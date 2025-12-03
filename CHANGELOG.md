@@ -5,6 +5,25 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.2] - 2025-01-04
+
+### ✨ Amélioration
+
+- **Option `-l` améliorée** : Filtre maintenant **toutes** les métriques de latence, pas seulement les gaps temporels
+  - TCPHandshakeAnalyzer : Filtre handshakes >= seuil
+  - RTTAnalyzer : Filtre mesures RTT >= seuil
+  - DNSAnalyzer : Filtre réponses DNS >= seuil
+  - Timeouts DNS toujours inclus (considérés comme latence infinie)
+
+**Avant :** `-l 2` = détectait uniquement les gaps temporels >= 2s
+
+**Maintenant :** `-l 2` = filtre TOUTES les latences (gaps, handshakes, RTT, DNS) >= 2s
+
+### 📝 Documentation
+
+- Clarification de l'option `-l` dans README.md et QUICKSTART.md
+- Ajout d'exemples explicites sur ce qui est filtré
+
 ## [1.0.1] - 2025-01-04
 
 ### 🔧 Corrections
