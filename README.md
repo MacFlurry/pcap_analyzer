@@ -64,15 +64,30 @@ L'analyseur détecte et analyse automatiquement **7 dimensions clés** impactant
 ### Installation depuis les sources
 
 ```bash
+# Cloner le repository
 git clone https://github.com/MacFlurry/pcap_analyzer.git
 cd pcap_analyzer
+
+# Créer un environnement virtuel (recommandé)
+python3 -m venv venv
+source venv/bin/activate  # Sur Linux/macOS
+# ou
+venv\Scripts\activate     # Sur Windows
+
+# Installer les dépendances
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Installer le package en mode développement
 pip install -e .
 ```
 
-### Installation des dépendances
+### Installation rapide (sans venv)
 
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/MacFlurry/pcap_analyzer.git
+cd pcap_analyzer
+pip install -e .
 ```
 
 ## Configuration

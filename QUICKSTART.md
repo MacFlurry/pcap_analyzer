@@ -5,8 +5,18 @@
 ### 1. Installer l'application
 
 ```bash
+# Cloner et accéder au répertoire
+git clone https://github.com/MacFlurry/pcap_analyzer.git
 cd pcap_analyzer
-./install.sh
+
+# Créer un environnement virtuel (recommandé)
+python3 -m venv venv
+source venv/bin/activate
+
+# Installer les dépendances et le package
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 2. Configurer l'accès SSH
