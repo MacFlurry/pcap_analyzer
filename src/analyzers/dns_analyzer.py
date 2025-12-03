@@ -72,7 +72,7 @@ class DNSAnalyzer:
     }
 
     def __init__(self, response_warning: float = 0.1, response_critical: float = 1.0,
-                 timeout: float = 5.0):
+                 timeout: float = 5.0, latency_filter: Optional[float] = None):
         """
         Initialise l'analyseur DNS
 
@@ -80,10 +80,12 @@ class DNSAnalyzer:
             response_warning: Seuil d'alerte temps de réponse (secondes)
             response_critical: Seuil critique temps de réponse (secondes)
             timeout: Délai de timeout pour considérer une requête perdue (secondes)
+            latency_filter: Si défini, ne garde que les transactions avec temps >= ce seuil
         """
         self.response_warning = response_warning
         self.response_critical = response_critical
         self.timeout = timeout
+        self.latency_filter = latency_filter
 
         self.queries: List[DNSQuery] = []
         self.responses: List[DNSResponse] = []
@@ -121,6 +123,8 @@ class DNSAnalyzer:
 
         # Deuxième passe : identifier les timeouts
         for query_id, query in self._pending_queries.items():
+            # Les timeouts sont toujours inclus (considérés comme latence infinie)
+            # sauf si on a un filtre très élevé et qu'on veut seulement les timeouts vraiment longs
             transaction = DNSTransaction(
                 query=query,
                 response=None,
@@ -245,16 +249,18 @@ class DNSAnalyzer:
 
             is_repeated = hasattr(matching_query, 'repeated') and matching_query.repeated
 
-            transaction = DNSTransaction(
-                query=matching_query,
-                response=response,
-                response_time=response_time,
-                timed_out=False,
-                repeated=is_repeated,
-                status=status
-            )
+            # Applique le filtre de latence si défini
+            if self.latency_filter is None or response_time >= self.latency_filter:
+                transaction = DNSTransaction(
+                    query=matching_query,
+                    response=response,
+                    response_time=response_time,
+                    timed_out=False,
+                    repeated=is_repeated,
+                    status=status
+                )
 
-            self.transactions.append(transaction)
+                self.transactions.append(transaction)
 
             # Retire la query des pending
             if query_full_key:

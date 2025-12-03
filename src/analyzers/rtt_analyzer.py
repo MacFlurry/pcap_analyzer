@@ -41,16 +41,19 @@ class FlowRTTStats:
 class RTTAnalyzer:
     """Analyseur de Round Trip Time"""
 
-    def __init__(self, rtt_warning: float = 0.1, rtt_critical: float = 0.5):
+    def __init__(self, rtt_warning: float = 0.1, rtt_critical: float = 0.5,
+                 latency_filter: Optional[float] = None):
         """
         Initialise l'analyseur de RTT
 
         Args:
             rtt_warning: Seuil d'alerte RTT en secondes
             rtt_critical: Seuil critique RTT en secondes
+            latency_filter: Si défini, ne garde que les mesures RTT >= ce seuil
         """
         self.rtt_warning = rtt_warning
         self.rtt_critical = rtt_critical
+        self.latency_filter = latency_filter
 
         self.measurements: List[RTTMeasurement] = []
         self.flow_stats: Dict[str, FlowRTTStats] = {}
@@ -99,16 +102,18 @@ class RTTAnalyzer:
                     if ack >= seq + payload_len:
                         rtt = timestamp - data_time
 
-                        measurement = RTTMeasurement(
-                            timestamp=timestamp,
-                            rtt=rtt,
-                            flow_key=reverse_flow,
-                            seq_num=seq,
-                            ack_num=ack,
-                            data_packet_num=data_pkt_num,
-                            ack_packet_num=i
-                        )
-                        self.measurements.append(measurement)
+                        # Applique le filtre de latence si défini
+                        if self.latency_filter is None or rtt >= self.latency_filter:
+                            measurement = RTTMeasurement(
+                                timestamp=timestamp,
+                                rtt=rtt,
+                                flow_key=reverse_flow,
+                                seq_num=seq,
+                                ack_num=ack,
+                                data_packet_num=data_pkt_num,
+                                ack_packet_num=i
+                            )
+                            self.measurements.append(measurement)
 
                         # Supprime le segment ACKé
                         del self._unacked_segments[reverse_flow][seq]

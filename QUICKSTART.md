@@ -45,7 +45,8 @@ C'est tout ! L'outil va :
 # Analyse complète
 pcap_analyzer analyze mon_fichier.pcap
 
-# Analyser uniquement les paquets avec latence >= 2 secondes
+# Filtrer pour ne garder que les latences >= 2 secondes
+# (Gaps, handshakes TCP, RTT, DNS >= 2s)
 pcap_analyzer analyze mon_fichier.pcap -l 2
 ```
 
@@ -116,11 +117,14 @@ pcap_analyzer capture -d 300 -f "host serveur-web.local"
 ### Scénario 2 : Problème de connexion intermittent
 
 ```bash
-# Capturer et filtrer uniquement les gros gaps
+# Capturer et filtrer uniquement les latences >= 1 seconde
 pcap_analyzer capture -d 120 -l 1.0
 
-# Le rapport montrera uniquement les paquets avec latence > 1s
-# Identifier les timestamps des interruptions
+# Le rapport montrera uniquement :
+# - Les gaps temporels >= 1s
+# - Les handshakes TCP >= 1s
+# - Les RTT >= 1s
+# - Les réponses DNS >= 1s
 ```
 
 ### Scénario 3 : Analyser un incident passé

@@ -31,16 +31,19 @@ class HandshakeFlow:
 class TCPHandshakeAnalyzer:
     """Analyseur des handshakes TCP"""
 
-    def __init__(self, syn_synack_threshold: float = 0.1, total_threshold: float = 0.3):
+    def __init__(self, syn_synack_threshold: float = 0.1, total_threshold: float = 0.3,
+                 latency_filter: Optional[float] = None):
         """
         Initialise l'analyseur de handshake TCP
 
         Args:
             syn_synack_threshold: Seuil d'alerte SYN→SYN/ACK en secondes
             total_threshold: Seuil d'alerte pour le handshake complet en secondes
+            latency_filter: Si défini, ne garde que les handshakes avec latence >= ce seuil
         """
         self.syn_synack_threshold = syn_synack_threshold
         self.total_threshold = total_threshold
+        self.latency_filter = latency_filter
         self.handshakes: List[HandshakeFlow] = []
         self.incomplete_handshakes: Dict[str, HandshakeFlow] = {}
 
@@ -112,15 +115,18 @@ class TCPHandshakeAnalyzer:
                                 # Détermine le côté suspect
                                 handshake.suspected_side = self._identify_suspect_side(handshake)
 
-                                # Déplace vers les handshakes complets
-                                self.handshakes.append(handshake)
+                                # Applique le filtre de latence si défini
+                                if self._should_include_handshake(handshake):
+                                    self.handshakes.append(handshake)
                                 del self.incomplete_handshakes[flow_key]
 
         # Ajoute les handshakes incomplets à la liste finale
         for handshake in self.incomplete_handshakes.values():
             if handshake.syn_to_synack_delay:
                 handshake.suspected_side = self._identify_suspect_side(handshake)
-            self.handshakes.append(handshake)
+            # Applique le filtre de latence si défini
+            if self._should_include_handshake(handshake):
+                self.handshakes.append(handshake)
 
         return self._generate_report()
 
@@ -145,6 +151,29 @@ class TCPHandshakeAnalyzer:
             return f"{ip.src}:{tcp.sport}->{ip.dst}:{tcp.dport}"
         else:  # server
             return f"{ip.dst}:{tcp.dport}->{ip.src}:{tcp.sport}"
+
+    def _should_include_handshake(self, handshake: HandshakeFlow) -> bool:
+        """
+        Détermine si un handshake doit être inclus selon le filtre de latence
+
+        Args:
+            handshake: Flux de handshake
+
+        Returns:
+            True si le handshake doit être inclus, False sinon
+        """
+        if self.latency_filter is None:
+            return True  # Pas de filtre, on inclut tout
+
+        # On garde le handshake si AU MOINS UNE de ses latences dépasse le seuil
+        if handshake.total_handshake_time and handshake.total_handshake_time >= self.latency_filter:
+            return True
+        if handshake.syn_to_synack_delay and handshake.syn_to_synack_delay >= self.latency_filter:
+            return True
+        if handshake.synack_to_ack_delay and handshake.synack_to_ack_delay >= self.latency_filter:
+            return True
+
+        return False
 
     def _identify_suspect_side(self, handshake: HandshakeFlow) -> str:
         """

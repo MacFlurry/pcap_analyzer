@@ -129,11 +129,20 @@ pcap_analyzer analyze capture.pcap
 
 #### Analyse avec filtrage par latence
 
-Analyse uniquement les paquets ayant une latence >= 2 secondes :
+Filtre toutes les métriques de latence pour ne garder que celles >= 2 secondes :
 
 ```bash
 pcap_analyzer analyze capture.pcap -l 2.0
 ```
+
+**Ce qui est filtré avec `-l 2.0` :**
+- ✅ Gaps temporels >= 2 secondes
+- ✅ Handshakes TCP >= 2 secondes
+- ✅ Mesures RTT >= 2 secondes
+- ✅ Réponses DNS >= 2 secondes
+- ✅ Timeouts DNS (toujours inclus)
+
+**Exemple :** Avec `-l 2`, vous ne verrez que les problèmes de latence vraiment significatifs (>= 2s), ce qui permet de se concentrer sur les problèmes majeurs.
 
 #### Options disponibles
 

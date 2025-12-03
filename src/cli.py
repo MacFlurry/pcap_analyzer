@@ -67,7 +67,8 @@ def analyze_pcap(packets: list, config, latency_filter: float = None):
         task = progress.add_task("[cyan]Analyse des handshakes TCP...", total=1)
         handshake_analyzer = TCPHandshakeAnalyzer(
             syn_synack_threshold=thresholds.get('syn_synack_delay', 0.1),
-            total_threshold=thresholds.get('handshake_total', 0.3)
+            total_threshold=thresholds.get('handshake_total', 0.3),
+            latency_filter=latency_filter
         )
         results['tcp_handshake'] = handshake_analyzer.analyze(packets)
         progress.update(task, advance=1)
@@ -86,7 +87,8 @@ def analyze_pcap(packets: list, config, latency_filter: float = None):
         task = progress.add_task("[cyan]Analyse du RTT...", total=1)
         rtt_analyzer = RTTAnalyzer(
             rtt_warning=thresholds.get('rtt_warning', 0.1),
-            rtt_critical=thresholds.get('rtt_critical', 0.5)
+            rtt_critical=thresholds.get('rtt_critical', 0.5),
+            latency_filter=latency_filter
         )
         results['rtt'] = rtt_analyzer.analyze(packets)
         progress.update(task, advance=1)
@@ -111,7 +113,8 @@ def analyze_pcap(packets: list, config, latency_filter: float = None):
         dns_analyzer = DNSAnalyzer(
             response_warning=thresholds.get('dns_response_warning', 0.1),
             response_critical=thresholds.get('dns_response_critical', 1.0),
-            timeout=thresholds.get('dns_timeout', 5.0)
+            timeout=thresholds.get('dns_timeout', 5.0),
+            latency_filter=latency_filter
         )
         results['dns'] = dns_analyzer.analyze(packets)
         progress.update(task, advance=1)
