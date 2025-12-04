@@ -21,7 +21,8 @@ from .analyzers import (
     RTTAnalyzer,
     TCPWindowAnalyzer,
     ICMPAnalyzer,
-    DNSAnalyzer
+    DNSAnalyzer,
+    SYNRetransmissionAnalyzer
 )
 from .report_generator import ReportGenerator
 
@@ -119,6 +120,13 @@ def analyze_pcap(packets: list, config, latency_filter: float = None):
         results['dns'] = dns_analyzer.analyze(packets)
         progress.update(task, advance=1)
 
+        # 8. Retransmissions SYN détaillées
+        task = progress.add_task("[cyan]Analyse des retransmissions SYN...", total=1)
+        syn_threshold = latency_filter if latency_filter else thresholds.get('syn_retrans_threshold', 2.0)
+        syn_retrans_analyzer = SYNRetransmissionAnalyzer(threshold=syn_threshold)
+        results['syn_retransmissions'] = syn_retrans_analyzer.analyze(packets)
+        progress.update(task, advance=1)
+
     # Affichage des résumés
     console.print("\n")
     console.print(Panel.fit("📊 Résultats de l'analyse", style="bold blue"))
@@ -130,6 +138,7 @@ def analyze_pcap(packets: list, config, latency_filter: float = None):
     console.print("\n" + window_analyzer.get_summary())
     console.print("\n" + icmp_analyzer.get_summary())
     console.print("\n" + dns_analyzer.get_summary())
+    console.print("\n" + syn_retrans_analyzer.get_summary())
 
     return results
 
