@@ -73,10 +73,14 @@ class RetransmissionAnalyzer:
         self.flow_stats: Dict[str, FlowStats] = {}
 
         # Tracking interne
-        self._seen_segments: Dict[str, Dict[int, Tuple[int, float]]] = defaultdict(dict)
+        # Changement: on stocke maintenant une liste de (packet_num, timestamp) pour chaque (seq, len)
+        # pour détecter les retransmissions multiples du même segment
+        self._seen_segments: Dict[str, Dict[Tuple[int, int], List[Tuple[int, float]]]] = defaultdict(lambda: defaultdict(list))
         self._flow_counters: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self._expected_ack: Dict[str, int] = {}
         self._expected_seq: Dict[str, int] = {}
+        self._dup_ack_count: Dict[str, int] = defaultdict(int)  # Compteur de DUP ACK par flux
+        self._last_ack: Dict[str, int] = {}  # Dernier ACK vu par flux
 
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
@@ -108,13 +112,19 @@ class RetransmissionAnalyzer:
         self._flow_counters[flow_key]['total'] += 1
 
         # Détection de retransmissions
-        if len(tcp.payload) > 0 or tcp.flags & 0x02:  # Données ou SYN
+        # On suit tous les segments avec données, SYN ou FIN (pas les ACK purs)
+        if len(tcp.payload) > 0 or tcp.flags & 0x03:  # Données, SYN ou FIN
             seq = tcp.seq
             payload_len = len(tcp.payload)
+            
+            # Clé unique: seq + longueur de payload pour distinguer retransmissions partielles
+            segment_key = (seq, payload_len)
 
             # Vérifie si ce segment a déjà été vu
-            if seq in self._seen_segments[flow_key]:
-                original_num, original_time = self._seen_segments[flow_key][seq]
+            # Changement: on compare maintenant avec TOUTES les occurrences précédentes
+            if segment_key in self._seen_segments[flow_key] and len(self._seen_segments[flow_key][segment_key]) > 0:
+                # C'est une retransmission - on prend la première occurrence comme référence
+                original_num, original_time = self._seen_segments[flow_key][segment_key][0]
                 delay = timestamp - original_time
 
                 retrans = TCPRetransmission(
@@ -130,30 +140,43 @@ class RetransmissionAnalyzer:
                 )
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]['retransmissions'] += 1
-            else:
-                self._seen_segments[flow_key][seq] = (packet_num, timestamp)
+            
+            # On enregistre TOUTES les occurrences (original + retransmissions)
+            self._seen_segments[flow_key][segment_key].append((packet_num, timestamp))
 
-        # Détection de DUP ACK
+        # Détection de DUP ACK et Fast Retransmission
         if tcp.flags & 0x10:  # ACK flag
             ack = tcp.ack
             reverse_flow = self._get_reverse_flow_key(packet)
 
-            if reverse_flow in self._expected_ack:
-                if ack == self._expected_ack[reverse_flow]:
-                    # Même ACK répété = DUP ACK
-                    anomaly = TCPAnomaly(
-                        anomaly_type='dup_ack',
-                        packet_num=packet_num,
-                        timestamp=timestamp,
-                        src_ip=ip.src,
-                        dst_ip=ip.dst,
-                        src_port=tcp.sport,
-                        dst_port=tcp.dport,
-                        details=f"Duplicate ACK for seq {ack}"
-                    )
-                    self.anomalies.append(anomaly)
-                    self._flow_counters[flow_key]['dup_acks'] += 1
-
+            # Vérifier si c'est un DUP ACK
+            if reverse_flow in self._last_ack and ack == self._last_ack[reverse_flow]:
+                # C'est un DUP ACK
+                self._dup_ack_count[reverse_flow] += 1
+                
+                anomaly = TCPAnomaly(
+                    anomaly_type='dup_ack',
+                    packet_num=packet_num,
+                    timestamp=timestamp,
+                    src_ip=ip.src,
+                    dst_ip=ip.dst,
+                    src_port=tcp.sport,
+                    dst_port=tcp.dport,
+                    details=f"Duplicate ACK #{self._dup_ack_count[reverse_flow]} for seq {ack}"
+                )
+                self.anomalies.append(anomaly)
+                self._flow_counters[flow_key]['dup_acks'] += 1
+                
+                # Détection de Fast Retransmission (après 3 DUP ACK selon RFC)
+                if self._dup_ack_count[reverse_flow] >= 3:
+                    # Marquer comme fast retransmission potentielle
+                    # La vraie fast retrans sera détectée quand le segment sera renvoyé
+                    pass
+            else:
+                # Nouvel ACK, réinitialiser le compteur de DUP ACK
+                self._dup_ack_count[reverse_flow] = 0
+                
+            self._last_ack[reverse_flow] = ack
             self._expected_ack[reverse_flow] = ack
 
         # Détection Out-of-Order
@@ -238,6 +261,38 @@ class RetransmissionAnalyzer:
 
             self.flow_stats[flow_key] = stats
 
+    def _count_unique_retransmitted_segments(self) -> int:
+        """
+        Compte le nombre de segments uniques qui ont été retransmis.
+        Un segment retransmis 2 fois compte pour 1 segment unique.
+        """
+        unique_segments = set()
+        for retrans in self.retransmissions:
+            # Clé unique: (src, dst, sport, dport, seq)
+            key = (retrans.src_ip, retrans.dst_ip, retrans.src_port, 
+                   retrans.dst_port, retrans.seq_num)
+            unique_segments.add(key)
+        return len(unique_segments)
+
+    def _get_wireshark_packet_count(self) -> int:
+        """
+        Calcule le nombre de paquets que Wireshark afficherait avec
+        le filtre 'tcp.analysis.retransmission'.
+        
+        Wireshark marque TOUS les paquets impliqués dans une retransmission:
+        - Le paquet original
+        - Chaque retransmission
+        
+        Donc: nombre_paquets_wireshark = segments_uniques + total_retransmissions
+        
+        Exemple:
+        - 1 segment retransmis 1 fois = 2 paquets (1 original + 1 retrans)
+        - 1 segment retransmis 2 fois = 3 paquets (1 original + 2 retrans)
+        """
+        unique_segments = self._count_unique_retransmitted_segments()
+        total_retrans = len(self.retransmissions)
+        return unique_segments + total_retrans
+
     def _generate_report(self) -> Dict[str, Any]:
         """Génère le rapport d'analyse"""
         total_retrans = len(self.retransmissions)
@@ -273,11 +328,15 @@ class RetransmissionAnalyzer:
     def get_summary(self) -> str:
         """Retourne un résumé textuel de l'analyse"""
         total_retrans = len(self.retransmissions)
+        unique_segments = self._count_unique_retransmitted_segments()
+        wireshark_count = self._get_wireshark_packet_count()
         flows_with_issues = [f for f in self.flow_stats.values() if f.severity != 'none']
 
         summary = f"📊 Analyse des retransmissions et anomalies TCP:\n"
         summary += f"  - Flux analysés: {len(self.flow_stats)}\n"
         summary += f"  - Retransmissions totales: {total_retrans}\n"
+        summary += f"    Note: {unique_segments} segment(s) unique(s) retransmis\n"
+        summary += f"          Wireshark 'tcp.analysis.retransmission' affiche {wireshark_count} paquets ({unique_segments} originaux + {total_retrans} retrans)\n"
         summary += f"  - Anomalies totales: {len(self.anomalies)}\n"
 
         if flows_with_issues:
@@ -292,3 +351,47 @@ class RetransmissionAnalyzer:
                 summary += f"    - Zero Window: {flow.zero_windows}\n"
 
         return summary
+
+    def get_details(self, limit: int = 20, flow_filter: str = None) -> str:
+        """
+        Retourne les détails des retransmissions
+        
+        Args:
+            limit: Nombre maximum de retransmissions à afficher
+            flow_filter: Filtrer sur un flux spécifique (ex: "10.28.104.211:16586->10.179.161.14:10100")
+        
+        Returns:
+            Chaîne formatée avec les détails des retransmissions
+        """
+        if not self.retransmissions:
+            return "✅ Aucune retransmission à détailler."
+        
+        # Filtrage par flux si demandé
+        retrans_list = self.retransmissions
+        if flow_filter:
+            retrans_list = [r for r in retrans_list 
+                          if f"{r.src_ip}:{r.src_port}->{r.dst_ip}:{r.dst_port}" == flow_filter]
+        
+        if not retrans_list:
+            return f"✅ Aucune retransmission trouvée pour le flux: {flow_filter}"
+        
+        total = len(retrans_list)
+        displayed = min(limit, total)
+        wireshark_count = self._get_wireshark_packet_count()
+        unique_segments = self._count_unique_retransmitted_segments()
+        
+        details = f"🔍 Détails des retransmissions ({displayed}/{total}):\n"
+        details += f"   (Wireshark 'tcp.analysis.retransmission': {wireshark_count} paquets = {unique_segments} originaux + {total} retrans)\n\n"
+        
+        for i, retrans in enumerate(retrans_list[:limit], 1):
+            delay_ms = retrans.delay * 1000  # Convertir en ms
+            details += f"  #{i}: Paquet {retrans.packet_num} (retrans de #{retrans.original_packet_num})\n"
+            details += f"      Seq: {retrans.seq_num}, Délai: {delay_ms:.1f}ms\n"
+            details += f"      {retrans.src_ip}:{retrans.src_port} → {retrans.dst_ip}:{retrans.dst_port}\n"
+            if i < displayed:
+                details += "\n"
+        
+        if total > limit:
+            details += f"\n  ... et {total - limit} autres retransmissions (utilisez --details-limit pour en voir plus)\n"
+        
+        return details

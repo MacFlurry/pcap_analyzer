@@ -7,7 +7,16 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
-### ✨ Nouveau
+### ✨ Ajouts
+
+- **Option `-d` / `--details`** : Affiche le détail de chaque retransmission détectée
+  - Numéro du paquet retransmis et du paquet original
+  - Numéro de séquence TCP
+  - Délai entre l'original et la retransmission
+  - Adresses IP et ports source/destination
+  - Option `--details-limit N` pour contrôler le nombre affiché (défaut: 20)
+
+- **Note Wireshark** : Clarification dans l'affichage que notre comptage de retransmissions (ex: 11) diffère de Wireshark qui affiche le double (ex: 22 paquets) car il inclut originaux + retransmissions
 
 - **Analyseur de retransmissions SYN** : Nouvelle dimension d'analyse pour détecter les problèmes de handshake TCP
   - Détecte automatiquement les retransmissions SYN multiples (client qui retente la connexion)
@@ -20,6 +29,12 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
   - Calcul de statistiques (min, max, moyenne des délais)
   - Section dédiée dans le rapport HTML avec timeline détaillée
   - Configuration via `syn_retrans_threshold` dans config.yaml (défaut: 2.0 secondes)
+
+**Exemple d'utilisation :**
+```bash
+pcap_analyzer analyze capture.pcap -d                    # Détails (20 max)
+pcap_analyzer analyze capture.pcap -d --details-limit 50 # Détails (50 max)
+```
 
 ### 📝 Documentation
 

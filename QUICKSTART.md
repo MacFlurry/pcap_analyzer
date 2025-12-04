@@ -58,6 +58,12 @@ pcap_analyzer analyze mon_fichier.pcap
 # Filtrer pour ne garder que les latences >= 2 secondes
 # (Gaps, handshakes TCP, RTT, DNS >= 2s)
 pcap_analyzer analyze mon_fichier.pcap -l 2
+
+# Afficher les détails des retransmissions
+pcap_analyzer analyze mon_fichier.pcap -d
+
+# Afficher plus de détails (jusqu'à 50 retransmissions)
+pcap_analyzer analyze mon_fichier.pcap -d --details-limit 50
 ```
 
 ### Capture personnalisée

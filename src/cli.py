@@ -44,11 +44,12 @@ def load_pcap(pcap_file: str) -> list:
         sys.exit(1)
 
 
-def analyze_pcap(packets: list, config, latency_filter: float = None):
+def analyze_pcap(packets: list, config, latency_filter: float = None, show_details: bool = False, details_limit: int = 20):
     """Analyse un fichier PCAP"""
     thresholds = config.thresholds
 
     results = {}
+    retrans_analyzer = None  # Pour accéder aux détails après analyse
 
     with Progress(
         SpinnerColumn(),
@@ -134,6 +135,13 @@ def analyze_pcap(packets: list, config, latency_filter: float = None):
     console.print("\n" + timestamp_analyzer.get_gaps_summary())
     console.print("\n" + handshake_analyzer.get_summary())
     console.print("\n" + retrans_analyzer.get_summary())
+    
+    # Affichage des détails des retransmissions si demandé
+    if show_details and retrans_analyzer:
+        details = retrans_analyzer.get_details(limit=details_limit)
+        if details:
+            console.print("\n" + details)
+    
     console.print("\n" + rtt_analyzer.get_summary())
     console.print("\n" + window_analyzer.get_summary())
     console.print("\n" + icmp_analyzer.get_summary())
@@ -155,13 +163,17 @@ def cli():
 @click.option('-c', '--config', type=click.Path(exists=True), help='Fichier de configuration personnalisé')
 @click.option('-o', '--output', help='Nom de base pour les rapports de sortie')
 @click.option('--no-report', is_flag=True, help='Ne pas générer de rapports HTML/JSON')
-def analyze(pcap_file, latency, config, output, no_report):
+@click.option('-d', '--details', is_flag=True, help='Afficher les détails des retransmissions')
+@click.option('--details-limit', type=int, default=20, help='Nombre max de retransmissions à afficher (défaut: 20)')
+def analyze(pcap_file, latency, config, output, no_report, details, details_limit):
     """
     Analyse un fichier PCAP pour détecter les causes de latence
 
     Exemple:
         pcap_analyzer analyze capture.pcap
         pcap_analyzer analyze capture.pcap -l 2.0
+        pcap_analyzer analyze capture.pcap -d          # Afficher détails retransmissions
+        pcap_analyzer analyze capture.pcap -d --details-limit 50
     """
     # Charge la configuration
     cfg = get_config(config)
@@ -173,7 +185,7 @@ def analyze(pcap_file, latency, config, output, no_report):
     if latency:
         console.print(f"[yellow]Mode filtrage: analyse des paquets avec latence >= {latency}s[/yellow]")
 
-    results = analyze_pcap(packets, cfg, latency_filter=latency)
+    results = analyze_pcap(packets, cfg, latency_filter=latency, show_details=details, details_limit=details_limit)
 
     # Génération des rapports
     if not no_report:
