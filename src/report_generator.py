@@ -386,6 +386,32 @@ class ReportGenerator:
                     {% endfor %}
                 </tbody>
             </table>
+
+            {% if retransmission.retransmissions %}
+            <h4>Détails des retransmissions (Top 50):</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Paquet #</th>
+                        <th>Original #</th>
+                        <th>Seq</th>
+                        <th>Délai (ms)</th>
+                        <th>Flux</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in retransmission.retransmissions[:50] %}
+                    <tr>
+                        <td>{{ r.packet_num }}</td>
+                        <td>{{ r.original_packet_num }}</td>
+                        <td>{{ r.seq_num }}</td>
+                        <td>{{ "%.2f"|format(r.delay * 1000) }}</td>
+                        <td><code>{{ r.src_ip }}:{{ r.src_port }} → {{ r.dst_ip }}:{{ r.dst_port }}</code></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
         </div>
         {% endif %}
 
