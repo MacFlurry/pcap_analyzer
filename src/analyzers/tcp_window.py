@@ -221,12 +221,33 @@ class TCPWindowAnalyzer:
             zero_count = self._event_counts[flow_key]['zero_window']
             low_count = self._event_counts[flow_key]['low_window']
 
-            if zero_count > 5 or zero_window_duration > 1.0:
-                suspected = 'application'
-            elif low_count > 10:
-                suspected = 'receiver'
-            else:
+            # Amélioration : Ignore les premières fenêtres (handshake + slow start)
+            # On skip les 10 premiers paquets pour éviter les faux positifs
+            windows_stable = windows[10:] if len(windows) > 10 else windows
+
+            # Pour les flux très courts (< 20 paquets), on ne signale pas de problème
+            # car il n'y a pas assez de données pour être pertinent
+            if len(windows) < 20:
                 suspected = 'none'
+            else:
+                # Calcule le % de fenêtres basses (hors handshake)
+                if windows_stable:
+                    low_window_percentage = (
+                        sum(1 for w in windows_stable if 0 < w < self.low_window_threshold) /
+                        len(windows_stable) * 100
+                    )
+                else:
+                    low_window_percentage = 0
+
+                # Détection améliorée : un problème n'est signalé que si :
+                # 1. Zero windows significatifs (> 5 ou durée > 1s)
+                # 2. OU fenêtres basses persistantes (> 20% du temps hors handshake)
+                if zero_count > 5 or zero_window_duration > 1.0:
+                    suspected = 'application'
+                elif low_window_percentage > 20:  # Plus de 20% du temps avec fenêtre basse
+                    suspected = 'receiver'
+                else:
+                    suspected = 'none'
 
             stats = FlowWindowStats(
                 flow_key=flow_key,
@@ -234,7 +255,7 @@ class TCPWindowAnalyzer:
                 dst_ip=dst_part[0],
                 src_port=int(src_part[1]),
                 dst_port=int(dst_part[1]),
-                min_window=min(windows),
+                min_window=min(windows_stable) if windows_stable else min(windows),
                 max_window=max(windows),
                 mean_window=sum(windows) / len(windows),
                 zero_window_count=zero_count,

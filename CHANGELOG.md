@@ -5,6 +5,27 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.3] - 2025-12-04
+
+### ✨ Amélioration
+
+- **Détection de fenêtres TCP améliorée** : Réduction drastique des faux positifs
+  - Ignore maintenant les 10 premiers paquets (handshake + slow start) pour le calcul de `min_window`
+  - Ignore les flux très courts (< 20 paquets) car pas assez de données pour être pertinent
+  - Ajout de détection de persistance : un problème n'est signalé que si fenêtre basse > 20% du temps
+  - Distinction entre fenêtre initiale basse (normal) et fenêtre persistante basse (problème)
+
+**Avant :** Tous les flux avec fenêtre initiale < 8192 bytes étaient signalés comme problématiques
+
+**Maintenant :** Seuls les flux longs avec fenêtres basses **persistantes** (> 20% du temps hors handshake) sont signalés
+
+### 📝 Documentation
+
+- Ajout d'instructions pour installation avec environnement virtuel (venv)
+  - README.md : Guide complet venv (Linux/macOS/Windows)
+  - QUICKSTART.md : Instructions venv intégrées
+  - Option d'installation sans venv également documentée
+
 ## [1.0.2] - 2025-01-04
 
 ### ✨ Amélioration
