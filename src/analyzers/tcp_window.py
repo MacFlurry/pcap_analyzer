@@ -222,15 +222,15 @@ class TCPWindowAnalyzer:
             low_count = self._event_counts[flow_key]['low_window']
 
             # Amélioration : Ignore les premières fenêtres (handshake + slow start)
-            # On skip les 10 premiers paquets pour éviter les faux positifs
-            windows_stable = windows[10:] if len(windows) > 10 else windows
+            # On skip les 20 premiers paquets pour vraiment éviter la phase de démarrage
+            windows_stable = windows[20:] if len(windows) > 20 else windows
 
-            # Pour les flux très courts (< 20 paquets), on ne signale pas de problème
+            # Pour les flux très courts (< 30 paquets), on ne signale pas de problème
             # car il n'y a pas assez de données pour être pertinent
-            if len(windows) < 20:
+            if len(windows) < 30:
                 suspected = 'none'
             else:
-                # Calcule le % de fenêtres basses (hors handshake)
+                # Calcule le % de fenêtres basses (hors handshake et slow start)
                 if windows_stable:
                     low_window_percentage = (
                         sum(1 for w in windows_stable if 0 < w < self.low_window_threshold) /
@@ -239,12 +239,15 @@ class TCPWindowAnalyzer:
                 else:
                     low_window_percentage = 0
 
-                # Détection améliorée : un problème n'est signalé que si :
-                # 1. Zero windows significatifs (> 5 ou durée > 1s)
-                # 2. OU fenêtres basses persistantes (> 20% du temps hors handshake)
+                # Détection stricte : un problème n'est signalé que si :
+                # 1. Zero windows significatifs (> 5 ou durée > 1s) → application lente
+                # 2. OU fenêtres basses persistantes (> 30% du temps) ET au moins quelques zero windows
+                #    → receiver avec problème réel, pas juste slow start
                 if zero_count > 5 or zero_window_duration > 1.0:
                     suspected = 'application'
-                elif low_window_percentage > 20:  # Plus de 20% du temps avec fenêtre basse
+                elif low_window_percentage > 30 and (zero_count > 0 or zero_window_duration > 0):
+                    # Ne signale receiver que s'il y a eu AU MOINS un zero window
+                    # pour éviter les faux positifs du slow start
                     suspected = 'receiver'
                 else:
                     suspected = 'none'
