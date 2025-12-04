@@ -38,6 +38,7 @@ class TimestampAnalyzer:
         self.capture_duration = 0.0
         self.first_timestamp = None
         self.last_timestamp = None
+        self._packet_count = 0
 
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
@@ -65,6 +66,7 @@ class TimestampAnalyzer:
         if not hasattr(packet, 'time'):
             return
 
+        self._packet_count += 1
         current_time = float(packet.time)
 
         # Premier paquet
@@ -97,6 +99,10 @@ class TimestampAnalyzer:
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
+        # Met à jour total_packets avec le compteur streaming
+        if self._packet_count > 0:
+            self.total_packets = self._packet_count
+            
         if self.first_timestamp and self.last_timestamp:
             self.capture_duration = self.last_timestamp - self.first_timestamp
 
