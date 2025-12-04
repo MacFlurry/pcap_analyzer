@@ -8,7 +8,7 @@ Outil d'analyse automatisée de fichiers PCAP pour identifier et diagnostiquer l
 
 ## Fonctionnalités
 
-L'analyseur détecte et analyse automatiquement **8 dimensions clés** impactant la latence réseau :
+L'analyseur détecte et analyse automatiquement **12 dimensions clés** impactant la latence réseau :
 
 ### 1. ⏱️ Gestion et analyse des horodatages
 - Détection automatique des ruptures de flux
@@ -58,6 +58,31 @@ L'analyseur détecte et analyse automatiquement **8 dimensions clés** impactant
 - Mesure du temps de réponse DNS
 - Détection de timeouts
 - Identification des requêtes répétées
+
+### 8. 🚫 Analyse des TCP Reset (RST)
+- Détection de tous les paquets TCP RST
+- Classification: RST prématurés (avant données) vs RST post-données
+- Suivi des flux impactés avec timestamps
+- Filtres tcpdump/Wireshark pour investigation
+
+### 9. 🧩 Analyse de la fragmentation IP
+- Détection des paquets fragmentés (flags MF, offset)
+- Suivi du réassemblage par ID de datagramme
+- Fragments perdus/incomplets avec timeout
+- Statistiques PMTU estimées + paquets DF
+- Top flows avec taux de fragmentation
+
+### 10. 📊 Top Talkers - Analyse du volume
+- Statistiques par IP (bytes/paquets envoyés/reçus)
+- Répartition par protocole (TCP, UDP, ICMP, Other)
+- Top conversations (src:port → dst:port)
+- Calcul des volumes en MB
+
+### 11. 📈 Analyse du débit (Throughput)
+- Calcul du débit global (Mbps, Kbps)
+- Débit par flux bidirectionnel
+- Détection des flux lents (<1 Mbps sur >1s)
+- Taille moyenne des paquets
 - Liste des domaines problématiques
 
 ## Installation
