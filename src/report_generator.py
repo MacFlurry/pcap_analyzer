@@ -210,6 +210,101 @@ class ReportGenerator:
             font-family: 'Courier New', monospace;
         }
 
+        .detail-box {
+            background: #1e1e1e;
+            color: #e0e0e0;
+            padding: 24px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #e74c3c;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .detail-box h5 {
+            color: #ffffff;
+            font-size: 1.1em;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #404040;
+        }
+
+        .detail-box .connection-title {
+            color: #4fc3f7;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .detail-box .connection-arrow {
+            color: #66bb6a;
+            margin: 0 8px;
+        }
+
+        .detail-box .info-line {
+            margin: 12px 0;
+            line-height: 1.8;
+        }
+
+        .detail-box .info-label {
+            color: #90a4ae;
+            font-weight: 600;
+            display: inline-block;
+            min-width: 180px;
+        }
+
+        .detail-box .info-value {
+            color: #ffffff;
+            font-family: 'Courier New', monospace;
+        }
+
+        .detail-box .info-value.timestamp {
+            color: #66bb6a;
+        }
+
+        .detail-box .info-value.count {
+            color: #ffa726;
+        }
+
+        .detail-box .timeline-list {
+            list-style-type: none;
+            padding-left: 20px;
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .detail-box .timeline-list li {
+            margin: 6px 0;
+            color: #e0e0e0;
+        }
+
+        .detail-box .timeline-list .attempt-num {
+            color: #ffeb3b;
+            font-weight: bold;
+        }
+
+        .detail-box .timeline-list .time-offset {
+            color: #4fc3f7;
+        }
+
+        .detail-box .success-indicator {
+            color: #66bb6a;
+            font-weight: bold;
+        }
+
+        .detail-box .error-indicator {
+            color: #ef5350;
+            font-weight: bold;
+        }
+
+        .detail-box .problem-badge {
+            background: #e74c3c;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 8px;
+        }
+
         .footer {
             margin-top: 50px;
             padding-top: 20px;
@@ -421,44 +516,98 @@ class ReportGenerator:
         <div class="section danger">
             <h3>{{ syn_retransmissions.total_syn_retransmissions }} handshake(s) avec retransmissions SYN excessives</h3>
             <p><strong>Seuil de détection:</strong> {{ syn_retransmissions.threshold_seconds }}s</p>
-            <p>Ces connexions ont dû retransmettre le paquet SYN initial plusieurs fois avant de recevoir un SYN/ACK du serveur.</p>
+            
+            {% if syn_retransmissions.delay_statistics %}
+            <div class="summary-grid">
+                <div class="summary-card danger">
+                    <h4>Délai minimum</h4>
+                    <div class="value">{{ "%.3f"|format(syn_retransmissions.delay_statistics.min_delay) }}s</div>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Délai maximum</h4>
+                    <div class="value">{{ "%.3f"|format(syn_retransmissions.delay_statistics.max_delay) }}s</div>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Délai moyen</h4>
+                    <div class="value">{{ "%.3f"|format(syn_retransmissions.delay_statistics.avg_delay) }}s</div>
+                </div>
+            </div>
+            {% endif %}
 
-            <h4>Handshakes problématiques (Top 10):</h4>
+            <h4>Top 10 des connexions les plus lentes:</h4>
             <table>
                 <thead>
                     <tr>
                         <th>Connexion</th>
-                        <th>Tentatives SYN</th>
+                        <th>Retransmissions SYN</th>
                         <th>Délai total</th>
-                        <th>Problème suspecté</th>
+                        <th>Problème identifié</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for hs in syn_retransmissions.top_problematic_connections[:10] %}
                     <tr>
                         <td><code>{{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</code></td>
-                        <td>{{ hs.retransmission_count + 1 }}</td>
+                        <td>{{ hs.retransmission_count }}</td>
                         <td>{{ "%.3f"|format(hs.total_delay or 0) }}s</td>
-                        <td>{{ hs.suspected_issue }}</td>
+                        <td><span class="badge danger">{{ hs.suspected_issue }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
 
-            <h4>Détails des retransmissions:</h4>
+            <h4>🔴 Top 5 des connexions les plus lentes:</h4>
             {% for hs in syn_retransmissions.top_problematic_connections[:5] %}
             <div class="detail-box">
-                <h5>{{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</h5>
-                <p><strong>Timeline:</strong></p>
-                <ul>
-                    {% for t in hs.syn_attempts_iso %}
-                    <li>SYN #{{ loop.index }} à {{ t }}</li>
+                <h5>
+                    #{{ loop.index }} – 
+                    <span class="connection-title">{{ hs.src_ip }}:{{ hs.src_port }}</span>
+                    <span class="connection-arrow">→</span>
+                    <span class="connection-title">{{ hs.dst_ip }}:{{ hs.dst_port }}</span>
+                </h5>
+                
+                <div class="info-line">
+                    <span class="info-label">Premier SYN:</span>
+                    <span class="info-value timestamp">{{ hs.first_syn_time_iso }}</span>
+                </div>
+                
+                <div class="info-line">
+                    <span class="info-label">Retransmissions SYN:</span>
+                    <span class="info-value count">{{ hs.retransmission_count }}</span>
+                </div>
+                
+                <div class="info-line">
+                    <span class="info-label">Timeline des SYN:</span>
+                </div>
+                <ul class="timeline-list">
+                    {% set first_time = hs.syn_attempts[0] if hs.syn_attempts else 0 %}
+                    {% for t in hs.syn_attempts %}
+                    <li>
+                        – Tentative <span class="attempt-num">#{{ loop.index }}</span>: 
+                        <span class="time-offset">+{{ "%.3f"|format(t - first_time) }}s</span>
+                    </li>
                     {% endfor %}
-                    {% if hs.synack_time_iso %}
-                    <li><strong>SYN/ACK reçu à {{ hs.synack_time_iso }}</strong> ({{ "%.3f"|format(hs.total_delay or 0) }}s après le 1er SYN)</li>
-                    {% endif %}
                 </ul>
-                <p><strong>Diagnostic:</strong> {{ hs.suspected_issue }}</p>
+                
+                {% if hs.synack_time_iso %}
+                <div class="info-line">
+                    <span class="info-label">SYN/ACK reçu:</span>
+                    <span class="info-value timestamp success-indicator">{{ hs.synack_time_iso }}</span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Délai total:</span>
+                    <span class="info-value count">{{ "%.3f"|format(hs.total_delay or 0) }}s</span>
+                </div>
+                {% else %}
+                <div class="info-line">
+                    <span class="error-indicator">❌ Aucune réponse SYN/ACK reçue</span>
+                </div>
+                {% endif %}
+                
+                <div class="info-line">
+                    <span class="info-label">Problème identifié:</span>
+                    <span class="problem-badge">{{ hs.suspected_issue }}</span>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -646,7 +795,7 @@ class ReportGenerator:
         Args:
             analysis_results: Résultats de l'analyse
             pcap_file: Nom du fichier PCAP analysé
-            output_name: Nom de base pour les fichiers de sortie
+            output_name: Nom de base pour les fichiers de sortie (peut être un chemin)
 
         Returns:
             Dictionnaire avec les chemins des fichiers générés
@@ -654,6 +803,14 @@ class ReportGenerator:
         if output_name is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_name = f"pcap_analysis_{timestamp}"
+
+        # Si output_name contient un chemin, l'utiliser directement
+        output_path = Path(output_name)
+        if output_path.suffix:  # Si c'est un chemin avec extension
+            base_path = output_path.with_suffix('')
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+        else:  # Sinon utiliser output_dir
+            base_path = self.output_dir / output_name
 
         # Ajoute des métadonnées
         analysis_results['analysis_info'] = {
@@ -664,11 +821,11 @@ class ReportGenerator:
         }
 
         # Génère le rapport JSON
-        json_path = self.output_dir / f"{output_name}.json"
+        json_path = Path(f"{base_path}.json")
         self._generate_json(analysis_results, json_path)
 
         # Génère le rapport HTML
-        html_path = self.output_dir / f"{output_name}.html"
+        html_path = Path(f"{base_path}.html")
         self._generate_html(analysis_results, html_path)
 
         return {
