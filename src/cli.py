@@ -41,28 +41,40 @@ def load_pcap_streaming(pcap_file: str, analyzers: list) -> int:
         Nombre de paquets traités
     """
     try:
-        console.print(f"[cyan]Analyse du fichier PCAP: {pcap_file}[/cyan]")
         packet_count = 0
         
-        with PcapReader(pcap_file) as reader:
-            for packet in reader:
-                packet_count += 1
-                
-                # Passe le paquet à chaque analyseur
-                for analyzer in analyzers:
-                    if hasattr(analyzer, 'process_packet'):
-                        analyzer.process_packet(packet, packet_count - 1)
-                
-                # Affichage périodique
-                if packet_count % 100000 == 0:
-                    console.print(f"[dim]Traité {packet_count} paquets...[/dim]")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[cyan]Analyse du fichier PCAP: {pcap_file}[/cyan]".format(pcap_file=pcap_file)),
+            console=console
+        ) as progress:
+            task = progress.add_task("[cyan]Chargement et analyse...", total=None)
+            
+            with PcapReader(pcap_file) as reader:
+                for packet in reader:
+                    packet_count += 1
+                    
+                    # Passe le paquet à chaque analyseur
+                    for analyzer in analyzers:
+                        if hasattr(analyzer, 'process_packet'):
+                            analyzer.process_packet(packet, packet_count - 1)
+                    
+                    # Mise à jour périodique
+                    if packet_count % 10000 == 0:
+                        progress.update(task, description=f"[cyan]Traité {packet_count} paquets...")
         
         console.print(f"[green]✓ {packet_count} paquets analysés[/green]")
         
-        # Finalise tous les analyseurs
-        for analyzer in analyzers:
-            if hasattr(analyzer, 'finalize'):
-                analyzer.finalize()
+        # Finalise tous les analyseurs avec spinner
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[cyan]Finalisation des analyses..."),
+            console=console
+        ) as progress:
+            task = progress.add_task("[cyan]Calcul des statistiques...", total=None)
+            for analyzer in analyzers:
+                if hasattr(analyzer, 'finalize'):
+                    analyzer.finalize()
         
         return packet_count
         
