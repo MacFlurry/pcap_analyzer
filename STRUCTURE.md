@@ -22,12 +22,13 @@ pcap_analyzer/
     ├── 🌐 ssh_capture.py        # Module de capture SSH/tcpdump
     ├── 📊 report_generator.py   # Générateur de rapports JSON/HTML
     │
-    └── analyzers/               # Modules d'analyse (7 dimensions)
+    └── analyzers/               # Modules d'analyse (8 dimensions)
         │
         ├── 📄 __init__.py
         │
         ├── ⏱️ timestamp_analyzer.py     # 1. Analyse des timestamps et gaps
         ├── 🤝 tcp_handshake.py          # 2. Analyse handshake TCP
+        ├── 🔄 syn_retransmission.py     # 2bis. Retransmissions SYN détaillées
         ├── 🔄 retransmission.py         # 3. Retransmissions et anomalies
         ├── ⏲️ rtt_analyzer.py           # 4. Round Trip Time
         ├── 🪟 tcp_window.py             # 5. Fenêtres TCP et saturation
@@ -61,9 +62,10 @@ pcap_analyzer/
                     │                                                  │
                     ▼                                                  ▼
         ┌───────────────────────┐                         ┌───────────────────────┐
-        │  ANALYZERS (7 modules)│                         │   LATENCY FILTER      │
+        │  ANALYZERS (8 modules)│                         │   LATENCY FILTER      │
         │  - Timestamps         │◄────────────────────────┤   (-l option)         │
         │  - TCP Handshake      │                         └───────────────────────┘
+        │  - SYN Retransmissions│
         │  - Retransmissions    │
         │  - RTT                │
         │  - TCP Window         │
@@ -123,6 +125,16 @@ Fonctionnalités :
 - Suit les phases SYN → SYN/ACK → ACK
 - Mesure les délais de chaque étape
 - Identifie le côté suspect (client/réseau/serveur)
+
+#### 3.2bis SYN Retransmission Analyzer (Nouveau)
+- Détecte les retransmissions SYN multiples
+- Analyse la timeline complète de tentatives de connexion
+- Identifie le problème exact :
+  - `server_delayed_response` : serveur répond tardivement au 1er SYN
+  - `packet_loss` : perte de paquets SYN dans le réseau
+  - `no_response` : serveur ne répond jamais
+- Corrèle avec les TCP timestamps pour diagnostic précis
+- Calcule statistiques (min, max, moyenne des délais)
 
 #### 3.3 Retransmission Analyzer
 - Détecte retransmissions TCP

@@ -32,16 +32,16 @@ thresholds:
 
 # Configuration SSH pour capture distante
 ssh:
-  host: "10.56.193.89"
+  host: "192.168.1.100"  # IP du serveur distant
   port: 22
-  username: "root"
-  # password: ""
-  key_file: "~/.ssh/native"
+  username: "your_username"
+  # password: ""  # Décommentez pour utiliser un mot de passe
+  key_file: "~/.ssh/id_rsa"  # Chemin vers votre clé SSH privée
 
   # Paramètres tcpdump
   tcpdump:
     interface: "any"
-    filter: "host 10.242.130.2 and port 2001"
+    filter: "host 192.168.1.50"  # Exemple : filtrer par IP
     snaplen: 65535
     buffer_size: 4096
 

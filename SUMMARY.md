@@ -8,7 +8,7 @@ Une application complète d'analyse automatisée des causes de latence réseau a
 
 ## 🎯 Fonctionnalités implémentées
 
-### 7 dimensions d'analyse automatique
+### 8 dimensions d'analyse automatique
 
 1. ✅ **Gestion et analyse des horodatages**
    - Détection des ruptures de flux
@@ -19,6 +19,12 @@ Une application complète d'analyse automatisée des causes de latence réseau a
    - Mesure SYN → SYN/ACK → ACK
    - Identification du côté suspect (client/réseau/serveur)
    - Détection des handshakes lents
+
+2bis. ✅ **Détection des retransmissions SYN (Nouveau)**
+   - Retransmissions SYN multiples
+   - Timeline complète de connexion
+   - Diagnostic précis (serveur lent, perte réseau, timeout)
+   - Corrélation avec TCP timestamps
 
 3. ✅ **Détection des retransmissions et anomalies TCP**
    - Retransmissions par flux
@@ -68,6 +74,7 @@ Une application complète d'analyse automatisée des causes de latence réseau a
 - ✅ `src/report_generator.py` - Rapports JSON/HTML
 - ✅ `src/analyzers/timestamp_analyzer.py`
 - ✅ `src/analyzers/tcp_handshake.py`
+- ✅ `src/analyzers/syn_retransmission.py` (Nouveau)
 - ✅ `src/analyzers/retransmission.py`
 - ✅ `src/analyzers/rtt_analyzer.py`
 - ✅ `src/analyzers/tcp_window.py`
@@ -271,7 +278,7 @@ done
 
 **Application production-ready** pour l'analyse automatisée de latence réseau !
 
-- ✅ **7 analyseurs** fonctionnels
+- ✅ **8 analyseurs** fonctionnels (dont 1 nouveau : SYN retransmissions)
 - ✅ **Capture SSH** automatisée
 - ✅ **Rapports HTML/JSON** professionnels
 - ✅ **Filtrage par latence** avec option `-l`
@@ -279,7 +286,7 @@ done
 - ✅ **Documentation complète** (4 guides)
 - ✅ **CLI intuitive** avec Rich
 
-**Total : ~3000+ lignes de code Python + configuration + documentation**
+**Total : ~3300+ lignes de code Python + configuration + documentation**
 
 ---
 
@@ -297,6 +304,7 @@ Consultez :
 L'outil répond à 100% de l'expression de besoins initiale :
 - ✅ Gestion horodatages
 - ✅ Analyse handshake TCP
+- ✅ Détection retransmissions SYN (Nouveau)
 - ✅ Détection retransmissions
 - ✅ Calcul RTT
 - ✅ Analyse fenêtres TCP

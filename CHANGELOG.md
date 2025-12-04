@@ -18,11 +18,30 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 - **Note Wireshark** : Clarification dans l'affichage que notre comptage de retransmissions (ex: 11) diffère de Wireshark qui affiche le double (ex: 22 paquets) car il inclut originaux + retransmissions
 
+- **Analyseur de retransmissions SYN** : Nouvelle dimension d'analyse pour détecter les problèmes de handshake TCP
+  - Détecte automatiquement les retransmissions SYN multiples (client qui retente la connexion)
+  - Analyse la timeline complète : 1er SYN, retransmissions, et réception du SYN/ACK
+  - Diagnostic précis du problème :
+    - `server_delayed_response` : le serveur répond tardivement au premier SYN
+    - `packet_loss` : perte de paquets SYN dans le réseau
+    - `no_response` : le serveur ne répond jamais
+  - Corrélation avec les TCP timestamps pour identifier quel SYN a été traité
+  - Calcul de statistiques (min, max, moyenne des délais)
+  - Section dédiée dans le rapport HTML avec timeline détaillée
+  - Configuration via `syn_retrans_threshold` dans config.yaml (défaut: 2.0 secondes)
+
 **Exemple d'utilisation :**
 ```bash
 pcap_analyzer analyze capture.pcap -d                    # Détails (20 max)
 pcap_analyzer analyze capture.pcap -d --details-limit 50 # Détails (50 max)
 ```
+
+### 📝 Documentation
+
+- Mise à jour de README.md avec la 8ème dimension d'analyse
+- Ajout de `syn_retransmission.py` dans STRUCTURE.md
+- Mise à jour de SUMMARY.md pour refléter les 8 analyseurs
+- Documentation du nouveau seuil `syn_retrans_threshold` dans config.yaml
 
 ## [1.0.3] - 2025-12-04
 
