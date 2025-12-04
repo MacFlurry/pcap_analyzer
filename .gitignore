@@ -1,53 +1,46 @@
-# Python
+
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+.agent-notes
+.DS_Store
+.eggs/
+.idea/
+.installed.cfg
 .Python
+.venv
+.vscode/
+*.egg
+*.egg-info/
+*.log
+*.pcap
+*.pcapng
+*.py[cod]
+*.so
+*.swo
+*.swp
+*~
+*$py.class
+# Configuration locale
+# IDE
+# Logs
+# OS
+# Python
+# Reports
+# Virtual environments
 build/
+config_local.yaml
+config.yaml.backup
 develop-eggs/
 dist/
 downloads/
 eggs/
-.eggs/
+env/
+ENV/
 lib/
 lib64/
 parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
-venv/
-env/
-ENV/
-.venv
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Reports
 reports/
-*.pcap
-*.pcapng
-
-# Configuration locale
-config_local.yaml
-config.yaml.backup
-
-# Logs
-*.log
-
-# OS
-.DS_Store
+sdist/
 Thumbs.db
-.agent-notes
-.agent-notes
-.agent-notes
+var/
+venv/
+wheels/
