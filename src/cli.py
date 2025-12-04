@@ -29,7 +29,8 @@ from .analyzers import (
     ThroughputAnalyzer,
     TCPTimeoutAnalyzer,
     AsymmetricTrafficAnalyzer,
-    BurstAnalyzer
+    BurstAnalyzer,
+    TemporalPatternAnalyzer
 )
 from .report_generator import ReportGenerator
 
@@ -190,6 +191,11 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
             min_packets_for_burst=thresholds.get('burst_min_packets', 50)
         )
         
+        # 16. Temporal Pattern Analyzer
+        temporal_analyzer = TemporalPatternAnalyzer(
+            slot_duration_seconds=thresholds.get('temporal_slot_duration', 60)
+        )
+        
         progress.update(task, advance=1)
 
     # Traitement streaming
@@ -208,7 +214,8 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         throughput_analyzer,
         tcp_timeout_analyzer,
         asymmetric_analyzer,
-        burst_analyzer
+        burst_analyzer,
+        temporal_analyzer
     ]
     
     load_pcap_streaming(pcap_file, analyzers)
@@ -229,6 +236,7 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     results['tcp_timeout'] = tcp_timeout_analyzer.get_results()
     results['asymmetric_traffic'] = asymmetric_analyzer.get_results()
     results['burst'] = burst_analyzer.get_results()
+    results['temporal'] = temporal_analyzer.get_results()
 
     # Affichage des résumés
     console.print("\n")
@@ -331,6 +339,20 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     if burst['worst_burst']:
         wb = burst['worst_burst']
         console.print(f"[yellow]Pire burst: {wb['start_iso']} - {wb['packet_count']} paquets ({wb['packets_per_second']:.0f} pkt/s, {wb['peak_ratio']:.1f}x la moyenne)[/yellow]")
+    
+    # Résumé Patterns Temporels
+    temporal = results['temporal']
+    temp_summary = temporal['summary']
+    temp_slots = temporal['slot_stats']
+    console.print("\n[bold cyan]📅 Analyse des Patterns Temporels[/bold cyan]")
+    console.print(f"Période: {temp_summary['capture_start']} → {temp_summary['capture_end']}")
+    console.print(f"Créneaux analysés: {temp_summary['total_slots']} (durée: {temp_summary['slot_duration_seconds']}s)")
+    console.print(f"Paquets/créneau: moy={temp_slots['avg_packets_per_slot']:.0f}, max={temp_slots['max_packets_per_slot']} ({temp_slots['peak_to_avg_ratio']}x)")
+    console.print(f"Pics détectés: {temp_summary['peaks_detected']}, Creux: {temp_summary['valleys_detected']}")
+    if temporal['periodic_patterns']:
+        console.print(f"[yellow]Patterns périodiques: {temp_summary['periodic_patterns_detected']}[/yellow]")
+        for p in temporal['periodic_patterns'][:2]:
+            console.print(f"  - {p['source_ip']}: toutes les {p['description']} ({p['confidence']}% confiance)")
 
     return results
 

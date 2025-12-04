@@ -1801,6 +1801,176 @@ class ReportGenerator:
         </div>
         {% endif %}
 
+        <!-- Patterns Temporels -->
+        {% if temporal and temporal.summary.total_slots > 0 %}
+        <h2>📅 Analyse des Patterns Temporels</h2>
+        <div class="section">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Période d'analyse</h4>
+                    <div class="value" style="font-size: 0.8em">{{ temporal.summary.capture_start }}</div>
+                    <small>→ {{ temporal.summary.capture_end }}</small>
+                </div>
+                <div class="summary-card info">
+                    <h4>Créneaux analysés</h4>
+                    <div class="value">{{ temporal.summary.total_slots }}</div>
+                    <small>{{ temporal.summary.slot_duration_seconds }}s par créneau</small>
+                </div>
+                <div class="summary-card {% if temporal.summary.peaks_detected > 10 %}warning{% else %}success{% endif %}">
+                    <h4>Pics détectés</h4>
+                    <div class="value">{{ temporal.summary.peaks_detected }}</div>
+                </div>
+                <div class="summary-card {% if temporal.summary.periodic_patterns_detected > 0 %}warning{% else %}info{% endif %}">
+                    <h4>Patterns périodiques</h4>
+                    <div class="value">{{ temporal.summary.periodic_patterns_detected }}</div>
+                </div>
+            </div>
+
+            <!-- Stats par créneau -->
+            <h3>📊 Distribution du trafic</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Métrique</th>
+                        <th>Valeur</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Paquets/créneau (moyenne)</td>
+                        <td>{{ temporal.slot_stats.avg_packets_per_slot }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paquets/créneau (min)</td>
+                        <td>{{ temporal.slot_stats.min_packets_per_slot }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paquets/créneau (max)</td>
+                        <td><span class="badge {% if temporal.slot_stats.peak_to_avg_ratio > 3 %}danger{% else %}info{% endif %}">{{ temporal.slot_stats.max_packets_per_slot }}</span></td>
+                    </tr>
+                    <tr>
+                        <td>Ratio pic/moyenne</td>
+                        <td>{{ temporal.slot_stats.peak_to_avg_ratio }}x</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Distribution horaire -->
+            {% if temporal.hourly_distribution %}
+            <h3>🕐 Distribution horaire</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Heure</th>
+                        <th>Paquets</th>
+                        <th>Volume</th>
+                        <th>Moy/créneau</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for hour in temporal.hourly_distribution %}
+                    <tr>
+                        <td><code>{{ hour.hour_label }}</code></td>
+                        <td>{{ hour.packets }}</td>
+                        <td>{{ "%.2f"|format(hour.bytes / 1048576) }} MB</td>
+                        <td>{{ hour.avg_per_slot }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Pics de trafic -->
+            {% if temporal.peaks %}
+            <h3>📈 Pics de trafic (Top 10)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Heure</th>
+                        <th>Paquets</th>
+                        <th>Volume</th>
+                        <th>Ratio</th>
+                        <th>Sources uniques</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for peak in temporal.peaks[:10] %}
+                    <tr>
+                        <td><code>{{ peak.time }}</code></td>
+                        <td>{{ peak.packets }}</td>
+                        <td>{{ "%.2f"|format(peak.bytes / 1024) }} KB</td>
+                        <td><span class="badge danger">{{ peak.ratio }}x</span></td>
+                        <td>{{ peak.unique_sources }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Patterns périodiques -->
+            {% if temporal.periodic_patterns %}
+            <h3>🔄 Patterns périodiques détectés</h3>
+            <p>Ces patterns indiquent des communications régulières (heartbeat, polling, cron jobs, etc.)</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Intervalle</th>
+                        <th>Description</th>
+                        <th>Occurrences</th>
+                        <th>Confiance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pattern in temporal.periodic_patterns %}
+                    <tr>
+                        <td><code>{{ pattern.source_ip }}</code></td>
+                        <td>{{ pattern.interval_seconds }}s</td>
+                        <td>{{ pattern.description }}</td>
+                        <td>{{ pattern.occurrences }}</td>
+                        <td>
+                            {% if pattern.confidence >= 70 %}
+                            <span class="badge success">{{ pattern.confidence }}%</span>
+                            {% elif pattern.confidence >= 50 %}
+                            <span class="badge warning">{{ pattern.confidence }}%</span>
+                            {% else %}
+                            <span class="badge info">{{ pattern.confidence }}%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Creux de trafic -->
+            {% if temporal.valleys %}
+            <h3>📉 Creux de trafic</h3>
+            <p>Périodes de faible activité - opportunité pour maintenance</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Heure</th>
+                        <th>Paquets</th>
+                        <th>Ratio vs moyenne</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for valley in temporal.valleys[:5] %}
+                    <tr>
+                        <td><code>{{ valley.time }}</code></td>
+                        <td>{{ valley.packets }}</td>
+                        <td><span class="badge success">{{ valley.ratio }}x</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="footer">
             <p>Rapport généré par <strong>PCAP Analyzer</strong> - {{ analysis_info.analysis_date }}</p>
         </div>
@@ -1920,7 +2090,8 @@ class ReportGenerator:
             throughput=data.get('throughput', {}),
             tcp_timeout=data.get('tcp_timeout', {}),
             asymmetric_traffic=data.get('asymmetric_traffic', {}),
-            burst=data.get('burst', {})
+            burst=data.get('burst', {}),
+            temporal=data.get('temporal', {})
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:
