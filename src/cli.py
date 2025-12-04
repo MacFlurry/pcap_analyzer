@@ -6,7 +6,7 @@ Interface en ligne de commande pour l'analyseur PCAP
 import click
 import sys
 from pathlib import Path
-from scapy.all import rdpcap
+from scapy.all import PcapReader
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 from rich.panel import Panel
@@ -29,54 +29,80 @@ from .report_generator import ReportGenerator
 console = Console()
 
 
-def load_pcap(pcap_file: str) -> list:
-    """Charge un fichier PCAP"""
+def load_pcap_streaming(pcap_file: str, analyzers: list) -> int:
+    """
+    Charge et analyse un fichier PCAP en mode streaming
+    
+    Args:
+        pcap_file: Chemin vers le fichier PCAP
+        analyzers: Liste des analyseurs à appliquer
+        
+    Returns:
+        Nombre de paquets traités
+    """
     try:
-        console.print(f"[cyan]Chargement du fichier PCAP: {pcap_file}[/cyan]")
-        packets = rdpcap(pcap_file)
-        console.print(f"[green]✓ {len(packets)} paquets chargés[/green]")
-        return packets
+        console.print(f"[cyan]Analyse du fichier PCAP: {pcap_file}[/cyan]")
+        packet_count = 0
+        
+        with PcapReader(pcap_file) as reader:
+            for packet in reader:
+                packet_count += 1
+                
+                # Passe le paquet à chaque analyseur
+                for analyzer in analyzers:
+                    if hasattr(analyzer, 'process_packet'):
+                        analyzer.process_packet(packet, packet_count - 1)
+                
+                # Affichage périodique
+                if packet_count % 100000 == 0:
+                    console.print(f"[dim]Traité {packet_count} paquets...[/dim]")
+        
+        console.print(f"[green]✓ {packet_count} paquets analysés[/green]")
+        
+        # Finalise tous les analyseurs
+        for analyzer in analyzers:
+            if hasattr(analyzer, 'finalize'):
+                analyzer.finalize()
+        
+        return packet_count
+        
     except FileNotFoundError:
         console.print(f"[red]❌ Fichier non trouvé: {pcap_file}[/red]")
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]❌ Erreur lors du chargement: {e}[/red]")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
-def analyze_pcap(packets: list, config, latency_filter: float = None, show_details: bool = False, details_limit: int = 20):
-    """Analyse un fichier PCAP"""
+def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None, show_details: bool = False, details_limit: int = 20):
+    """Analyse un fichier PCAP en mode streaming optimisé"""
     thresholds = config.thresholds
 
     results = {}
-    retrans_analyzer = None  # Pour accéder aux détails après analyse
-
+    
+    # Initialisation des analyseurs
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         console=console
     ) as progress:
-
+        task = progress.add_task("[cyan]Initialisation des analyseurs...", total=1)
+        
         # 1. Timestamps
-        task = progress.add_task("[cyan]Analyse des timestamps...", total=1)
         gap_threshold = latency_filter if latency_filter else thresholds.get('packet_gap', 1.0)
         timestamp_analyzer = TimestampAnalyzer(gap_threshold=gap_threshold)
-        results['timestamps'] = timestamp_analyzer.analyze(packets)
-        progress.update(task, advance=1)
 
         # 2. TCP Handshake
-        task = progress.add_task("[cyan]Analyse des handshakes TCP...", total=1)
         handshake_analyzer = TCPHandshakeAnalyzer(
             syn_synack_threshold=thresholds.get('syn_synack_delay', 0.1),
             total_threshold=thresholds.get('handshake_total', 0.3),
             latency_filter=latency_filter
         )
-        results['tcp_handshake'] = handshake_analyzer.analyze(packets)
-        progress.update(task, advance=1)
 
         # 3. Retransmissions
-        task = progress.add_task("[cyan]Analyse des retransmissions...", total=1)
         retrans_analyzer = RetransmissionAnalyzer(
             retrans_low=thresholds.get('retransmission_low', 10),
             retrans_medium=thresholds.get('retransmission_medium', 50),
@@ -85,51 +111,60 @@ def analyze_pcap(packets: list, config, latency_filter: float = None, show_detai
             retrans_rate_medium=thresholds.get('retransmission_rate_medium', 3.0),
             retrans_rate_critical=thresholds.get('retransmission_rate_critical', 5.0)
         )
-        results['retransmission'] = retrans_analyzer.analyze(packets)
-        progress.update(task, advance=1)
 
         # 4. RTT
-        task = progress.add_task("[cyan]Analyse du RTT...", total=1)
         rtt_analyzer = RTTAnalyzer(
             rtt_warning=thresholds.get('rtt_warning', 0.1),
             rtt_critical=thresholds.get('rtt_critical', 0.5),
             latency_filter=latency_filter
         )
-        results['rtt'] = rtt_analyzer.analyze(packets)
-        progress.update(task, advance=1)
 
         # 5. TCP Window
-        task = progress.add_task("[cyan]Analyse des fenêtres TCP...", total=1)
         window_analyzer = TCPWindowAnalyzer(
             low_window_threshold=thresholds.get('low_window_threshold', 8192),
             zero_window_duration=thresholds.get('zero_window_duration', 0.1)
         )
-        results['tcp_window'] = window_analyzer.analyze(packets)
-        progress.update(task, advance=1)
 
         # 6. ICMP / PMTU
-        task = progress.add_task("[cyan]Analyse ICMP et PMTU...", total=1)
         icmp_analyzer = ICMPAnalyzer()
-        results['icmp'] = icmp_analyzer.analyze(packets)
-        progress.update(task, advance=1)
 
         # 7. DNS
-        task = progress.add_task("[cyan]Analyse DNS...", total=1)
         dns_analyzer = DNSAnalyzer(
             response_warning=thresholds.get('dns_response_warning', 0.1),
             response_critical=thresholds.get('dns_response_critical', 1.0),
             timeout=thresholds.get('dns_timeout', 5.0),
             latency_filter=latency_filter
         )
-        results['dns'] = dns_analyzer.analyze(packets)
-        progress.update(task, advance=1)
 
         # 8. Retransmissions SYN détaillées
-        task = progress.add_task("[cyan]Analyse des retransmissions SYN...", total=1)
         syn_threshold = latency_filter if latency_filter else thresholds.get('syn_retrans_threshold', 2.0)
         syn_retrans_analyzer = SYNRetransmissionAnalyzer(threshold=syn_threshold)
-        results['syn_retransmissions'] = syn_retrans_analyzer.analyze(packets)
+        
         progress.update(task, advance=1)
+
+    # Traitement streaming
+    analyzers = [
+        timestamp_analyzer,
+        handshake_analyzer,
+        retrans_analyzer,
+        rtt_analyzer,
+        window_analyzer,
+        icmp_analyzer,
+        dns_analyzer,
+        syn_retrans_analyzer
+    ]
+    
+    load_pcap_streaming(pcap_file, analyzers)
+    
+    # Récupération des résultats
+    results['timestamps'] = timestamp_analyzer._generate_report() if hasattr(timestamp_analyzer, '_generate_report') else {}
+    results['tcp_handshake'] = handshake_analyzer._generate_report() if hasattr(handshake_analyzer, '_generate_report') else {}
+    results['retransmission'] = retrans_analyzer._generate_report() if hasattr(retrans_analyzer, '_generate_report') else {}
+    results['rtt'] = rtt_analyzer._generate_report() if hasattr(rtt_analyzer, '_generate_report') else {}
+    results['tcp_window'] = window_analyzer._generate_report() if hasattr(window_analyzer, '_generate_report') else {}
+    results['icmp'] = icmp_analyzer._generate_report() if hasattr(icmp_analyzer, '_generate_report') else {}
+    results['dns'] = dns_analyzer._generate_report() if hasattr(dns_analyzer, '_generate_report') else {}
+    results['syn_retransmissions'] = syn_retrans_analyzer._generate_report() if hasattr(syn_retrans_analyzer, '_generate_report') else {}
 
     # Affichage des résumés
     console.print("\n")
@@ -181,14 +216,11 @@ def analyze(pcap_file, latency, config, output, no_report, details, details_limi
     # Charge la configuration
     cfg = get_config(config)
 
-    # Charge le PCAP
-    packets = load_pcap(pcap_file)
-
-    # Analyse
+    # Mode filtrage
     if latency:
         console.print(f"[yellow]Mode filtrage: analyse des paquets avec latence >= {latency}s[/yellow]")
 
-    results = analyze_pcap(packets, cfg, latency_filter=latency, show_details=details, details_limit=details_limit)
+    results = analyze_pcap_streaming(pcap_file, cfg, latency_filter=latency, show_details=details, details_limit=details_limit)
 
     # Génération des rapports
     if not no_report:
@@ -238,8 +270,7 @@ def capture(duration, filter, output, config, analyze, latency):
         # Analyse automatique si demandé
         if analyze:
             console.print("\n[cyan]Lancement de l'analyse automatique...[/cyan]")
-            packets = load_pcap(local_pcap)
-            results = analyze_pcap(packets, cfg, latency_filter=latency)
+            results = analyze_pcap_streaming(local_pcap, cfg, latency_filter=latency)
 
             # Génération des rapports
             console.print("\n[cyan]Génération des rapports...[/cyan]")

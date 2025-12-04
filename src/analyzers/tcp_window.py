@@ -84,14 +84,23 @@ class TCPWindowAnalyzer:
             Dictionnaire contenant les résultats d'analyse
         """
         for i, packet in enumerate(packets):
-            if not packet.haslayer(TCP) or not packet.haslayer(IP):
-                continue
+            self.process_packet(packet, i)
 
-            self._analyze_packet(i, packet)
+        return self.finalize()
 
+    def process_packet(self, packet: Packet, packet_num: int) -> None:
+        """Traite un paquet individuel"""
+        if not packet.haslayer(TCP) or not packet.haslayer(IP):
+            return
+
+        self._last_packet_time = float(packet.time)
+        self._analyze_packet(packet_num, packet)
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalise l'analyse et génère le rapport"""
         # Termine les zero windows en cours
-        if packets:
-            last_time = float(packets[-1].time)
+        if hasattr(self, '_last_packet_time'):
+            last_time = self._last_packet_time
             for flow_key, (start_pkt, start_time, event) in self._zero_window_start.items():
                 duration = last_time - start_time
                 event.duration = duration

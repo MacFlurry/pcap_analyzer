@@ -57,69 +57,75 @@ class TCPHandshakeAnalyzer:
         Returns:
             Dictionnaire contenant les résultats d'analyse
         """
-        # Première passe : identifier les SYN
         for i, packet in enumerate(packets):
-            if not packet.haslayer(TCP):
-                continue
+            self.process_packet(packet, i)
+            
+        return self.finalize()
 
-            tcp = packet[TCP]
-            packet_time = float(packet.time)
+    def process_packet(self, packet: Packet, packet_num: int) -> None:
+        """Traite un paquet individuel"""
+        if not packet.haslayer(TCP):
+            return
 
-            # Détection SYN (sans ACK)
-            if tcp.flags & 0x02 and not tcp.flags & 0x10:  # SYN flag set, ACK flag not set
-                flow_key = self._get_flow_key(packet, 'client')
+        tcp = packet[TCP]
+        packet_time = float(packet.time)
 
-                if flow_key not in self.incomplete_handshakes:
-                    handshake = HandshakeFlow(
-                        src_ip=packet['IP'].src,
-                        dst_ip=packet['IP'].dst,
-                        src_port=tcp.sport,
-                        dst_port=tcp.dport,
-                        syn_time=packet_time,
-                        syn_packet_num=i
-                    )
-                    self.incomplete_handshakes[flow_key] = handshake
+        # Détection SYN (sans ACK)
+        if tcp.flags & 0x02 and not tcp.flags & 0x10:  # SYN flag set, ACK flag not set
+            flow_key = self._get_flow_key(packet, 'client')
 
-            # Détection SYN/ACK
-            elif tcp.flags & 0x12 == 0x12:  # SYN+ACK flags set
-                flow_key = self._get_flow_key(packet, 'server')
+            if flow_key not in self.incomplete_handshakes:
+                handshake = HandshakeFlow(
+                    src_ip=packet['IP'].src,
+                    dst_ip=packet['IP'].dst,
+                    src_port=tcp.sport,
+                    dst_port=tcp.dport,
+                    syn_time=packet_time,
+                    syn_packet_num=packet_num
+                )
+                self.incomplete_handshakes[flow_key] = handshake
 
-                if flow_key in self.incomplete_handshakes:
-                    handshake = self.incomplete_handshakes[flow_key]
-                    handshake.synack_time = packet_time
-                    handshake.synack_packet_num = i
+        # Détection SYN/ACK
+        elif tcp.flags & 0x12 == 0x12:  # SYN+ACK flags set
+            flow_key = self._get_flow_key(packet, 'server')
 
+            if flow_key in self.incomplete_handshakes:
+                handshake = self.incomplete_handshakes[flow_key]
+                handshake.synack_time = packet_time
+                handshake.synack_packet_num = packet_num
+
+                if handshake.syn_time:
+                    handshake.syn_to_synack_delay = packet_time - handshake.syn_time
+
+        # Détection ACK final (après SYN/ACK)
+        elif tcp.flags & 0x10 and not tcp.flags & 0x02:  # ACK flag set, SYN not set
+            flow_key = self._get_flow_key(packet, 'client')
+
+            if flow_key in self.incomplete_handshakes:
+                handshake = self.incomplete_handshakes[flow_key]
+                
+                # On ne traite que si on a vu le SYN/ACK
+                if handshake.synack_time:
+                    handshake.ack_time = packet_time
+                    handshake.ack_packet_num = packet_num
+                    handshake.synack_to_ack_delay = packet_time - handshake.synack_time
+                    
                     if handshake.syn_time:
-                        handshake.syn_to_synack_delay = packet_time - handshake.syn_time
+                        handshake.total_handshake_time = packet_time - handshake.syn_time
+                        handshake.complete = True
+                        
+                        # Détermine le côté suspect
+                        handshake.suspected_side = self._identify_suspect_side(handshake)
+                        
+                        # Ajout aux handshakes terminés si on doit l'inclure
+                        if self._should_include_handshake(handshake):
+                            self.handshakes.append(handshake)
+                        
+                        # Suppression des incomplets
+                        del self.incomplete_handshakes[flow_key]
 
-            # Détection ACK final (après SYN/ACK)
-            elif tcp.flags & 0x10 and not tcp.flags & 0x02:  # ACK flag set, SYN not set
-                flow_key = self._get_flow_key(packet, 'client')
-
-                if flow_key in self.incomplete_handshakes:
-                    handshake = self.incomplete_handshakes[flow_key]
-
-                    # Vérifie que c'est bien l'ACK du handshake (pas un ACK de données)
-                    if handshake.synack_time and not handshake.ack_time:
-                        if packet_time - handshake.synack_time < 5.0:  # Timeout de 5s
-                            handshake.ack_time = packet_time
-                            handshake.ack_packet_num = i
-
-                            if handshake.synack_time:
-                                handshake.synack_to_ack_delay = packet_time - handshake.synack_time
-
-                            if handshake.syn_time:
-                                handshake.total_handshake_time = packet_time - handshake.syn_time
-                                handshake.complete = True
-
-                                # Détermine le côté suspect
-                                handshake.suspected_side = self._identify_suspect_side(handshake)
-
-                                # Applique le filtre de latence si défini
-                                if self._should_include_handshake(handshake):
-                                    self.handshakes.append(handshake)
-                                del self.incomplete_handshakes[flow_key]
-
+    def finalize(self) -> Dict[str, Any]:
+        """Finalise l'analyse et génère le rapport"""
         # Ajoute les handshakes incomplets à la liste finale
         for handshake in self.incomplete_handshakes.values():
             if handshake.syn_to_synack_delay:

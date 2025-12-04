@@ -107,13 +107,20 @@ class RetransmissionAnalyzer:
             Dictionnaire contenant les résultats d'analyse
         """
         for i, packet in enumerate(packets):
-            if not packet.haslayer(TCP) or not packet.haslayer(IP):
-                continue
+            self.process_packet(packet, i)
 
-            self._analyze_packet(i, packet)
+        return self.finalize()
 
+    def process_packet(self, packet: Packet, packet_num: int) -> None:
+        """Traite un paquet individuel"""
+        if not packet.haslayer(TCP) or not packet.haslayer(IP):
+            return
+
+        self._analyze_packet(packet_num, packet)
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalise l'analyse et génère le rapport"""
         self._calculate_flow_severity()
-
         return self._generate_report()
 
     def _analyze_packet(self, packet_num: int, packet: Packet) -> None:

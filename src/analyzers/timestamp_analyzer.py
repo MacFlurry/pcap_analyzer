@@ -55,43 +55,48 @@ class TimestampAnalyzer:
             return self._generate_report()
 
         # Analyse séquentielle des timestamps
-        prev_packet = None
-        prev_time = None
-
         for i, packet in enumerate(packets):
-            if not hasattr(packet, 'time'):
-                continue
+            self.process_packet(packet, i)
 
-            current_time = float(packet.time)
+        return self.finalize()
 
-            # Premier paquet
-            if self.first_timestamp is None:
-                self.first_timestamp = current_time
+    def process_packet(self, packet: Packet, packet_num: int) -> None:
+        """Traite un paquet individuel"""
+        if not hasattr(packet, 'time'):
+            return
 
-            self.last_timestamp = current_time
+        current_time = float(packet.time)
 
-            # Calcul de l'intervalle avec le paquet précédent
-            if prev_time is not None:
-                interval = current_time - prev_time
-                self.packet_intervals.append(interval)
+        # Premier paquet
+        if self.first_timestamp is None:
+            self.first_timestamp = current_time
 
-                # Détection de gap anormal
-                if interval > self.gap_threshold:
-                    gap = TimestampGap(
-                        packet_num_before=i - 1,
-                        packet_num_after=i,
-                        timestamp_before=prev_time,
-                        timestamp_after=current_time,
-                        gap_duration=interval,
-                        src_ip=self._get_src_ip(packet),
-                        dst_ip=self._get_dst_ip(packet),
-                        protocol=self._get_protocol(packet)
-                    )
-                    self.gaps.append(gap)
+        self.last_timestamp = current_time
 
-            prev_time = current_time
-            prev_packet = packet
+        # Calcul de l'intervalle avec le paquet précédent
+        # Note: On stocke prev_time dans l'instance maintenant
+        if hasattr(self, '_prev_time') and self._prev_time is not None:
+            interval = current_time - self._prev_time
+            self.packet_intervals.append(interval)
 
+            # Détection de gap anormal
+            if interval > self.gap_threshold:
+                gap = TimestampGap(
+                    packet_num_before=packet_num - 1,
+                    packet_num_after=packet_num,
+                    timestamp_before=self._prev_time,
+                    timestamp_after=current_time,
+                    gap_duration=interval,
+                    src_ip=self._get_src_ip(packet),
+                    dst_ip=self._get_dst_ip(packet),
+                    protocol=self._get_protocol(packet)
+                )
+                self.gaps.append(gap)
+
+        self._prev_time = current_time
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalise l'analyse et génère le rapport"""
         if self.first_timestamp and self.last_timestamp:
             self.capture_duration = self.last_timestamp - self.first_timestamp
 

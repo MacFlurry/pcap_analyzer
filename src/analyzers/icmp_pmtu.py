@@ -69,14 +69,22 @@ class ICMPAnalyzer:
             Dictionnaire contenant les résultats d'analyse
         """
         for i, packet in enumerate(packets):
-            # ICMP IPv4
-            if packet.haslayer(ICMP):
-                self._analyze_icmp_packet(i, packet)
+            self.process_packet(packet, i)
 
-            # ICMPv6
-            elif packet.haslayer(ICMPv6DestUnreach):
-                self._analyze_icmpv6_packet(i, packet)
+        return self.finalize()
 
+    def process_packet(self, packet: Packet, packet_num: int) -> None:
+        """Traite un paquet individuel"""
+        # ICMP IPv4
+        if packet.haslayer(ICMP):
+            self._analyze_icmp_packet(packet_num, packet)
+
+        # ICMPv6
+        elif packet.haslayer(ICMPv6DestUnreach):
+            self._analyze_icmpv6_packet(packet_num, packet)
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalise l'analyse et génère le rapport"""
         return self._generate_report()
 
     def _analyze_icmp_packet(self, packet_num: int, packet: Packet) -> None:

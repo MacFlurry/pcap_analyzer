@@ -63,66 +63,71 @@ class SYNRetransmissionAnalyzer:
         Returns:
             Dictionnaire contenant les résultats d'analyse
         """
-        # Dictionnaire pour tracker les SYN par séquence number
-        syn_tracker: Dict[Tuple[str, int, int, int], SYNRetransmission] = {}
-
         for i, packet in enumerate(packets):
-            if not packet.haslayer(TCP) or not packet.haslayer('IP'):
-                continue
+            self.process_packet(packet, i)
 
-            tcp = packet[TCP]
-            ip = packet['IP']
-            packet_time = float(packet.time)
+        return self.finalize()
 
-            # Détection SYN (sans ACK)
-            if tcp.flags & 0x02 and not tcp.flags & 0x10:
-                base_flow_key = (ip.src, ip.dst, tcp.sport, tcp.dport)
-                
-                # Vérifier si c'est une retransmission (même flux, même seq number)
-                if base_flow_key in syn_tracker:
-                    retrans = syn_tracker[base_flow_key]
-                    # Vérifier si même seq number (retransmission)
-                    if len(retrans.syn_attempts) > 0:
-                        first_syn_seq = retrans.syn_attempts[0]  # On utilise le timestamp comme référence
-                        # On considère que c'est une retransmission si c'est le même flux
-                        # et que le temps est cohérent (< 10s depuis le dernier SYN)
-                        if packet_time - retrans.syn_attempts[-1] < 10.0:
-                            retrans.syn_attempts.append(packet_time)
-                            retrans.syn_packet_nums.append(i)
-                            retrans.retransmission_count += 1
-                else:
-                    # Nouveau SYN
-                    retrans = SYNRetransmission(
-                        src_ip=ip.src,
-                        dst_ip=ip.dst,
-                        src_port=tcp.sport,
-                        dst_port=tcp.dport,
-                        first_syn_time=packet_time,
-                        syn_attempts=[packet_time],
-                        syn_packet_nums=[i]
-                    )
-                    syn_tracker[base_flow_key] = retrans
+    def process_packet(self, packet: Packet, packet_num: int) -> None:
+        """Traite un paquet individuel"""
+        if not packet.haslayer(TCP) or not packet.haslayer('IP'):
+            return
 
-            # Détection SYN/ACK
-            elif tcp.flags & 0x12 == 0x12:
-                # Cherche le SYN correspondant (flux inverse)
-                reverse_flow_key = (ip.dst, ip.src, tcp.dport, tcp.sport)
-                
-                if reverse_flow_key in syn_tracker:
-                    retrans = syn_tracker[reverse_flow_key]
-                    if not retrans.synack_received:  # Premier SYN/ACK
-                        retrans.synack_time = packet_time
-                        retrans.synack_packet_num = i
-                        retrans.total_delay = packet_time - retrans.first_syn_time
-                        retrans.synack_received = True
-                        retrans.suspected_issue = self._identify_issue(retrans)
-                        
-                        # Si délai >= seuil ou retransmissions, on garde
-                        if retrans.total_delay >= self.threshold or retrans.retransmission_count > 0:
-                            self.retransmissions.append(retrans)
+        tcp = packet[TCP]
+        ip = packet['IP']
+        packet_time = float(packet.time)
 
+        # Détection SYN (sans ACK)
+        if tcp.flags & 0x02 and not tcp.flags & 0x10:
+            base_flow_key = (ip.src, ip.dst, tcp.sport, tcp.dport)
+            
+            # Vérifier si c'est une retransmission (même flux, même seq number)
+            if base_flow_key in self.pending_syns:
+                retrans = self.pending_syns[base_flow_key]
+                # On considère que c'est une retransmission si c'est le même flux
+                # et que le temps est cohérent (< 10s depuis le dernier SYN)
+                if retrans.syn_attempts and packet_time - retrans.syn_attempts[-1] < 10.0:
+                    retrans.syn_attempts.append(packet_time)
+                    retrans.syn_packet_nums.append(packet_num)
+                    retrans.retransmission_count += 1
+            else:
+                # Nouveau SYN
+                retrans = SYNRetransmission(
+                    src_ip=ip.src,
+                    dst_ip=ip.dst,
+                    src_port=tcp.sport,
+                    dst_port=tcp.dport,
+                    first_syn_time=packet_time,
+                    syn_attempts=[packet_time],
+                    syn_packet_nums=[packet_num],
+                    retransmission_count=0
+                )
+                self.pending_syns[base_flow_key] = retrans
+
+        # Détection SYN/ACK
+        elif tcp.flags & 0x12 == 0x12:
+            reverse_flow = (ip.dst, ip.src, tcp.dport, tcp.sport)
+            
+            if reverse_flow in self.pending_syns:
+                retrans = self.pending_syns[reverse_flow]
+                if not retrans.synack_received:
+                    retrans.synack_received = True
+                    retrans.synack_time = packet_time
+                    retrans.synack_packet_num = packet_num
+                    retrans.total_delay = packet_time - retrans.first_syn_time
+                    
+                    # Analyse de la cause du délai
+                    if retrans.retransmission_count > 0:
+                        retrans.suspected_issue = "delayed_synack"
+                    
+                    # Ajoute aux retransmissions complétées
+                    self.retransmissions.append(retrans)
+                    del self.pending_syns[reverse_flow]
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalise l'analyse et génère le rapport"""
         # Ajoute les SYN sans réponse
-        for retrans in syn_tracker.values():
+        for retrans in self.pending_syns.values():
             if not retrans.synack_received and retrans.retransmission_count > 0:
                 retrans.suspected_issue = "no_synack_received"
                 # Si pas de réponse, le délai est la différence entre le dernier et le premier SYN

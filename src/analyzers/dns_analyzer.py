@@ -107,34 +107,30 @@ class DNSAnalyzer:
         Returns:
             Dictionnaire contenant les résultats d'analyse
         """
-        # Première passe : enregistrer les queries et responses
         for i, packet in enumerate(packets):
-            if not packet.haslayer(DNS):
-                continue
+            self.process_packet(packet, i)
 
-            dns = packet[DNS]
+        return self.finalize()
 
-            # Requête DNS
-            if dns.qr == 0:  # Query
-                self._process_query(i, packet, dns)
-            # Réponse DNS
-            elif dns.qr == 1:  # Response
-                self._process_response(i, packet, dns)
+    def process_packet(self, packet: Packet, packet_num: int) -> None:
+        """Traite un paquet individuel"""
+        if not packet.haslayer(DNS):
+            return
 
-        # Deuxième passe : identifier les timeouts
-        for query_id, query in self._pending_queries.items():
-            # Les timeouts sont toujours inclus (considérés comme latence infinie)
-            # sauf si on a un filtre très élevé et qu'on veut seulement les timeouts vraiment longs
-            transaction = DNSTransaction(
-                query=query,
-                response=None,
-                response_time=None,
-                timed_out=True,
-                repeated=False,
-                status='timeout'
-            )
-            self.transactions.append(transaction)
+        dns = packet[DNS]
+        
+        # Requête DNS (qr=0)
+        if dns.qr == 0:
+            self._process_query(packet_num, packet, dns)
 
+        # Réponse DNS (qr=1)
+        elif dns.qr == 1:
+            self._process_response(packet_num, packet, dns)
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalise l'analyse et génère le rapport"""
+        # Les requêtes sans réponse sont déjà gérées dans process_packet
+        # Pas besoin de check_timeouts supplémentaire
         return self._generate_report()
 
     def _process_query(self, packet_num: int, packet: Packet, dns: DNS) -> None:

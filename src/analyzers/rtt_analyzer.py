@@ -71,52 +71,62 @@ class RTTAnalyzer:
         Returns:
             Dictionnaire contenant les résultats d'analyse
         """
-        # Première passe : enregistrer les segments avec données
         for i, packet in enumerate(packets):
-            if not packet.haslayer(TCP) or not packet.haslayer(IP):
-                continue
+            self.process_packet(packet, i)
 
-            tcp = packet[TCP]
-            timestamp = float(packet.time)
+        return self.finalize()
 
-            # Segment avec données
-            if len(tcp.payload) > 0:
-                flow_key = self._get_flow_key(packet)
-                seq = tcp.seq
-                payload_len = len(tcp.payload)
+    def process_packet(self, packet: Packet, packet_num: int) -> None:
+        """Traite un paquet individuel"""
+        if not packet.haslayer(TCP) or not packet.haslayer(IP):
+            return
 
-                # Enregistre le segment en attente d'ACK
-                if seq not in self._unacked_segments[flow_key]:
-                    self._unacked_segments[flow_key][seq] = (i, timestamp, payload_len)
+        tcp = packet[TCP]
+        timestamp = float(packet.time)
 
-            # ACK reçu
-            if tcp.flags & 0x10 and tcp.ack > 0:
-                reverse_flow = self._get_reverse_flow_key(packet)
-                ack = tcp.ack
+        # Segment avec données
+        if len(tcp.payload) > 0:
+            flow_key = self._get_flow_key(packet)
+            seq = tcp.seq
+            payload_len = len(tcp.payload)
 
-                # Cherche les segments correspondants
-                for seq, (data_pkt_num, data_time, payload_len) in list(
-                    self._unacked_segments[reverse_flow].items()
-                ):
-                    # Si l'ACK couvre ce segment
-                    if ack >= seq + payload_len:
-                        rtt = timestamp - data_time
+            # Enregistre le segment en attente d'ACK
+            if seq not in self._unacked_segments[flow_key]:
+                self._unacked_segments[flow_key][seq] = (packet_num, timestamp, payload_len)
 
-                        # Applique le filtre de latence si défini
-                        if self.latency_filter is None or rtt >= self.latency_filter:
-                            measurement = RTTMeasurement(
-                                timestamp=timestamp,
-                                rtt=rtt,
-                                flow_key=reverse_flow,
-                                seq_num=seq,
-                                ack_num=ack,
-                                data_packet_num=data_pkt_num,
-                                ack_packet_num=i
-                            )
-                            self.measurements.append(measurement)
+        # ACK reçu
+        if tcp.flags & 0x10 and tcp.ack > 0:
+            reverse_flow = self._get_reverse_flow_key(packet)
+            ack = tcp.ack
 
-                        # Supprime le segment ACKé
-                        del self._unacked_segments[reverse_flow][seq]
+            # Cherche les segments correspondants
+            for seq, (data_pkt_num, data_time, payload_len) in list(
+                self._unacked_segments[reverse_flow].items()
+            ):
+                # Si l'ACK couvre ce segment
+                if ack >= seq + payload_len:
+                    rtt = timestamp - data_time
+
+                    # Applique le filtre de latence si défini
+                    if self.latency_filter is None or rtt >= self.latency_filter:
+                        measurement = RTTMeasurement(
+                            timestamp=timestamp,
+                            rtt=rtt,
+                            flow_key=reverse_flow,
+                            seq_num=seq,
+                            ack_num=ack,
+                            data_packet_num=data_pkt_num,
+                            ack_packet_num=packet_num
+                        )
+                        self.measurements.append(measurement)
+
+                    # Supprime le segment ACKé
+                    del self._unacked_segments[reverse_flow][seq]
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalise l'analyse et génère le rapport"""
+        self._calculate_flow_statistics()
+        return self._generate_report()
 
         # Calcule les statistiques par flux
         self._calculate_flow_statistics()
