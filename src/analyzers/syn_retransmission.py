@@ -125,6 +125,9 @@ class SYNRetransmissionAnalyzer:
         for retrans in syn_tracker.values():
             if not retrans.synack_received and retrans.retransmission_count > 0:
                 retrans.suspected_issue = "no_synack_received"
+                # Si pas de réponse, le délai est la différence entre le dernier et le premier SYN
+                if retrans.syn_attempts:
+                    retrans.total_delay = retrans.syn_attempts[-1] - retrans.first_syn_time
                 self.retransmissions.append(retrans)
 
         return self._generate_report()

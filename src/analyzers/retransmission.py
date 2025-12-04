@@ -394,6 +394,9 @@ class RetransmissionAnalyzer:
         for flow in self.flow_stats.values():
             severity_counts[flow.severity] += 1
 
+        # Tri des retransmissions par délai décroissant (les plus graves en premier)
+        sorted_retransmissions = sorted(self.retransmissions, key=lambda r: r.delay, reverse=True)
+
         return {
             'total_flows': len(self.flow_stats),
             'flows_with_issues': len(flows_with_issues),
@@ -406,7 +409,7 @@ class RetransmissionAnalyzer:
                 'medium': self.retrans_medium,
                 'critical': self.retrans_critical
             },
-            'retransmissions': [asdict(r) for r in self.retransmissions],
+            'retransmissions': [asdict(r) for r in sorted_retransmissions],
             'anomalies': [asdict(a) for a in self.anomalies],
             'flow_statistics': [asdict(f) for f in self.flow_stats.values()]
         }
@@ -459,10 +462,14 @@ class RetransmissionAnalyzer:
         if not retrans_list:
             return f"✅ Aucune retransmission trouvée pour le flux: {flow_filter}"
         
+        # Tri par délai décroissant (les pires retransmissions en premier)
+        # On privilégie les RTO (délais longs) aux Fast Retransmissions (délais courts)
+        retrans_list.sort(key=lambda r: r.delay, reverse=True)
+        
         total = len(retrans_list)
         displayed = min(limit, total)
         
-        details = f"🔍 Détails des retransmissions ({displayed}/{total}):\n\n"
+        details = f"🔍 Détails des retransmissions (Top {displayed} par délai / Total {total}):\n\n"
         
         for i, retrans in enumerate(retrans_list[:limit], 1):
             delay_ms = retrans.delay * 1000  # Convertir en ms
