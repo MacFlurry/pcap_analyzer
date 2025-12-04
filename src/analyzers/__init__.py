@@ -14,6 +14,7 @@ from .tcp_reset import TCPResetAnalyzer
 from .ip_fragmentation import IPFragmentationAnalyzer
 from .top_talkers import TopTalkersAnalyzer
 from .throughput import ThroughputAnalyzer
+from .tcp_timeout import TCPTimeoutAnalyzer
 
 __all__ = [
     'TimestampAnalyzer',
@@ -27,5 +28,6 @@ __all__ = [
     'TCPResetAnalyzer',
     'IPFragmentationAnalyzer',
     'TopTalkersAnalyzer',
-    'ThroughputAnalyzer'
+    'ThroughputAnalyzer',
+    'TCPTimeoutAnalyzer'
 ]

@@ -26,7 +26,8 @@ from .analyzers import (
     TCPResetAnalyzer,
     IPFragmentationAnalyzer,
     TopTalkersAnalyzer,
-    ThroughputAnalyzer
+    ThroughputAnalyzer,
+    TCPTimeoutAnalyzer
 )
 from .report_generator import ReportGenerator
 
@@ -168,6 +169,12 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         # 12. Throughput
         throughput_analyzer = ThroughputAnalyzer()
         
+        # 13. TCP Timeout
+        tcp_timeout_analyzer = TCPTimeoutAnalyzer(
+            idle_threshold=thresholds.get('tcp_idle_threshold', 30.0),
+            zombie_threshold=thresholds.get('tcp_zombie_threshold', 60.0)
+        )
+        
         progress.update(task, advance=1)
 
     # Traitement streaming
@@ -183,7 +190,8 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         tcp_reset_analyzer,
         ip_fragmentation_analyzer,
         top_talkers_analyzer,
-        throughput_analyzer
+        throughput_analyzer,
+        tcp_timeout_analyzer
     ]
     
     load_pcap_streaming(pcap_file, analyzers)
@@ -201,6 +209,7 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     results['ip_fragmentation'] = ip_fragmentation_analyzer.get_results()
     results['top_talkers'] = top_talkers_analyzer.get_results()
     results['throughput'] = throughput_analyzer.get_results()
+    results['tcp_timeout'] = tcp_timeout_analyzer.get_results()
 
     # Affichage des résumés
     console.print("\n")
@@ -266,6 +275,19 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     console.print(f"Flux analysés: {tp['total_flows']}")
     if tp['slow_flows']:
         console.print(f"[yellow]Flux lents détectés: {len(tp['slow_flows'])}[/yellow]")
+    
+    # Résumé TCP Timeout
+    timeout = results['tcp_timeout']
+    cats = timeout['categories']
+    console.print("\n[bold cyan]⏱️ Analyse des Timeouts TCP[/bold cyan]")
+    console.print(f"Connexions totales: {timeout['total_connections']}")
+    console.print(f"Connexions problématiques: {timeout['problematic_count']}")
+    if timeout['problematic_count'] > 0:
+        console.print(f"  - SYN timeout: {cats['syn_timeout_count']}")
+        console.print(f"  - Half-open: {cats['half_open_count']}")
+        console.print(f"  - Zombie: {cats['zombie_count']}")
+        console.print(f"  - Idle: {cats['idle_count']}")
+        console.print(f"  - Établies sans données: {cats['established_idle_count']}")
 
     return results
 

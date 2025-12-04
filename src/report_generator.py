@@ -1377,6 +1377,151 @@ class ReportGenerator:
         </div>
         {% endif %}
 
+        <!-- TCP Timeout -->
+        {% if tcp_timeout and tcp_timeout.total_connections > 0 %}
+        <h2>⏱️ Analyse des Timeouts TCP</h2>
+        <div class="section {% if tcp_timeout.problematic_count > 10 %}danger{% elif tcp_timeout.problematic_count > 0 %}warning{% else %}success{% endif %}">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Connexions totales</h4>
+                    <div class="value">{{ tcp_timeout.total_connections }}</div>
+                </div>
+                <div class="summary-card {% if tcp_timeout.problematic_count > 10 %}danger{% elif tcp_timeout.problematic_count > 0 %}warning{% else %}success{% endif %}">
+                    <h4>Connexions problématiques</h4>
+                    <div class="value">{{ tcp_timeout.problematic_count }}</div>
+                </div>
+                <div class="summary-card success">
+                    <h4>Fermées proprement (FIN)</h4>
+                    <div class="value">{{ tcp_timeout.categories.closed_fin_count }}</div>
+                </div>
+                <div class="summary-card info">
+                    <h4>Fermées par RST</h4>
+                    <div class="value">{{ tcp_timeout.categories.closed_rst_count }}</div>
+                </div>
+            </div>
+
+            <!-- Détails des problèmes -->
+            {% if tcp_timeout.problematic_count > 0 %}
+            <h3>🔍 Répartition des problèmes</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type de problème</th>
+                        <th>Description</th>
+                        <th>Nombre</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge danger">SYN Timeout</span></td>
+                        <td>SYN envoyé mais pas de SYN-ACK reçu</td>
+                        <td>{{ tcp_timeout.categories.syn_timeout_count }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge warning">Half-Open</span></td>
+                        <td>SYN-ACK reçu mais pas d'ACK final</td>
+                        <td>{{ tcp_timeout.categories.half_open_count }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge danger">Zombie</span></td>
+                        <td>Inactives depuis >{{ tcp_timeout.thresholds.zombie_threshold }}s sans fermeture</td>
+                        <td>{{ tcp_timeout.categories.zombie_count }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge warning">Idle</span></td>
+                        <td>Inactives depuis >{{ tcp_timeout.thresholds.idle_threshold }}s</td>
+                        <td>{{ tcp_timeout.categories.idle_count }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge info">Établies sans données</span></td>
+                        <td>Handshake complet mais aucune donnée</td>
+                        <td>{{ tcp_timeout.categories.established_idle_count }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- SYN Timeout détails -->
+            {% if tcp_timeout.categories.syn_timeout and tcp_timeout.categories.syn_timeout|length > 0 %}
+            <h3>🔴 Connexions SYN Timeout (Top 10)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Premier SYN</th>
+                        <th>Dernier paquet</th>
+                        <th>Temps d'attente</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conn in tcp_timeout.categories.syn_timeout %}
+                    <tr>
+                        <td><code>{{ conn.flow }}</code></td>
+                        <td>{{ conn.first_seen_iso }}</td>
+                        <td>{{ conn.last_seen_iso }}</td>
+                        <td><span class="badge danger">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Zombie détails -->
+            {% if tcp_timeout.categories.zombie and tcp_timeout.categories.zombie|length > 0 %}
+            <h3>💀 Connexions Zombie (Top 10)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Durée active</th>
+                        <th>Inactif depuis</th>
+                        <th>Paquets</th>
+                        <th>Volume</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conn in tcp_timeout.categories.zombie %}
+                    <tr>
+                        <td><code>{{ conn.flow }}</code></td>
+                        <td>{{ "%.1f"|format(conn.duration) }}s</td>
+                        <td><span class="badge danger">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
+                        <td>{{ conn.packet_count }}</td>
+                        <td>{{ "%.2f"|format(conn.bytes_total / 1024) }} KB</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Half-open détails -->
+            {% if tcp_timeout.categories.half_open and tcp_timeout.categories.half_open|length > 0 %}
+            <h3>⚠️ Connexions Half-Open (Top 10)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Premier SYN</th>
+                        <th>Inactif depuis</th>
+                        <th>État</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conn in tcp_timeout.categories.half_open %}
+                    <tr>
+                        <td><code>{{ conn.flow }}</code></td>
+                        <td>{{ conn.first_seen_iso }}</td>
+                        <td><span class="badge warning">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
+                        <td>SYN-ACK reçu, en attente ACK</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="footer">
             <p>Rapport généré par <strong>PCAP Analyzer</strong> - {{ analysis_info.analysis_date }}</p>
         </div>
@@ -1493,7 +1638,8 @@ class ReportGenerator:
             tcp_reset=data.get('tcp_reset', {}),
             ip_fragmentation=data.get('ip_fragmentation', {}),
             top_talkers=data.get('top_talkers', {}),
-            throughput=data.get('throughput', {})
+            throughput=data.get('throughput', {}),
+            tcp_timeout=data.get('tcp_timeout', {})
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:
