@@ -117,11 +117,12 @@ class SYNRetransmissionAnalyzer:
                     retrans.total_delay = packet_time - retrans.first_syn_time
                     
                     # Analyse de la cause du délai
-                    if retrans.retransmission_count > 0:
-                        retrans.suspected_issue = "delayed_synack"
+                    retrans.suspected_issue = self._identify_issue(retrans)
                     
-                    # Ajoute aux retransmissions complétées
-                    self.retransmissions.append(retrans)
+                    # Ajoute aux retransmissions complétées si délai >= seuil ou retransmissions présentes
+                    if retrans.total_delay >= self.threshold or retrans.retransmission_count > 0:
+                        self.retransmissions.append(retrans)
+                    
                     del self.pending_syns[reverse_flow]
 
     def finalize(self) -> Dict[str, Any]:
