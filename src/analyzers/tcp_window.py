@@ -41,7 +41,7 @@ class FlowWindowStats:
 
 
 class TCPWindowAnalyzer:
-    """Analyseur de fenêtres TCP"""
+    """Analyseur de fenêtres TCP optimisé"""
 
     def __init__(self, low_window_threshold: int = 8192, zero_window_duration: float = 0.1):
         """
@@ -57,10 +57,21 @@ class TCPWindowAnalyzer:
         self.window_events: List[WindowEvent] = []
         self.flow_stats: Dict[str, FlowWindowStats] = {}
 
-        # Tracking interne
-        self._flow_windows: Dict[str, List[int]] = defaultdict(list)
-        self._zero_window_start: Dict[str, Tuple[int, float]] = {}
-        self._event_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        # Tracking interne optimisé
+        self._flow_scales: Dict[str, int] = {}  # Cache des facteurs d'échelle
+        self._zero_window_start: Dict[str, Tuple[int, float, WindowEvent]] = {}
+        
+        # Agrégation des stats pour éviter de stocker toutes les fenêtres (mémoire & CPU)
+        # Structure: {
+        #   'count': int, 'sum': float, 'min': int, 'max': int,
+        #   'stable_count': int, 'stable_sum': float, 'stable_min': int, 'stable_max': int,
+        #   'low_window_count': int, 'zero_window_count': int, 'zero_duration': float
+        # }
+        self._flow_aggregates: Dict[str, Dict[str, Any]] = defaultdict(lambda: {
+            'count': 0, 'sum': 0.0, 'min': float('inf'), 'max': 0,
+            'stable_count': 0, 'stable_sum': 0.0, 'stable_min': float('inf'), 'stable_max': 0,
+            'low_window_count': 0, 'zero_window_count': 0, 'zero_duration': 0.0
+        })
 
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
@@ -79,16 +90,12 @@ class TCPWindowAnalyzer:
             self._analyze_packet(i, packet)
 
         # Termine les zero windows en cours
-        for flow_key, (start_pkt, start_time) in self._zero_window_start.items():
-            # Utilise le dernier timestamp connu
-            if packets:
-                last_time = float(packets[-1].time)
+        if packets:
+            last_time = float(packets[-1].time)
+            for flow_key, (start_pkt, start_time, event) in self._zero_window_start.items():
                 duration = last_time - start_time
-                # Met à jour la durée du dernier événement zero window
-                for event in reversed(self.window_events):
-                    if event.flow_key == flow_key and event.event_type == 'zero_window':
-                        event.duration = duration
-                        break
+                event.duration = duration
+                self._flow_aggregates[flow_key]['zero_duration'] += duration
 
         # Calcule les statistiques par flux
         self._calculate_flow_statistics()
@@ -102,51 +109,60 @@ class TCPWindowAnalyzer:
         timestamp = float(packet.time)
 
         flow_key = self._get_flow_key(packet)
+        
+        # Gestion optimisée du Window Scale
+        window_scale = self._get_window_scale(tcp, flow_key)
         window_size = tcp.window
-        window_scale = self._get_window_scale(tcp)
         actual_window = window_size * window_scale
 
-        # Enregistre la taille de fenêtre
-        self._flow_windows[flow_key].append(actual_window)
+        # Mise à jour des agrégats
+        stats = self._flow_aggregates[flow_key]
+        stats['count'] += 1
+        stats['sum'] += actual_window
+        if actual_window < stats['min']: stats['min'] = actual_window
+        if actual_window > stats['max']: stats['max'] = actual_window
+
+        # Stats "stables" (après 20 paquets)
+        is_stable = stats['count'] > 20
+        if is_stable:
+            stats['stable_count'] += 1
+            stats['stable_sum'] += actual_window
+            if actual_window < stats['stable_min']: stats['stable_min'] = actual_window
+            if actual_window > stats['stable_max']: stats['stable_max'] = actual_window
 
         # Détection Zero Window
         if actual_window == 0:
-            self._event_counts[flow_key]['zero_window'] += 1
+            stats['zero_window_count'] += 1
 
             # Démarre le tracking de la durée si pas déjà en cours
             if flow_key not in self._zero_window_start:
-                self._zero_window_start[flow_key] = (packet_num, timestamp)
-
-            event = WindowEvent(
-                event_type='zero_window',
-                packet_num=packet_num,
-                timestamp=timestamp,
-                flow_key=flow_key,
-                window_size=actual_window,
-                src_ip=ip.src,
-                dst_ip=ip.dst,
-                src_port=tcp.sport,
-                dst_port=tcp.dport
-            )
-            self.window_events.append(event)
+                event = WindowEvent(
+                    event_type='zero_window',
+                    packet_num=packet_num,
+                    timestamp=timestamp,
+                    flow_key=flow_key,
+                    window_size=actual_window,
+                    src_ip=ip.src,
+                    dst_ip=ip.dst,
+                    src_port=tcp.sport,
+                    dst_port=tcp.dport
+                )
+                self.window_events.append(event)
+                self._zero_window_start[flow_key] = (packet_num, timestamp, event)
 
         else:
             # Fin d'un zero window
             if flow_key in self._zero_window_start:
-                start_pkt, start_time = self._zero_window_start[flow_key]
+                start_pkt, start_time, event = self._zero_window_start[flow_key]
                 duration = timestamp - start_time
-
-                # Met à jour la durée du dernier événement zero window
-                for event in reversed(self.window_events):
-                    if (event.flow_key == flow_key and
-                        event.event_type == 'zero_window' and
-                        event.packet_num == start_pkt):
-                        event.duration = duration
-                        break
-
+                
+                # Mise à jour directe de l'événement et des stats
+                event.duration = duration
+                stats['zero_duration'] += duration
+                
                 del self._zero_window_start[flow_key]
 
-                # Window Update après zero window
+                # Window Update après zero window significatif
                 if duration >= self.zero_window_duration_threshold:
                     event = WindowEvent(
                         event_type='window_update',
@@ -162,22 +178,13 @@ class TCPWindowAnalyzer:
                     )
                     self.window_events.append(event)
 
-        # Détection Low Window
+        # Détection Low Window (uniquement comptage, pas d'événement pour éviter le spam)
         if 0 < actual_window < self.low_window_threshold:
-            self._event_counts[flow_key]['low_window'] += 1
-
-            event = WindowEvent(
-                event_type='low_window',
-                packet_num=packet_num,
-                timestamp=timestamp,
-                flow_key=flow_key,
-                window_size=actual_window,
-                src_ip=ip.src,
-                dst_ip=ip.dst,
-                src_port=tcp.sport,
-                dst_port=tcp.dport
-            )
-            self.window_events.append(event)
+            if is_stable:
+                stats['low_window_count'] += 1
+            
+            # On ne génère plus d'événement 'low_window' pour chaque paquet
+            # car cela ralentit énormément l'analyse et surcharge la mémoire
 
     def _get_flow_key(self, packet: Packet) -> str:
         """Génère une clé de flux unidirectionnelle"""
@@ -185,89 +192,75 @@ class TCPWindowAnalyzer:
         tcp = packet[TCP]
         return f"{ip.src}:{tcp.sport}->{ip.dst}:{tcp.dport}"
 
-    def _get_window_scale(self, tcp: TCP) -> int:
+    def _get_window_scale(self, tcp: TCP, flow_key: str) -> int:
         """
-        Récupère le facteur d'échelle de la fenêtre TCP
-
-        Args:
-            tcp: Couche TCP du paquet
-
-        Returns:
-            Facteur d'échelle (1 si non trouvé)
+        Récupère le facteur d'échelle de la fenêtre TCP avec mise en cache
         """
-        # Cherche l'option Window Scale (kind=3)
-        if tcp.options:
-            for option in tcp.options:
-                if option[0] == 'WScale':
-                    return 2 ** option[1]
+        # Vérifie le cache
+        if flow_key in self._flow_scales:
+            return self._flow_scales[flow_key]
+            
+        # Si c'est un SYN, on cherche l'option
+        if tcp.flags.S:  # Flag SYN
+            scale = 1
+            if tcp.options:
+                for option in tcp.options:
+                    if option[0] == 'WScale':
+                        scale = 2 ** option[1]
+                        break
+            self._flow_scales[flow_key] = scale
+            return scale
+            
+        # Par défaut 1 si on n'a pas vu le SYN
         return 1
 
     def _calculate_flow_statistics(self) -> None:
-        """Calcule les statistiques de fenêtre par flux"""
-        for flow_key, windows in self._flow_windows.items():
-            if not windows:
-                continue
-
+        """Calcule les statistiques de fenêtre par flux à partir des agrégats"""
+        for flow_key, stats in self._flow_aggregates.items():
             parts = flow_key.split('->')
             src_part, dst_part = parts[0].split(':'), parts[1].split(':')
 
-            # Calcule la durée totale des zero windows
-            zero_window_duration = sum(
-                event.duration for event in self.window_events
-                if event.flow_key == flow_key and event.event_type == 'zero_window'
-            )
+            zero_duration = stats['zero_duration']
+            zero_count = stats['zero_window_count']
+            
+            # Calcul du pourcentage de fenêtres basses sur la partie stable
+            low_window_percentage = 0
+            if stats['stable_count'] > 0:
+                low_window_percentage = (stats['low_window_count'] / stats['stable_count']) * 100
 
-            # Détermine le goulot d'étranglement suspecté
-            zero_count = self._event_counts[flow_key]['zero_window']
-            low_count = self._event_counts[flow_key]['low_window']
-
-            # Amélioration : Ignore les premières fenêtres (handshake + slow start)
-            # On skip les 20 premiers paquets pour vraiment éviter la phase de démarrage
-            windows_stable = windows[20:] if len(windows) > 20 else windows
-
-            # Pour les flux très courts (< 30 paquets), on ne signale pas de problème
-            # car il n'y a pas assez de données pour être pertinent
-            if len(windows) < 30:
-                suspected = 'none'
-            else:
-                # Calcule le % de fenêtres basses (hors handshake et slow start)
-                if windows_stable:
-                    low_window_percentage = (
-                        sum(1 for w in windows_stable if 0 < w < self.low_window_threshold) /
-                        len(windows_stable) * 100
-                    )
-                else:
-                    low_window_percentage = 0
-
-                # Détection stricte : un problème n'est signalé que si :
-                # 1. Zero windows significatifs (> 5 ou durée > 1s) → application lente
-                # 2. OU fenêtres basses persistantes (> 30% du temps) ET au moins quelques zero windows
-                #    → receiver avec problème réel, pas juste slow start
-                if zero_count > 5 or zero_window_duration > 1.0:
+            # Détermination du goulot d'étranglement
+            suspected = 'none'
+            
+            # On ignore les flux trop courts
+            if stats['count'] >= 30:
+                if zero_count > 5 or zero_duration > 1.0:
                     suspected = 'application'
-                elif low_window_percentage > 30 and (zero_count > 0 or zero_window_duration > 0):
-                    # Ne signale receiver que s'il y a eu AU MOINS un zero window
-                    # pour éviter les faux positifs du slow start
+                elif low_window_percentage > 30 and (zero_count > 0 or zero_duration > 0):
                     suspected = 'receiver'
-                else:
-                    suspected = 'none'
 
-            stats = FlowWindowStats(
+            # Valeurs min/max/moy
+            # Si on a des données stables, on les privilégie pour le min
+            min_win = stats['stable_min'] if stats['stable_count'] > 0 else stats['min']
+            if min_win == float('inf'): min_win = 0
+            
+            mean_win = stats['sum'] / stats['count'] if stats['count'] > 0 else 0
+
+            flow_stats = FlowWindowStats(
                 flow_key=flow_key,
                 src_ip=src_part[0],
                 dst_ip=dst_part[0],
                 src_port=int(src_part[1]),
                 dst_port=int(dst_part[1]),
-                min_window=min(windows_stable) if windows_stable else min(windows),
-                max_window=max(windows),
-                mean_window=sum(windows) / len(windows),
+                min_window=int(min_win),
+                max_window=int(stats['max']),
+                mean_window=mean_win,
                 zero_window_count=zero_count,
-                low_window_count=low_count,
-                zero_window_total_duration=zero_window_duration,
+                low_window_count=stats['low_window_count'],
+                zero_window_total_duration=zero_duration,
                 suspected_bottleneck=suspected
             )
 
-            self.flow_stats[flow_key] = stats
+            self.flow_stats[flow_key] = flow_stats
 
     def _generate_report(self) -> Dict[str, Any]:
         """Génère le rapport d'analyse des fenêtres TCP"""
