@@ -159,6 +159,33 @@ pcap_analyzer analyze capture.pcap -l 2.0
 
 **Exemple :** Avec `-l 2`, vous ne verrez que les problèmes de latence vraiment significatifs (>= 2s), ce qui permet de se concentrer sur les problèmes majeurs.
 
+#### Afficher les détails des retransmissions
+
+L'option `-d` (ou `--details`) affiche le détail de chaque retransmission détectée :
+
+```bash
+# Afficher les détails des retransmissions (20 premières par défaut)
+pcap_analyzer analyze capture.pcap -d
+
+# Afficher jusqu'à 50 retransmissions
+pcap_analyzer analyze capture.pcap -d --details-limit 50
+
+# Combiner avec filtrage de latence et sans rapport
+pcap_analyzer analyze capture.pcap -l 2.0 -d --no-report
+```
+
+**Sortie exemple :**
+```
+🔍 Détails des retransmissions (11/11):
+   (Wireshark: filtre 'tcp.analysis.retransmission' affiche 22 paquets)
+
+  #1: Paquet 467 (retrans de #466)
+      Seq: 1065153881, Délai: 205.0ms
+      10.28.104.211:16586 → 10.179.161.14:10100
+```
+
+> **Note Wireshark :** L'analyseur compte les **segments retransmis** (ex: 11), tandis que Wireshark avec le filtre `tcp.analysis.retransmission` affiche le double (ex: 22 paquets) car il inclut à la fois les paquets originaux et leurs retransmissions.
+
 #### Options disponibles
 
 ```bash
@@ -169,6 +196,8 @@ Options:
   -c, --config PATH          Fichier de configuration personnalisé
   -o, --output TEXT          Nom de base pour les rapports de sortie
   --no-report                Ne pas générer de rapports HTML/JSON
+  -d, --details              Afficher les détails des retransmissions
+  --details-limit INTEGER    Nombre max de retransmissions à afficher (défaut: 20)
   --help                     Afficher l'aide
 ```
 

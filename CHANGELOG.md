@@ -5,6 +5,25 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [Unreleased]
+
+### ✨ Ajouts
+
+- **Option `-d` / `--details`** : Affiche le détail de chaque retransmission détectée
+  - Numéro du paquet retransmis et du paquet original
+  - Numéro de séquence TCP
+  - Délai entre l'original et la retransmission
+  - Adresses IP et ports source/destination
+  - Option `--details-limit N` pour contrôler le nombre affiché (défaut: 20)
+
+- **Note Wireshark** : Clarification dans l'affichage que notre comptage de retransmissions (ex: 11) diffère de Wireshark qui affiche le double (ex: 22 paquets) car il inclut originaux + retransmissions
+
+**Exemple d'utilisation :**
+```bash
+pcap_analyzer analyze capture.pcap -d                    # Détails (20 max)
+pcap_analyzer analyze capture.pcap -d --details-limit 50 # Détails (50 max)
+```
+
 ## [1.0.3] - 2025-12-04
 
 ### ✨ Amélioration
