@@ -48,3 +48,4 @@ config.yaml.backup
 # OS
 .DS_Store
 Thumbs.db
+.agent-notes
