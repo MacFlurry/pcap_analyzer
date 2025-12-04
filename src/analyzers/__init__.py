@@ -10,6 +10,10 @@ from .tcp_window import TCPWindowAnalyzer
 from .icmp_pmtu import ICMPAnalyzer
 from .dns_analyzer import DNSAnalyzer
 from .syn_retransmission import SYNRetransmissionAnalyzer
+from .tcp_reset import TCPResetAnalyzer
+from .ip_fragmentation import IPFragmentationAnalyzer
+from .top_talkers import TopTalkersAnalyzer
+from .throughput import ThroughputAnalyzer
 
 __all__ = [
     'TimestampAnalyzer',
@@ -19,5 +23,9 @@ __all__ = [
     'TCPWindowAnalyzer',
     'ICMPAnalyzer',
     'DNSAnalyzer',
-    'SYNRetransmissionAnalyzer'
+    'SYNRetransmissionAnalyzer',
+    'TCPResetAnalyzer',
+    'IPFragmentationAnalyzer',
+    'TopTalkersAnalyzer',
+    'ThroughputAnalyzer'
 ]

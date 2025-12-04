@@ -22,7 +22,11 @@ from .analyzers import (
     TCPWindowAnalyzer,
     ICMPAnalyzer,
     DNSAnalyzer,
-    SYNRetransmissionAnalyzer
+    SYNRetransmissionAnalyzer,
+    TCPResetAnalyzer,
+    IPFragmentationAnalyzer,
+    TopTalkersAnalyzer,
+    ThroughputAnalyzer
 )
 from .report_generator import ReportGenerator
 
@@ -152,6 +156,18 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         syn_threshold = latency_filter if latency_filter else thresholds.get('syn_retrans_threshold', 2.0)
         syn_retrans_analyzer = SYNRetransmissionAnalyzer(threshold=syn_threshold)
         
+        # 9. TCP Reset
+        tcp_reset_analyzer = TCPResetAnalyzer()
+        
+        # 10. Fragmentation IP
+        ip_fragmentation_analyzer = IPFragmentationAnalyzer()
+        
+        # 11. Top Talkers
+        top_talkers_analyzer = TopTalkersAnalyzer()
+        
+        # 12. Throughput
+        throughput_analyzer = ThroughputAnalyzer()
+        
         progress.update(task, advance=1)
 
     # Traitement streaming
@@ -163,7 +179,11 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         window_analyzer,
         icmp_analyzer,
         dns_analyzer,
-        syn_retrans_analyzer
+        syn_retrans_analyzer,
+        tcp_reset_analyzer,
+        ip_fragmentation_analyzer,
+        top_talkers_analyzer,
+        throughput_analyzer
     ]
     
     load_pcap_streaming(pcap_file, analyzers)
@@ -177,6 +197,10 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     results['icmp'] = icmp_analyzer._generate_report() if hasattr(icmp_analyzer, '_generate_report') else {}
     results['dns'] = dns_analyzer._generate_report() if hasattr(dns_analyzer, '_generate_report') else {}
     results['syn_retransmissions'] = syn_retrans_analyzer._generate_report() if hasattr(syn_retrans_analyzer, '_generate_report') else {}
+    results['tcp_reset'] = tcp_reset_analyzer.get_results()
+    results['ip_fragmentation'] = ip_fragmentation_analyzer.get_results()
+    results['top_talkers'] = top_talkers_analyzer.get_results()
+    results['throughput'] = throughput_analyzer.get_results()
 
     # Affichage des résumés
     console.print("\n")
@@ -197,6 +221,51 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     console.print("\n" + icmp_analyzer.get_summary())
     console.print("\n" + dns_analyzer.get_summary())
     console.print("\n" + syn_retrans_analyzer.get_summary())
+    
+    # Résumé TCP Reset
+    reset_results = results['tcp_reset']
+    console.print("\n[bold cyan]🔴 Analyse des TCP Reset (RST)[/bold cyan]")
+    console.print(f"Total RST détectés: {reset_results['total_resets']}")
+    console.print(f"RST prématurés (avant échange de données): {reset_results['premature_resets']}")
+    console.print(f"RST post-données: {reset_results['post_data_resets']}")
+    console.print(f"Flux impactés: {reset_results['flows_with_resets']}")
+    
+    # Résumé Fragmentation IP
+    frag_results = results['ip_fragmentation']
+    console.print("\n[bold cyan]📦 Analyse de la fragmentation IP[/bold cyan]")
+    console.print(f"Total fragments détectés: {frag_results['total_fragments']}")
+    if frag_results['has_fragmentation']:
+        console.print(f"Groupes de fragments: {frag_results['total_fragment_groups']}")
+        console.print(f"Réassemblages complets: {frag_results['complete_reassemblies']}")
+        console.print(f"Réassemblages incomplets: {frag_results['incomplete_reassemblies']}")
+        console.print(f"PMTU estimé: {frag_results['estimated_pmtu']} bytes")
+    else:
+        console.print("[green]✓ Aucune fragmentation IP détectée[/green]")
+    
+    # Résumé Top Talkers
+    talkers = results['top_talkers']
+    console.print("\n[bold cyan]📊 Top Talkers[/bold cyan]")
+    if talkers['top_ips']:
+        console.print("Top 5 IPs par volume:")
+        for i, ip_stat in enumerate(talkers['top_ips'][:5], 1):
+            total_mb = ip_stat['total_bytes'] / (1024 * 1024)
+            console.print(f"  {i}. {ip_stat['ip']}: {total_mb:.2f} MB ({ip_stat['packets_sent'] + ip_stat['packets_received']} paquets)")
+    
+    # Protocoles
+    if talkers['protocol_stats']:
+        console.print("Répartition par protocole:")
+        for proto, stats in talkers['protocol_stats'].items():
+            mb = stats['bytes'] / (1024 * 1024)
+            console.print(f"  - {proto}: {mb:.2f} MB ({stats['packets']} paquets)")
+    
+    # Résumé Throughput
+    tp = results['throughput']
+    console.print("\n[bold cyan]📈 Analyse du débit (Throughput)[/bold cyan]")
+    console.print(f"Débit global: {tp['global_throughput']['throughput_mbps']:.2f} Mbps")
+    console.print(f"Durée totale: {tp['global_throughput']['duration_seconds']:.2f}s")
+    console.print(f"Flux analysés: {tp['total_flows']}")
+    if tp['slow_flows']:
+        console.print(f"[yellow]Flux lents détectés: {len(tp['slow_flows'])}[/yellow]")
 
     return results
 
