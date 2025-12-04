@@ -3,32 +3,49 @@
 # Seuils généraux
 thresholds:
   # Délai anormal entre paquets (secondes)
+  # Détecte les "trous" dans la capture ou les pauses applicatives longues
   packet_gap: 1.0
 
   # Handshake TCP
-  syn_synack_delay: 0.1  # secondes
-  handshake_total: 0.3   # secondes
+  # Temps entre le SYN (client) et le SYN-ACK (serveur)
+  syn_synack_delay: 0.1  # 100ms - Au-delà, le serveur est lent ou le réseau sature
+  # Temps total pour les 3 étapes (SYN -> SYN-ACK -> ACK)
+  handshake_total: 0.3   # 300ms
 
-  # Retransmissions SYN (nouveau)
-  syn_retrans_threshold: 2.0  # secondes - seuil pour détecter les retransmissions SYN problématiques
+  # Retransmissions SYN
+  # Délai avant de considérer qu'une tentative de connexion échoue ou traîne trop
+  syn_retrans_threshold: 2.0  # secondes
 
   # RTT (Round Trip Time)
-  rtt_warning: 0.1       # secondes
-  rtt_critical: 0.5      # secondes
+  # Latence réseau estimée entre la capture et l'autre extrémité
+  rtt_warning: 0.1       # 100ms - Latence élevée
+  rtt_critical: 0.5      # 500ms - Latence critique (impact utilisateur fort)
 
-  # Retransmissions
-  retransmission_low: 5      # nombre par flux
-  retransmission_medium: 15
-  retransmission_critical: 30
+  # Retransmissions TCP
+  # Logique hybride : Il faut dépasser le seuil absolu (low) ET le seuil de taux (%)
+  
+  # 1. Seuils absolus (Nombre de paquets retransmis)
+  # Minimum requis pour déclencher une alerte (évite les faux positifs sur les très petits flux)
+  retransmission_low: 10      # Augmenté de 5 à 10 pour réduire le bruit sur les petits flux
+  retransmission_medium: 50
+  retransmission_critical: 100 # Si ce nombre est atteint, on alerte même si le taux est bas (volume important)
+  
+  # 2. Seuils relatifs (Taux de perte en %)
+  # C'est le critère principal de sévérité une fois le seuil absolu 'low' dépassé
+  retransmission_rate_low: 1.0       # 1% de perte - Début de dégradation
+  retransmission_rate_medium: 3.0    # 3% de perte - Impact notable sur le débit
+  retransmission_rate_critical: 5.0  # 5% de perte - Connexion instable / inutilisable
 
   # TCP Window
-  low_window_threshold: 8192  # bytes
-  zero_window_duration: 0.1   # secondes
+  # Taille de fenêtre (en octets) considérée comme "basse", risquant de limiter le débit
+  low_window_threshold: 8192  # 8 KB
+  # Durée pendant laquelle la fenêtre reste à 0 (blocage de l'émetteur)
+  zero_window_duration: 0.1   # 100ms
 
   # DNS
-  dns_response_warning: 0.1   # secondes
-  dns_response_critical: 1.0  # secondes
-  dns_timeout: 5.0            # secondes
+  dns_response_warning: 0.1   # 100ms
+  dns_response_critical: 1.0  # 1s
+  dns_timeout: 5.0            # 5s - Standard pour un timeout client
 
 # Configuration SSH pour capture distante
 ssh:

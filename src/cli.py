@@ -78,9 +78,12 @@ def analyze_pcap(packets: list, config, latency_filter: float = None, show_detai
         # 3. Retransmissions
         task = progress.add_task("[cyan]Analyse des retransmissions...", total=1)
         retrans_analyzer = RetransmissionAnalyzer(
-            retrans_low=thresholds.get('retransmission_low', 5),
-            retrans_medium=thresholds.get('retransmission_medium', 15),
-            retrans_critical=thresholds.get('retransmission_critical', 30)
+            retrans_low=thresholds.get('retransmission_low', 10),
+            retrans_medium=thresholds.get('retransmission_medium', 50),
+            retrans_critical=thresholds.get('retransmission_critical', 100),
+            retrans_rate_low=thresholds.get('retransmission_rate_low', 1.0),
+            retrans_rate_medium=thresholds.get('retransmission_rate_medium', 3.0),
+            retrans_rate_critical=thresholds.get('retransmission_rate_critical', 5.0)
         )
         results['retransmission'] = retrans_analyzer.analyze(packets)
         progress.update(task, advance=1)

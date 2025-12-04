@@ -48,25 +48,35 @@ class FlowStats:
     dup_acks: int
     out_of_order: int
     zero_windows: int
-    severity: str  # 'low', 'medium', 'critical'
+    severity: str = 'none'
+    retransmission_rate: float = 0.0
 
 
 class RetransmissionAnalyzer:
     """Analyseur de retransmissions et anomalies TCP"""
 
-    def __init__(self, retrans_low: int = 5, retrans_medium: int = 15,
-                 retrans_critical: int = 30):
+    def __init__(self, retrans_low: int = 10, retrans_medium: int = 50,
+                 retrans_critical: int = 100,
+                 retrans_rate_low: float = 1.0, retrans_rate_medium: float = 3.0,
+                 retrans_rate_critical: float = 5.0):
         """
         Initialise l'analyseur de retransmissions
 
         Args:
-            retrans_low: Seuil bas de retransmissions par flux
-            retrans_medium: Seuil moyen de retransmissions par flux
-            retrans_critical: Seuil critique de retransmissions par flux
+            retrans_low: Seuil bas de retransmissions (nombre absolu)
+            retrans_medium: Seuil moyen de retransmissions (nombre absolu)
+            retrans_critical: Seuil critique de retransmissions (nombre absolu)
+            retrans_rate_low: Seuil bas de taux de retransmission (%)
+            retrans_rate_medium: Seuil moyen de taux de retransmission (%)
+            retrans_rate_critical: Seuil critique de taux de retransmission (%)
         """
         self.retrans_low = retrans_low
         self.retrans_medium = retrans_medium
         self.retrans_critical = retrans_critical
+        
+        self.retrans_rate_low = retrans_rate_low
+        self.retrans_rate_medium = retrans_rate_medium
+        self.retrans_rate_critical = retrans_rate_critical
 
         self.retransmissions: List[TCPRetransmission] = []
         self.anomalies: List[TCPAnomaly] = []
@@ -315,15 +325,29 @@ class RetransmissionAnalyzer:
             src_part, dst_part = parts[0].split(':'), parts[1].split(':')
 
             retrans_count = counters['retransmissions']
+            total_packets = counters['total']
+            
+            # Calcul du taux de retransmission en pourcentage
+            retrans_rate = (retrans_count / total_packets * 100) if total_packets > 0 else 0
 
-            if retrans_count >= self.retrans_critical:
-                severity = 'critical'
-            elif retrans_count >= self.retrans_medium:
-                severity = 'medium'
-            elif retrans_count >= self.retrans_low:
-                severity = 'low'
-            else:
-                severity = 'none'
+            # La sévérité est déterminée par le taux, MAIS il faut un minimum absolu de retransmissions
+            # pour éviter de flagger les très petits flux (ex: 1 retrans sur 4 paquets = 25%)
+            
+            severity = 'none'
+            
+            # On vérifie d'abord si on dépasse le seuil absolu minimal (low)
+            if retrans_count >= self.retrans_low:
+                if retrans_rate >= self.retrans_rate_critical:
+                    severity = 'critical'
+                elif retrans_rate >= self.retrans_rate_medium:
+                    severity = 'medium'
+                elif retrans_rate >= self.retrans_rate_low:
+                    severity = 'low'
+                
+                # Fallback: si le nombre absolu est très élevé, on flag quand même
+                # même si le taux est bas (ex: flux très long)
+                if severity == 'none' and retrans_count >= self.retrans_critical:
+                    severity = 'low'  # On reste en low si c'est juste du volume mais taux faible
 
             stats = FlowStats(
                 flow_key=flow_key,
@@ -336,7 +360,8 @@ class RetransmissionAnalyzer:
                 dup_acks=counters['dup_acks'],
                 out_of_order=counters['out_of_order'],
                 zero_windows=counters['zero_windows'],
-                severity=severity
+                severity=severity,
+                retransmission_rate=retrans_rate
             )
 
             self.flow_stats[flow_key] = stats
