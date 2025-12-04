@@ -93,6 +93,7 @@ Ouvrez le fichier HTML dans votre navigateur pour voir l'analyse complète.
 
 1. **Gaps temporels** : Interruptions dans le flux de paquets
 2. **Handshakes lents** : Connexions TCP qui mettent du temps à s'établir
+2bis. **Retransmissions SYN** : Détection des tentatives multiples de connexion (serveur lent, perte réseau)
 3. **Retransmissions** : Paquets renvoyés (signe de pertes)
 4. **RTT élevé** : Temps de réponse réseau élevé
 5. **Zero Window** : L'application ne consomme pas assez vite les données

@@ -8,7 +8,7 @@ Outil d'analyse automatisée de fichiers PCAP pour identifier et diagnostiquer l
 
 ## Fonctionnalités
 
-L'analyseur détecte et analyse automatiquement **7 dimensions clés** impactant la latence réseau :
+L'analyseur détecte et analyse automatiquement **8 dimensions clés** impactant la latence réseau :
 
 ### 1. ⏱️ Gestion et analyse des horodatages
 - Détection automatique des ruptures de flux
@@ -21,6 +21,13 @@ L'analyseur détecte et analyse automatiquement **7 dimensions clés** impactant
 - Identification du côté suspect (client, réseau, serveur)
 - Détection des handshakes lents
 - Analyse complète et incomplète des connexions
+
+### 2bis. 🔄 Détection des retransmissions SYN
+- Détection automatique des retransmissions SYN multiples
+- Analyse de la timeline complète (1er SYN, retransmissions, SYN/ACK)
+- Identification précise du problème (serveur lent, perte réseau, timeout)
+- Calcul du délai total de handshake incluant les retransmissions
+- Corrélation avec les timestamps TCP pour diagnostic avancé
 
 ### 3. 🔄 Détection des retransmissions et anomalies TCP
 - Comptage des retransmissions par flux
@@ -100,6 +107,7 @@ thresholds:
   packet_gap: 1.0              # Délai anormal entre paquets (secondes)
   syn_synack_delay: 0.1        # Délai SYN→SYN/ACK (secondes)
   handshake_total: 0.3         # Handshake complet (secondes)
+  syn_retrans_threshold: 2.0   # Seuil retransmissions SYN (secondes)
   rtt_warning: 0.1             # RTT avertissement (secondes)
   rtt_critical: 0.5            # RTT critique (secondes)
   retransmission_low: 5        # Retransmissions faible
