@@ -28,7 +28,8 @@ from .analyzers import (
     TopTalkersAnalyzer,
     ThroughputAnalyzer,
     TCPTimeoutAnalyzer,
-    AsymmetricTrafficAnalyzer
+    AsymmetricTrafficAnalyzer,
+    BurstAnalyzer
 )
 from .report_generator import ReportGenerator
 
@@ -182,6 +183,13 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
             min_bytes_threshold=thresholds.get('asymmetry_min_bytes', 10000)
         )
         
+        # 15. Burst Analyzer
+        burst_analyzer = BurstAnalyzer(
+            interval_ms=thresholds.get('burst_interval_ms', 100),
+            burst_threshold_multiplier=thresholds.get('burst_threshold_multiplier', 3.0),
+            min_packets_for_burst=thresholds.get('burst_min_packets', 50)
+        )
+        
         progress.update(task, advance=1)
 
     # Traitement streaming
@@ -199,7 +207,8 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         top_talkers_analyzer,
         throughput_analyzer,
         tcp_timeout_analyzer,
-        asymmetric_analyzer
+        asymmetric_analyzer,
+        burst_analyzer
     ]
     
     load_pcap_streaming(pcap_file, analyzers)
@@ -219,6 +228,7 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     results['throughput'] = throughput_analyzer.get_results()
     results['tcp_timeout'] = tcp_timeout_analyzer.get_results()
     results['asymmetric_traffic'] = asymmetric_analyzer.get_results()
+    results['burst'] = burst_analyzer.get_results()
 
     # Affichage des résumés
     console.print("\n")
@@ -309,6 +319,18 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         console.print("Top 3 flux les plus asymétriques:")
         for i, f in enumerate(asym['asymmetric_flows'][:3], 1):
             console.print(f"  {i}. {f['src_ip']}:{f['src_port']} → {f['dst_ip']}:{f['dst_port']} ({f['protocol']}): {f['asymmetry_percent']:.1f}% asymétrique")
+    
+    # Résumé Bursts
+    burst = results['burst']
+    burst_summary = burst['summary']
+    burst_interval = burst['interval_stats']
+    console.print("\n[bold cyan]💥 Analyse des Bursts de Paquets[/bold cyan]")
+    console.print(f"Intervalles analysés: {burst_summary['total_intervals']} (intervalle: {burst_summary['interval_ms']}ms)")
+    console.print(f"Régularité du trafic: {burst_interval['traffic_regularity']} (CV: {burst_interval['coefficient_of_variation']}%)")
+    console.print(f"Bursts détectés: {burst_summary['bursts_detected']}")
+    if burst['worst_burst']:
+        wb = burst['worst_burst']
+        console.print(f"[yellow]Pire burst: {wb['start_iso']} - {wb['packet_count']} paquets ({wb['packets_per_second']:.0f} pkt/s, {wb['peak_ratio']:.1f}x la moyenne)[/yellow]")
 
     return results
 

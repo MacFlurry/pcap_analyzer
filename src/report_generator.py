@@ -1662,6 +1662,145 @@ class ReportGenerator:
         </div>
         {% endif %}
 
+        <!-- Bursts de Paquets -->
+        {% if burst and burst.summary.total_intervals > 0 %}
+        <h2>💥 Analyse des Bursts de Paquets</h2>
+        <div class="section {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Intervalles analysés</h4>
+                    <div class="value">{{ burst.summary.total_intervals }}</div>
+                    <small>{{ burst.summary.interval_ms }}ms par intervalle</small>
+                </div>
+                <div class="summary-card {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
+                    <h4>Bursts détectés</h4>
+                    <div class="value">{{ burst.summary.bursts_detected }}</div>
+                    <small>Seuil: {{ burst.summary.burst_threshold_multiplier }}x la moyenne</small>
+                </div>
+                <div class="summary-card info">
+                    <h4>Paquets dans bursts</h4>
+                    <div class="value">{{ burst.summary.packets_in_bursts }}</div>
+                </div>
+                <div class="summary-card {% if burst.interval_stats.traffic_regularity == 'Très irrégulier' %}danger{% elif burst.interval_stats.traffic_regularity == 'Variable' %}warning{% else %}success{% endif %}">
+                    <h4>Régularité du trafic</h4>
+                    <div class="value">{{ burst.interval_stats.traffic_regularity }}</div>
+                    <small>CV: {{ burst.interval_stats.coefficient_of_variation }}%</small>
+                </div>
+            </div>
+
+            <!-- Statistiques d'intervalle -->
+            <h3>📊 Distribution du trafic</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Métrique</th>
+                        <th>Valeur</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Paquets/intervalle (moyenne)</td>
+                        <td>{{ burst.interval_stats.avg_packets_per_interval }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paquets/intervalle (min)</td>
+                        <td>{{ burst.interval_stats.min_packets_per_interval }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paquets/intervalle (max)</td>
+                        <td><span class="badge {% if burst.interval_stats.max_packets_per_interval > burst.interval_stats.avg_packets_per_interval * 3 %}danger{% else %}info{% endif %}">{{ burst.interval_stats.max_packets_per_interval }}</span></td>
+                    </tr>
+                    <tr>
+                        <td>Écart-type</td>
+                        <td>{{ burst.interval_stats.std_deviation }}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Pire burst -->
+            {% if burst.worst_burst %}
+            <h3>🔴 Burst le plus intense</h3>
+            <div class="summary-grid">
+                <div class="summary-card danger">
+                    <h4>Timestamp</h4>
+                    <div class="value">{{ burst.worst_burst.start_iso }}</div>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Paquets</h4>
+                    <div class="value">{{ burst.worst_burst.packet_count }}</div>
+                    <small>{{ burst.worst_burst.packets_per_second }} pkt/s</small>
+                </div>
+                <div class="summary-card warning">
+                    <h4>Intensité</h4>
+                    <div class="value">{{ burst.worst_burst.peak_ratio }}x</div>
+                    <small>par rapport à la moyenne</small>
+                </div>
+                {% if burst.worst_burst.top_source %}
+                <div class="summary-card info">
+                    <h4>Source principale</h4>
+                    <div class="value" style="font-size: 0.9em">{{ burst.worst_burst.top_source.ip }}</div>
+                    <small>{{ burst.worst_burst.top_source.packets }} paquets</small>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Liste des bursts -->
+            {% if burst.bursts %}
+            <h3>📋 Tous les bursts détectés (Top 20)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Début</th>
+                        <th>Durée</th>
+                        <th>Paquets</th>
+                        <th>Débit</th>
+                        <th>Intensité</th>
+                        <th>Source principale</th>
+                        <th>Protocoles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in burst.bursts[:20] %}
+                    <tr>
+                        <td><code>{{ b.start_iso }}</code></td>
+                        <td>{{ b.duration_ms }} ms</td>
+                        <td>{{ b.packet_count }}</td>
+                        <td>
+                            <span class="badge info">{{ b.packets_per_second }} pkt/s</span>
+                            <br><small>{{ b.mbps }} Mbps</small>
+                        </td>
+                        <td>
+                            {% if b.peak_ratio > 5 %}
+                            <span class="badge danger">{{ b.peak_ratio }}x</span>
+                            {% elif b.peak_ratio > 3 %}
+                            <span class="badge warning">{{ b.peak_ratio }}x</span>
+                            {% else %}
+                            <span class="badge info">{{ b.peak_ratio }}x</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if b.top_sources %}
+                            {{ b.top_sources[0].ip }} ({{ b.top_sources[0].packets }})
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for proto, count in b.protocol_breakdown.items() %}
+                            <span class="badge">{{ proto }}: {{ count }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="footer">
             <p>Rapport généré par <strong>PCAP Analyzer</strong> - {{ analysis_info.analysis_date }}</p>
         </div>
@@ -1780,7 +1919,8 @@ class ReportGenerator:
             top_talkers=data.get('top_talkers', {}),
             throughput=data.get('throughput', {}),
             tcp_timeout=data.get('tcp_timeout', {}),
-            asymmetric_traffic=data.get('asymmetric_traffic', {})
+            asymmetric_traffic=data.get('asymmetric_traffic', {}),
+            burst=data.get('burst', {})
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:

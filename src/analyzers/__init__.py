@@ -16,6 +16,7 @@ from .top_talkers import TopTalkersAnalyzer
 from .throughput import ThroughputAnalyzer
 from .tcp_timeout import TCPTimeoutAnalyzer
 from .asymmetric_traffic import AsymmetricTrafficAnalyzer
+from .burst_analyzer import BurstAnalyzer
 
 __all__ = [
     'TimestampAnalyzer',
@@ -31,5 +32,6 @@ __all__ = [
     'TopTalkersAnalyzer',
     'ThroughputAnalyzer',
     'TCPTimeoutAnalyzer',
-    'AsymmetricTrafficAnalyzer'
+    'AsymmetricTrafficAnalyzer',
+    'BurstAnalyzer'
 ]
