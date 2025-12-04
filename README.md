@@ -118,15 +118,25 @@ thresholds:
   rtt_warning: 0.1             # RTT avertissement (secondes)
   rtt_critical: 0.5            # RTT critique (secondes)
   
-  # Retransmissions TCP (seuils absolus)
-  retransmission_low: 10       # Nombre minimum de retransmissions
-  retransmission_medium: 50    # Nombre moyen de retransmissions
-  retransmission_critical: 100 # Nombre critique de retransmissions
+  # Retransmissions TCP - Logique hybride (seuils absolus + taux)
+  # La sévérité est déterminée par DEUX critères combinés :
+  # 1. Seuil absolu minimum requis (évite faux positifs sur petits flux)
+  # 2. Taux de perte en % (critère principal de sévérité)
+  #
+  # Exemples :
+  # - 100 paquets, 5 retrans (5%) → Aucune alerte (< 10 seuil minimum)
+  # - 100 paquets, 15 retrans (15%) → CRITICAL (≥10 seuil ET ≥5% taux)
+  # - 10000 paquets, 15 retrans (0.15%) → LOW (≥10 seuil ET ≥0.1% taux)
+  # - 10000 paquets, 500 retrans (5%) → CRITICAL (≥10 seuil ET 5% taux)
+  # - Tout flux avec ≥100 retrans → CRITICAL (garde-fou volume important)
   
-  # Retransmissions TCP (seuils de taux en %)
-  retransmission_rate_low: 1.0       # 1% de taux de perte
-  retransmission_rate_medium: 3.0    # 3% de taux de perte
-  retransmission_rate_critical: 5.0  # 5% de taux de perte
+  retransmission_low: 10       # Seuil minimum absolu pour déclencher analyse
+  retransmission_medium: 50    # Seuil moyen (garde-fou)
+  retransmission_critical: 100 # Seuil critique absolu (force alerte même si taux bas)
+  
+  retransmission_rate_low: 1.0       # 1% de taux de perte → LOW
+  retransmission_rate_medium: 3.0    # 3% de taux de perte → MEDIUM
+  retransmission_rate_critical: 5.0  # 5% de taux de perte → CRITICAL
   
   # TCP Window
   low_window_threshold: 8192   # Fenêtre TCP basse (bytes)
