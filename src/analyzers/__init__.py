@@ -15,6 +15,7 @@ from .ip_fragmentation import IPFragmentationAnalyzer
 from .top_talkers import TopTalkersAnalyzer
 from .throughput import ThroughputAnalyzer
 from .tcp_timeout import TCPTimeoutAnalyzer
+from .asymmetric_traffic import AsymmetricTrafficAnalyzer
 
 __all__ = [
     'TimestampAnalyzer',
@@ -29,5 +30,6 @@ __all__ = [
     'IPFragmentationAnalyzer',
     'TopTalkersAnalyzer',
     'ThroughputAnalyzer',
-    'TCPTimeoutAnalyzer'
+    'TCPTimeoutAnalyzer',
+    'AsymmetricTrafficAnalyzer'
 ]

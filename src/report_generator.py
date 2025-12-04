@@ -1522,6 +1522,146 @@ class ReportGenerator:
         </div>
         {% endif %}
 
+        <!-- Trafic Asymétrique -->
+        {% if asymmetric_traffic and asymmetric_traffic.summary.total_flows > 0 %}
+        <h2>⚖️ Analyse du Trafic Asymétrique</h2>
+        <div class="section {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Flux analysés</h4>
+                    <div class="value">{{ asymmetric_traffic.summary.total_flows }}</div>
+                </div>
+                <div class="summary-card {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
+                    <h4>Flux asymétriques</h4>
+                    <div class="value">{{ asymmetric_traffic.summary.asymmetric_flows }} ({{ "%.1f"|format(asymmetric_traffic.summary.asymmetric_percentage) }}%)</div>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Quasi-unidirectionnels</h4>
+                    <div class="value">{{ asymmetric_traffic.summary.unidirectional_flows }}</div>
+                </div>
+                <div class="summary-card success">
+                    <h4>Flux symétriques</h4>
+                    <div class="value">{{ asymmetric_traffic.summary.symmetric_flows }}</div>
+                </div>
+            </div>
+
+            <p>Seuil d'asymétrie: <strong>ratio < {{ asymmetric_traffic.summary.asymmetry_threshold }}</strong> (une direction a moins de {{ "%.0f"|format(asymmetric_traffic.summary.asymmetry_threshold * 100) }}% de l'autre)</p>
+
+            <!-- Répartition par protocole -->
+            {% if asymmetric_traffic.protocol_breakdown %}
+            <h3>📊 Répartition par protocole</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Protocole</th>
+                        <th>Flux</th>
+                        <th>Volume</th>
+                        <th>Asymétriques</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for proto, stats in asymmetric_traffic.protocol_breakdown.items() %}
+                    <tr>
+                        <td><span class="badge">{{ proto }}</span></td>
+                        <td>{{ stats.flows }}</td>
+                        <td>{{ "%.2f"|format(stats.bytes / 1048576) }} MB</td>
+                        <td>
+                            {% if stats.asymmetric > 0 %}
+                            <span class="badge warning">{{ stats.asymmetric }}</span>
+                            {% else %}
+                            <span class="badge success">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Top flux par volume -->
+            {% if asymmetric_traffic.top_flows_by_volume %}
+            <h3>📈 Top 10 flux par volume</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Protocole</th>
+                        <th>Volume total</th>
+                        <th>Forward →</th>
+                        <th>← Reverse</th>
+                        <th>Asymétrie</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in asymmetric_traffic.top_flows_by_volume[:10] %}
+                    <tr>
+                        <td><code>{{ flow.src_ip }} ↔ {{ flow.dst_ip }}</code></td>
+                        <td><span class="badge">{{ flow.protocol }}</span></td>
+                        <td>{{ "%.2f"|format(flow.total_bytes / 1048576) }} MB</td>
+                        <td>{{ "%.2f"|format(flow.forward_bytes / 1024) }} KB</td>
+                        <td>{{ "%.2f"|format(flow.reverse_bytes / 1024) }} KB</td>
+                        <td>
+                            {% if flow.asymmetry_percent > 90 %}
+                            <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                            {% elif flow.asymmetry_percent > 70 %}
+                            <span class="badge warning">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                            {% else %}
+                            <span class="badge success">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Flux les plus asymétriques -->
+            {% if asymmetric_traffic.asymmetric_flows %}
+            <h3>🔴 Flux les plus asymétriques (Top 20)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Proto</th>
+                        <th>Direction dominante</th>
+                        <th>Forward</th>
+                        <th>Reverse</th>
+                        <th>Ratio</th>
+                        <th>Asymétrie</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in asymmetric_traffic.asymmetric_flows[:20] %}
+                    <tr>
+                        <td><code>{{ flow.src_ip }}:{{ flow.src_port }} ↔ {{ flow.dst_ip }}:{{ flow.dst_port }}</code></td>
+                        <td><span class="badge">{{ flow.protocol }}</span></td>
+                        <td>
+                            {% if flow.dominant_direction == 'forward' %}
+                            <span class="badge info">{{ flow.src_ip }} →</span>
+                            {% else %}
+                            <span class="badge info">← {{ flow.dst_ip }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ "%.2f"|format(flow.forward_bytes / 1024) }} KB ({{ flow.forward_packets }} pkts)</td>
+                        <td>{{ "%.2f"|format(flow.reverse_bytes / 1024) }} KB ({{ flow.reverse_packets }} pkts)</td>
+                        <td>{{ "%.4f"|format(flow.byte_ratio) }}</td>
+                        <td>
+                            {% if flow.is_unidirectional %}
+                            <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}% (Unidirectionnel)</span>
+                            {% else %}
+                            <span class="badge warning">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="footer">
             <p>Rapport généré par <strong>PCAP Analyzer</strong> - {{ analysis_info.analysis_date }}</p>
         </div>
@@ -1639,7 +1779,8 @@ class ReportGenerator:
             ip_fragmentation=data.get('ip_fragmentation', {}),
             top_talkers=data.get('top_talkers', {}),
             throughput=data.get('throughput', {}),
-            tcp_timeout=data.get('tcp_timeout', {})
+            tcp_timeout=data.get('tcp_timeout', {}),
+            asymmetric_traffic=data.get('asymmetric_traffic', {})
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:

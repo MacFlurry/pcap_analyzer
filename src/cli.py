@@ -27,7 +27,8 @@ from .analyzers import (
     IPFragmentationAnalyzer,
     TopTalkersAnalyzer,
     ThroughputAnalyzer,
-    TCPTimeoutAnalyzer
+    TCPTimeoutAnalyzer,
+    AsymmetricTrafficAnalyzer
 )
 from .report_generator import ReportGenerator
 
@@ -175,6 +176,12 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
             zombie_threshold=thresholds.get('tcp_zombie_threshold', 60.0)
         )
         
+        # 14. Asymmetric Traffic
+        asymmetric_analyzer = AsymmetricTrafficAnalyzer(
+            asymmetry_threshold=thresholds.get('asymmetry_threshold', 0.3),
+            min_bytes_threshold=thresholds.get('asymmetry_min_bytes', 10000)
+        )
+        
         progress.update(task, advance=1)
 
     # Traitement streaming
@@ -191,7 +198,8 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         ip_fragmentation_analyzer,
         top_talkers_analyzer,
         throughput_analyzer,
-        tcp_timeout_analyzer
+        tcp_timeout_analyzer,
+        asymmetric_analyzer
     ]
     
     load_pcap_streaming(pcap_file, analyzers)
@@ -210,6 +218,7 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     results['top_talkers'] = top_talkers_analyzer.get_results()
     results['throughput'] = throughput_analyzer.get_results()
     results['tcp_timeout'] = tcp_timeout_analyzer.get_results()
+    results['asymmetric_traffic'] = asymmetric_analyzer.get_results()
 
     # Affichage des résumés
     console.print("\n")
@@ -288,6 +297,18 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         console.print(f"  - Zombie: {cats['zombie_count']}")
         console.print(f"  - Idle: {cats['idle_count']}")
         console.print(f"  - Établies sans données: {cats['established_idle_count']}")
+    
+    # Résumé Trafic Asymétrique
+    asym = results['asymmetric_traffic']
+    asym_summary = asym['summary']
+    console.print("\n[bold cyan]⚖️ Analyse du Trafic Asymétrique[/bold cyan]")
+    console.print(f"Flux analysés: {asym_summary['total_flows']}")
+    console.print(f"Flux asymétriques (ratio < {asym_summary['asymmetry_threshold']}): {asym_summary['asymmetric_flows']} ({asym_summary['asymmetric_percentage']:.1f}%)")
+    console.print(f"Flux quasi-unidirectionnels: {asym_summary['unidirectional_flows']}")
+    if asym['asymmetric_flows']:
+        console.print("Top 3 flux les plus asymétriques:")
+        for i, f in enumerate(asym['asymmetric_flows'][:3], 1):
+            console.print(f"  {i}. {f['src_ip']}:{f['src_port']} → {f['dst_ip']}:{f['dst_port']} ({f['protocol']}): {f['asymmetry_percent']:.1f}% asymétrique")
 
     return results
 
