@@ -104,17 +104,35 @@ Le fichier `config.yaml` à la racine du projet contient tous les paramètres co
 ```yaml
 # Seuils de détection
 thresholds:
+  # Timestamps
   packet_gap: 1.0              # Délai anormal entre paquets (secondes)
+  
+  # Handshake TCP
   syn_synack_delay: 0.1        # Délai SYN→SYN/ACK (secondes)
   handshake_total: 0.3         # Handshake complet (secondes)
+  
+  # Retransmissions SYN
   syn_retrans_threshold: 2.0   # Seuil retransmissions SYN (secondes)
+  
+  # RTT (Round Trip Time)
   rtt_warning: 0.1             # RTT avertissement (secondes)
   rtt_critical: 0.5            # RTT critique (secondes)
-  retransmission_low: 5        # Retransmissions faible
-  retransmission_medium: 15    # Retransmissions moyen
-  retransmission_critical: 30  # Retransmissions critique
+  
+  # Retransmissions TCP (seuils absolus)
+  retransmission_low: 10       # Nombre minimum de retransmissions
+  retransmission_medium: 50    # Nombre moyen de retransmissions
+  retransmission_critical: 100 # Nombre critique de retransmissions
+  
+  # Retransmissions TCP (seuils de taux en %)
+  retransmission_rate_low: 1.0       # 1% de taux de perte
+  retransmission_rate_medium: 3.0    # 3% de taux de perte
+  retransmission_rate_critical: 5.0  # 5% de taux de perte
+  
+  # TCP Window
   low_window_threshold: 8192   # Fenêtre TCP basse (bytes)
   zero_window_duration: 0.1    # Durée Zero Window (secondes)
+  
+  # DNS
   dns_response_warning: 0.1    # Réponse DNS avertissement (secondes)
   dns_response_critical: 1.0   # Réponse DNS critique (secondes)
   dns_timeout: 5.0             # Timeout DNS (secondes)

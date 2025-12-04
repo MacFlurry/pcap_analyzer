@@ -9,6 +9,9 @@ thresholds:
   syn_synack_delay: 0.1  # secondes
   handshake_total: 0.3   # secondes
 
+  # Retransmissions SYN
+  syn_retrans_threshold: 2.0  # secondes - Délai avant de considérer un handshake comme problématique
+
   # RTT (Round Trip Time)
   rtt_warning: 0.1       # secondes
   rtt_critical: 0.5      # secondes
