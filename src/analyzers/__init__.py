@@ -1,5 +1,5 @@
 """
-Modules d'analyse pour la détection des causes de latence réseau
+Analyseurs réseau pour PCAP Analyzer
 """
 
 from .timestamp_analyzer import TimestampAnalyzer
@@ -9,6 +9,7 @@ from .rtt_analyzer import RTTAnalyzer
 from .tcp_window import TCPWindowAnalyzer
 from .icmp_pmtu import ICMPAnalyzer
 from .dns_analyzer import DNSAnalyzer
+from .syn_retransmission import SYNRetransmissionAnalyzer
 
 __all__ = [
     'TimestampAnalyzer',
@@ -18,4 +19,5 @@ __all__ = [
     'TCPWindowAnalyzer',
     'ICMPAnalyzer',
     'DNSAnalyzer',
+    'SYNRetransmissionAnalyzer'
 ]

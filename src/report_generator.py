@@ -389,6 +389,55 @@ class ReportGenerator:
         </div>
         {% endif %}
 
+        <!-- SYN Retransmissions -->
+        {% if syn_retransmissions.total_syn_retransmissions and syn_retransmissions.total_syn_retransmissions > 0 %}
+        <h2>🔴 Retransmissions SYN - Problèmes de Handshake</h2>
+        <div class="section danger">
+            <h3>{{ syn_retransmissions.total_syn_retransmissions }} handshake(s) avec retransmissions SYN excessives</h3>
+            <p><strong>Seuil de détection:</strong> {{ syn_retransmissions.threshold_seconds }}s</p>
+            <p>Ces connexions ont dû retransmettre le paquet SYN initial plusieurs fois avant de recevoir un SYN/ACK du serveur.</p>
+
+            <h4>Handshakes problématiques (Top 10):</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Connexion</th>
+                        <th>Tentatives SYN</th>
+                        <th>Délai total</th>
+                        <th>Problème suspecté</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for hs in syn_retransmissions.top_problematic_connections[:10] %}
+                    <tr>
+                        <td><code>{{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</code></td>
+                        <td>{{ hs.retransmission_count + 1 }}</td>
+                        <td>{{ "%.3f"|format(hs.total_delay or 0) }}s</td>
+                        <td>{{ hs.suspected_issue }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <h4>Détails des retransmissions:</h4>
+            {% for hs in syn_retransmissions.top_problematic_connections[:5] %}
+            <div class="detail-box">
+                <h5>{{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</h5>
+                <p><strong>Timeline:</strong></p>
+                <ul>
+                    {% for t in hs.syn_attempts_iso %}
+                    <li>SYN #{{ loop.index }} à {{ t }}</li>
+                    {% endfor %}
+                    {% if hs.synack_time_iso %}
+                    <li><strong>SYN/ACK reçu à {{ hs.synack_time_iso }}</strong> ({{ "%.3f"|format(hs.total_delay or 0) }}s après le 1er SYN)</li>
+                    {% endif %}
+                </ul>
+                <p><strong>Diagnostic:</strong> {{ hs.suspected_issue }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <!-- RTT -->
         {% if rtt.flows_with_high_rtt > 0 %}
         <h2>⏲️ Analyse RTT (Round Trip Time)</h2>
@@ -617,7 +666,8 @@ class ReportGenerator:
             rtt=data.get('rtt', {}),
             tcp_window=data.get('tcp_window', {}),
             icmp=data.get('icmp', {}),
-            dns=data.get('dns', {})
+            dns=data.get('dns', {}),
+            syn_retransmissions=data.get('syn_retransmissions', {})
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:
