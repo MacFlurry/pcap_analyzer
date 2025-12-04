@@ -396,7 +396,6 @@ class RetransmissionAnalyzer:
         summary += f"  - Flux analysés: {len(self.flow_stats)}\n"
         summary += f"  - Retransmissions totales: {total_retrans}\n"
         summary += f"    ({unique_segments} segment(s) unique(s) retransmis)\n"
-        summary += f"    Note: Wireshark 'tcp.analysis.retransmission' peut afficher plus car il compte les 2 sens (A→B et B→A)\n"
         summary += f"  - Anomalies totales: {len(self.anomalies)}\n"
 
         if flows_with_issues:
@@ -438,8 +437,7 @@ class RetransmissionAnalyzer:
         total = len(retrans_list)
         displayed = min(limit, total)
         
-        details = f"🔍 Détails des retransmissions ({displayed}/{total}):\n"
-        details += f"   (Note: Wireshark 'tcp.analysis.retransmission' compte les 2 sens A→B et B→A)\n\n"
+        details = f"🔍 Détails des retransmissions ({displayed}/{total}):\n\n"
         
         for i, retrans in enumerate(retrans_list[:limit], 1):
             delay_ms = retrans.delay * 1000  # Convertir en ms
