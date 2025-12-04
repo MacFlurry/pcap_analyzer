@@ -305,6 +305,37 @@ class ReportGenerator:
             margin-top: 8px;
         }
 
+        .filter-box {
+            background: #2d2d2d;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 16px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .filter-box .filter-label {
+            color: #9575cd;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .filter-box .filter-command {
+            color: #4fc3f7;
+            font-size: 0.95em;
+            word-break: break-all;
+            user-select: all;
+            cursor: text;
+        }
+
+        .filter-box .filter-command:hover {
+            background: #3a3a3a;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
         .footer {
             margin-top: 50px;
             padding-top: 20px;
@@ -607,6 +638,16 @@ class ReportGenerator:
                 <div class="info-line">
                     <span class="info-label">Problème identifié:</span>
                     <span class="problem-badge">{{ hs.suspected_issue }}</span>
+                </div>
+
+                <div class="filter-box">
+                    <span class="filter-label">🔍 Filtre tcpdump:</span>
+                    <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'tcp and host {{ hs.src_ip }} and port {{ hs.src_port }} and host {{ hs.dst_ip }} and port {{ hs.dst_port }}'</div>
+                </div>
+
+                <div class="filter-box">
+                    <span class="filter-label">🔍 Filtre Wireshark:</span>
+                    <div class="filter-command">ip.addr == {{ hs.src_ip }} && tcp.port == {{ hs.src_port }} && ip.addr == {{ hs.dst_ip }} && tcp.port == {{ hs.dst_port }}</div>
                 </div>
             </div>
             {% endfor %}
