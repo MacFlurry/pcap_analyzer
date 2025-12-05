@@ -1399,6 +1399,9 @@ class ReportGenerator:
                 <div class="summary-card info">
                     <h4>Fermées par RST</h4>
                     <div class="value">{{ tcp_timeout.categories.closed_rst_count }}</div>
+                    {% if tcp_timeout.categories.total_rst_packets is defined %}
+                    <small>({{ tcp_timeout.categories.total_rst_packets }} paquets RST vus)</small>
+                    {% endif %}
                 </div>
             </div>
 

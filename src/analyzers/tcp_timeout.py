@@ -69,6 +69,9 @@ class TCPTimeoutAnalyzer:
         self.first_packet_time: Optional[float] = None
         self.last_packet_time: Optional[float] = None
         self.packet_count = 0
+        
+        # Compteur RST pour cohérence avec tcp_reset.py
+        self.total_rst_packets = 0
 
     def _normalize_flow_key(self, src_ip: str, dst_ip: str, 
                             src_port: int, dst_port: int) -> str:
@@ -147,6 +150,7 @@ class TCPTimeoutAnalyzer:
         # RST - Fermeture brutale
         if flags & 0x04:
             conn.rst_seen = True
+            self.total_rst_packets += 1  # Comptage global pour cohérence
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et classifie les connexions"""
@@ -267,6 +271,7 @@ class TCPTimeoutAnalyzer:
                 'established_idle_count': len(categories['established_idle']),
                 'closed_fin_count': len(categories['closed_fin']),
                 'closed_rst_count': len(categories['closed_rst']),
+                'total_rst_packets': self.total_rst_packets,  # Total des paquets RST vus
                 'active_count': len(categories['active'])
             }
         }
