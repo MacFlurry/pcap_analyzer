@@ -548,23 +548,56 @@ class ReportGenerator:
     </style>
 </head>
 <body>
+    {% macro format_bytes(value) %}
+    {% set bytes = value or 0 %}
+    {% if bytes < 1024 %}
+        {{ bytes }} B
+    {% elif bytes < 1048576 %}
+        {{ "%.2f"|format(bytes / 1024) }} KB
+    {% elif bytes < 1073741824 %}
+        {{ "%.2f"|format(bytes / 1048576) }} MB
+    {% else %}
+        {{ "%.2f"|format(bytes / 1073741824) }} GB
+    {% endif %}
+    {% endmacro %}
+
+    {% macro format_bitrate(value_mbps) %}
+    {% set mbps = value_mbps or 0 %}
+    {% if mbps < 0.001 %}
+        {{ "%.0f"|format(mbps * 1000000) }} bps
+    {% elif mbps < 1 %}
+        {{ "%.2f"|format(mbps * 1000) }} Kbps
+    {% elif mbps < 1000 %}
+        {{ "%.2f"|format(mbps) }} Mbps
+    {% else %}
+        {{ "%.2f"|format(mbps / 1000) }} Gbps
+    {% endif %}
+    {% endmacro %}
+
     <div class="container">
         <header>
-            <h1>📊 Rapport d'analyse de latence réseau</h1>
+            <h1>📊 PCAP Analyzer</h1>
             <div class="meta-info">
                 <strong>Fichier PCAP:</strong> {{ analysis_info.pcap_file }}<br>
                 <strong>Date d'analyse:</strong> {{ analysis_info.analysis_date }}<br>
                 <strong>Durée de capture:</strong> {{ "%.2f"|format(analysis_info.capture_duration) }} secondes<br>
-                <strong>Total de paquets:</strong> {{ analysis_info.total_packets }}
+                <strong>Total de paquets:</strong> {{ analysis_info.total_packets }}<br>
+                <span style="display: inline-block; margin-top: 5px; padding: 3px 8px; background-color: #2196F3; color: white; border-radius: 3px; font-size: 0.85em;">IPv4 uniquement</span>
             </div>
         </header>
 
         <!-- Vue d'ensemble -->
         <h2>Vue d'ensemble</h2>
         <div class="summary-grid">
-            <div class="summary-card {% if timestamps['gaps_detected'] > 0 %}warning{% else %}success{% endif %}">
-                <h3>Gaps temporels</h3>
-                <div class="value">{{ timestamps['gaps_detected'] }}</div>
+            <div class="summary-card {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}warning{% else %}success{% endif %}">
+                <h3>Gaps anormaux</h3>
+                <div class="value">
+                    {% if timestamps.get('periodic_pattern_detected', false) %}
+                        {{ timestamps.get('non_periodic_gaps', 0) }}
+                    {% else %}
+                        {{ timestamps['gaps_detected'] }}
+                    {% endif %}
+                </div>
             </div>
 
             <div class="summary-card {% if tcp_handshake.slow_handshakes > 0 %}warning{% else %}success{% endif %}">
@@ -594,10 +627,16 @@ class ReportGenerator:
         </div>
 
         <!-- Analyse des timestamps -->
-        {% if timestamps['gaps_detected'] > 0 %}
+        {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}
         <h2>⏱️ Analyse des timestamps</h2>
         <div class="section warning">
-            <h3>{{ timestamps['gaps_detected'] }} gap(s) temporel(s) détecté(s)</h3>
+            <h3>{{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }} gap(s) temporel(s) anormal(aux) détecté(s)</h3>
+            {% if timestamps.get('periodic_pattern_detected', false) %}
+            <div class="alert alert-info" style="margin-bottom: 15px;">
+                <strong>ℹ️ Pattern périodique détecté:</strong> {{ timestamps['gaps_detected'] - timestamps.get('non_periodic_gaps', 0) }} gaps réguliers ont été masqués.
+                Seuls les gaps hors pattern sont affichés ci-dessous.
+            </div>
+            {% endif %}
             <table>
                 <thead>
                     <tr>
@@ -608,13 +647,17 @@ class ReportGenerator:
                     </tr>
                 </thead>
                 <tbody>
-                    {% for gap in timestamps['gaps'][:20] %}
+                    {% set count = namespace(value=0) %}
+                    {% for gap in timestamps['gaps'] %}
+                    {% if gap.is_abnormal and count.value < 20 %}
+                    {% set count.value = count.value + 1 %}
                     <tr>
                         <td>#{{ gap.packet_num_before }} → #{{ gap.packet_num_after }}</td>
                         <td><strong>{{ "%.3f"|format(gap.gap_duration) }}s</strong></td>
                         <td><code>{{ gap.src_ip }} → {{ gap.dst_ip }}</code></td>
                         <td><span class="badge info">{{ gap.protocol }}</span></td>
                     </tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -707,30 +750,39 @@ class ReportGenerator:
             </table>
             {% endif %}
 
-            {% if retransmission.retransmissions %}
-            <h4>Détails des retransmissions (Top 10):</h4>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Paquet #</th>
-                        <th>Original #</th>
-                        <th>Seq</th>
-                        <th>Délai (ms)</th>
-                        <th>Flux</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in retransmission.retransmissions[:10] %}
-                    <tr>
-                        <td>{{ r.packet_num }}</td>
-                        <td>{{ r.original_packet_num }}</td>
-                        <td>{{ r.seq_num }}</td>
-                        <td>{{ "%.2f"|format(r.delay * 1000) }}</td>
-                        <td><code>{{ r.src_ip }}:{{ r.src_port }} → {{ r.dst_ip }}:{{ r.dst_port }}</code></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            {% if retransmission.retrans_by_flow %}
+            <h4>Détails des retransmissions par flux (Top {{ [retransmission.retrans_by_flow|length, 10]|min }}):</h4>
+            {% for flow_data in retransmission.retrans_by_flow[:10] %}
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">{{ flow_data.flow_key }}</span>
+                <span class="header-info">({{ flow_data.total_retransmissions_in_flow }} retransmissions)</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <div class="detail-box">
+                        <h5>Détails pour le flux <code>{{ flow_data.flow_key }}</code></h5>
+                        <ul class="timeline-list">
+                            {% for r in flow_data.details %}
+                            <li>
+                                Retransmission #{{ loop.index }}: Paquet <span class="attempt-num">{{ r.packet_num }}</span> (Original: #{{ r.original_packet_num }})
+                                <span class="time-offset">Délai: {{ "%.2f"|format(r.delay * 1000) }}ms</span>
+                                <br>Seq: {{ r.seq_num }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <div class="filter-box">
+                            <span class="filter-label">🔍 Filtre tcpdump:</span>
+                            <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'tcp and host {{ flow_data.details[0].src_ip }} and port {{ flow_data.details[0].src_port }} and host {{ flow_data.details[0].dst_ip }} and port {{ flow_data.details[0].dst_port }}'</div>
+                        </div>
+                        <div class="filter-box">
+                            <span class="filter-label">🔍 Filtre Wireshark:</span>
+                            <div class="filter-command">ip.addr == {{ flow_data.details[0].src_ip }} && tcp.port == {{ flow_data.details[0].src_port }} && ip.addr == {{ flow_data.details[0].dst_ip }} && tcp.port == {{ flow_data.details[0].dst_port }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
             {% endif %}
         </div>
         {% endif %}
@@ -1297,7 +1349,7 @@ class ReportGenerator:
                 {% for proto, stats in top_talkers.protocol_stats.items() %}
                 <div class="summary-card {% if proto == 'TCP' %}info{% elif proto == 'UDP' %}success{% else %}warning{% endif %}">
                     <h4>{{ proto }}</h4>
-                    <div class="value">{{ "%.2f"|format(stats.bytes / 1048576) }} MB</div>
+                    <div class="value">{{ format_bytes(stats.bytes) }}</div>
                     <small>{{ stats.packets }} paquets</small>
                 </div>
                 {% endfor %}
@@ -1322,9 +1374,9 @@ class ReportGenerator:
                     <tr>
                         <td>{{ loop.index }}</td>
                         <td><code>{{ ip_stat.ip }}</code></td>
-                        <td><strong>{{ "%.2f"|format(ip_stat.total_bytes / 1048576) }} MB</strong></td>
-                        <td>{{ "%.2f"|format(ip_stat.bytes_sent / 1048576) }} MB</td>
-                        <td>{{ "%.2f"|format(ip_stat.bytes_received / 1048576) }} MB</td>
+                        <td><strong>{{ format_bytes(ip_stat.total_bytes) }}</strong></td>
+                        <td>{{ format_bytes(ip_stat.bytes_sent) }}</td>
+                        <td>{{ format_bytes(ip_stat.bytes_received) }}</td>
                         <td>{{ ip_stat.packets_sent + ip_stat.packets_received }}</td>
                     </tr>
                     {% endfor %}
@@ -1352,7 +1404,7 @@ class ReportGenerator:
                         <td><code>{{ conv.src_ip }}{% if conv.src_port %}:{{ conv.src_port }}{% endif %}</code></td>
                         <td><code>{{ conv.dst_ip }}{% if conv.dst_port %}:{{ conv.dst_port }}{% endif %}</code></td>
                         <td><span class="badge {% if conv.protocol == 'TCP' %}info{% elif conv.protocol == 'UDP' %}success{% else %}warning{% endif %}">{{ conv.protocol }}</span></td>
-                        <td><strong>{{ "%.2f"|format(conv.bytes / 1048576) }} MB</strong></td>
+                        <td><strong>{{ format_bytes(conv.bytes) }}</strong></td>
                         <td>{{ conv.packets }}</td>
                     </tr>
                     {% endfor %}
@@ -1376,7 +1428,7 @@ class ReportGenerator:
                 </div>
                 <div class="summary-card success">
                     <h4>Volume total</h4>
-                    <div class="value">{{ "%.2f"|format(throughput.global_throughput.total_bytes / 1048576) }} MB</div>
+                    <div class="value">{{ format_bytes(throughput.global_throughput.total_bytes) }}</div>
                     <small>{{ throughput.global_throughput.total_packets }} paquets</small>
                 </div>
                 <div class="summary-card info">
@@ -1407,7 +1459,7 @@ class ReportGenerator:
                         <td><code>{{ flow.flow_key }}</code></td>
                         <td><span class="badge {% if flow.protocol == 'TCP' %}info{% elif flow.protocol == 'UDP' %}success{% else %}warning{% endif %}">{{ flow.protocol }}</span></td>
                         <td><strong>{{ "%.2f"|format(flow.throughput_mbps) }} Mbps</strong></td>
-                        <td>{{ "%.2f"|format(flow.bytes / 1048576) }} MB</td>
+                        <td>{{ format_bytes(flow.bytes) }}</td>
                         <td>{{ "%.1f"|format(flow.duration_seconds) }}s</td>
                     </tr>
                     {% endfor %}
@@ -1433,7 +1485,7 @@ class ReportGenerator:
                     <tr>
                         <td><code>{{ flow.flow_key }}</code></td>
                         <td><span class="badge warning">{{ "%.2f"|format(flow.throughput_kbps) }} Kbps</span></td>
-                        <td>{{ "%.2f"|format(flow.bytes / 1024) }} KB</td>
+                        <td>{{ format_bytes(flow.bytes) }}</td>
                         <td>{{ "%.1f"|format(flow.duration_seconds) }}s</td>
                         <td>{{ "%.0f"|format(flow.avg_packet_size) }} bytes</td>
                     </tr>
@@ -1558,7 +1610,7 @@ class ReportGenerator:
                         <td>{{ "%.1f"|format(conn.duration) }}s</td>
                         <td><span class="badge danger">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
                         <td>{{ conn.packet_count }}</td>
-                        <td>{{ "%.2f"|format(conn.bytes_total / 1024) }} KB</td>
+                        <td>{{ format_bytes(conn.bytes_total) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -1636,7 +1688,7 @@ class ReportGenerator:
                     <tr>
                         <td><span class="badge">{{ proto }}</span></td>
                         <td>{{ stats.flows }}</td>
-                        <td>{{ "%.2f"|format(stats.bytes / 1048576) }} MB</td>
+                        <td>{{ format_bytes(stats.bytes) }}</td>
                         <td>
                             {% if stats.asymmetric > 0 %}
                             <span class="badge warning">{{ stats.asymmetric }}</span>
@@ -1669,9 +1721,9 @@ class ReportGenerator:
                     <tr>
                         <td><code>{{ flow.src_ip }} ↔ {{ flow.dst_ip }}</code></td>
                         <td><span class="badge">{{ flow.protocol }}</span></td>
-                        <td>{{ "%.2f"|format(flow.total_bytes / 1048576) }} MB</td>
-                        <td>{{ "%.2f"|format(flow.forward_bytes / 1024) }} KB</td>
-                        <td>{{ "%.2f"|format(flow.reverse_bytes / 1024) }} KB</td>
+                        <td>{{ format_bytes(flow.total_bytes) }}</td>
+                        <td>{{ format_bytes(flow.forward_bytes) }}</td>
+                        <td>{{ format_bytes(flow.reverse_bytes) }}</td>
                         <td>
                             {% if flow.asymmetry_percent > 90 %}
                             <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
@@ -1714,8 +1766,8 @@ class ReportGenerator:
                             <span class="badge info">← {{ flow.dst_ip }}</span>
                             {% endif %}
                         </td>
-                        <td>{{ "%.2f"|format(flow.forward_bytes / 1024) }} KB ({{ flow.forward_packets }} pkts)</td>
-                        <td>{{ "%.2f"|format(flow.reverse_bytes / 1024) }} KB ({{ flow.reverse_packets }} pkts)</td>
+                        <td>{{ format_bytes(flow.forward_bytes) }} ({{ flow.forward_packets }} pkts)</td>
+                        <td>{{ format_bytes(flow.reverse_bytes) }} ({{ flow.reverse_packets }} pkts)</td>
                         <td>{{ "%.4f"|format(flow.byte_ratio) }}</td>
                         <td>
                             {% if flow.is_unidirectional %}
@@ -1944,7 +1996,7 @@ class ReportGenerator:
                     <tr>
                         <td><code>{{ hour.hour_label }}</code></td>
                         <td>{{ hour.packets }}</td>
-                        <td>{{ "%.2f"|format(hour.bytes / 1048576) }} MB</td>
+                        <td>{{ format_bytes(hour.bytes) }}</td>
                         <td>{{ hour.avg_per_slot }}</td>
                     </tr>
                     {% endfor %}
@@ -1970,7 +2022,7 @@ class ReportGenerator:
                     <tr>
                         <td><code>{{ peak.time }}</code></td>
                         <td>{{ peak.packets }}</td>
-                        <td>{{ "%.2f"|format(peak.bytes / 1024) }} KB</td>
+                        <td>{{ format_bytes(peak.bytes) }}</td>
                         <td><span class="badge danger">{{ peak.ratio }}x</span></td>
                         <td>{{ peak.unique_sources }}</td>
                     </tr>
@@ -2126,7 +2178,7 @@ class ReportGenerator:
                                 <span class="badge success">0</span>
                             {% endif %}
                         </td>
-                        <td>{{ (flow.sacked_bytes / 1024) | round(1) }} KB</td>
+                        <td>{{ format_bytes(flow.sacked_bytes) }}</td>
                         <td>{{ flow.unique_blocks }}</td>
                         <td>{{ flow.duration_seconds }}s</td>
                     </tr>
@@ -2244,13 +2296,20 @@ class ReportGenerator:
                 <h3>Résumé pour les équipes métier et management</h3>
                 <div class="interpretive-summary">
                     {% set has_incident = false %}
-                    {% if timestamps and timestamps['gaps_detected'] > 0 %}
+                    {% set is_small_capture = analysis_info.total_packets < 1000 %}
+                    {% set is_very_small_capture = analysis_info.total_packets < 100 %}
+
+                    {# Logique contextuelle améliorée : ne pas alarmer sur patterns réguliers #}
+                    {# Utilise non_periodic_gaps au lieu de gaps_detected total #}
+                    {% if timestamps and timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) > 10 and not is_very_small_capture %}
                         {% set has_incident = true %}
                     {% endif %}
-                    {% if retransmission and retransmission.total_retransmissions > 1000 %}
+                    {# Retransmissions : seuils plus élevés et rate > 5% #}
+                    {% if retransmission and retransmission.total_retransmissions > 1000 and retransmission.retransmission_rate > 5.0 %}
                         {% set has_incident = true %}
                     {% endif %}
-                    {% if throughput and throughput.global_throughput.throughput_mbps < 1 %}
+                    {# Débit < 1 Mbps n'est un problème QUE si volume significatif ET pas de pattern périodique #}
+                    {% if throughput and throughput.global_throughput.throughput_mbps < 1 and analysis_info.total_packets > 10000 and not timestamps.get('periodic_pattern_detected', false) %}
                         {% set has_incident = true %}
                     {% endif %}
 
@@ -2269,9 +2328,15 @@ class ReportGenerator:
                     <div class="interpretation-details">
                         <h4>🔍 Analyse des problèmes identifiés :</h4>
                         <ul>
-                            {% if timestamps and timestamps['gaps_detected'] > 0 %}
-                            <li><strong>Délais anormaux entre paquets :</strong> {{ timestamps['gaps_detected'] }} interruptions détectées (certaines dépassent 1.0s). 
-                                Cela signifie que le réseau "oublie" des messages pendant plusieurs secondes.</li>
+                            {% if timestamps and timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}
+                            <li><strong>Délais anormaux entre paquets :</strong> {{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }} interruptions détectées (certaines dépassent 1.0s).
+                                {% if is_very_small_capture %}
+                                    Pour une capture de faible volume ({{ analysis_info.total_packets }} paquets), ceci est normal - trafic sporadique attendu.
+                                {% elif timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) > 10 %}
+                                    Volume significatif d'interruptions - à surveiller.
+                                {% else %}
+                                    Trafic non continu - vérifier si cela correspond au comportement attendu de l'application.
+                                {% endif %}</li>
                             {% endif %}
 
                             {% if retransmission and retransmission.total_retransmissions > 0 %}
@@ -2280,8 +2345,18 @@ class ReportGenerator:
                             {% endif %}
 
                             {% if throughput and throughput.global_throughput.throughput_mbps %}
-                            <li><strong>Débit global :</strong> {{ "%.2f"|format(throughput.global_throughput.throughput_mbps) }} Mbps sur {{ "%.0f"|format(throughput.global_throughput.duration_seconds / 60) }} minutes. 
-                                {% if throughput.global_throughput.throughput_mbps < 1 %}Débit très faible pour du trafic moderne.{% elif throughput.global_throughput.throughput_mbps < 10 %}Débit correct mais limité.{% else %}Débit satisfaisant.{% endif %}</li>
+                            <li><strong>Débit global :</strong>
+                                {{ format_bitrate(throughput.global_throughput.throughput_mbps) }}
+                                sur {{ "%.0f"|format(throughput.global_throughput.duration_seconds / 60) }} minutes.
+                                {% if is_very_small_capture %}
+                                    Capture de faible volume ({{ analysis_info.total_packets }} paquets) - métrique de débit non significative.
+                                {% elif throughput.global_throughput.throughput_mbps < 1 and analysis_info.total_packets > 10000 %}
+                                    Débit très faible pour ce volume de paquets - à investiguer.
+                                {% elif throughput.global_throughput.throughput_mbps < 10 %}
+                                    Débit modéré.
+                                {% else %}
+                                    Débit satisfaisant.
+                                {% endif %}</li>
                             {% endif %}
 
                             {% if tcp_timeout and tcp_timeout.total_connections > 0 %}
@@ -2289,25 +2364,71 @@ class ReportGenerator:
                                 {% if tcp_timeout.problematic_count == 0 %}aucune n'est problématique.{% else %}{{ tcp_timeout.problematic_count }} présentent des anomalies (timeouts, fermetures brutales).{% endif %}</li>
                             {% endif %}
 
+                            {% if asymmetric_traffic and asymmetric_traffic.summary.unidirectional_flows > 0 %}
+                            <li><strong>Trafic Unidirectionnel :</strong> {{ asymmetric_traffic.summary.unidirectional_flows }} flux unidirectionnels détectés.
+                                {% set mdns_found = false %}
+                                {% set multicast_found = false %}
+                                {% for flow in asymmetric_traffic.asymmetric_flows %}
+                                    {% if flow.is_unidirectional %}
+                                        {% if '5353' in flow.src_port|string or '5353' in flow.dst_port|string %}{% set mdns_found = true %}{% endif %}
+                                        {% if flow.dst_ip.startswith('224.') or flow.dst_ip.startswith('239.') %}{% set multicast_found = true %}{% endif %}
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if mdns_found or multicast_found %}
+                                    <br>🔍 <em>Analyse :</em> Ce trafic correspond principalement à des protocoles de découverte réseau (<strong>{% if mdns_found %}mDNS{% endif %}{% if mdns_found and multicast_found %}/{% endif %}{% if multicast_found %}Multicast{% endif %}</strong>). C'est un comportement <strong>normal</strong> où les émetteurs envoient des annonces sans attendre de réponse directe dans le même flux. Ce n'est pas une anomalie.
+                                {% else %}
+                                    <br>⚠️ À vérifier : S'il s'agit de trafic UDP autre que multicast, cela pourrait indiquer du streaming sans voie de retour visible ou une configuration de routage asymétrique.
+                                {% endif %}
+                            </li>
+                            {% endif %}
+
+                            {% if dns and dns.error_transactions > 0 %}
+                            <li><strong>Erreurs DNS :</strong> {{ dns.error_transactions }} résolutions ont échoué.
+                                {% if dns.top_problematic_domains %}
+                                <br>Domaines introuvables (NXDOMAIN) fréquents : <code>{{ dns.top_problematic_domains[0][0] }}</code>. 
+                                Cela peut être dû à des blocages (Private Relay, AdBlock) ou des domaines inexistants.
+                                {% endif %}
+                            </li>
+                            {% endif %}
+
                             {% if patterns and patterns.periodic_patterns %}
                             <li><strong>Trafic périodique :</strong> Détection de patterns réguliers (probablement des systèmes de monitoring ou heartbeat) toutes les {{ patterns.periodic_patterns[0].interval_seconds }} secondes.</li>
                             {% endif %}
                         </ul>
+                        </ul>
 
                         <h4>🎯 Impact métier estimé :</h4>
                         <ul>
+                            {% if is_very_small_capture %}
+                            <li><strong>Volume de capture :</strong> Capture de faible volume ({{ analysis_info.total_packets }} paquets sur {{ "%.0f"|format(analysis_info.capture_duration) }}s).
+                                Les métriques statistiques ne sont pas significatives - capture plus longue recommandée pour analyse fiable.</li>
+                            <li><strong>Impact utilisateur :</strong> Impossible à évaluer avec certitude sur ce faible échantillon.</li>
+                            {% elif is_small_capture %}
+                            <li><strong>Volume de capture :</strong> Capture de volume modéré ({{ analysis_info.total_packets }} paquets).
+                                Métriques indicatives - capture plus longue conseillée pour conclusions définitives.</li>
+                            <li><strong>Impact utilisateur :</strong> {% if has_incident %}Problèmes détectés - à confirmer avec capture plus longue.{% else %}Pas de problème majeur détecté sur cet échantillon.{% endif %}</li>
+                            {% else %}
                             {% if has_incident %}
-                            <li><strong>Impact utilisateur :</strong> Lenteurs importantes, timeouts applicatifs possibles, déconnexions fréquentes.</li>
-                            <li><strong>Impact applicatif :</strong> Les échanges entre {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "serveurs" }} et {{ top_talkers.top_ips[1].ip if top_talkers and top_talkers.top_ips|length > 1 else "clients" }} sont dégradés.</li>
+                            <li><strong>Impact utilisateur :</strong> Dégradations de performance détectées - lenteurs possibles, timeouts applicatifs potentiels.</li>
+                            <li><strong>Impact applicatif :</strong> Les échanges entre {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "serveurs" }} et {{ top_talkers.top_ips[1].ip if top_talkers and top_talkers.top_ips|length > 1 else "clients" }} montrent des anomalies.</li>
                             {% else %}
                             <li><strong>Impact utilisateur :</strong> Fonctionnement normal du réseau selon les seuils définis.</li>
                             {% endif %}
-                            <li><strong>Durée de la capture :</strong> {{ "%.1f"|format(analysis_info.capture_duration) }} secondes ({{ "%.1f"|format(analysis_info.capture_duration / 60) }} minutes).</li>
+                            {% endif %}
                         </ul>
 
                         <h4>🔧 Recommandations :</h4>
                         <ul>
+                            {% if is_very_small_capture %}
+                            <li><strong>Capture plus longue :</strong> Augmenter la durée de capture (minimum 5 minutes) ou le volume de trafic pour obtenir des statistiques fiables.</li>
+                            <li><strong>Période représentative :</strong> Capturer pendant une période d'activité normale de l'application pour avoir des données significatives.</li>
+                            {% elif is_small_capture %}
+                            <li><strong>Validation recommandée :</strong> Effectuer une capture plus longue (10-15 minutes) pour confirmer les tendances observées.</li>
                             {% if has_incident %}
+                            <li><strong>Investigation :</strong> Si problèmes confirmés sur capture longue, vérifier la charge des serveurs {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "principaux" }}.</li>
+                            {% endif %}
+                            {% elif has_incident %}
                             <li><strong>Investigation prioritaire :</strong> Vérifier la charge CPU/mémoire des serveurs {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "principaux" }}.</li>
                             <li><strong>Monitoring réseau :</strong> Contrôler l'utilisation de la bande passante sur les équipements intermédiaires.</li>
                             <li><strong>Logs applicatifs :</strong> Corréler avec les logs pendant cette période pour identifier les timeouts.</li>
@@ -2417,13 +2538,21 @@ class ReportGenerator:
         retrans_by_flow = {}
         
         if 'retransmissions' in retrans_data and retrans_data['retransmissions']:
-            for r in retrans_data['retransmissions'][:50]:
+            for r in retrans_data['retransmissions']:
                 flow_key = f"{r['src_ip']}:{r['src_port']} → {r['dst_ip']}:{r['dst_port']}"
                 if flow_key not in retrans_by_flow:
-                    retrans_by_flow[flow_key] = []
-                retrans_by_flow[flow_key].append(r)
+                    retrans_by_flow[flow_key] = {
+                        'flow_key': flow_key,
+                        'details': [],
+                        'total_retransmissions_in_flow': 0 # Added for convenience in template
+                    }
+                retrans_by_flow[flow_key]['details'].append(r)
+                retrans_by_flow[flow_key]['total_retransmissions_in_flow'] += 1
         
-        retrans_data['retrans_by_flow'] = retrans_by_flow
+        # Sort flows by number of retransmissions for consistent display
+        sorted_retrans_flows = sorted(retrans_by_flow.values(), 
+                                      key=lambda x: x['total_retransmissions_in_flow'], reverse=True)
+        retrans_data['retrans_by_flow'] = sorted_retrans_flows
         
         template = Template(self.HTML_TEMPLATE)
         html_content = template.render(

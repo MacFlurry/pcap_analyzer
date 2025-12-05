@@ -19,6 +19,7 @@ class TimestampGap:
     src_ip: str
     dst_ip: str
     protocol: str
+    is_abnormal: bool = True
 
 
 class TimestampAnalyzer:
@@ -91,7 +92,8 @@ class TimestampAnalyzer:
                     gap_duration=interval,
                     src_ip=self._get_src_ip(packet),
                     dst_ip=self._get_dst_ip(packet),
-                    protocol=self._get_protocol(packet)
+                    protocol=self._get_protocol(packet),
+                    is_abnormal=True
                 )
                 self.gaps.append(gap)
 
@@ -138,6 +140,49 @@ class TimestampAnalyzer:
             return 'IP'
         return 'Other'
 
+    def _detect_periodic_pattern(self) -> bool:
+        """
+        Détecte si les gaps forment un pattern périodique (polling, heartbeat, etc.)
+
+        Returns:
+            True si les gaps semblent être un comportement applicatif régulier
+        """
+        if len(self.gaps) < 3:
+            return False
+
+        # Extraire les durées des gaps
+        gap_durations = [gap.gap_duration for gap in self.gaps]
+
+        # Calculer la moyenne et l'écart-type
+        mean_gap = statistics.mean(gap_durations)
+
+        if len(gap_durations) < 2:
+            return False
+
+        stdev_gap = statistics.stdev(gap_durations)
+
+        # Si l'écart-type est < 10% de la moyenne, c'est probablement périodique
+        # (variance très faible = comportement régulier)
+        coefficient_of_variation = (stdev_gap / mean_gap) if mean_gap > 0 else float('inf')
+
+        return coefficient_of_variation < 0.10
+
+    def _mark_periodic_gaps(self) -> None:
+        """
+        Marque les gaps qui correspondent au pattern périodique comme non anormaux
+        """
+        if len(self.gaps) < 3:
+            return
+
+        gap_durations = [gap.gap_duration for gap in self.gaps]
+        mean_gap = statistics.mean(gap_durations)
+
+        # Marquer les gaps qui sont proches de la moyenne comme "non anormaux"
+        for gap in self.gaps:
+            deviation = abs(gap.gap_duration - mean_gap) / mean_gap if mean_gap > 0 else 0
+            if deviation <= 0.20:
+                gap.is_abnormal = False
+
     def _generate_report(self) -> Dict[str, Any]:
         """Génère le rapport d'analyse des timestamps"""
         stats = {}
@@ -153,6 +198,14 @@ class TimestampAnalyzer:
             if len(self.packet_intervals) > 1:
                 stats['stdev_interval'] = statistics.stdev(self.packet_intervals)
 
+        # Détection de pattern périodique dans les gaps
+        periodic_pattern_detected = self._detect_periodic_pattern()
+        
+        non_periodic_gaps = len(self.gaps)
+        if periodic_pattern_detected:
+            self._mark_periodic_gaps()
+            non_periodic_gaps = sum(1 for gap in self.gaps if gap.is_abnormal)
+
         return {
             'total_packets': self.total_packets,
             'capture_duration_seconds': self.capture_duration,
@@ -162,17 +215,28 @@ class TimestampAnalyzer:
             'gaps_detected': len(self.gaps),
             'gaps': [asdict(gap) for gap in self.gaps],
             'interval_statistics': stats,
-            'packets_per_second': self.total_packets / self.capture_duration if self.capture_duration > 0 else 0
+            'packets_per_second': self.total_packets / self.capture_duration if self.capture_duration > 0 else 0,
+            'periodic_pattern_detected': periodic_pattern_detected,
+            'non_periodic_gaps': non_periodic_gaps
         }
 
     def get_gaps_summary(self) -> str:
         """Retourne un résumé textuel des gaps détectés"""
-        if not self.gaps:
+        # Filtrer pour ne garder que les gaps anormaux
+        abnormal_gaps = [gap for gap in self.gaps if getattr(gap, 'is_abnormal', True)]
+        
+        if not abnormal_gaps:
+            if self.gaps:
+                return f"ℹ️ {len(self.gaps)} gap(s) périodique(s) détecté(s) (comportement normal)."
             return "Aucun gap temporel anormal détecté."
 
-        summary = f"🔴 {len(self.gaps)} gap(s) temporel(s) anormal(aux) détecté(s):\n"
+        summary = f"🔴 {len(abnormal_gaps)} gap(s) temporel(s) anormal(aux) détecté(s)"
+        if len(self.gaps) > len(abnormal_gaps):
+            summary += f" (sur {len(self.gaps)} total):\n"
+        else:
+            summary += ":\n"
 
-        for i, gap in enumerate(self.gaps, 1):
+        for i, gap in enumerate(abnormal_gaps, 1):
             summary += f"\n  Gap #{i}:\n"
             summary += f"    - Entre paquets {gap.packet_num_before} et {gap.packet_num_after}\n"
             summary += f"    - Durée: {gap.gap_duration:.3f}s\n"
