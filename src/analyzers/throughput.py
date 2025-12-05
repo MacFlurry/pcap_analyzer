@@ -149,7 +149,11 @@ class ThroughputAnalyzer:
                 'duration_seconds': throughput['duration_seconds'],
                 'throughput_mbps': throughput['mbps'],
                 'throughput_kbps': throughput['kbps'],
-                'avg_packet_size': flow['bytes'] / flow['packets'] if flow['packets'] > 0 else 0
+                'avg_packet_size': flow['bytes'] / flow['packets'] if flow['packets'] > 0 else 0,
+                'src_ip': flow['src_ip'],
+                'dst_ip': flow['dst_ip'],
+                'src_port': flow['src_port'],
+                'dst_port': flow['dst_port']
             })
         
         # Trier par débit décroissant

@@ -20,6 +20,7 @@ class TCPRetransmission:
     seq_num: int
     original_packet_num: int
     delay: float
+    retrans_type: str = "Unknown" # New field
 
 
 @dataclass
@@ -58,7 +59,9 @@ class RetransmissionAnalyzer:
     def __init__(self, retrans_low: int = 10, retrans_medium: int = 50,
                  retrans_critical: int = 100,
                  retrans_rate_low: float = 1.0, retrans_rate_medium: float = 3.0,
-                 retrans_rate_critical: float = 5.0):
+                 retrans_rate_critical: float = 5.0,
+                 rto_threshold_ms: float = 200.0, # New threshold for RTO
+                 fast_retrans_delay_max_ms: float = 50.0): # New threshold for Fast Retrans
         """
         Initialise l'analyseur de retransmissions
 
@@ -69,6 +72,8 @@ class RetransmissionAnalyzer:
             retrans_rate_low: Seuil bas de taux de retransmission (%)
             retrans_rate_medium: Seuil moyen de taux de retransmission (%)
             retrans_rate_critical: Seuil critique de taux de retransmission (%)
+            rto_threshold_ms: Seuil en ms pour considérer une retransmission comme un RTO
+            fast_retrans_delay_max_ms: Délai max en ms pour considérer une retransmission comme Fast Retrans
         """
         self.retrans_low = retrans_low
         self.retrans_medium = retrans_medium
@@ -77,6 +82,9 @@ class RetransmissionAnalyzer:
         self.retrans_rate_low = retrans_rate_low
         self.retrans_rate_medium = retrans_rate_medium
         self.retrans_rate_critical = retrans_rate_critical
+        
+        self.rto_threshold = rto_threshold_ms / 1000.0 # Convert to seconds
+        self.fast_retrans_delay_max = fast_retrans_delay_max_ms / 1000.0 # Convert to seconds
 
         self.retransmissions: List[TCPRetransmission] = []
         self.anomalies: List[TCPAnomaly] = []
@@ -220,6 +228,13 @@ class RetransmissionAnalyzer:
 
                 delay = timestamp - original_time
 
+                # Determine retransmission type based on delay heuristics
+                retrans_type = "Retransmission" # Default
+                if delay >= self.rto_threshold:
+                    retrans_type = "RTO"
+                elif delay <= self.fast_retrans_delay_max:
+                    retrans_type = "Fast Retransmission"
+                
                 retrans = TCPRetransmission(
                     packet_num=packet_num,
                     timestamp=timestamp,
@@ -229,7 +244,8 @@ class RetransmissionAnalyzer:
                     dst_port=tcp.dport,
                     seq_num=seq,
                     original_packet_num=original_num,
-                    delay=delay
+                    delay=delay,
+                    retrans_type=retrans_type # Assign the type
                 )
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]['retransmissions'] += 1
@@ -404,6 +420,11 @@ class RetransmissionAnalyzer:
         # Tri des retransmissions par délai décroissant (les plus graves en premier)
         sorted_retransmissions = sorted(self.retransmissions, key=lambda r: r.delay, reverse=True)
 
+        rto_count = sum(1 for r in self.retransmissions if r.retrans_type == "RTO")
+        fast_retrans_count = sum(1 for r in self.retransmissions if r.retrans_type == "Fast Retransmission")
+        # All other types (including "Unknown" and "Retransmission")
+        other_retrans_count = total_retrans - rto_count - fast_retrans_count 
+
         return {
             'total_flows': len(self.flow_stats),
             'flows_with_issues': len(flows_with_issues),
@@ -418,7 +439,11 @@ class RetransmissionAnalyzer:
             },
             'retransmissions': [asdict(r) for r in sorted_retransmissions],
             'anomalies': [asdict(a) for a in self.anomalies],
-            'flow_statistics': [asdict(f) for f in self.flow_stats.values()]
+            'flow_statistics': [asdict(f) for f in self.flow_stats.values()],
+            'rto_count': rto_count,
+            'fast_retrans_count': fast_retrans_count,
+            'other_retrans_count': other_retrans_count,
+            'unique_retransmitted_segments': self._count_unique_retransmitted_segments()
         }
 
     def get_summary(self) -> str:
@@ -431,6 +456,19 @@ class RetransmissionAnalyzer:
         summary += f"  - Flux analysés: {len(self.flow_stats)}\n"
         summary += f"  - Retransmissions totales: {total_retrans}\n"
         summary += f"    ({unique_segments} segment(s) unique(s) retransmis)\n"
+        
+        rto_count = sum(1 for r in self.retransmissions if r.retrans_type == "RTO")
+        fast_retrans_count = sum(1 for r in self.retransmissions if r.retrans_type == "Fast Retransmission")
+        other_retrans_count = total_retrans - rto_count - fast_retrans_count
+        
+        if rto_count > 0:
+            summary += f"    dont RTOs: {rto_count} 🔴 (Congestion Sévère)\n"
+        if fast_retrans_count > 0:
+            summary += f"    dont Fast Retransmissions: {fast_retrans_count} 🟠 (Pertes Légères / Désordre)\n"
+        if other_retrans_count > 0:
+            summary += f"    dont Autres Retransmissions: {other_retrans_count}\n"
+
+
         summary += f"  - Anomalies totales: {len(self.anomalies)}\n"
 
         if flows_with_issues:

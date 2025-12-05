@@ -12,6 +12,31 @@ from jinja2 import Template
 class ReportGenerator:
     """Générateur de rapports pour l'analyse PCAP"""
 
+    COMMON_PORTS = {
+        80: "HTTP",
+        443: "HTTPS",
+        20: "FTP-Data",
+        21: "FTP-Control",
+        22: "SSH",
+        23: "Telnet",
+        25: "SMTP",
+        53: "DNS",
+        67: "DHCP-Server",
+        68: "DHCP-Client",
+        69: "TFTP",
+        110: "POP3",
+        137: "NetBIOS-NS",
+        138: "NetBIOS-DGM",
+        139: "NetBIOS-SSN",
+        143: "IMAP",
+        161: "SNMP",
+        162: "SNMP-Trap",
+        3389: "RDP",
+        5353: "mDNS",
+        1900: "SSDP",
+        8080: "HTTP-Alt"
+    }
+
     HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -574,6 +599,15 @@ class ReportGenerator:
     {% endif %}
     {% endmacro %}
 
+    {% macro format_port(port) %}
+        {% set service_name = common_ports.get(port) %}
+        {% if service_name %}
+            {{ port }} ({{ service_name }})
+        {% else %}
+            {{ port }}
+        {% endif %}
+    {% endmacro %}
+
     <div class="container">
         <header>
             <h1>📊 PCAP Analyzer</h1>
@@ -605,9 +639,13 @@ class ReportGenerator:
                 <div class="value">{{ tcp_handshake.slow_handshakes }}</div>
             </div>
 
-            <div class="summary-card {% if retransmission.total_retransmissions > 20 %}danger{% elif retransmission.total_retransmissions > 5 %}warning{% else %}success{% endif %}">
+            <div class="summary-card {% if retransmission.rto_count > 0 or retransmission.fast_retrans_count > 10 %}danger{% elif retransmission.fast_retrans_count > 0 %}warning{% else %}success{% endif %}">
                 <h3>Retransmissions</h3>
                 <div class="value">{{ retransmission.total_retransmissions }}</div>
+                <small>
+                    {% if retransmission.rto_count > 0 %}🔴 RTO: {{ retransmission.rto_count }}{% endif %}
+                    {% if retransmission.fast_retrans_count > 0 %}🟠 FR: {{ retransmission.fast_retrans_count }}{% endif %}
+                </small>
             </div>
 
             <div class="summary-card {% if tcp_window.flows_with_issues > 0 %}warning{% else %}success{% endif %}">
@@ -709,7 +747,18 @@ class ReportGenerator:
         <h2>🔄 Retransmissions et anomalies TCP</h2>
         <div class="section {% if retransmission.total_retransmissions > 50 %}danger{% else %}warning{% endif %}">
             <h3>{{ retransmission.total_retransmissions }} retransmission(s) détectée(s){% if retransmission.flows_with_issues > 0 %} - {{ retransmission.flows_with_issues }} flux avec problèmes{% endif %}</h3>
-            <p><strong>Retransmissions totales:</strong> {{ retransmission.total_retransmissions }}</p>
+            <p><strong>Retransmissions totales:</strong> {{ retransmission.total_retransmissions }} ({{ retransmission.unique_retransmitted_segments }} segments uniques)</p>
+            <p>
+                {% if retransmission.rto_count > 0 %}
+                🔴 <strong>RTOs (Timeout de Retransmission):</strong> {{ retransmission.rto_count }} - <span style="font-size:0.9em;">Indique une congestion sévère ou une perte de paquets prolongée.</span><br>
+                {% endif %}
+                {% if retransmission.fast_retrans_count > 0 %}
+                🟠 <strong>Fast Retransmissions:</strong> {{ retransmission.fast_retrans_count }} - <span style="font-size:0.9em;">Indique des pertes de paquets légères ou un désordre des paquets.</span><br>
+                {% endif %}
+                {% if retransmission.other_retrans_count > 0 %}
+                🔵 <strong>Autres Retransmissions:</strong> {{ retransmission.other_retrans_count }}<br>
+                {% endif %}
+            </p>
             <p><strong>Anomalies totales:</strong> {{ retransmission.total_anomalies }}</p>
 
             {% if retransmission.flows_with_issues > 0 %}
@@ -729,7 +778,7 @@ class ReportGenerator:
                     {% for flow in retransmission.flow_statistics[:15] %}
                     {% if flow.severity != 'none' %}
                     <tr>
-                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{{ format_port(flow.src_port) }} → {{ flow.dst_ip }}:{{ format_port(flow.dst_port) }}</code></td>
                         <td>
                             {% if flow.severity == 'critical' %}
                             <span class="badge danger">CRITIQUE</span>
@@ -767,7 +816,7 @@ class ReportGenerator:
                             <li>
                                 Retransmission #{{ loop.index }}: Paquet <span class="attempt-num">{{ r.packet_num }}</span> (Original: #{{ r.original_packet_num }})
                                 <span class="time-offset">Délai: {{ "%.2f"|format(r.delay * 1000) }}ms</span>
-                                <br>Seq: {{ r.seq_num }}
+                                <br>Seq: {{ r.seq_num }} - Type: <strong>{{ r.retrans_type }}</strong>
                             </li>
                             {% endfor %}
                         </ul>
@@ -824,7 +873,7 @@ class ReportGenerator:
                 <tbody>
                     {% for hs in syn_retransmissions.top_problematic_connections[:10] %}
                     <tr>
-                        <td><code>{{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</code></td>
+                        <td><code>{{ hs.src_ip }}:{{ format_port(hs.src_port) }} → {{ hs.dst_ip }}:{{ format_port(hs.dst_port) }}</code></td>
                         <td>{{ hs.retransmission_count }}</td>
                         <td>{{ "%.3f"|format(hs.total_delay or 0) }}s</td>
                         <td>
@@ -871,7 +920,7 @@ class ReportGenerator:
             {% for hs in syn_retransmissions.top_problematic_connections[:10] %}
             <div class="collapsible-header">
                 <span class="toggle-icon">▶</span>
-                <span class="header-title">#{{ loop.index }} – {{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</span>
+                <span class="header-title">#{{ loop.index }} – {{ hs.src_ip }}:{{ format_port(hs.src_port) }} → {{ hs.dst_ip }}:{{ format_port(hs.dst_port) }}</span>
                 <span class="header-info">({{ hs.retransmission_count }} retrans SYN, délai: {{ "%.3f"|format(hs.total_delay or 0) }}s)</span>
             </div>
             <div class="collapsible-content">
@@ -982,7 +1031,7 @@ class ReportGenerator:
                 <tbody>
                     {% for flow in tcp_reset.top_reset_flows[:10] %}
                     <tr>
-                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{{ format_port(flow.src_port) }} → {{ flow.dst_ip }}:{{ format_port(flow.dst_port) }}</code></td>
                         <td><strong>{{ flow.count }}</strong></td>
                         <td>
                             {% if flow.premature %}
@@ -1009,7 +1058,7 @@ class ReportGenerator:
             <div class="detail-box">
                 <div class="info-line">
                     <span class="info-label">Flux:</span>
-                    <span class="info-value"><code>{{ flow.flow_key }}</code></span>
+                    <span class="info-value"><code>{{ flow.src_ip }}:{{ format_port(flow.src_port) }} → {{ flow.dst_ip }}:{{ format_port(flow.dst_port) }}</code></span>
                 </div>
                 
                 <div class="info-line">
@@ -1203,7 +1252,7 @@ class ReportGenerator:
                     {% for flow in rtt.flow_statistics[:15] %}
                     {% if flow.mean_rtt > rtt.thresholds.warning_seconds %}
                     <tr>
-                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{{ format_port(flow.src_port) }} → {{ flow.dst_ip }}:{{ format_port(flow.dst_port) }}</code></td>
                         <td><strong>{{ "%.2f"|format(flow.mean_rtt * 1000) }} ms</strong></td>
                         <td>{{ "%.2f"|format(flow.min_rtt * 1000) }} / {{ "%.2f"|format(flow.max_rtt * 1000) }} ms</td>
                         <td>{{ flow.rtt_spikes }}</td>
@@ -1235,7 +1284,7 @@ class ReportGenerator:
                     {% for flow in tcp_window.flow_statistics[:15] %}
                     {% if flow.suspected_bottleneck != 'none' %}
                     <tr>
-                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{{ format_port(flow.src_port) }} → {{ flow.dst_ip }}:{{ format_port(flow.dst_port) }}</code></td>
                         <td>
                             {% if flow.suspected_bottleneck == 'application' %}
                             <span class="badge danger">Application</span>
@@ -1367,9 +1416,11 @@ class ReportGenerator:
                         <th>Envoyé</th>
                         <th>Reçu</th>
                         <th>Paquets</th>
+                        <th>Visualisation</th>
                     </tr>
                 </thead>
                 <tbody>
+                    {% set max_bytes = top_talkers.get('max_total_bytes', 0) %}
                     {% for ip_stat in top_talkers.top_ips[:10] %}
                     <tr>
                         <td>{{ loop.index }}</td>
@@ -1378,6 +1429,10 @@ class ReportGenerator:
                         <td>{{ format_bytes(ip_stat.bytes_sent) }}</td>
                         <td>{{ format_bytes(ip_stat.bytes_received) }}</td>
                         <td>{{ ip_stat.packets_sent + ip_stat.packets_received }}</td>
+                        <td>
+                            {% set width = (ip_stat.total_bytes / max_bytes) * 100 if max_bytes > 0 else 0 %}
+                            <div style="width: {{ width }}%; background-color: #3498db; height: 10px; border-radius: 2px;" title="{{ width|round(1) }}%"></div>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -1401,8 +1456,8 @@ class ReportGenerator:
                     {% for conv in top_talkers.top_conversations[:10] %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td><code>{{ conv.src_ip }}{% if conv.src_port %}:{{ conv.src_port }}{% endif %}</code></td>
-                        <td><code>{{ conv.dst_ip }}{% if conv.dst_port %}:{{ conv.dst_port }}{% endif %}</code></td>
+                        <td><code>{{ conv.src_ip }}{% if conv.src_port %}:{{ format_port(conv.src_port) }}{% endif %}</code></td>
+                        <td><code>{{ conv.dst_ip }}{% if conv.dst_port %}:{{ format_port(conv.dst_port) }}{% endif %}</code></td>
                         <td><span class="badge {% if conv.protocol == 'TCP' %}info{% elif conv.protocol == 'UDP' %}success{% else %}warning{% endif %}">{{ conv.protocol }}</span></td>
                         <td><strong>{{ format_bytes(conv.bytes) }}</strong></td>
                         <td>{{ conv.packets }}</td>
@@ -1456,11 +1511,17 @@ class ReportGenerator:
                     {% for flow in throughput.top_flows[:10] %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{% if flow.src_port %}{{ format_port(flow.src_port) }}{% endif %} <-> {{ flow.dst_ip }}:{% if flow.dst_port %}{{ format_port(flow.dst_port) }}{% endif %}</code></td>
                         <td><span class="badge {% if flow.protocol == 'TCP' %}info{% elif flow.protocol == 'UDP' %}success{% else %}warning{% endif %}">{{ flow.protocol }}</span></td>
                         <td><strong>{{ "%.2f"|format(flow.throughput_mbps) }} Mbps</strong></td>
                         <td>{{ format_bytes(flow.bytes) }}</td>
-                        <td>{{ "%.1f"|format(flow.duration_seconds) }}s</td>
+                        <td>
+                            {% if flow.duration_seconds < 0.01 %}
+                                &lt; 0.01s
+                            {% else %}
+                                {{ "%.2f"|format(flow.duration_seconds) }}s
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -1483,10 +1544,16 @@ class ReportGenerator:
                 <tbody>
                     {% for flow in throughput.slow_flows %}
                     <tr>
-                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{% if flow.src_port %}{{ format_port(flow.src_port) }}{% endif %} <-> {{ flow.dst_ip }}:{% if flow.dst_port %}{{ format_port(flow.dst_port) }}{% endif %}</code></td>
                         <td><span class="badge warning">{{ "%.2f"|format(flow.throughput_kbps) }} Kbps</span></td>
                         <td>{{ format_bytes(flow.bytes) }}</td>
-                        <td>{{ "%.1f"|format(flow.duration_seconds) }}s</td>
+                        <td>
+                            {% if flow.duration_seconds < 0.01 %}
+                                &lt; 0.01s
+                            {% else %}
+                                {{ "%.2f"|format(flow.duration_seconds) }}s
+                            {% endif %}
+                        </td>
                         <td>{{ "%.0f"|format(flow.avg_packet_size) }} bytes</td>
                     </tr>
                     {% endfor %}
@@ -1580,7 +1647,7 @@ class ReportGenerator:
                 <tbody>
                     {% for conn in tcp_timeout.categories.syn_timeout %}
                     <tr>
-                        <td><code>{{ conn.flow }}</code></td>
+                        <td><code>{{ conn.src_ip }}:{{ format_port(conn.src_port) }} → {{ conn.dst_ip }}:{{ format_port(conn.dst_port) }}</code></td>
                         <td>{{ conn.first_seen_iso }}</td>
                         <td>{{ conn.last_seen_iso }}</td>
                         <td><span class="badge danger">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
@@ -1606,7 +1673,7 @@ class ReportGenerator:
                 <tbody>
                     {% for conn in tcp_timeout.categories.zombie %}
                     <tr>
-                        <td><code>{{ conn.flow }}</code></td>
+                        <td><code>{{ conn.src_ip }}:{{ format_port(conn.src_port) }} → {{ conn.dst_ip }}:{{ format_port(conn.dst_port) }}</code></td>
                         <td>{{ "%.1f"|format(conn.duration) }}s</td>
                         <td><span class="badge danger">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
                         <td>{{ conn.packet_count }}</td>
@@ -1632,7 +1699,7 @@ class ReportGenerator:
                 <tbody>
                     {% for conn in tcp_timeout.categories.half_open %}
                     <tr>
-                        <td><code>{{ conn.flow }}</code></td>
+                        <td><code>{{ conn.src_ip }}:{{ format_port(conn.src_port) }} → {{ conn.dst_ip }}:{{ format_port(conn.dst_port) }}</code></td>
                         <td>{{ conn.first_seen_iso }}</td>
                         <td><span class="badge warning">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
                         <td>SYN-ACK reçu, en attente ACK</td>
@@ -1719,7 +1786,7 @@ class ReportGenerator:
                 <tbody>
                     {% for flow in asymmetric_traffic.top_flows_by_volume[:10] %}
                     <tr>
-                        <td><code>{{ flow.src_ip }} ↔ {{ flow.dst_ip }}</code></td>
+                        <td><code>{{ flow.src_ip }}{% if flow.src_port %}:{{ format_port(flow.src_port) }}{% endif %} ↔ {{ flow.dst_ip }}{% if flow.dst_port %}:{{ format_port(flow.dst_port) }}{% endif %}</code></td>
                         <td><span class="badge">{{ flow.protocol }}</span></td>
                         <td>{{ format_bytes(flow.total_bytes) }}</td>
                         <td>{{ format_bytes(flow.forward_bytes) }}</td>
@@ -1757,7 +1824,7 @@ class ReportGenerator:
                 <tbody>
                     {% for flow in asymmetric_traffic.asymmetric_flows[:20] %}
                     <tr>
-                        <td><code>{{ flow.src_ip }}:{{ flow.src_port }} ↔ {{ flow.dst_ip }}:{{ flow.dst_port }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{{ format_port(flow.src_port) }} ↔ {{ flow.dst_ip }}:{{ format_port(flow.dst_port) }}</code></td>
                         <td><span class="badge">{{ flow.protocol }}</span></td>
                         <td>
                             {% if flow.dominant_direction == 'forward' %}
@@ -1841,6 +1908,20 @@ class ReportGenerator:
                 </tbody>
             </table>
 
+            <div class="info-box">
+                <p><strong>🔍 Comprendre les Bursts :</strong></p>
+                <ul>
+                    <li><strong>Définition :</strong> Un "burst" est une augmentation soudaine et brève du trafic (pic).</li>
+                    <li><strong>Implications :</strong>
+                        <ul>
+                            <li>Des bursts intenses (> 10x la moyenne) peuvent saturer les buffers des équipements réseaux (switchs/routeurs) et provoquer des pertes de paquets (drops).</li>
+                            <li>Ils génèrent de la gigue (jitter), nuisible pour la VoIP/Vidéo.</li>
+                        </ul>
+                    </li>
+                    <li><strong>Diagnostic :</strong> Si vous avez des pertes de paquets corrélées avec ces horaires, les bursts sont probablement la cause (micro-congestions).</li>
+                </ul>
+            </div>
+
             <!-- Pire burst -->
             {% if burst.worst_burst %}
             <h3>🔴 Burst le plus intense</h3>
@@ -1871,54 +1952,61 @@ class ReportGenerator:
 
             <!-- Liste des bursts -->
             {% if burst.bursts %}
-            <h3>📋 Tous les bursts détectés (Top 20)</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Début</th>
-                        <th>Durée</th>
-                        <th>Paquets</th>
-                        <th>Débit</th>
-                        <th>Intensité</th>
-                        <th>Source principale</th>
-                        <th>Protocoles</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for b in burst.bursts[:20] %}
-                    <tr>
-                        <td><code>{{ b.start_iso }}</code></td>
-                        <td>{{ b.duration_ms }} ms</td>
-                        <td>{{ b.packet_count }}</td>
-                        <td>
-                            <span class="badge info">{{ b.packets_per_second }} pkt/s</span>
-                            <br><small>{{ b.mbps }} Mbps</small>
-                        </td>
-                        <td>
-                            {% if b.peak_ratio > 5 %}
-                            <span class="badge danger">{{ b.peak_ratio }}x</span>
-                            {% elif b.peak_ratio > 3 %}
-                            <span class="badge warning">{{ b.peak_ratio }}x</span>
-                            {% else %}
-                            <span class="badge info">{{ b.peak_ratio }}x</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if b.top_sources %}
-                            {{ b.top_sources[0].ip }} ({{ b.top_sources[0].packets }})
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% for proto, count in b.protocol_breakdown.items() %}
-                            <span class="badge">{{ proto }}: {{ count }}</span>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">📋 Liste détaillée des bursts (Top 10)</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Début</th>
+                                <th>Durée</th>
+                                <th>Paquets</th>
+                                <th>Débit</th>
+                                <th>Intensité</th>
+                                <th>Source principale</th>
+                                <th>Protocoles</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in burst.bursts[:10] %}
+                            <tr>
+                                <td><code>{{ b.start_iso }}</code></td>
+                                <td>{{ b.duration_ms }} ms</td>
+                                <td>{{ b.packet_count }}</td>
+                                <td>
+                                    <span class="badge info">{{ b.packets_per_second }} pkt/s</span>
+                                    <br><small>{{ b.mbps }} Mbps</small>
+                                </td>
+                                <td>
+                                    {% if b.peak_ratio > 5 %}
+                                    <span class="badge danger">{{ b.peak_ratio }}x</span>
+                                    {% elif b.peak_ratio > 3 %}
+                                    <span class="badge warning">{{ b.peak_ratio }}x</span>
+                                    {% else %}
+                                    <span class="badge info">{{ b.peak_ratio }}x</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if b.top_sources %}
+                                    {{ b.top_sources[0].ip }} ({{ b.top_sources[0].packets }})
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% for proto, count in b.protocol_breakdown.items() %}
+                                    <span class="badge">{{ proto }}: {{ count }}</span>
+                                    {% endfor %}
+                                </td>
+                            </tr>
                             {% endfor %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endif %}
         </div>
         {% endif %}
@@ -2169,7 +2257,7 @@ class ReportGenerator:
                 <tbody>
                     {% for flow in sack.top_sack_flows[:10] %}
                     <tr>
-                        <td><code>{{ flow.flow }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{{ format_port(flow.src_port) }} ↔ {{ flow.dst_ip }}:{{ format_port(flow.dst_port) }}</code></td>
                         <td><span class="badge info">{{ flow.sack_events }}</span></td>
                         <td>
                             {% if flow.dsack_events > 0 %}
@@ -2204,7 +2292,7 @@ class ReportGenerator:
                 <tbody>
                     {% for flow in sack.dsack_analysis.problematic_flows %}
                     <tr class="{% if flow.dsack_percentage > 10 %}danger{% else %}warning{% endif %}">
-                        <td><code>{{ flow.flow }}</code></td>
+                        <td><code>{{ flow.src_ip }}:{{ format_port(flow.src_port) }} ↔ {{ flow.dst_ip }}:{{ format_port(flow.dst_port) }}</code></td>
                         <td><span class="badge danger">{{ flow.dsack_events }}</span></td>
                         <td>{{ flow.total_sack_events }}</td>
                         <td>{{ flow.dsack_percentage }}%</td>
@@ -2340,8 +2428,14 @@ class ReportGenerator:
                             {% endif %}
 
                             {% if retransmission and retransmission.total_retransmissions > 0 %}
-                            <li><strong>Retransmissions TCP :</strong> {{ retransmission.total_retransmissions }} paquets ont dû être renvoyés car ils étaient perdus. 
-                                {% if retransmission.total_retransmissions > 5000 %}C'est un volume très élevé qui indique des pertes de paquets fréquentes.{% else %}Volume modéré de pertes de paquets.{% endif %}</li>
+                            <li><strong>Retransmissions TCP :</strong> {{ retransmission.total_retransmissions }} paquets retransmis.
+                                {% if retransmission.rto_count > 0 %}
+                                    <br><span class="text-danger">🔴 <strong>Critique :</strong> {{ retransmission.rto_count }} RTO(s) détecté(s).</span> Cela indique des coupures nettes ou une congestion sévère avec des délais d'attente importants (> 200ms). L'expérience utilisateur est probablement impactée (gels, lenteurs).
+                                {% elif retransmission.total_retransmissions > 5000 %}
+                                    C'est un volume très élevé qui indique des pertes de paquets fréquentes.
+                                {% else %}
+                                    Volume modéré de pertes de paquets (Fast Retransmissions), généralement géré par TCP sans impact majeur.
+                                {% endif %}</li>
                             {% endif %}
 
                             {% if throughput and throughput.global_throughput.throughput_mbps %}
@@ -2554,6 +2648,14 @@ class ReportGenerator:
                                       key=lambda x: x['total_retransmissions_in_flow'], reverse=True)
         retrans_data['retrans_by_flow'] = sorted_retrans_flows
         
+        # Pré-calcul du max pour les barres de volume (Top Talkers)
+        if data.get('top_talkers', {}).get('top_ips'):
+            max_bytes = 0
+            for ip in data['top_talkers']['top_ips']:
+                if ip['total_bytes'] > max_bytes:
+                    max_bytes = ip['total_bytes']
+            data['top_talkers']['max_total_bytes'] = max_bytes
+        
         template = Template(self.HTML_TEMPLATE)
         html_content = template.render(
             analysis_info=data.get('analysis_info', {}),
@@ -2573,7 +2675,8 @@ class ReportGenerator:
             asymmetric_traffic=data.get('asymmetric_traffic', {}),
             burst=data.get('burst', {}),
             temporal=data.get('temporal', {}),
-            sack=data.get('sack', {})
+            sack=data.get('sack', {}),
+            common_ports=self.COMMON_PORTS
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:

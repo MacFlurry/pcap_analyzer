@@ -296,6 +296,10 @@ class SackAnalyzer:
             "top_sack_flows": [
                 {
                     "flow": f"{f.src_ip}:{f.src_port} ↔ {f.dst_ip}:{f.dst_port}",
+                    "src_ip": f.src_ip,
+                    "dst_ip": f.dst_ip,
+                    "src_port": f.src_port,
+                    "dst_port": f.dst_port,
                     "sack_events": f.sack_events,
                     "dsack_events": f.dsack_events,
                     "sacked_bytes": f.total_sacked_bytes,
@@ -310,6 +314,10 @@ class SackAnalyzer:
                 "problematic_flows": [
                     {
                         "flow": f"{f.src_ip}:{f.src_port} ↔ {f.dst_ip}:{f.dst_port}",
+                        "src_ip": f.src_ip,
+                        "dst_ip": f.dst_ip,
+                        "src_port": f.src_port,
+                        "dst_port": f.dst_port,
                         "dsack_events": f.dsack_events,
                         "total_sack_events": f.sack_events,
                         "dsack_percentage": round(f.dsack_events / f.sack_events * 100, 1) if f.sack_events > 0 else 0

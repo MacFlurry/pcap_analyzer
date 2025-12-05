@@ -117,6 +117,11 @@ class DNSAnalyzer:
         if not packet.haslayer(DNS):
             return
 
+        # Vérifie si le paquet contient une couche UDP (DNS par défaut utilise UDP)
+        # Certains DNS peuvent utiliser TCP, mais l'analyseur se concentre sur UDP pour l'instant
+        if not packet.haslayer(UDP):
+            return # Ignore les paquets DNS qui ne sont pas sur UDP
+        
         dns = packet[DNS]
         
         # Requête DNS (qr=0)
