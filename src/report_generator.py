@@ -1972,14 +1972,14 @@ class ReportGenerator:
         {% endif %}
 
         <!-- Section SACK/D-SACK (Priorité #10) -->
-        {% if sack and sack.summary.sack_packets > 0 %}
+        {% if sack and sack.summary.tcp_packets > 0 %}
         <div class="section">
             <h2><span class="icon">🔄</span> SACK/D-SACK Analysis</h2>
             <p>Analyse des accusés de réception sélectifs (Selective Acknowledgment)</p>
             
             <!-- Cartes de résumé -->
             <div class="summary-cards">
-                <div class="summary-card {% if sack.summary.sack_usage_percentage < 10 %}warning{% else %}success{% endif %}">
+                <div class="summary-card {% if sack.summary.sack_usage_percentage < 10 %}warning{% elif sack.summary.sack_usage_percentage == 0 %}info{% else %}success{% endif %}">
                     <div class="label">🎯 Utilisation SACK</div>
                     <div class="value">{{ sack.summary.sack_usage_percentage }}%</div>
                     <small>{{ sack.summary.sack_packets }} / {{ sack.summary.tcp_packets }} paquets TCP</small>
@@ -2031,7 +2031,7 @@ class ReportGenerator:
             </table>
 
             <!-- Top flux SACK -->
-            {% if sack.top_sack_flows %}
+            {% if sack.top_sack_flows and sack.summary.sack_packets > 0 %}
             <h3>🔝 Top flux utilisant SACK</h3>
             <table>
                 <thead>
@@ -2066,7 +2066,7 @@ class ReportGenerator:
             {% endif %}
 
             <!-- Flux problématiques avec D-SACK -->
-            {% if sack.dsack_analysis.problematic_flows %}
+            {% if sack.dsack_analysis.problematic_flows and sack.summary.dsack_packets > 0 %}
             <h3>⚠️ Flux avec D-SACK (problématiques)</h3>
             <p class="warning-note">D-SACK indique des doublons ou des retransmissions inutiles</p>
             <table>
@@ -2102,7 +2102,7 @@ class ReportGenerator:
             {% endif %}
 
             <!-- Événements SACK récents -->
-            {% if sack.recent_sack_events %}
+            {% if sack.recent_sack_events and sack.summary.sack_packets > 0 %}
             <h3>🕒 Événements SACK récents</h3>
             <table>
                 <thead>
@@ -2143,7 +2143,11 @@ class ReportGenerator:
             <h3>💡 Recommandations</h3>
             <div class="detail-box">
                 <ul>
-                    {% if sack.summary.sack_usage_percentage < 10 %}
+                    {% if sack.summary.sack_usage_percentage == 0 %}
+                    <li><strong>Aucune utilisation SACK détectée</strong> - Les endpoints n'utilisent pas les retransmissions sélectives</li>
+                    <li>SACK permet d'optimiser les retransmissions en acquittant sélectivement les segments reçus</li>
+                    <li>Vérifiez la configuration TCP des endpoints pour activer SACK si nécessaire</li>
+                    {% elif sack.summary.sack_usage_percentage < 10 %}
                     <li><strong>Faible utilisation SACK ({{ sack.summary.sack_usage_percentage }}%)</strong> - Vérifiez la configuration TCP des endpoints</li>
                     {% endif %}
                     {% if sack.efficiency.flows_with_dsack > 0 %}
@@ -2152,8 +2156,12 @@ class ReportGenerator:
                     {% if sack.summary.sack_usage_percentage > 50 %}
                     <li><strong>Excellente utilisation SACK</strong> - Les retransmissions sont optimisées</li>
                     {% endif %}
+                    {% if sack.summary.sack_packets > 0 %}
                     <li>SACK permet d'éviter environ {{ sack.efficiency.estimated_retransmission_savings_mb }} MB de retransmissions complètes</li>
                     <li>Surveillance recommandée des flux avec ratio D-SACK > 10%</li>
+                    {% else %}
+                    <li>SACK n'est pas utilisé dans cette capture - retransmissions classiques en cas de perte</li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
