@@ -18,6 +18,7 @@ from .tcp_timeout import TCPTimeoutAnalyzer
 from .asymmetric_traffic import AsymmetricTrafficAnalyzer
 from .burst_analyzer import BurstAnalyzer
 from .temporal_pattern import TemporalPatternAnalyzer
+from .sack_analyzer import SackAnalyzer
 
 __all__ = [
     'TimestampAnalyzer',

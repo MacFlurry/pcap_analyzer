@@ -15,22 +15,12 @@ from rich.table import Table
 from .config import get_config
 from .ssh_capture import capture_from_config
 from .analyzers import (
-    TimestampAnalyzer,
-    TCPHandshakeAnalyzer,
-    RetransmissionAnalyzer,
-    RTTAnalyzer,
-    TCPWindowAnalyzer,
-    ICMPAnalyzer,
-    DNSAnalyzer,
-    SYNRetransmissionAnalyzer,
-    TCPResetAnalyzer,
-    IPFragmentationAnalyzer,
-    TopTalkersAnalyzer,
-    ThroughputAnalyzer,
-    TCPTimeoutAnalyzer,
-    AsymmetricTrafficAnalyzer,
-    BurstAnalyzer,
-    TemporalPatternAnalyzer
+    TimestampAnalyzer, TCPHandshakeAnalyzer, RetransmissionAnalyzer,
+    RTTAnalyzer, TCPWindowAnalyzer, ICMPAnalyzer, DNSAnalyzer,
+    SYNRetransmissionAnalyzer, TCPResetAnalyzer, IPFragmentationAnalyzer,
+    TopTalkersAnalyzer, ThroughputAnalyzer, TCPTimeoutAnalyzer,
+    AsymmetricTrafficAnalyzer, BurstAnalyzer, TemporalPatternAnalyzer,
+    SackAnalyzer
 )
 from .report_generator import ReportGenerator
 
@@ -196,6 +186,9 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
             slot_duration_seconds=thresholds.get('temporal_slot_duration', 60)
         )
         
+        # 17. SACK Analyzer
+        sack_analyzer = SackAnalyzer()
+        
         progress.update(task, advance=1)
 
     # Traitement streaming
@@ -215,7 +208,8 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         tcp_timeout_analyzer,
         asymmetric_analyzer,
         burst_analyzer,
-        temporal_analyzer
+        temporal_analyzer,
+        sack_analyzer
     ]
     
     load_pcap_streaming(pcap_file, analyzers)
@@ -237,6 +231,7 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
     results['asymmetric_traffic'] = asymmetric_analyzer.get_results()
     results['burst'] = burst_analyzer.get_results()
     results['temporal'] = temporal_analyzer.get_results()
+    results['sack'] = sack_analyzer.get_results()
 
     # Affichage des résumés
     console.print("\n")
@@ -353,6 +348,22 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         console.print(f"[yellow]Patterns périodiques: {temp_summary['periodic_patterns_detected']}[/yellow]")
         for p in temporal['periodic_patterns'][:2]:
             console.print(f"  - {p['source_ip']}: toutes les {p['description']} ({p['confidence']}% confiance)")
+
+    # Résumé SACK/D-SACK
+    sack = results['sack']
+    sack_summary = sack['summary']
+    sack_efficiency = sack['efficiency']
+    console.print("\n[bold cyan]🔄 Analyse SACK/D-SACK[/bold cyan]")
+    console.print(f"Paquets TCP avec SACK: {sack_summary['sack_packets']} ({sack_summary['sack_usage_percentage']}%)")
+    console.print(f"D-SACK détectés: {sack_summary['dsack_packets']} ({sack_summary['dsack_ratio_percentage']}% des SACK)")
+    console.print(f"Flux utilisant SACK: {sack_summary['flows_using_sack']}")
+    
+    if sack_summary['sack_packets'] > 0:
+        console.print(f"[green]Économie estimée: {sack_efficiency['estimated_retransmission_savings_mb']} MB en retransmissions évitées[/green]")
+        if sack_efficiency['flows_with_dsack'] > 0:
+            console.print(f"[yellow]⚠️ {sack_efficiency['flows_with_dsack']} flux avec D-SACK (problématiques)[/yellow]")
+    else:
+        console.print("[dim]Aucune utilisation SACK détectée[/dim]")
 
     return results
 

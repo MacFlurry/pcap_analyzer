@@ -1971,6 +1971,194 @@ class ReportGenerator:
         </div>
         {% endif %}
 
+        <!-- Section SACK/D-SACK (Priorité #10) -->
+        {% if sack and sack.summary.sack_packets > 0 %}
+        <div class="section">
+            <h2><span class="icon">🔄</span> SACK/D-SACK Analysis</h2>
+            <p>Analyse des accusés de réception sélectifs (Selective Acknowledgment)</p>
+            
+            <!-- Cartes de résumé -->
+            <div class="summary-cards">
+                <div class="summary-card {% if sack.summary.sack_usage_percentage < 10 %}warning{% else %}success{% endif %}">
+                    <div class="label">🎯 Utilisation SACK</div>
+                    <div class="value">{{ sack.summary.sack_usage_percentage }}%</div>
+                    <small>{{ sack.summary.sack_packets }} / {{ sack.summary.tcp_packets }} paquets TCP</small>
+                </div>
+                <div class="summary-card {% if sack.summary.dsack_ratio_percentage > 5 %}danger{% else %}info{% endif %}">
+                    <div class="label">⚠️ Ratio D-SACK</div>
+                    <div class="value">{{ sack.summary.dsack_ratio_percentage }}%</div>
+                    <small>{{ sack.summary.dsack_packets }} doublons détectés</small>
+                </div>
+                <div class="summary-card info">
+                    <div class="label">🌐 Flux SACK</div>
+                    <div class="value">{{ sack.summary.flows_using_sack }}</div>
+                    <small>connexions utilisant SACK</small>
+                </div>
+                <div class="summary-card success">
+                    <div class="label">💾 Économie estimée</div>
+                    <div class="value">{{ sack.efficiency.estimated_retransmission_savings_mb }} MB</div>
+                    <small>retransmissions évitées</small>
+                </div>
+            </div>
+
+            <!-- Efficacité SACK -->
+            <h3>📊 Efficacité des retransmissions sélectives</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Métrique</th>
+                        <th>Valeur</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Octets SACK moyens</strong></td>
+                        <td><span class="badge info">{{ sack.efficiency.avg_sacked_bytes_per_event }}</span></td>
+                        <td>Taille moyenne des blocs acquittés sélectivement</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Flux avec D-SACK</strong></td>
+                        <td><span class="badge {% if sack.efficiency.flows_with_dsack > 0 %}warning{% else %}success{% endif %}">{{ sack.efficiency.flows_with_dsack }}</span></td>
+                        <td>Connexions avec doublons ({{ sack.efficiency.dsack_flows_percentage }}%)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total événements SACK</strong></td>
+                        <td><span class="badge info">{{ sack.summary.total_sack_events }}</span></td>
+                        <td>Nombre total d'accusés de réception sélectifs</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Top flux SACK -->
+            {% if sack.top_sack_flows %}
+            <h3>🔝 Top flux utilisant SACK</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Événements SACK</th>
+                        <th>D-SACK</th>
+                        <th>Octets SACK</th>
+                        <th>Blocs uniques</th>
+                        <th>Durée</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in sack.top_sack_flows[:10] %}
+                    <tr>
+                        <td><code>{{ flow.flow }}</code></td>
+                        <td><span class="badge info">{{ flow.sack_events }}</span></td>
+                        <td>
+                            {% if flow.dsack_events > 0 %}
+                                <span class="badge danger">{{ flow.dsack_events }} ({{ flow.dsack_ratio }}%)</span>
+                            {% else %}
+                                <span class="badge success">0</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ (flow.sacked_bytes / 1024) | round(1) }} KB</td>
+                        <td>{{ flow.unique_blocks }}</td>
+                        <td>{{ flow.duration_seconds }}s</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Flux problématiques avec D-SACK -->
+            {% if sack.dsack_analysis.problematic_flows %}
+            <h3>⚠️ Flux avec D-SACK (problématiques)</h3>
+            <p class="warning-note">D-SACK indique des doublons ou des retransmissions inutiles</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>D-SACK Events</th>
+                        <th>Total SACK Events</th>
+                        <th>% D-SACK</th>
+                        <th>Problème potentiel</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in sack.dsack_analysis.problematic_flows %}
+                    <tr class="{% if flow.dsack_percentage > 10 %}danger{% else %}warning{% endif %}">
+                        <td><code>{{ flow.flow }}</code></td>
+                        <td><span class="badge danger">{{ flow.dsack_events }}</span></td>
+                        <td>{{ flow.total_sack_events }}</td>
+                        <td>{{ flow.dsack_percentage }}%</td>
+                        <td>
+                            {% if flow.dsack_percentage > 20 %}
+                                <small>Retransmissions excessives</small>
+                            {% elif flow.dsack_percentage > 10 %}
+                                <small>Retransmissions fréquentes</small>
+                            {% else %}
+                                <small>Retransmissions occasionnelles</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Événements SACK récents -->
+            {% if sack.recent_sack_events %}
+            <h3>🕒 Événements SACK récents</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Heure</th>
+                        <th>Flux</th>
+                        <th>Blocs SACK</th>
+                        <th>Octets</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in sack.recent_sack_events %}
+                    <tr class="{% if event.is_dsack %}warning{% endif %}">
+                        <td><code>{{ event.time }}</code></td>
+                        <td><small>{{ event.flow }}</small></td>
+                        <td>
+                            {% for block in event.blocks %}
+                                <span class="badge secondary">{{ block }}</span>
+                            {% endfor %}
+                            {% if event.blocks|length > 3 %}...{% endif %}
+                        </td>
+                        <td>{{ event.sacked_bytes }} B</td>
+                        <td>
+                            {% if event.is_dsack %}
+                                <span class="badge danger" title="Duplicate SACK - séquence {{ event.dsack_sequence }}">D-SACK</span>
+                            {% else %}
+                                <span class="badge success">SACK</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Recommandations -->
+            <h3>💡 Recommandations</h3>
+            <div class="detail-box">
+                <ul>
+                    {% if sack.summary.sack_usage_percentage < 10 %}
+                    <li><strong>Faible utilisation SACK ({{ sack.summary.sack_usage_percentage }}%)</strong> - Vérifiez la configuration TCP des endpoints</li>
+                    {% endif %}
+                    {% if sack.efficiency.flows_with_dsack > 0 %}
+                    <li><strong>{{ sack.efficiency.flows_with_dsack }} flux avec D-SACK</strong> - Investiguer les causes des retransmissions inutiles</li>
+                    {% endif %}
+                    {% if sack.summary.sack_usage_percentage > 50 %}
+                    <li><strong>Excellente utilisation SACK</strong> - Les retransmissions sont optimisées</li>
+                    {% endif %}
+                    <li>SACK permet d'éviter environ {{ sack.efficiency.estimated_retransmission_savings_mb }} MB de retransmissions complètes</li>
+                    <li>Surveillance recommandée des flux avec ratio D-SACK > 10%</li>
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="footer">
             <p>Rapport généré par <strong>PCAP Analyzer</strong> - {{ analysis_info.analysis_date }}</p>
         </div>
@@ -2091,7 +2279,8 @@ class ReportGenerator:
             tcp_timeout=data.get('tcp_timeout', {}),
             asymmetric_traffic=data.get('asymmetric_traffic', {}),
             burst=data.get('burst', {}),
-            temporal=data.get('temporal', {})
+            temporal=data.get('temporal', {}),
+            sack=data.get('sack', {})
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:
