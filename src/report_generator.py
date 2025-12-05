@@ -136,6 +136,73 @@ class ReportGenerator:
             background: #d5f4e6;
         }
 
+        /* Styles pour le résumé interprétatif */
+        .interpretive-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .interpretive-summary h4 {
+            color: #2c3e50;
+            margin: 20px 0 10px 0;
+            font-size: 1.1em;
+        }
+
+        .interpretive-summary ul {
+            margin-left: 20px;
+        }
+
+        .interpretive-summary li {
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+
+        .alert {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+            border-left: 4px solid;
+        }
+
+        .alert.alert-success {
+            background: #d5f4e6;
+            border-left-color: #27ae60;
+            color: #155724;
+        }
+
+        .alert.alert-danger {
+            background: #fadbd8;
+            border-left-color: #e74c3c;
+            color: #721c24;
+        }
+
+        .alert h4 {
+            margin-bottom: 8px;
+            font-size: 1.2em;
+        }
+
+        .interpretation-details {
+            margin-top: 20px;
+        }
+
+        .interpretation-details h4 {
+            color: #2c3e50;
+            font-size: 1.1em;
+            margin: 15px 0 8px 0;
+            font-weight: 600;
+        }
+
+        .interpretation-details ul {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .interpretation-details li {
+            margin-bottom: 8px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -495,9 +562,9 @@ class ReportGenerator:
         <!-- Vue d'ensemble -->
         <h2>Vue d'ensemble</h2>
         <div class="summary-grid">
-            <div class="summary-card {% if timestamps.gaps_detected > 0 %}warning{% else %}success{% endif %}">
+            <div class="summary-card {% if timestamps['gaps_detected'] > 0 %}warning{% else %}success{% endif %}">
                 <h3>Gaps temporels</h3>
-                <div class="value">{{ timestamps.gaps_detected }}</div>
+                <div class="value">{{ timestamps['gaps_detected'] }}</div>
             </div>
 
             <div class="summary-card {% if tcp_handshake.slow_handshakes > 0 %}warning{% else %}success{% endif %}">
@@ -527,10 +594,10 @@ class ReportGenerator:
         </div>
 
         <!-- Analyse des timestamps -->
-        {% if timestamps.gaps_detected > 0 %}
+        {% if timestamps['gaps_detected'] > 0 %}
         <h2>⏱️ Analyse des timestamps</h2>
         <div class="section warning">
-            <h3>{{ timestamps.gaps_detected }} gap(s) temporel(s) détecté(s)</h3>
+            <h3>{{ timestamps['gaps_detected'] }} gap(s) temporel(s) détecté(s)</h3>
             <table>
                 <thead>
                     <tr>
@@ -541,7 +608,7 @@ class ReportGenerator:
                     </tr>
                 </thead>
                 <tbody>
-                    {% for gap in timestamps.gaps[:20] %}
+                    {% for gap in timestamps['gaps'][:20] %}
                     <tr>
                         <td>#{{ gap.packet_num_before }} → #{{ gap.packet_num_after }}</td>
                         <td><strong>{{ "%.3f"|format(gap.gap_duration) }}s</strong></td>
@@ -2169,6 +2236,92 @@ class ReportGenerator:
             </div>
         </div>
         {% endif %}
+
+        <!-- Résumé interprétatif pour non-techniciens -->
+        <div class="section">
+            <h2>📋 Résumé interprétatif</h2>
+            <div class="summary-card">
+                <h3>Résumé pour les équipes métier et management</h3>
+                <div class="interpretive-summary">
+                    {% set has_incident = false %}
+                    {% if timestamps and timestamps['gaps_detected'] > 0 %}
+                        {% set has_incident = true %}
+                    {% endif %}
+                    {% if retransmission and retransmission.total_retransmissions > 1000 %}
+                        {% set has_incident = true %}
+                    {% endif %}
+                    {% if throughput and throughput.global_throughput.throughput_mbps < 1 %}
+                        {% set has_incident = true %}
+                    {% endif %}
+
+                    {% if has_incident %}
+                    <div class="alert alert-danger">
+                        <h4>🚨 Incident détecté</h4>
+                        <p>Il y a un problème de performance réseau qui impacte probablement l'expérience utilisateur.</p>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <h4>✅ Aucun incident critique</h4>
+                        <p>Le réseau fonctionne normalement selon les seuils définis.</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="interpretation-details">
+                        <h4>🔍 Analyse des problèmes identifiés :</h4>
+                        <ul>
+                            {% if timestamps and timestamps['gaps_detected'] > 0 %}
+                            <li><strong>Délais anormaux entre paquets :</strong> {{ timestamps['gaps_detected'] }} interruptions détectées (certaines dépassent 1.0s). 
+                                Cela signifie que le réseau "oublie" des messages pendant plusieurs secondes.</li>
+                            {% endif %}
+
+                            {% if retransmission and retransmission.total_retransmissions > 0 %}
+                            <li><strong>Retransmissions TCP :</strong> {{ retransmission.total_retransmissions }} paquets ont dû être renvoyés car ils étaient perdus. 
+                                {% if retransmission.total_retransmissions > 5000 %}C'est un volume très élevé qui indique des pertes de paquets fréquentes.{% else %}Volume modéré de pertes de paquets.{% endif %}</li>
+                            {% endif %}
+
+                            {% if throughput and throughput.global_throughput.throughput_mbps %}
+                            <li><strong>Débit global :</strong> {{ "%.2f"|format(throughput.global_throughput.throughput_mbps) }} Mbps sur {{ "%.0f"|format(throughput.global_throughput.duration_seconds / 60) }} minutes. 
+                                {% if throughput.global_throughput.throughput_mbps < 1 %}Débit très faible pour du trafic moderne.{% elif throughput.global_throughput.throughput_mbps < 10 %}Débit correct mais limité.{% else %}Débit satisfaisant.{% endif %}</li>
+                            {% endif %}
+
+                            {% if tcp_timeout and tcp_timeout.total_connections > 0 %}
+                            <li><strong>Connexions TCP :</strong> {{ tcp_timeout.total_connections }} connexions analysées, 
+                                {% if tcp_timeout.problematic_count == 0 %}aucune n'est problématique.{% else %}{{ tcp_timeout.problematic_count }} présentent des anomalies (timeouts, fermetures brutales).{% endif %}</li>
+                            {% endif %}
+
+                            {% if patterns and patterns.periodic_patterns %}
+                            <li><strong>Trafic périodique :</strong> Détection de patterns réguliers (probablement des systèmes de monitoring ou heartbeat) toutes les {{ patterns.periodic_patterns[0].interval_seconds }} secondes.</li>
+                            {% endif %}
+                        </ul>
+
+                        <h4>🎯 Impact métier estimé :</h4>
+                        <ul>
+                            {% if has_incident %}
+                            <li><strong>Impact utilisateur :</strong> Lenteurs importantes, timeouts applicatifs possibles, déconnexions fréquentes.</li>
+                            <li><strong>Impact applicatif :</strong> Les échanges entre {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "serveurs" }} et {{ top_talkers.top_ips[1].ip if top_talkers and top_talkers.top_ips|length > 1 else "clients" }} sont dégradés.</li>
+                            {% else %}
+                            <li><strong>Impact utilisateur :</strong> Fonctionnement normal du réseau selon les seuils définis.</li>
+                            {% endif %}
+                            <li><strong>Durée de la capture :</strong> {{ "%.1f"|format(analysis_info.capture_duration) }} secondes ({{ "%.1f"|format(analysis_info.capture_duration / 60) }} minutes).</li>
+                        </ul>
+
+                        <h4>🔧 Recommandations :</h4>
+                        <ul>
+                            {% if has_incident %}
+                            <li><strong>Investigation prioritaire :</strong> Vérifier la charge CPU/mémoire des serveurs {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "principaux" }}.</li>
+                            <li><strong>Monitoring réseau :</strong> Contrôler l'utilisation de la bande passante sur les équipements intermédiaires.</li>
+                            <li><strong>Logs applicatifs :</strong> Corréler avec les logs pendant cette période pour identifier les timeouts.</li>
+                            {% if tcp_retransmission and tcp_retransmission.total_retransmissions > 5000 %}
+                            <li><strong>Action immédiate :</strong> Les pertes de paquets sont très élevées - investigation réseau urgente recommandée.</li>
+                            {% endif %}
+                            {% else %}
+                            <li><strong>Surveillance continue :</strong> Le réseau fonctionne normalement - maintenir le monitoring en place.</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="footer">
             <p>Rapport généré par <strong>PCAP Analyzer</strong> - {{ analysis_info.analysis_date }}</p>
