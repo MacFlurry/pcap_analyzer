@@ -8,7 +8,7 @@ Outil d'analyse automatisée de fichiers PCAP pour identifier et diagnostiquer l
 
 ## Fonctionnalités
 
-L'analyseur détecte et analyse automatiquement **12 dimensions clés** impactant la latence réseau :
+L'analyseur détecte et analyse automatiquement **17 dimensions clés** impactant la latence réseau :
 
 ### 1. ⏱️ Gestion et analyse des horodatages
 - Détection automatique des ruptures de flux
@@ -84,6 +84,43 @@ L'analyseur détecte et analyse automatiquement **12 dimensions clés** impactan
 - Détection des flux lents (<1 Mbps sur >1s)
 - Taille moyenne des paquets
 - Liste des domaines problématiques
+
+### 12. ⏱️ Analyse des Timeouts TCP
+- Détection SYN timeout (SYN sans SYN-ACK)
+- Détection Half-open (SYN-ACK sans ACK final) 
+- Détection connexions Zombie (inactives >60s sans fermeture)
+- Détection connexions Idle (inactives >30s)
+- Classification des fermetures (FIN vs RST)
+
+### 13. ⚖️ Analyse du Trafic Asymétrique
+- Détection des déséquilibres directionnels par flux
+- Calcul des ratios avant/arrière (forward/reverse)
+- Classification flux asymétriques vs unidirectionnels
+- Seuils configurables d'asymétrie
+
+### 14. 💥 Analyse des Bursts de Paquets
+- Détection des rafales de trafic anormales
+- Analyse par intervalles configurables (100ms)
+- Calcul coefficient de variation du trafic
+- Classification régulier/irrégulier/bursty
+
+### 15. 📅 Analyse des Patterns Temporels
+- Analyse temporelle par créneaux (60s par défaut)
+- Détection des pics et creux de trafic
+- Identification patterns périodiques (heartbeat, polling)
+- Distribution horaire du trafic
+
+### 16. 🔄 Analyse SACK/D-SACK (Selective Acknowledgment)
+- Détection des options SACK TCP (option 5)
+- Parsing des blocs SACK (Left/Right Edge)
+- Détection D-SACK (Duplicate SACK) pour doublons
+- Calcul efficacité des retransmissions sélectives
+- Classification des flux problématiques
+
+### 17. 🔬 Window Scaling (intégré)
+- Détection des options Window Scale TCP
+- Analyse des facteurs d'échelle de fenêtre
+- Calcul des fenêtres effectives par flux
 
 ## Installation
 

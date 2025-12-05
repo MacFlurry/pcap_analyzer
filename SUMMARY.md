@@ -8,7 +8,7 @@ Une application complète d'analyse automatisée des causes de latence réseau a
 
 ## 🎯 Fonctionnalités implémentées
 
-### 8 dimensions d'analyse automatique
+### 17 dimensions d'analyse automatique (10/12 priorités terminées)
 
 1. ✅ **Gestion et analyse des horodatages**
    - Détection des ruptures de flux
@@ -20,7 +20,7 @@ Une application complète d'analyse automatisée des causes de latence réseau a
    - Identification du côté suspect (client/réseau/serveur)
    - Détection des handshakes lents
 
-2bis. ✅ **Détection des retransmissions SYN (Nouveau)**
+2bis. ✅ **Détection des retransmissions SYN**
    - Retransmissions SYN multiples
    - Timeline complète de connexion
    - Diagnostic précis (serveur lent, perte réseau, timeout)
@@ -36,9 +36,10 @@ Une application complète d'analyse automatisée des causes de latence réseau a
    - Détection de pics anormaux
    - Série temporelle
 
-5. ✅ **Analyse des fenêtres TCP**
+5. ✅ **Analyse des fenêtres TCP et Window Scaling**
    - Détection Zero Window
    - Fenêtres basses persistantes
+   - Options Window Scale
    - Identification goulot d'étranglement
 
 6. ✅ **Détection PMTU et ICMP**
@@ -50,6 +51,55 @@ Une application complète d'analyse automatisée des causes de latence réseau a
    - Temps de réponse DNS
    - Timeouts et requêtes répétées
    - Domaines problématiques
+
+8. ✅ **TCP Reset Analysis**
+   - Détection de tous les paquets TCP RST
+   - Classification prématurés vs post-données
+   - Suivi des flux impactés
+
+9. ✅ **Fragmentation IP**
+   - Détection paquets fragmentés
+   - Suivi du réassemblage
+   - Fragments perdus/incomplets
+
+10. ✅ **Top Talkers**
+    - Statistiques par IP
+    - Répartition par protocole  
+    - Top conversations
+
+11. ✅ **Throughput Analysis**
+    - Calcul débit global/par flux
+    - Détection flux lents
+    - Taille moyenne paquets
+
+12. ✅ **TCP Timeouts**
+    - SYN timeout, Half-open
+    - Connexions Zombie/Idle
+    - Classification fermetures
+
+13. ✅ **Trafic Asymétrique**
+    - Déséquilibres directionnels
+    - Ratios forward/reverse
+    - Classification asymétrique
+
+14. ✅ **Burst Analysis**
+    - Rafales de trafic
+    - Coefficient de variation
+    - Classification régularité
+
+15. ✅ **Patterns Temporels**
+    - Analyse par créneaux
+    - Détection pics/creux
+    - Patterns périodiques
+
+16. ✅ **SACK/D-SACK Analysis**
+    - Options SACK TCP
+    - Blocs SACK parsing
+    - Détection D-SACK
+
+🔄 **Restant à implémenter:**
+- Priority #11: ECN (Explicit Congestion Notification)
+- Priority #12: QoS/DSCP Analysis
 
 ---
 
