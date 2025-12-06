@@ -204,22 +204,27 @@ class TCPWindowAnalyzer:
     def _get_window_scale(self, tcp: TCP, flow_key: str) -> int:
         """
         Récupère le facteur d'échelle de la fenêtre TCP avec mise en cache
+
+        RFC 7323: Window Scale option MUST be checked in both SYN and SYN-ACK packets
+        for proper negotiation. The scale factor is only valid if both sides agree.
         """
         # Vérifie le cache
         if flow_key in self._flow_scales:
             return self._flow_scales[flow_key]
-            
-        # Si c'est un SYN, on cherche l'option
-        if tcp.flags.S:  # Flag SYN
+
+        # RFC 7323: Check for WScale option in SYN or SYN-ACK packets
+        # Both SYN (0x02) and SYN-ACK (0x12) can carry WScale option
+        if tcp.flags & 0x02:  # Flag SYN set (includes both SYN and SYN-ACK)
             scale = 1
             if tcp.options:
                 for option in tcp.options:
                     if option[0] == 'WScale':
+                        # RFC 7323: Scale factor = 2^shift_count
                         scale = 2 ** option[1]
                         break
             self._flow_scales[flow_key] = scale
             return scale
-            
+
         # Par défaut 1 si on n'a pas vu le SYN
         return 1
 

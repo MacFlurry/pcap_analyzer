@@ -184,17 +184,11 @@ class RetransmissionAnalyzer:
 
             # Méthode combinée (Wireshark-like + Exact Match)
             
-            # 1. Vérifier si c'est une retransmission basée sur le numéro de séquence (Wireshark)
-            # Si le numéro de séquence + len est <= au plus haut vu, c'est une retransmission
-            if flow_key in self._highest_seq:
-                highest_seq, highest_pkt, highest_time = self._highest_seq[flow_key]
-                
-                # Vérification KeepAlive: len=0/1, seq = highest_seq - 1
-                is_keepalive = (payload_len <= 1) and (seq == highest_seq - 1)
-                
-                if not is_keepalive and seq < highest_seq:
-                    is_retransmission = True
-                    # ... (logique existante pour original_num)
+            # 1. Vérifier si le segment exact (seq, len) a déjà été vu
+            # C'est la méthode la plus fiable pour distinguer Retransmission vs Out-of-Order
+            if segment_key in self._seen_segments[flow_key]:
+                is_retransmission = True
+                original_num, original_time = self._seen_segments[flow_key][segment_key][0]
 
             # 2. Vérifier si c'est une Spurious Retransmission (déjà ACKé par l'autre côté)
             reverse_key = self._get_reverse_flow_key(packet)
@@ -203,17 +197,16 @@ class RetransmissionAnalyzer:
                 # Si le segment entier est avant le max ACK, c'est une retransmission inutile
                 if seq + payload_len <= max_ack:
                     is_retransmission = True
-                    # On ne connait pas forcément l'original, mais on sait que c'est une retransmission
-                    if original_num is None:
-                        pass
+                    # On ne connait pas forcément l'original si le tracking a commencé après, 
+                    # mais on sait que c'est une retransmission.
+                    # On garde original_num = None pour l'instant, on le settera ci-dessous
 
-            # 3. Vérifier Fast Retransmission
-            # Si on a reçu > 2 DUP ACKs demandant ce SEQ
+            # 3. Vérifier Fast Retransmission (SEQ attendu par >2 DUP ACKs)
             if not is_retransmission and self._dup_ack_count[reverse_key] > 2:
                  expected_seq = self._last_ack[reverse_key]
                  if seq == expected_seq:
                      is_retransmission = True
-                     # C'est une Fast Retransmission
+                     # Fast Retransmission confirmée
 
             if is_retransmission:
                 # Essayer de trouver le paquet original exact si pas encore trouvé
@@ -221,8 +214,9 @@ class RetransmissionAnalyzer:
                     if segment_key in self._seen_segments[flow_key] and len(self._seen_segments[flow_key][segment_key]) > 0:
                         original_num, original_time = self._seen_segments[flow_key][segment_key][0]
                     elif flow_key in self._highest_seq:
-                         # Fallback sur highest_seq info
+                         # Fallback sur highest_seq info si on n'a pas l'historique complet
                          _, highest_pkt, highest_time = self._highest_seq[flow_key]
+                         # Attention: ce n'est pas forcément le VRAI original, mais une approx
                          original_num = highest_pkt
                          original_time = highest_time
                     else:
