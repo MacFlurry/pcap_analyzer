@@ -467,7 +467,7 @@ class RetransmissionAnalyzer:
         if fast_retrans_count > 0:
             summary += f"    dont Fast Retransmissions: {fast_retrans_count} 🟠 (Pertes Légères / Désordre)\n"
         if other_retrans_count > 0:
-            summary += f"    dont Autres Retransmissions: {other_retrans_count}\n"
+            summary += f"    dont Autres Retransmissions: {other_retrans_count} 🔵 (Causes diverses)\n"
 
 
         summary += f"  - Anomalies totales: {len(self.anomalies)}\n"
