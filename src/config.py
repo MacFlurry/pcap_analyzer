@@ -98,6 +98,14 @@ class Config:
                 f"Seuils manquants dans 'thresholds': {', '.join(missing_thresholds)}"
             )
 
+        # Validate thresholds types
+        for key, value in config['thresholds'].items():
+            if not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"Le seuil '{key}' doit être un nombre (int ou float), "
+                    f"reçu: {type(value).__name__} ({value})"
+                )
+
         # Validate SSH section
         if not isinstance(config['ssh'], dict):
             raise ValueError("La section 'ssh' doit être un dictionnaire")

@@ -342,6 +342,13 @@ def capture(duration, filter, output, config, analyze, latency):
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output = f"capture_{timestamp}.pcap"
+    
+    # Validation du chemin de sortie
+    output_path = Path(output)
+    if not output_path.parent.exists():
+        raise click.BadParameter(f"Le dossier parent n'existe pas: {output_path.parent}")
+    if output_path.parent.is_file():
+        raise click.BadParameter(f"Le chemin parent est un fichier, pas un dossier: {output_path.parent}")
 
     try:
         # Lance la capture
