@@ -47,6 +47,10 @@ class TCPHandshakeAnalyzer:
         self.latency_filter = latency_filter
         self.handshakes: List[HandshakeFlow] = []
         self.incomplete_handshakes: Dict[str, HandshakeFlow] = {}
+        # Memory optimization: cleanup stale handshakes periodically
+        self._cleanup_interval = 10000  # Cleanup every 10k packets
+        self._packet_counter = 0
+        self._handshake_timeout = 60.0  # Remove incomplete handshakes after 60s
 
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
@@ -70,6 +74,11 @@ class TCPHandshakeAnalyzer:
 
         tcp = packet[TCP]
         packet_time = float(packet.time)
+
+        # Memory optimization: periodic cleanup of stale handshakes
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_stale_handshakes(packet_time)
 
         # Détection SYN (sans ACK)
         if tcp.flags & 0x02 and not tcp.flags & 0x10:  # SYN flag set, ACK flag not set
@@ -131,6 +140,22 @@ class TCPHandshakeAnalyzer:
                             # Suppression des incomplets
                             del self.incomplete_handshakes[flow_key]
                     # If ACK number doesn't match, this is not the handshake completion ACK
+
+    def _cleanup_stale_handshakes(self, current_time: float) -> None:
+        """
+        Remove stale incomplete handshakes to prevent memory leaks.
+
+        Args:
+            current_time: Current packet timestamp
+        """
+        stale_keys = []
+        for key, handshake in self.incomplete_handshakes.items():
+            if handshake.syn_time and (current_time - handshake.syn_time) > self._handshake_timeout:
+                stale_keys.append(key)
+
+        # Remove stale handshakes
+        for key in stale_keys:
+            del self.incomplete_handshakes[key]
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""

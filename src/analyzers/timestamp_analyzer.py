@@ -34,7 +34,9 @@ class TimestampAnalyzer:
         """
         self.gap_threshold = gap_threshold
         self.gaps: List[TimestampGap] = []
+        # Memory optimization: limit stored intervals using sliding window
         self.packet_intervals: List[float] = []
+        self._max_intervals = 100000  # Limit to prevent memory exhaustion
         self.total_packets = 0
         self.capture_duration = 0.0
         self.first_timestamp = None
@@ -80,7 +82,13 @@ class TimestampAnalyzer:
         # Note: On stocke prev_time dans l'instance maintenant
         if hasattr(self, '_prev_time') and self._prev_time is not None:
             interval = current_time - self._prev_time
-            self.packet_intervals.append(interval)
+
+            # Memory optimization: use sliding window to limit memory usage
+            if len(self.packet_intervals) < self._max_intervals:
+                self.packet_intervals.append(interval)
+            else:
+                # Keep only the most recent intervals (sliding window)
+                self.packet_intervals = self.packet_intervals[-self._max_intervals+1:] + [interval]
 
             # Détection de gap anormal
             if interval > self.gap_threshold:
