@@ -322,7 +322,12 @@
             <p><strong>Retransmissions totales:</strong> {{ retransmission.total_retransmissions }} ({{ retransmission.unique_retransmitted_segments }} segments uniques)</p>
             <p>
                 {% if retransmission.rto_count > 0 %}
-                🔴 <strong>RTOs (Timeout de Retransmission):</strong> {{ retransmission.rto_count }} - <span style="font-size:0.9em;">Indique une congestion sévère ou une perte de paquets prolongée.</span><br>
+                    {% if rto_rate > 0.05 or retransmission.rto_count > 5 %}
+                    🔴 <strong>RTOs (Timeout de Retransmission):</strong> {{ retransmission.rto_count }} ({{ "%.2f"|format(rto_rate) }}%) - <span style="font-size:0.9em;">Indique une congestion sévère ou une perte de paquets prolongée.</span>
+                    {% else %}
+                    🔵 <strong>RTOs (Timeout de Retransmission):</strong> {{ retransmission.rto_count }} ({{ "%.2f"|format(rto_rate) }}%) - <span style="font-size:0.9em;">Volume négligeable (impact minime).</span>
+                    {% endif %}
+                    <br>
                 {% endif %}
                 {% if retransmission.fast_retrans_count > 0 %}
                 🟠 <strong>Fast Retransmissions:</strong> {{ retransmission.fast_retrans_count }} - <span style="font-size:0.9em;">Indique des pertes de paquets légères ou un désordre des paquets.</span><br>
@@ -2092,6 +2097,8 @@
                                     <br><span class="text-danger">🔴 <strong>Critique :</strong> {{ retransmission.rto_count }} RTOs détectés ({{ "%.2f"|format(rto_rate) }}%).</span> Volume élevé de timeouts : indique une congestion sévère ou une connectivité instable.
                                 {% elif rto_rate > 0.05 or retransmission.rto_count > 5 %}
                                     <br><span class="text-warning">⚠️ <strong>Attention :</strong> {{ retransmission.rto_count }} RTO(s) détecté(s) ({{ "%.2f"|format(rto_rate) }}%).</span> Quelques délais d'attente importants. Impact ponctuel.
+                                {% elif retransmission.rto_count > 0 %}
+                                    <br><span class="text-success">ℹ️ <strong>Note :</strong> {{ retransmission.rto_count }} RTO détecté ({{ "%.2f"|format(rto_rate) }}%).</span> Volume négligeable, sans impact perceptible.
                                 {% elif retransmission.total_retransmissions > 5000 %}
                                     C'est un volume très élevé qui indique des pertes de paquets fréquentes.
                                 {% else %}
@@ -2141,7 +2148,7 @@
                             {% if dns and dns.error_transactions > 0 %}
                             <li><strong>Erreurs DNS :</strong> {{ dns.error_transactions }} résolutions ont échoué.
                                 {% if dns.top_problematic_domains %}
-                                <br>Domaines introuvables (NXDOMAIN) fréquents : <code>{{ dns.top_problematic_domains[0][0] }}</code>. 
+                                <br>Domaines introuvables (NXDOMAIN) fréquents : <code>{{ dns.top_problematic_domains[0].domain }}</code>. 
                                 Cela peut être dû à des blocages (Private Relay, AdBlock) ou des domaines inexistants.
                                 {% endif %}
                             </li>
