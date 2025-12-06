@@ -103,23 +103,40 @@ class ThroughputAnalyzer:
         flow['last_timestamp'] = timestamp
 
     def _calculate_throughput(self, bytes_count: int, first_ts: float, last_ts: float) -> Dict[str, float]:
-        """Calcule le débit en différentes unités"""
-        duration = last_ts - first_ts if last_ts and first_ts else 0
-        
-        if duration <= 0:
+        """
+        Calcule le débit en différentes unités.
+
+        FIX: Improved handling of edge cases:
+        - Single packet flows (first_ts == last_ts)
+        - Missing timestamps
+        - Proper bit/byte conversion (using decimal 1000 for network metrics)
+        """
+        # Handle missing timestamps
+        if not first_ts or not last_ts:
             return {
                 'duration_seconds': 0,
                 'bytes_per_second': 0,
                 'kbps': 0,
                 'mbps': 0
             }
-        
+
+        duration = last_ts - first_ts
+
+        # For single packet or very short flows, use minimal duration
+        # to avoid division by zero while still indicating data was transferred
+        if duration <= 0:
+            # Assume minimum measurable duration (1ms) for throughput calculation
+            # This prevents division by zero for single-packet flows
+            duration = 0.001
+
         bps = bytes_count / duration
+
+        # Network throughput uses decimal (SI) units: 1 kbit = 1000 bits
         return {
-            'duration_seconds': duration,
+            'duration_seconds': last_ts - first_ts,  # Real duration (may be 0)
             'bytes_per_second': bps,
-            'kbps': (bps * 8) / 1000,  # kilobits per second
-            'mbps': (bps * 8) / 1000000  # megabits per second
+            'kbps': (bps * 8) / 1000,  # kilobits per second (decimal)
+            'mbps': (bps * 8) / 1_000_000  # megabits per second (decimal)
         }
 
     def get_results(self) -> Dict[str, Any]:

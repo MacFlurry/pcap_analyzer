@@ -138,23 +138,28 @@ class DNSAnalyzer:
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Traiter les requêtes DNS en attente qui ont dépassé le seuil de timeout
+        # FIX: Only mark as timeout if we've seen enough packets AFTER the query
+        # to reasonably expect a response (i.e., capture continued for at least timeout duration)
         queries_to_remove = []
         for query_full_key, query in self._pending_queries.items():
-            # Si le temps écoulé depuis la requête est supérieur au timeout défini
+            # Check if enough time has passed since the query for a timeout to be valid
+            # We need last_packet_time to be at least timeout seconds after the query
             if self.last_packet_time and (self.last_packet_time - query.timestamp >= self.timeout):
-                is_repeated = getattr(query, 'repeated', False) # Récupère l'état 'repeated'
+                is_repeated = getattr(query, 'repeated', False)
 
                 transaction = DNSTransaction(
                     query=query,
                     response=None,
-                    response_time=None, # Pas de temps de réponse pour un timeout
+                    response_time=None,
                     timed_out=True,
                     repeated=is_repeated,
                     status='timeout'
                 )
                 self.transactions.append(transaction)
                 queries_to_remove.append(query_full_key)
-        
+            # If capture ended before timeout period, don't mark as timeout
+            # (query might have been answered if capture continued)
+
         for key in queries_to_remove:
             del self._pending_queries[key]
 
