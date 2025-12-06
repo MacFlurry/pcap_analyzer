@@ -1313,7 +1313,7 @@
                 <ul>
                     <li><strong>Définition :</strong> Un flux est dit "asymétrique" quand le volume de données envoyé dans une direction est beaucoup plus important que dans l'autre.</li>
                     <li><strong>Normalité :</strong> C'est normal pour le téléchargement de fichiers (Download >> Upload) ou le streaming.</li>
-                    <li><strong>Anomalie :</strong> C'est suspect pour des protocoles transactionnels symétriques, ou si le trafic est 100% unidirectionnel (problème de routage, perte de paquets de retour, ou scan UDP).</li>
+                    <li><strong>Anomalie :</strong> C'est suspect pour des protocoles transactionnels symétriques, ou si le trafic est quasi-unidirectionnel (ratio < 0.3), ce qui peut indiquer un problème de routage, une perte de paquets de retour, ou un scan UDP.</li>
                 </ul>
             </div>
 
