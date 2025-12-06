@@ -97,6 +97,8 @@ class DNSAnalyzer:
         # Pour détecter les requêtes répétées: {(query_name, query_type): timestamp}
         self._recent_queries: Dict[tuple, float] = {}
 
+        self.last_packet_time: Optional[float] = None # NEW: Track last packet time for timeouts
+
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
         Analyse les transactions DNS
@@ -122,6 +124,7 @@ class DNSAnalyzer:
         if not packet.haslayer(UDP):
             return # Ignore les paquets DNS qui ne sont pas sur UDP
         
+        self.last_packet_time = float(packet.time) # NEW: Update last_packet_time
         dns = packet[DNS]
         
         # Requête DNS (qr=0)
@@ -134,8 +137,27 @@ class DNSAnalyzer:
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
-        # Les requêtes sans réponse sont déjà gérées dans process_packet
-        # Pas besoin de check_timeouts supplémentaire
+        # Traiter les requêtes DNS en attente qui ont dépassé le seuil de timeout
+        queries_to_remove = []
+        for query_full_key, query in self._pending_queries.items():
+            # Si le temps écoulé depuis la requête est supérieur au timeout défini
+            if self.last_packet_time and (self.last_packet_time - query.timestamp >= self.timeout):
+                is_repeated = getattr(query, 'repeated', False) # Récupère l'état 'repeated'
+
+                transaction = DNSTransaction(
+                    query=query,
+                    response=None,
+                    response_time=None, # Pas de temps de réponse pour un timeout
+                    timed_out=True,
+                    repeated=is_repeated,
+                    status='timeout'
+                )
+                self.transactions.append(transaction)
+                queries_to_remove.append(query_full_key)
+        
+        for key in queries_to_remove:
+            del self._pending_queries[key]
+
         return self._generate_report()
 
     def _process_query(self, packet_num: int, packet: Packet, dns: DNS) -> None:

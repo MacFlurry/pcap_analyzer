@@ -1,0 +1,2490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport d'analyse PCAP - {{ analysis_info.pcap_file }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        header {
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .meta-info {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        h2 {
+            color: #34495e;
+            font-size: 1.8em;
+            margin: 30px 0 15px 0;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }
+
+        h3 {
+            color: #2c3e50;
+            font-size: 1.3em;
+            margin: 20px 0 10px 0;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .summary-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .summary-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .summary-card.danger {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .summary-card h3 {
+            color: white;
+            margin: 0 0 10px 0;
+            font-size: 1em;
+            opacity: 0.9;
+        }
+
+        .summary-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+
+        .section.warning {
+            border-left-color: #f39c12;
+            background: #fef5e7;
+        }
+
+        .section.danger {
+            border-left-color: #e74c3c;
+            background: #fadbd8;
+        }
+
+        .section.success {
+            border-left-color: #27ae60;
+            background: #d5f4e6;
+        }
+
+        /* Styles pour le résumé interprétatif */
+        .interpretive-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .interpretive-summary h4 {
+            color: #2c3e50;
+            margin: 20px 0 10px 0;
+            font-size: 1.1em;
+        }
+
+        .interpretive-summary ul {
+            margin-left: 20px;
+        }
+
+        .interpretive-summary li {
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+
+        .alert {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+            border-left: 4px solid;
+        }
+
+        .alert.alert-success {
+            background: #d5f4e6;
+            border-left-color: #27ae60;
+            color: #155724;
+        }
+
+        .alert.alert-danger {
+            background: #fadbd8;
+            border-left-color: #e74c3c;
+            color: #721c24;
+        }
+
+        .alert h4 {
+            margin-bottom: 8px;
+            font-size: 1.2em;
+        }
+
+        .interpretation-details {
+            margin-top: 20px;
+        }
+
+        .interpretation-details h4 {
+            color: #2c3e50;
+            font-size: 1.1em;
+            margin: 15px 0 8px 0;
+            font-weight: 600;
+        }
+
+        .interpretation-details ul {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .interpretation-details li {
+            margin-bottom: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: white;
+        }
+
+        th {
+            background: #34495e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge.success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .badge.warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .badge.danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .badge.info {
+            background: #3498db;
+            color: white;
+        }
+
+        .suggestions {
+            background: #e8f8f5;
+            border-left: 4px solid #1abc9c;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .suggestions ul {
+            margin-left: 20px;
+        }
+
+        .suggestions li {
+            margin: 8px 0;
+        }
+
+        code {
+            background: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #2c3e50;
+        }
+
+        .detail-box {
+            background: #1e1e1e;
+            color: #e0e0e0;
+            padding: 24px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #e74c3c;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .detail-box code {
+            background: #2d2d2d;
+            color: #4fc3f7;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .detail-box h5 {
+            color: #ffffff;
+            font-size: 1.1em;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #404040;
+        }
+
+        .detail-box .connection-title {
+            color: #4fc3f7;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .detail-box .connection-arrow {
+            color: #66bb6a;
+            margin: 0 8px;
+        }
+
+        .detail-box .info-line {
+            margin: 12px 0;
+            line-height: 1.8;
+        }
+
+        .detail-box .info-label {
+            color: #90a4ae;
+            font-weight: 600;
+            display: inline-block;
+            min-width: 180px;
+        }
+
+        .detail-box .info-value {
+            color: #ffffff;
+            font-family: 'Courier New', monospace;
+        }
+
+        .detail-box .info-value.timestamp {
+            color: #66bb6a;
+        }
+
+        .detail-box .info-value.count {
+            color: #ffa726;
+        }
+
+        .detail-box .timeline-list {
+            list-style-type: none;
+            padding-left: 20px;
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .detail-box .timeline-list li {
+            margin: 6px 0;
+            color: #e0e0e0;
+        }
+
+        .detail-box .timeline-list .attempt-num {
+            color: #ffeb3b;
+            font-weight: bold;
+        }
+
+        .detail-box .timeline-list .time-offset {
+            color: #4fc3f7;
+        }
+
+        .detail-box .success-indicator {
+            color: #66bb6a;
+            font-weight: bold;
+        }
+
+        /* Collapsible sections */
+        .collapsible-header {
+            cursor: pointer;
+            user-select: none;
+            padding: 16px;
+            background: #2c2c2c;
+            border-radius: 6px;
+            margin: 12px 0;
+            transition: background 0.2s ease;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .collapsible-header:hover {
+            background: #353535;
+        }
+
+        .collapsible-header .toggle-icon {
+            display: inline-block;
+            width: 20px;
+            font-weight: bold;
+            color: #4fc3f7;
+            margin-right: 8px;
+            transition: transform 0.2s ease;
+        }
+
+        .collapsible-header.active .toggle-icon {
+            transform: rotate(90deg);
+        }
+
+        .collapsible-header .header-title {
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        .collapsible-header .header-info {
+            color: #90a4ae;
+            font-size: 0.85em;
+            margin-left: 12px;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            background: #1e1e1e;
+            border-left: 4px solid #555;
+            margin-left: 20px;
+        }
+
+        .collapsible-content.active {
+            max-height: 2000px;
+            transition: max-height 0.5s ease-in;
+        }
+
+        .collapsible-content .content-inner {
+            padding: 16px;
+        }
+
+        .detail-box .error-indicator {
+            color: #ef5350;
+            font-weight: bold;
+        }
+
+        .detail-box .problem-badge {
+            background: #e74c3c;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 8px;
+        }
+
+        .filter-box {
+            background: #2d2d2d;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 16px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .filter-box .filter-label {
+            color: #9575cd;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .filter-box .filter-command {
+            color: #4fc3f7;
+            font-size: 0.95em;
+            word-break: break-all;
+            user-select: all;
+            cursor: text;
+        }
+
+        .filter-box .filter-command:hover {
+            background: #3a3a3a;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        /* Info tooltip */
+        .info-tooltip {
+            position: relative;
+            display: inline-block;
+            margin-left: 6px;
+        }
+
+        .info-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            line-height: 16px;
+            text-align: center;
+            background: #3498db;
+            color: white;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: help;
+            vertical-align: middle;
+        }
+
+        .info-tooltip .tooltip-text {
+            visibility: hidden;
+            width: 300px;
+            background-color: #2c3e50;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -150px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.9em;
+            line-height: 1.4;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .info-tooltip .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #2c3e50 transparent transparent transparent;
+        }
+
+        .info-tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    {% macro format_bytes(value) %}
+    {% set bytes = value or 0 %}
+    {% if bytes < 1024 %}
+        {{ bytes }} B
+    {% elif bytes < 1048576 %}
+        {{ "%.2f"|format(bytes / 1024) }} KB
+    {% elif bytes < 1073741824 %}
+        {{ "%.2f"|format(bytes / 1048576) }} MB
+    {% else %}
+        {{ "%.2f"|format(bytes / 1073741824) }} GB
+    {% endif %}
+    {% endmacro %}
+
+    {% macro format_bitrate(value_mbps) %}
+    {% set mbps = value_mbps or 0 %}
+    {% if mbps < 0.001 %}
+        {{ "%.0f"|format(mbps * 1000000) }} bps
+    {% elif mbps < 1 %}
+        {{ "%.2f"|format(mbps * 1000) }} Kbps
+    {% elif mbps < 1000 %}
+        {{ "%.2f"|format(mbps) }} Mbps
+    {% else %}
+        {{ "%.2f"|format(mbps / 1000) }} Gbps
+    {% endif %}
+    {% endmacro %}
+
+    {% macro format_port(port) %}
+        {% set service_name = common_ports.get(port) %}
+        {% if service_name %}
+            {{ port }} ({{ service_name }})
+        {% else %}
+            {{ port }}
+        {% endif %}
+    {% endmacro %}
+
+    <div class="container">
+        <header>
+            <h1>📊 PCAP Analyzer</h1>
+            <div class="meta-info">
+                <strong>Fichier PCAP:</strong> {{ analysis_info.pcap_file }}<br>
+                <strong>Date d'analyse:</strong> {{ analysis_info.analysis_date }}<br>
+                <strong>Durée de capture:</strong> {{ "%.2f"|format(analysis_info.capture_duration) }} secondes<br>
+                <strong>Total de paquets:</strong> {{ analysis_info.total_packets }}<br>
+                <span style="display: inline-block; margin-top: 5px; padding: 3px 8px; background-color: #2196F3; color: white; border-radius: 3px; font-size: 0.85em;">IPv4 uniquement</span>
+            </div>
+        </header>
+
+        <!-- Vue d'ensemble -->
+        <h2>Vue d'ensemble</h2>
+        <div class="summary-grid">
+            <div class="summary-card {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}warning{% else %}success{% endif %}">
+                <h3>Gaps anormaux</h3>
+                <div class="value">
+                    {% if timestamps.get('periodic_pattern_detected', false) %}
+                        {{ timestamps.get('non_periodic_gaps', 0) }}
+                    {% else %}
+                        {{ timestamps['gaps_detected'] }}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="summary-card {% if tcp_handshake.slow_handshakes > 0 %}warning{% else %}success{% endif %}">
+                <h3>Handshakes lents</h3>
+                <div class="value">{{ tcp_handshake.slow_handshakes }}</div>
+            </div>
+
+            <div class="summary-card {% if retransmission.rto_count > 0 or retransmission.fast_retrans_count > 10 %}danger{% elif retransmission.fast_retrans_count > 0 %}warning{% else %}success{% endif %}">
+                <h3>Retransmissions</h3>
+                <div class="value">{{ retransmission.total_retransmissions }}</div>
+                <small>
+                    {% if retransmission.rto_count > 0 %}🔴 RTO: {{ retransmission.rto_count }}{% endif %}
+                    {% if retransmission.fast_retrans_count > 0 %}🟠 FR: {{ retransmission.fast_retrans_count }}{% endif %}
+                </small>
+            </div>
+
+            <div class="summary-card {% if tcp_window.flows_with_issues > 0 %}warning{% else %}success{% endif %}">
+                <h3>Problèmes fenêtre TCP</h3>
+                <div class="value">{{ tcp_window.flows_with_issues }}</div>
+            </div>
+
+            <div class="summary-card {% if icmp.pmtu_issues_count > 0 %}danger{% elif icmp.dest_unreachable_count > 0 %}warning{% else %}success{% endif %}">
+                <h3>Problèmes ICMP</h3>
+                <div class="value">{{ icmp.pmtu_issues_count + icmp.dest_unreachable_count }}</div>
+            </div>
+
+            <div class="summary-card {% if dns.timeout_transactions > 0 or dns.slow_transactions > 0 %}warning{% else %}success{% endif %}">
+                <h3>Problèmes DNS</h3>
+                <div class="value">{{ dns.timeout_transactions + dns.slow_transactions }}</div>
+            </div>
+        </div>
+
+        <!-- Analyse des timestamps -->
+        {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}
+        <h2>⏱️ Analyse des timestamps</h2>
+        <div class="section warning">
+            <h3>{{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }} gap(s) temporel(s) anormal(aux) détecté(s)</h3>
+            {% if timestamps.get('periodic_pattern_detected', false) %}
+            <div class="alert alert-info" style="margin-bottom: 15px;">
+                <strong>ℹ️ Pattern périodique détecté:</strong> {{ timestamps['gaps_detected'] - timestamps.get('non_periodic_gaps', 0) }} gaps réguliers ont été masqués.
+                Seuls les gaps hors pattern sont affichés ci-dessous.
+            </div>
+            {% endif %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Paquets</th>
+                        <th>Durée du gap</th>
+                        <th>Direction</th>
+                        <th>Protocole</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set count = namespace(value=0) %}
+                    {% for gap in timestamps['gaps'] %}
+                    {% if gap.is_abnormal and count.value < 20 %}
+                    {% set count.value = count.value + 1 %}
+                    <tr>
+                        <td>#{{ gap.packet_num_before }} → #{{ gap.packet_num_after }}</td>
+                        <td><strong>{{ "%.3f"|format(gap.gap_duration) }}s</strong></td>
+                        <td><code>{{ gap.src_ip }} → {{ gap.dst_ip }}</code></td>
+                        <td><span class="badge info">{{ gap.protocol }}</span></td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Handshakes TCP -->
+        {% if tcp_handshake.slow_handshakes > 0 %}
+        <h2>🤝 Analyse des handshakes TCP</h2>
+        <div class="section warning">
+            <h3>{{ tcp_handshake.slow_handshakes }} handshake(s) lent(s)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Durée totale</th>
+                        <th>SYN→SYN/ACK</th>
+                        <th>SYN/ACK→ACK</th>
+                        <th>Côté suspect</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for hs in tcp_handshake.slow_handshake_details %}
+                    <tr>
+                        <td><code>{{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</code></td>
+                        <td><strong>{{ "%.3f"|format(hs.total_handshake_time or 0) }}s</strong></td>
+                        <td>{{ "%.3f"|format(hs.syn_to_synack_delay or 0) }}s</td>
+                        <td>{{ "%.3f"|format(hs.synack_to_ack_delay or 0) }}s</td>
+                        <td>
+                            {% if hs.suspected_side == 'server' %}
+                            <span class="badge danger">Serveur</span>
+                            {% elif hs.suspected_side == 'client' %}
+                            <span class="badge warning">Client</span>
+                            {% elif hs.suspected_side == 'network' %}
+                            <span class="badge info">Réseau</span>
+                            {% else %}
+                            <span class="badge">{{ hs.suspected_side }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Retransmissions -->
+        {% if retransmission.total_retransmissions > 0 %}
+        <h2>🔄 Retransmissions et anomalies TCP</h2>
+        <div class="section {% if retransmission.total_retransmissions > 50 %}danger{% else %}warning{% endif %}">
+            <h3>{{ retransmission.total_retransmissions }} retransmission(s) détectée(s){% if retransmission.flows_with_issues > 0 %} - {{ retransmission.flows_with_issues }} flux avec problèmes{% endif %}</h3>
+            <p><strong>Retransmissions totales:</strong> {{ retransmission.total_retransmissions }} ({{ retransmission.unique_retransmitted_segments }} segments uniques)</p>
+            <p>
+                {% if retransmission.rto_count > 0 %}
+                🔴 <strong>RTOs (Timeout de Retransmission):</strong> {{ retransmission.rto_count }} - <span style="font-size:0.9em;">Indique une congestion sévère ou une perte de paquets prolongée.</span><br>
+                {% endif %}
+                {% if retransmission.fast_retrans_count > 0 %}
+                🟠 <strong>Fast Retransmissions:</strong> {{ retransmission.fast_retrans_count }} - <span style="font-size:0.9em;">Indique des pertes de paquets légères ou un désordre des paquets.</span><br>
+                {% endif %}
+                {% if retransmission.other_retrans_count > 0 %}
+                🔵 <strong>Autres Retransmissions:</strong> {{ retransmission.other_retrans_count }}<br>
+                {% endif %}
+            </p>
+            <p><strong>Anomalies totales:</strong> {{ retransmission.total_anomalies }}</p>
+
+            {% if retransmission.flows_with_issues > 0 %}
+            <h4>Flux les plus problématiques:</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Sévérité</th>
+                        <th>Retransmissions</th>
+                        <th>DUP ACK</th>
+                        <th>Out-of-Order</th>
+                        <th>Zero Window</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in retransmission.flow_statistics[:15] %}
+                    {% if flow.severity != 'none' %}
+                    <tr>
+                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td>
+                            {% if flow.severity == 'critical' %}
+                            <span class="badge danger">CRITIQUE</span>
+                            {% elif flow.severity == 'medium' %}
+                            <span class="badge warning">MOYEN</span>
+                            {% else %}
+                            <span class="badge info">BAS</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ flow.retransmissions }}</td>
+                        <td>{{ flow.dup_acks }}</td>
+                        <td>{{ flow.out_of_order }}</td>
+                        <td>{{ flow.zero_windows }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            {% if retransmission.retrans_by_flow %}
+            <h4>Détails des retransmissions par flux (Top {{ [retransmission.retrans_by_flow|length, 10]|min }}):</h4>
+            {% for flow_data in retransmission.retrans_by_flow[:10] %}
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">{{ flow_data.flow_key }}</span>
+                <span class="header-info">({{ flow_data.total_retransmissions_in_flow }} retransmissions)</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <div class="detail-box">
+                        <h5>Détails pour le flux <code>{{ flow_data.flow_key }}</code></h5>
+                        <ul class="timeline-list">
+                            {% for r in flow_data.details %}
+                            <li>
+                                Retransmission #{{ loop.index }}: Paquet <span class="attempt-num">{{ r.packet_num }}</span> (Original: #{{ r.original_packet_num }})
+                                <span class="time-offset">Délai: {{ "%.2f"|format(r.delay * 1000) }}ms</span>
+                                <br>Seq: {{ r.seq_num }} - Type: <strong>{{ r.retrans_type }}</strong>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <div class="filter-box">
+                            <span class="filter-label">🔍 Filtre tcpdump:</span>
+                            <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'tcp and host {{ flow_data.details[0].src_ip }} and port {{ flow_data.details[0].src_port }} and host {{ flow_data.details[0].dst_ip }} and port {{ flow_data.details[0].dst_port }}'</div>
+                        </div>
+                        <div class="filter-box">
+                            <span class="filter-label">🔍 Filtre Wireshark:</span>
+                            <div class="filter-command">ip.addr == {{ flow_data.details[0].src_ip }} && tcp.port == {{ flow_data.details[0].src_port }} && ip.addr == {{ flow_data.details[0].dst_ip }} && tcp.port == {{ flow_data.details[0].dst_port }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- SYN Retransmissions -->
+        {% if syn_retransmissions.total_syn_retransmissions and syn_retransmissions.total_syn_retransmissions > 0 %}
+        <h2>🔴 Retransmissions SYN - Problèmes de Handshake</h2>
+        <div class="section danger">
+            <h3>{{ syn_retransmissions.total_syn_retransmissions }} handshake(s) avec retransmissions SYN excessives</h3>
+            <p><strong>Seuil de détection:</strong> {{ syn_retransmissions.threshold_seconds }}s</p>
+            
+            {% if syn_retransmissions.delay_statistics %}
+            <div class="summary-grid">
+                <div class="summary-card danger">
+                    <h4>Délai minimum</h4>
+                    <div class="value">{{ "%.3f"|format(syn_retransmissions.delay_statistics.min_delay) }}s</div>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Délai maximum</h4>
+                    <div class="value">{{ "%.3f"|format(syn_retransmissions.delay_statistics.max_delay) }}s</div>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Délai moyen</h4>
+                    <div class="value">{{ "%.3f"|format(syn_retransmissions.delay_statistics.avg_delay) }}s</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <h4>Top 10 des connexions les plus lentes:</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Connexion</th>
+                        <th>Retransmissions SYN</th>
+                        <th>Délai total</th>
+                        <th>Problème identifié</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for hs in syn_retransmissions.top_problematic_connections[:10] %}
+                    <tr>
+                        <td><code>{{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</code></td>
+                        <td>{{ hs.retransmission_count }}</td>
+                        <td>{{ "%.3f"|format(hs.total_delay or 0) }}s</td>
+                        <td>
+                            <span class="badge danger">{{ hs.suspected_issue }}</span>
+                            <div class="info-tooltip">
+                                <span class="info-icon">i</span>
+                                <span class="tooltip-text">
+                                    {% if hs.suspected_issue == 'no_synack_received' %}
+                                    <strong>Aucune réponse SYN/ACK reçue</strong><br>
+                                    Le serveur ne répond pas aux tentatives de connexion. Causes possibles :
+                                    • Serveur éteint ou inaccessible<br>
+                                    • Firewall bloquant les connexions<br>
+                                    • Service non démarré sur le port demandé
+                                    {% elif hs.suspected_issue == 'server_delayed_response' %}
+                                    <strong>Réponse serveur lente</strong><br>
+                                    Le serveur répond mais avec un délai important. Causes possibles :
+                                    • Serveur surchargé (CPU, RAM)<br>
+                                    • Problème de performance applicative<br>
+                                    • Latence réseau élevée
+                                    {% elif hs.suspected_issue == 'network_packet_loss' %}
+                                    <strong>Perte de paquets réseau</strong><br>
+                                    Des paquets SYN sont perdus en transit. Causes possibles :
+                                    • Congestion réseau<br>
+                                    • Équipement réseau défaillant<br>
+                                    • Problème de routage
+                                    {% elif hs.suspected_issue == 'timeout_waiting_synack' %}
+                                    <strong>Timeout en attente de SYN/ACK</strong><br>
+                                    Le client abandonne avant de recevoir la réponse. Causes possibles :
+                                    • Timeout TCP trop court<br>
+                                    • Latence réseau excessive<br>
+                                    • Serveur très lent à répondre
+                                    {% else %}
+                                    {{ hs.suspected_issue }}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <h4>🔴 Top 10 des connexions les plus lentes (détails):</h4>
+            {% for hs in syn_retransmissions.top_problematic_connections[:10] %}
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">#{{ loop.index }} – {{ hs.src_ip }}:{{ hs.src_port }} → {{ hs.dst_ip }}:{{ hs.dst_port }}</span>
+                <span class="header-info">({{ hs.retransmission_count }} retrans SYN, délai: {{ "%.3f"|format(hs.total_delay or 0) }}s)</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <div class="detail-box">
+                        <div class="info-line">
+                            <span class="info-label">Premier SYN:</span>
+                            <span class="info-value timestamp">{{ hs.first_syn_time_iso }}</span>
+                        </div>
+                        
+                        <div class="info-line">
+                            <span class="info-label">Retransmissions SYN:</span>
+                            <span class="info-value count">{{ hs.retransmission_count }}</span>
+                        </div>
+                        
+                        <div class="info-line">
+                            <span class="info-label">Timeline des SYN:</span>
+                        </div>
+                        <ul class="timeline-list">
+                            {% set first_time = hs.syn_attempts[0] if hs.syn_attempts else 0 %}
+                            {% for t in hs.syn_attempts %}
+                            <li>
+                                – Tentative <span class="attempt-num">#{{ loop.index }}</span>: 
+                                <span class="time-offset">+{{ "%.3f"|format(t - first_time) }}s</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        
+                        {% if hs.synack_time_iso %}
+                        <div class="info-line">
+                            <span class="info-label">SYN/ACK reçu:</span>
+                            <span class="info-value timestamp success-indicator">{{ hs.synack_time_iso }}</span>
+                        </div>
+                        <div class="info-line">
+                            <span class="info-label">Délai total:</span>
+                            <span class="info-value count">{{ "%.3f"|format(hs.total_delay or 0) }}s</span>
+                        </div>
+                        {% else %}
+                        <div class="info-line">
+                            <span class="error-indicator">❌ Aucune réponse SYN/ACK reçue</span>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="info-line">
+                            <span class="info-label">Problème identifié:</span>
+                            <span class="problem-badge">{{ hs.suspected_issue }}</span>
+                        </div>
+
+                        <div class="filter-box">
+                            <span class="filter-label">🔍 Filtre tcpdump:</span>
+                            <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'tcp and host {{ hs.src_ip }} and port {{ hs.src_port }} and host {{ hs.dst_ip }} and port {{ hs.dst_port }}'</div>
+                        </div>
+
+                        <div class="filter-box">
+                            <span class="filter-label">🔍 Filtre Wireshark:</span>
+                            <div class="filter-command">ip.addr == {{ hs.src_ip }} && tcp.port == {{ hs.src_port }} && ip.addr == {{ hs.dst_ip }} && tcp.port == {{ hs.dst_port }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- TCP Reset (RST) -->
+        {% if tcp_reset.total_resets and tcp_reset.total_resets > 0 %}
+        <h2>🔴 Analyse des TCP Reset (RST)</h2>
+        <div class="section danger">
+            <h3>{{ tcp_reset.total_resets }} paquet(s) RST détecté(s)</h3>
+            
+            <div class="summary-grid">
+                <div class="summary-card danger">
+                    <h4>RST Prématurés</h4>
+                    <div class="value">{{ tcp_reset.premature_resets }}</div>
+                    <small>Avant échange de données</small>
+                </div>
+                <div class="summary-card warning">
+                    <h4>RST Post-données</h4>
+                    <div class="value">{{ tcp_reset.post_data_resets }}</div>
+                    <small>Après échange de données</small>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Flux Impactés</h4>
+                    <div class="value">{{ tcp_reset.flows_with_resets }}</div>
+                    <small>Connexions interrompues</small>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <p><strong>🔍 Analyse:</strong></p>
+                <ul>
+                    <li><strong>RST Prématurés:</strong> Connexion refusée avant transfert de données (firewall, port fermé, service arrêté)</li>
+                    <li><strong>RST Post-données:</strong> Connexion interrompue brutalement (crash applicatif, timeout, erreur protocole)</li>
+                </ul>
+            </div>
+
+            {% if tcp_reset.top_reset_flows and tcp_reset.top_reset_flows|length > 0 %}
+            <h4>Top {{ tcp_reset.top_reset_flows|length }} des flux avec RST:</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Nombre RST</th>
+                        <th>Type</th>
+                        <th>Timestamps</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in tcp_reset.top_reset_flows[:10] %}
+                    <tr>
+                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><strong>{{ flow.count }}</strong></td>
+                        <td>
+                            {% if flow.premature %}
+                            <span class="badge danger">Prématuré</span>
+                            {% else %}
+                            <span class="badge warning">Post-données</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>
+                                {% for ts in flow.timestamps[:3] %}
+                                {{ "%.6f"|format(ts) }}s{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                                {% if flow.timestamps|length > 3 %}...{% endif %}
+                            </small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <h4>Détails des flux avec RST:</h4>
+            {% for flow in tcp_reset.top_reset_flows[:10] %}
+            <div class="detail-box">
+                <div class="info-line">
+                    <span class="info-label">Flux:</span>
+                    <span class="info-value"><code>{{ flow.flow_key }}</code></span>
+                </div>
+                
+                <div class="info-line">
+                    <span class="info-label">Nombre de RST:</span>
+                    <span class="info-value count">{{ flow.count }}</span>
+                </div>
+                
+                <div class="info-line">
+                    <span class="info-label">Type:</span>
+                    {% if flow.premature %}
+                    <span class="problem-badge">RST Prématuré (connexion refusée)</span>
+                    {% else %}
+                    <span class="problem-badge">RST Post-données (interruption)</span>
+                    {% endif %}
+                </div>
+                
+                <div class="info-line">
+                    <span class="info-label">Timestamps des RST:</span>
+                </div>
+                <ul class="timeline-list">
+                    {% for ts in flow.timestamps %}
+                    <li>RST #{{ loop.index }}: <span class="time-offset">{{ "%.6f"|format(ts) }}s</span></li>
+                    {% endfor %}
+                </ul>
+                
+                <div class="filter-box">
+                    <span class="filter-label">🔍 Filtre tcpdump (RST uniquement):</span>
+                    <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'tcp and host {{ flow.flow_key }} and tcp[tcpflags] & tcp-rst != 0'</div>
+                </div>
+
+                <div class="filter-box">
+                    <span class="filter-label">🔍 Filtre Wireshark (flux complet):</span>
+                    <div class="filter-command">{{ flow.flow_key.replace('and', '&&').replace('host', 'ip.addr ==').replace('port', 'tcp.port ==') }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Fragmentation IP -->
+        {% if ip_fragmentation.has_fragmentation %}
+        <h2>📦 Analyse de la fragmentation IP</h2>
+        <div class="section warning">
+            <h3>{{ ip_fragmentation.total_fragments }} fragment(s) IP détecté(s)</h3>
+            
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Groupes de fragments</h4>
+                    <div class="value">{{ ip_fragmentation.total_fragment_groups }}</div>
+                    <small>Datagrammes fragmentés</small>
+                </div>
+                <div class="summary-card success">
+                    <h4>Réassemblages complets</h4>
+                    <div class="value">{{ ip_fragmentation.complete_reassemblies }}</div>
+                    <small>Fragments reçus au complet</small>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Réassemblages incomplets</h4>
+                    <div class="value">{{ ip_fragmentation.incomplete_reassemblies }}</div>
+                    <small>Fragments manquants</small>
+                </div>
+                <div class="summary-card info">
+                    <h4>PMTU estimé</h4>
+                    <div class="value">{{ ip_fragmentation.estimated_pmtu }}</div>
+                    <small>bytes</small>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <p><strong>🔍 Analyse:</strong></p>
+                <ul>
+                    <li><strong>Fragmentation IP:</strong> Se produit quand un paquet dépasse le MTU du réseau</li>
+                    <li><strong>Problèmes courants:</strong> Fragments perdus causent des timeouts silencieux (tout ou rien)</li>
+                    <li><strong>PMTU Discovery:</strong> Mécanisme pour découvrir la taille maximale sans fragmentation</li>
+                    <li><strong>Recommandation:</strong> Éviter la fragmentation en ajustant le MSS ou en activant PMTU Discovery</li>
+                </ul>
+            </div>
+
+            {% if ip_fragmentation.top_fragmented_flows and ip_fragmentation.top_fragmented_flows|length > 0 %}
+            <h4>Top {{ ip_fragmentation.top_fragmented_flows|length }} des flux avec fragmentation:</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Fragments</th>
+                        <th>Taux</th>
+                        <th>Taille min/max/avg</th>
+                        <th>Incomplets</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in ip_fragmentation.top_fragmented_flows[:10] %}
+                    <tr>
+                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><strong>{{ flow.fragment_count }}</strong> / {{ flow.packets_count }}</td>
+                        <td>
+                            {% if flow.fragmentation_rate > 50 %}
+                            <span class="badge danger">{{ "%.1f"|format(flow.fragmentation_rate) }}%</span>
+                            {% elif flow.fragmentation_rate > 20 %}
+                            <span class="badge warning">{{ "%.1f"|format(flow.fragmentation_rate) }}%</span>
+                            {% else %}
+                            <span class="badge info">{{ "%.1f"|format(flow.fragmentation_rate) }}%</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>{{ flow.min_fragment_size }} / {{ flow.max_fragment_size }} / {{ "%.0f"|format(flow.avg_fragment_size) }} bytes</small>
+                        </td>
+                        <td>
+                            {% if flow.incomplete_reassemblies > 0 %}
+                            <span class="badge danger">{{ flow.incomplete_reassemblies }}</span>
+                            {% else %}
+                            <span class="badge success">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            {% if ip_fragmentation.incomplete_fragments_details and ip_fragmentation.incomplete_fragments_details|length > 0 %}
+            <h4>⚠️ Fragments incomplets (possibles pertes):</h4>
+            {% for frag in ip_fragmentation.incomplete_fragments_details[:10] %}
+            <div class="detail-box">
+                <div class="info-line">
+                    <span class="info-label">Flux:</span>
+                    <span class="info-value"><code>{{ frag.flow_key }}</code></span>
+                </div>
+                
+                <div class="info-line">
+                    <span class="info-label">ID Datagramme:</span>
+                    <span class="info-value count">{{ frag.ip_id }}</span>
+                </div>
+                
+                <div class="info-line">
+                    <span class="info-label">Fragments reçus:</span>
+                    <span class="info-value count">{{ frag.fragments_received }}</span>
+                </div>
+                
+                {% if frag.total_length %}
+                <div class="info-line">
+                    <span class="info-label">Longueur totale attendue:</span>
+                    <span class="info-value count">{{ frag.total_length }} bytes</span>
+                </div>
+                {% else %}
+                <div class="info-line">
+                    <span class="error-indicator">⚠️ Longueur totale inconnue (dernier fragment non reçu)</span>
+                </div>
+                {% endif %}
+                
+                <div class="info-line">
+                    <span class="info-label">Âge du fragment:</span>
+                    <span class="info-value">{{ "%.1f"|format(frag.age) }}s</span>
+                </div>
+                
+                <div class="filter-box">
+                    <span class="filter-label">🔍 Filtre tcpdump (fragments):</span>
+                    <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'ip[6:2] & 0x1fff != 0 and host {{ frag.src_ip }} and host {{ frag.dst_ip }}'</div>
+                </div>
+
+                <div class="filter-box">
+                    <span class="filter-label">🔍 Filtre Wireshark:</span>
+                    <div class="filter-command">ip.src == {{ frag.src_ip }} && ip.dst == {{ frag.dst_ip }} && ip.id == {{ frag.ip_id }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- RTT -->
+        {% if rtt.flows_with_high_rtt > 0 %}
+        <h2>⏲️ Analyse RTT (Round Trip Time)</h2>
+        <div class="section warning">
+            <h3>{{ rtt.flows_with_high_rtt }} flux avec RTT élevé</h3>
+            <p><strong>RTT moyen global:</strong> {{ "%.2f"|format((rtt.global_statistics.mean_rtt or 0) * 1000) }} ms</p>
+            <p><strong>RTT max global:</strong> {{ "%.2f"|format((rtt.global_statistics.max_rtt or 0) * 1000) }} ms</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>RTT moyen</th>
+                        <th>RTT min/max</th>
+                        <th>Pics RTT</th>
+                        <th>Mesures</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in rtt.flow_statistics[:15] %}
+                    {% if flow.mean_rtt > rtt.thresholds.warning_seconds %}
+                    <tr>
+                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><strong>{{ "%.2f"|format(flow.mean_rtt * 1000) }} ms</strong></td>
+                        <td>{{ "%.2f"|format(flow.min_rtt * 1000) }} / {{ "%.2f"|format(flow.max_rtt * 1000) }} ms</td>
+                        <td>{{ flow.rtt_spikes }}</td>
+                        <td>{{ flow.measurements_count }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- TCP Window -->
+        {% if tcp_window.flows_with_issues > 0 %}
+        <h2>🪟 Analyse des fenêtres TCP</h2>
+        <div class="section warning">
+            <h3>{{ tcp_window.flows_with_issues }} flux avec problèmes de fenêtre</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Goulot suspecté</th>
+                        <th>Zero Windows</th>
+                        <th>Durée ZW totale</th>
+                        <th>Fenêtre min/moy/max</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in tcp_window.flow_statistics[:15] %}
+                    {% if flow.suspected_bottleneck != 'none' %}
+                    <tr>
+                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td>
+                            {% if flow.suspected_bottleneck == 'application' %}
+                            <span class="badge danger">Application</span>
+                            {% elif flow.suspected_bottleneck == 'receiver' %}
+                            <span class="badge warning">Récepteur</span>
+                            {% else %}
+                            <span class="badge info">{{ flow.suspected_bottleneck }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ flow.zero_window_count }}</td>
+                        <td>{{ "%.3f"|format(flow.zero_window_total_duration) }}s</td>
+                        <td>{{ flow.min_window }} / {{ "%.0f"|format(flow.mean_window) }} / {{ flow.max_window }} bytes</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- ICMP / PMTU -->
+        {% if icmp.pmtu_issues_count > 0 or icmp.dest_unreachable_count > 0 %}
+        <h2>📡 Analyse ICMP et PMTU</h2>
+
+        {% if icmp.pmtu_issues_count > 0 %}
+        <div class="section danger">
+            <h3>🔴 {{ icmp.pmtu_issues_count }} problème(s) PMTU détecté(s)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Paquet</th>
+                        <th>Message</th>
+                        <th>MTU suggéré</th>
+                        <th>Flux affecté</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for msg in icmp.pmtu_issues %}
+                    <tr>
+                        <td>#{{ msg.packet_num }}</td>
+                        <td>{{ msg.message }}</td>
+                        <td>{% if msg.mtu > 0 %}<strong>{{ msg.mtu }} bytes</strong>{% else %}N/A{% endif %}</td>
+                        <td><code>{{ msg.original_src }} → {{ msg.original_dst }}</code></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {% if icmp.pmtu_suggestions %}
+            <div class="suggestions">
+                <h4>💡 Suggestions:</h4>
+                <ul>
+                    {% for suggestion in icmp.pmtu_suggestions %}
+                    <li>{{ suggestion }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if icmp.dest_unreachable_count > 0 %}
+        <div class="section warning">
+            <h3>{{ icmp.dest_unreachable_count }} message(s) Destination Unreachable</h3>
+            <p>Des destinations sont injoignables. Vérifiez la configuration réseau et les pare-feu.</p>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <!-- DNS -->
+        {% if dns.timeout_transactions > 0 or dns.slow_transactions > 0 %}
+        <h2>🌐 Analyse DNS</h2>
+        <div class="section {% if dns.timeout_transactions > 5 %}danger{% else %}warning{% endif %}">
+            <h3>Problèmes DNS détectés</h3>
+            <p><strong>Requêtes totales:</strong> {{ dns.total_queries }}</p>
+            <p><strong>Timeouts:</strong> {{ dns.timeout_transactions }}</p>
+            <p><strong>Réponses lentes:</strong> {{ dns.slow_transactions }}</p>
+            <p><strong>Erreurs:</strong> {{ dns.error_transactions }}</p>
+
+            {% if dns.top_problematic_domains %}
+            <h4>Domaines problématiques:</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Domaine</th>
+                        <th>Nombre de problèmes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for domain, count in dns.top_problematic_domains %}
+                    <tr>
+                        <td><code>{{ domain }}</code></td>
+                        <td>{{ count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Top Talkers -->
+        {% if top_talkers.top_ips %}
+        <h2>📊 Top Talkers - Analyse du volume</h2>
+        <div class="section info">
+            
+            <!-- Répartition par protocole -->
+            {% if top_talkers.protocol_stats %}
+            <h3>Répartition par protocole</h3>
+            <div class="summary-grid">
+                {% for proto, stats in top_talkers.protocol_stats.items() %}
+                <div class="summary-card {% if proto == 'TCP' %}info{% elif proto == 'UDP' %}success{% else %}warning{% endif %}">
+                    <h4>{{ proto }}</h4>
+                    <div class="value">{{ format_bytes(stats.bytes) }}</div>
+                    <small>{{ stats.packets }} paquets</small>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Top IPs -->
+            <h3>Top 10 des hôtes par volume</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Adresse IP</th>
+                        <th>Volume total</th>
+                        <th>Envoyé</th>
+                        <th>Reçu</th>
+                        <th>Paquets</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ip_stat in top_talkers.top_ips[:10] %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><code>{{ ip_stat.ip }}</code></td>
+                        <td><strong>{{ format_bytes(ip_stat.total_bytes) }}</strong></td>
+                        <td>{{ format_bytes(ip_stat.bytes_sent) }}</td>
+                        <td>{{ format_bytes(ip_stat.bytes_received) }}</td>
+                        <td>{{ ip_stat.packets_sent + ip_stat.packets_received }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Top Conversations -->
+            {% if top_talkers.top_conversations %}
+            <h3>Top 10 des conversations</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Source</th>
+                        <th>Destination</th>
+                        <th>Protocole</th>
+                        <th>Volume</th>
+                        <th>Paquets</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conv in top_talkers.top_conversations[:10] %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><code>{{ conv.src_ip }}{% if conv.src_port %}:{{ conv.src_port }}{% endif %}</code></td>
+                        <td><code>{{ conv.dst_ip }}{% if conv.dst_port %}:{{ conv.dst_port }}{% endif %}</code></td>
+                        <td><span class="badge {% if conv.protocol == 'TCP' %}info{% elif conv.protocol == 'UDP' %}success{% else %}warning{% endif %}">{{ conv.protocol }}</span></td>
+                        <td><strong>{{ format_bytes(conv.bytes) }}</strong></td>
+                        <td>{{ conv.packets }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Throughput -->
+        {% if throughput.global_throughput %}
+        <h2>📈 Analyse du débit (Throughput)</h2>
+        <div class="section info">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Débit global</h4>
+                    <div class="value">{{ "%.2f"|format(throughput.global_throughput.throughput_mbps) }} Mbps</div>
+                    <small>{{ "%.2f"|format(throughput.global_throughput.throughput_kbps) }} Kbps</small>
+                </div>
+                <div class="summary-card success">
+                    <h4>Volume total</h4>
+                    <div class="value">{{ format_bytes(throughput.global_throughput.total_bytes) }}</div>
+                    <small>{{ throughput.global_throughput.total_packets }} paquets</small>
+                </div>
+                <div class="summary-card info">
+                    <h4>Durée capture</h4>
+                    <div class="value">{{ "%.1f"|format(throughput.global_throughput.duration_seconds) }}s</div>
+                    <small>{{ throughput.total_flows }} flux</small>
+                </div>
+            </div>
+
+            <!-- Top flows par débit -->
+            {% if throughput.top_flows %}
+            <h3>Top 10 des flux par débit</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Flux</th>
+                        <th>Protocole</th>
+                        <th>Débit</th>
+                        <th>Volume</th>
+                        <th>Durée</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in throughput.top_flows[:10] %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><span class="badge {% if flow.protocol == 'TCP' %}info{% elif flow.protocol == 'UDP' %}success{% else %}warning{% endif %}">{{ flow.protocol }}</span></td>
+                        <td><strong>{{ "%.2f"|format(flow.throughput_mbps) }} Mbps</strong></td>
+                        <td>{{ format_bytes(flow.bytes) }}</td>
+                        <td>{{ "%.1f"|format(flow.duration_seconds) }}s</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Flux lents -->
+            {% if throughput.slow_flows %}
+            <h3>⚠️ Flux à faible débit (potentiels goulots)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Débit</th>
+                        <th>Volume</th>
+                        <th>Durée</th>
+                        <th>Taille moy. paquet</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in throughput.slow_flows %}
+                    <tr>
+                        <td><code>{{ flow.flow_key }}</code></td>
+                        <td><span class="badge warning">{{ "%.2f"|format(flow.throughput_kbps) }} Kbps</span></td>
+                        <td>{{ format_bytes(flow.bytes) }}</td>
+                        <td>{{ "%.1f"|format(flow.duration_seconds) }}s</td>
+                        <td>{{ "%.0f"|format(flow.avg_packet_size) }} bytes</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- TCP Timeout -->
+        {% if tcp_timeout and tcp_timeout.total_connections > 0 %}
+        <h2>⏱️ Analyse des Timeouts TCP</h2>
+        <div class="section {% if tcp_timeout.problematic_count > 10 %}danger{% elif tcp_timeout.problematic_count > 0 %}warning{% else %}success{% endif %}">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Connexions totales</h4>
+                    <div class="value">{{ tcp_timeout.total_connections }}</div>
+                </div>
+                <div class="summary-card {% if tcp_timeout.problematic_count > 10 %}danger{% elif tcp_timeout.problematic_count > 0 %}warning{% else %}success{% endif %}">
+                    <h4>Connexions problématiques</h4>
+                    <div class="value">{{ tcp_timeout.problematic_count }}</div>
+                </div>
+                <div class="summary-card success">
+                    <h4>Fermées proprement (FIN)</h4>
+                    <div class="value">{{ tcp_timeout.categories.closed_fin_count }}</div>
+                </div>
+                <div class="summary-card info">
+                    <h4>Fermées par RST</h4>
+                    <div class="value">{{ tcp_timeout.categories.closed_rst_count }}</div>
+                    {% if tcp_timeout.categories.total_rst_packets is defined %}
+                    <small>({{ tcp_timeout.categories.total_rst_packets }} paquets RST vus)</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Détails des problèmes -->
+            {% if tcp_timeout.problematic_count > 0 %}
+            <h3>🔍 Répartition des problèmes</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type de problème</th>
+                        <th>Description</th>
+                        <th>Nombre</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge danger">SYN Timeout</span></td>
+                        <td>SYN envoyé mais pas de SYN-ACK reçu</td>
+                        <td>{{ tcp_timeout.categories.syn_timeout_count }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge warning">Half-Open</span></td>
+                        <td>SYN-ACK reçu mais pas d'ACK final</td>
+                        <td>{{ tcp_timeout.categories.half_open_count }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge danger">Zombie</span></td>
+                        <td>Inactives depuis >{{ tcp_timeout.thresholds.zombie_threshold }}s sans fermeture</td>
+                        <td>{{ tcp_timeout.categories.zombie_count }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge warning">Idle</span></td>
+                        <td>Inactives depuis >{{ tcp_timeout.thresholds.idle_threshold }}s</td>
+                        <td>{{ tcp_timeout.categories.idle_count }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge info">Établies sans données</span></td>
+                        <td>Handshake complet mais aucune donnée</td>
+                        <td>{{ tcp_timeout.categories.established_idle_count }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- SYN Timeout détails -->
+            {% if tcp_timeout.categories.syn_timeout and tcp_timeout.categories.syn_timeout|length > 0 %}
+            <h3>🔴 Connexions SYN Timeout (Top 10)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Premier SYN</th>
+                        <th>Dernier paquet</th>
+                        <th>Temps d'attente</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conn in tcp_timeout.categories.syn_timeout %}
+                    <tr>
+                        <td><code>{{ conn.flow }}</code></td>
+                        <td>{{ conn.first_seen_iso }}</td>
+                        <td>{{ conn.last_seen_iso }}</td>
+                        <td><span class="badge danger">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Zombie détails -->
+            {% if tcp_timeout.categories.zombie and tcp_timeout.categories.zombie|length > 0 %}
+            <h3>💀 Connexions Zombie (Top 10)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Durée active</th>
+                        <th>Inactif depuis</th>
+                        <th>Paquets</th>
+                        <th>Volume</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conn in tcp_timeout.categories.zombie %}
+                    <tr>
+                        <td><code>{{ conn.flow }}</code></td>
+                        <td>{{ "%.1f"|format(conn.duration) }}s</td>
+                        <td><span class="badge danger">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
+                        <td>{{ conn.packet_count }}</td>
+                        <td>{{ format_bytes(conn.bytes_total) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Half-open détails -->
+            {% if tcp_timeout.categories.half_open and tcp_timeout.categories.half_open|length > 0 %}
+            <h3>⚠️ Connexions Half-Open (Top 10)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Premier SYN</th>
+                        <th>Inactif depuis</th>
+                        <th>État</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conn in tcp_timeout.categories.half_open %}
+                    <tr>
+                        <td><code>{{ conn.flow }}</code></td>
+                        <td>{{ conn.first_seen_iso }}</td>
+                        <td><span class="badge warning">{{ "%.1f"|format(conn.idle_time) }}s</span></td>
+                        <td>SYN-ACK reçu, en attente ACK</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Trafic Asymétrique -->
+        {% if asymmetric_traffic and asymmetric_traffic.summary.total_flows > 0 %}
+        <h2>⚖️ Analyse du Trafic Asymétrique</h2>
+        <div class="section {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Flux analysés</h4>
+                    <div class="value">{{ asymmetric_traffic.summary.total_flows }}</div>
+                </div>
+                <div class="summary-card {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
+                    <h4>Flux asymétriques</h4>
+                    <div class="value">{{ asymmetric_traffic.summary.asymmetric_flows }} ({{ "%.1f"|format(asymmetric_traffic.summary.asymmetric_percentage) }}%)</div>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Quasi-unidirectionnels</h4>
+                    <div class="value">{{ asymmetric_traffic.summary.unidirectional_flows }}</div>
+                </div>
+                <div class="summary-card success">
+                    <h4>Flux symétriques</h4>
+                    <div class="value">{{ asymmetric_traffic.summary.symmetric_flows }}</div>
+                </div>
+            </div>
+
+            <p>Seuil d'asymétrie: <strong>ratio < {{ asymmetric_traffic.summary.asymmetry_threshold }}</strong> (une direction a moins de {{ "%.0f"|format(asymmetric_traffic.summary.asymmetry_threshold * 100) }}% de l'autre)</p>
+
+            <!-- Répartition par protocole -->
+            {% if asymmetric_traffic.protocol_breakdown %}
+            <h3>📊 Répartition par protocole</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Protocole</th>
+                        <th>Flux</th>
+                        <th>Volume</th>
+                        <th>Asymétriques</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for proto, stats in asymmetric_traffic.protocol_breakdown.items() %}
+                    <tr>
+                        <td><span class="badge">{{ proto }}</span></td>
+                        <td>{{ stats.flows }}</td>
+                        <td>{{ format_bytes(stats.bytes) }}</td>
+                        <td>
+                            {% if stats.asymmetric > 0 %}
+                            <span class="badge warning">{{ stats.asymmetric }}</span>
+                            {% else %}
+                            <span class="badge success">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Top flux par volume -->
+            {% if asymmetric_traffic.top_flows_by_volume %}
+            <h3>📈 Top 10 flux par volume</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Protocole</th>
+                        <th>Volume total</th>
+                        <th>Forward →</th>
+                        <th>← Reverse</th>
+                        <th>Asymétrie</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in asymmetric_traffic.top_flows_by_volume[:10] %}
+                    <tr>
+                        <td><code>{{ flow.src_ip }} ↔ {{ flow.dst_ip }}</code></td>
+                        <td><span class="badge">{{ flow.protocol }}</span></td>
+                        <td>{{ format_bytes(flow.total_bytes) }}</td>
+                        <td>{{ format_bytes(flow.forward_bytes) }}</td>
+                        <td>{{ format_bytes(flow.reverse_bytes) }}</td>
+                        <td>
+                            {% if flow.asymmetry_percent > 90 %}
+                            <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                            {% elif flow.asymmetry_percent > 70 %}
+                            <span class="badge warning">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                            {% else %}
+                            <span class="badge success">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Flux les plus asymétriques -->
+            {% if asymmetric_traffic.asymmetric_flows %}
+            <h3>🔴 Flux les plus asymétriques (Top 20)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Proto</th>
+                        <th>Direction dominante</th>
+                        <th>Forward</th>
+                        <th>Reverse</th>
+                        <th>Ratio</th>
+                        <th>Asymétrie</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in asymmetric_traffic.asymmetric_flows[:20] %}
+                    <tr>
+                        <td><code>{{ flow.src_ip }}:{{ flow.src_port }} ↔ {{ flow.dst_ip }}:{{ flow.dst_port }}</code></td>
+                        <td><span class="badge">{{ flow.protocol }}</span></td>
+                        <td>
+                            {% if flow.dominant_direction == 'forward' %}
+                            <span class="badge info">{{ flow.src_ip }} →</span>
+                            {% else %}
+                            <span class="badge info">← {{ flow.dst_ip }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ format_bytes(flow.forward_bytes) }} ({{ flow.forward_packets }} pkts)</td>
+                        <td>{{ format_bytes(flow.reverse_bytes) }} ({{ flow.reverse_packets }} pkts)</td>
+                        <td>{{ "%.4f"|format(flow.byte_ratio) }}</td>
+                        <td>
+                            {% if flow.is_unidirectional %}
+                            <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}% (Unidirectionnel)</span>
+                            {% else %}
+                            <span class="badge warning">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Bursts de Paquets -->
+        {% if burst and burst.summary.total_intervals > 0 %}
+        <h2>💥 Analyse des Bursts de Paquets</h2>
+        <div class="section {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Intervalles analysés</h4>
+                    <div class="value">{{ burst.summary.total_intervals }}</div>
+                    <small>{{ burst.summary.interval_ms }}ms par intervalle</small>
+                </div>
+                <div class="summary-card {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
+                    <h4>Bursts détectés</h4>
+                    <div class="value">{{ burst.summary.bursts_detected }}</div>
+                    <small>Seuil: {{ burst.summary.burst_threshold_multiplier }}x la moyenne</small>
+                </div>
+                <div class="summary-card info">
+                    <h4>Paquets dans bursts</h4>
+                    <div class="value">{{ burst.summary.packets_in_bursts }}</div>
+                </div>
+                <div class="summary-card {% if burst.interval_stats.traffic_regularity == 'Très irrégulier' %}danger{% elif burst.interval_stats.traffic_regularity == 'Variable' %}warning{% else %}success{% endif %}">
+                    <h4>Régularité du trafic</h4>
+                    <div class="value">{{ burst.interval_stats.traffic_regularity }}</div>
+                    <small>CV: {{ burst.interval_stats.coefficient_of_variation }}%</small>
+                </div>
+            </div>
+
+            <!-- Statistiques d'intervalle -->
+            <h3>📊 Distribution du trafic</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Métrique</th>
+                        <th>Valeur</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Paquets/intervalle (moyenne)</td>
+                        <td>{{ burst.interval_stats.avg_packets_per_interval }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paquets/intervalle (min)</td>
+                        <td>{{ burst.interval_stats.min_packets_per_interval }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paquets/intervalle (max)</td>
+                        <td><span class="badge {% if burst.interval_stats.max_packets_per_interval > burst.interval_stats.avg_packets_per_interval * 3 %}danger{% else %}info{% endif %}">{{ burst.interval_stats.max_packets_per_interval }}</span></td>
+                    </tr>
+                    <tr>
+                        <td>Écart-type</td>
+                        <td>{{ burst.interval_stats.std_deviation }}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Pire burst -->
+            {% if burst.worst_burst %}
+            <h3>🔴 Burst le plus intense</h3>
+            <div class="summary-grid">
+                <div class="summary-card danger">
+                    <h4>Timestamp</h4>
+                    <div class="value">{{ burst.worst_burst.start_iso }}</div>
+                </div>
+                <div class="summary-card danger">
+                    <h4>Paquets</h4>
+                    <div class="value">{{ burst.worst_burst.packet_count }}</div>
+                    <small>{{ burst.worst_burst.packets_per_second }} pkt/s</small>
+                </div>
+                <div class="summary-card warning">
+                    <h4>Intensité</h4>
+                    <div class="value">{{ burst.worst_burst.peak_ratio }}x</div>
+                    <small>par rapport à la moyenne</small>
+                </div>
+                {% if burst.worst_burst.top_source %}
+                <div class="summary-card info">
+                    <h4>Source principale</h4>
+                    <div class="value" style="font-size: 0.9em">{{ burst.worst_burst.top_source.ip }}</div>
+                    <small>{{ burst.worst_burst.top_source.packets }} paquets</small>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Liste des bursts -->
+            {% if burst.bursts %}
+            <h3>📋 Tous les bursts détectés (Top 20)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Début</th>
+                        <th>Durée</th>
+                        <th>Paquets</th>
+                        <th>Débit</th>
+                        <th>Intensité</th>
+                        <th>Source principale</th>
+                        <th>Protocoles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in burst.bursts[:20] %}
+                    <tr>
+                        <td><code>{{ b.start_iso }}</code></td>
+                        <td>{{ b.duration_ms }} ms</td>
+                        <td>{{ b.packet_count }}</td>
+                        <td>
+                            <span class="badge info">{{ b.packets_per_second }} pkt/s</span>
+                            <br><small>{{ b.mbps }} Mbps</small>
+                        </td>
+                        <td>
+                            {% if b.peak_ratio > 5 %}
+                            <span class="badge danger">{{ b.peak_ratio }}x</span>
+                            {% elif b.peak_ratio > 3 %}
+                            <span class="badge warning">{{ b.peak_ratio }}x</span>
+                            {% else %}
+                            <span class="badge info">{{ b.peak_ratio }}x</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if b.top_sources %}
+                            {{ b.top_sources[0].ip }} ({{ b.top_sources[0].packets }})
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for proto, count in b.protocol_breakdown.items() %}
+                            <span class="badge">{{ proto }}: {{ count }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Patterns Temporels -->
+        {% if temporal and temporal.summary.total_slots > 0 %}
+        <h2>📅 Analyse des Patterns Temporels</h2>
+        <div class="section">
+            
+            <!-- Stats globales -->
+            <div class="summary-grid">
+                <div class="summary-card info">
+                    <h4>Période d'analyse</h4>
+                    <div class="value" style="font-size: 0.8em">{{ temporal.summary.capture_start }}</div>
+                    <small>→ {{ temporal.summary.capture_end }}</small>
+                </div>
+                <div class="summary-card info">
+                    <h4>Créneaux analysés</h4>
+                    <div class="value">{{ temporal.summary.total_slots }}</div>
+                    <small>{{ temporal.summary.slot_duration_seconds }}s par créneau</small>
+                </div>
+                <div class="summary-card {% if temporal.summary.peaks_detected > 10 %}warning{% else %}success{% endif %}">
+                    <h4>Pics détectés</h4>
+                    <div class="value">{{ temporal.summary.peaks_detected }}</div>
+                </div>
+                <div class="summary-card {% if temporal.summary.periodic_patterns_detected > 0 %}warning{% else %}info{% endif %}">
+                    <h4>Patterns périodiques</h4>
+                    <div class="value">{{ temporal.summary.periodic_patterns_detected }}</div>
+                </div>
+            </div>
+
+            <!-- Statistiques par créneau -->
+            <h3>📊 Distribution du trafic</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Métrique</th>
+                        <th>Valeur</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Paquets/créneau (moyenne)</td>
+                        <td>{{ temporal.slot_stats.avg_packets_per_slot }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paquets/creneau (min)</td>
+                        <td>{{ temporal.slot_stats.min_packets_per_slot }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paquets/creneau (max)</td>
+                        <td><span class="badge {% if temporal.slot_stats.peak_to_avg_ratio > 3 %}danger{% else %}info{% endif %}">{{ temporal.slot_stats.max_packets_per_slot }}</span></td>
+                    </tr>
+                    <tr>
+                        <td>Ratio pic/moyenne</td>
+                        <td>{{ temporal.slot_stats.peak_to_avg_ratio }}x</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Distribution horaire -->
+            {% if temporal.hourly_distribution %}
+            <h3>🕐 Distribution horaire</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Heure</th>
+                        <th>Paquets</th>
+                        <th>Volume</th>
+                        <th>Moy/créneau</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for hour in temporal.hourly_distribution %}
+                    <tr>
+                        <td><code>{{ hour.hour_label }}</code></td>
+                        <td>{{ hour.packets }}</td>
+                        <td>{{ format_bytes(hour.bytes) }}</td>
+                        <td>{{ hour.avg_per_slot }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Pics de trafic -->
+            {% if temporal.peaks %}
+            <h3>📈 Pics de trafic (Top 10)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Heure</th>
+                        <th>Paquets</th>
+                        <th>Volume</th>
+                        <th>Ratio</th>
+                        <th>Sources uniques</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for peak in temporal.peaks[:10] %}
+                    <tr>
+                        <td><code>{{ peak.time }}</code></td>
+                        <td>{{ peak.packets }}</td>
+                        <td>{{ format_bytes(peak.bytes) }}</td>
+                        <td><span class="badge danger">{{ peak.ratio }}x</span></td>
+                        <td>{{ peak.unique_sources }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Patterns périodiques -->
+            {% if temporal.periodic_patterns %}
+            <h3>🔄 Patterns périodiques détectés</h3>
+            <p>Ces patterns indiquent des communications régulières (heartbeat, polling, cron jobs, etc.)</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Intervalle</th>
+                        <th>Description</th>
+                        <th>Occurrences</th>
+                        <th>Confiance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pattern in temporal.periodic_patterns %}
+                    <tr>
+                        <td><code>{{ pattern.source_ip }}</code></td>
+                        <td>{{ pattern.interval_seconds }}s</td>
+                        <td>{{ pattern.description }}</td>
+                        <td>{{ pattern.occurrences }}</td>
+                        <td>
+                            {% if pattern.confidence >= 70 %}
+                            <span class="badge success">{{ pattern.confidence }}%</span>
+                            {% elif pattern.confidence >= 50 %}
+                            <span class="badge warning">{{ pattern.confidence }}%</span>
+                            {% else %}
+                            <span class="badge info">{{ pattern.confidence }}%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Creux de trafic -->
+            {% if temporal.valleys %}
+            <h3>📉 Creux de trafic</h3>
+            <p>Périodes de faible activité - opportunité pour maintenance</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Heure</th>
+                        <th>Paquets</th>
+                        <th>Ratio vs moyenne</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for valley in temporal.valleys[:5] %}
+                    <tr>
+                        <td><code>{{ valley.time }}</code></td>
+                        <td>{{ valley.packets }}</td>
+                        <td><span class="badge success">{{ valley.ratio }}x</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Section SACK/D-SACK -->
+        {% if sack and sack.summary.tcp_packets > 0 %}
+        <div class="section">
+            <h2><span class="icon">🔄</span> SACK/D-SACK Analysis</h2>
+            <p>Analyse des accusés de réception sélectifs (Selective Acknowledgment)</p>
+            
+            <!-- Cartes de résumé -->
+            <div class="summary-cards">
+                <div class="summary-card {% if sack.summary.sack_usage_percentage < 10 %}warning{% elif sack.summary.sack_usage_percentage == 0 %}info{% else %}success{% endif %}">
+                    <div class="label">🎯 Utilisation SACK</div>
+                    <div class="value">{{ sack.summary.sack_usage_percentage }}%</div>
+                    <small>{{ sack.summary.sack_packets }} / {{ sack.summary.tcp_packets }} paquets TCP</small>
+                </div>
+                <div class="summary-card {% if sack.summary.dsack_ratio_percentage > 5 %}danger{% else %}info{% endif %}">
+                    <div class="label">⚠️ Ratio D-SACK</div>
+                    <div class="value">{{ sack.summary.dsack_ratio_percentage }}%</div>
+                    <small>{{ sack.summary.dsack_packets }} doublons détectés</small>
+                </div>
+                <div class="summary-card info">
+                    <div class="label">🌐 Flux SACK</div>
+                    <div class="value">{{ sack.summary.flows_using_sack }}</div>
+                    <small>connexions utilisant SACK</small>
+                </div>
+                <div class="summary-card success">
+                    <div class="label">💾 Économie estimée</div>
+                    <div class="value">{{ sack.efficiency.estimated_retransmission_savings_mb }} MB</div>
+                    <small>retransmissions évitées</small>
+                </div>
+            </div>
+
+            <!-- Efficacité SACK -->
+            <h3>📊 Efficacité des retransmissions sélectives</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Métrique</th>
+                        <th>Valeur</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Octets SACK moyens</strong></td>
+                        <td><span class="badge info">{{ sack.efficiency.avg_sacked_bytes_per_event }}</span></td>
+                        <td>Taille moyenne des blocs acquittés sélectivement</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Flux avec D-SACK</strong></td>
+                        <td><span class="badge {% if sack.efficiency.flows_with_dsack > 0 %}warning{% else %}success{% endif %}">{{ sack.efficiency.flows_with_dsack }}</span></td>
+                        <td>Connexions avec doublons ({{ sack.efficiency.dsack_flows_percentage }}%)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total événements SACK</strong></td>
+                        <td><span class="badge info">{{ sack.summary.total_sack_events }}</span></td>
+                        <td>Nombre total d'accusés de réception sélectifs</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Top flux SACK -->
+            {% if sack.top_sack_flows and sack.summary.sack_packets > 0 %}
+            <h3>🔝 Top flux utilisant SACK</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>Événements SACK</th>
+                        <th>D-SACK</th>
+                        <th>Octets SACK</th>
+                        <th>Blocs uniques</th>
+                        <th>Durée</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in sack.top_sack_flows[:10] %}
+                    <tr>
+                        <td><code>{{ flow.flow }}</code></td>
+                        <td><span class="badge info">{{ flow.sack_events }}</span></td>
+                        <td>
+                            {% if flow.dsack_events > 0 %}
+                                <span class="badge danger">{{ flow.dsack_events }} ({{ flow.dsack_ratio }}%)</span>
+                            {% else %}
+                                <span class="badge success">0</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ format_bytes(flow.sacked_bytes) }}</td>
+                        <td>{{ flow.unique_blocks }}</td>
+                        <td>{{ flow.duration_seconds }}s</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Flux problématiques avec D-SACK -->
+            {% if sack.dsack_analysis.problematic_flows and sack.summary.dsack_packets > 0 %}
+            <h3>⚠️ Flux avec D-SACK (problématiques)</h3>
+            <p class="warning-note">D-SACK indique des doublons ou des retransmissions inutiles</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flux</th>
+                        <th>D-SACK Events</th>
+                        <th>Total SACK Events</th>
+                        <th>% D-SACK</th>
+                        <th>Problème potentiel</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in sack.dsack_analysis.problematic_flows %}
+                    <tr class="{% if flow.dsack_percentage > 10 %}danger{% else %}warning{% endif %}">
+                        <td><code>{{ flow.flow }}</code></td>
+                        <td><span class="badge danger">{{ flow.dsack_events }}</span></td>
+                        <td>{{ flow.total_sack_events }}</td>
+                        <td>{{ flow.dsack_percentage }}%</td>
+                        <td>
+                            {% if flow.dsack_percentage > 20 %}
+                                <small>Retransmissions excessives</small>
+                            {% elif flow.dsack_percentage > 10 %}
+                                <small>Retransmissions fréquentes</small>
+                            {% else %}
+                                <small>Retransmissions occasionnelles</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Événements SACK récents -->
+            {% if sack.recent_sack_events and sack.summary.sack_packets > 0 %}
+            <h3>🕒 Événements SACK récents</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Heure</th>
+                        <th>Flux</th>
+                        <th>Blocs SACK</th>
+                        <th>Octets</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in sack.recent_sack_events %}
+                    <tr class="{% if event.is_dsack %}warning{% endif %}">
+                        <td><code>{{ event.time }}</code></td>
+                        <td><small>{{ event.flow }}</small></td>
+                        <td>
+                            {% for block in event.blocks %}
+                                <span class="badge secondary">{{ block }}</span>
+                            {% endfor %}
+                            {% if event.blocks|length > 3 %}...{% endif %}
+                        </td>
+                        <td>{{ event.sacked_bytes }} B</td>
+                        <td>
+                            {% if event.is_dsack %}
+                                <span class="badge danger" title="Duplicate SACK - séquence {{ event.dsack_sequence }}">D-SACK</span>
+                            {% else %}
+                                <span class="badge success">SACK</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            <!-- Recommandations -->
+            <h3>💡 Recommandations</h3>
+            <div class="detail-box">
+                <ul>
+                    {% if sack.summary.sack_usage_percentage == 0 %}
+                    <li><strong>Aucune utilisation SACK détectée</strong> - Les endpoints n'utilisent pas les retransmissions sélectives</li>
+                    <li>SACK permet d'optimiser les retransmissions en acquittant sélectivement les segments reçus</li>
+                    <li>Vérifiez la configuration TCP des endpoints pour activer SACK si nécessaire</li>
+                    {% elif sack.summary.sack_usage_percentage < 10 %}
+                    <li><strong>Faible utilisation SACK ({{ sack.summary.sack_usage_percentage }}%)</strong> - Vérifiez la configuration TCP des endpoints</li>
+                    {% endif %}
+                    {% if sack.efficiency.flows_with_dsack > 0 %}
+                    <li><strong>{{ sack.efficiency.flows_with_dsack }} flux avec D-SACK</strong> - Investiguer les causes des retransmissions inutiles</li>
+                    {% endif %}
+                    {% if sack.summary.sack_usage_percentage > 50 %}
+                    <li><strong>Excellente utilisation SACK</strong> - Les retransmissions sont optimisées</li>
+                    {% endif %}
+                    {% if sack.summary.sack_packets > 0 %}
+                    <li>SACK permet d'éviter environ {{ sack.efficiency.estimated_retransmission_savings_mb }} MB de retransmissions complètes</li>
+                    <li>Surveillance recommandée des flux avec ratio D-SACK > 10%</li>
+                    {% else %}
+                    <li>SACK n'est pas utilisé dans cette capture - retransmissions classiques en cas de perte</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Résumé interprétatif pour non-techniciens -->
+        <div class="section">
+            <h2>📋 Résumé interprétatif</h2>
+            <div class="summary-card">
+                <h3>Résumé pour les équipes métier et management</h3>
+                <div class="interpretive-summary">
+                    {% set has_incident = false %}
+                    {% set is_small_capture = analysis_info.total_packets < 1000 %}
+                    {% set is_very_small_capture = analysis_info.total_packets < 100 %}
+
+                    {# Logique contextuelle améliorée : ne pas alarmer sur patterns réguliers #}
+                    {# Utilise non_periodic_gaps au lieu de gaps_detected total #}
+                    {% if timestamps and timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) > 10 and not is_very_small_capture %}
+                        {% set has_incident = true %}
+                    {% endif %}
+                    {# Retransmissions : seuils plus élevés et rate > 5% #}
+                    {% if retransmission and retransmission.total_retransmissions > 1000 and retransmission.retransmission_rate > 5.0 %}
+                        {% set has_incident = true %}
+                    {% endif %}
+                    {# Débit < 1 Mbps n'est un problème QUE si volume significatif ET pas de pattern périodique #}
+                    {% if throughput and throughput.global_throughput.throughput_mbps < 1 and analysis_info.total_packets > 10000 and not timestamps.get('periodic_pattern_detected', false) %}
+                        {% set has_incident = true %}
+                    {% endif %}
+
+                    {% if has_incident %}
+                    <div class="alert alert-danger">
+                        <h4>🚨 Incident détecté</h4>
+                        <p>Il y a un problème de performance réseau qui impacte probablement l'expérience utilisateur.</p>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <h4>✅ Aucun incident critique</h4>
+                        <p>Le réseau fonctionne normalement selon les seuils définis.</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="interpretation-details">
+                        <h4>🔍 Analyse des problèmes identifiés :</h4>
+                        <ul>
+                            {% if timestamps and timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}
+                            <li><strong>Délais anormaux entre paquets :</strong> {{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }} interruptions détectées (certaines dépassent 1.0s).
+                                {% if is_very_small_capture %}
+                                    Pour une capture de faible volume ({{ analysis_info.total_packets }} paquets), ceci est normal - trafic sporadique attendu.
+                                {% elif timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) > 10 %}
+                                    Volume significatif d'interruptions - à surveiller.
+                                {% else %}
+                                    Trafic non continu - vérifier si cela correspond au comportement attendu de l'application.
+                                {% endif %}</li>
+                            {% endif %}
+                            
+                            {% if retransmission and retransmission.total_retransmissions > 0 %}
+                            <li><strong>Retransmissions TCP :</strong> {{ retransmission.total_retransmissions }} paquets retransmis.
+                                {% if retransmission.rto_count > 10 %}
+                                    <br><span class="text-danger">🔴 <strong>Critique :</strong> {{ retransmission.rto_count }} RTOs détectés.</span> Volume élevé de timeouts : indique une congestion sévère ou une connectivité instable. L'expérience utilisateur est fortement dégradée.
+                                {% elif retransmission.rto_count > 0 %}
+                                    <br><span class="text-warning">⚠️ <strong>Attention :</strong> {{ retransmission.rto_count }} RTO(s) détecté(s).</span> Quelques délais d'attente importants (> 200ms) ont eu lieu. Impact ponctuel (micro-coupures) mais pas de panne généralisée.
+                                {% elif retransmission.total_retransmissions > 5000 %}
+                                    C'est un volume très élevé qui indique des pertes de paquets fréquentes.
+                                {% else %}
+                                    Volume modéré de pertes de paquets (Fast Retransmissions), généralement géré par TCP sans impact majeur.
+                                {% endif %}</li>
+                            {% endif %}
+
+                            {% if throughput and throughput.global_throughput.throughput_mbps %}
+                            <li><strong>Débit global :</strong>
+                                {{ format_bitrate(throughput.global_throughput.throughput_mbps) }}
+                                sur {{ "%.0f"|format(throughput.global_throughput.duration_seconds / 60) }} minutes.
+                                {% if is_very_small_capture %}
+                                    Capture de faible volume ({{ analysis_info.total_packets }} paquets) - métrique de débit non significative.
+                                {% elif throughput.global_throughput.throughput_mbps < 1 and analysis_info.total_packets > 10000 %}
+                                    Débit très faible pour ce volume de paquets - à investiguer.
+                                {% elif throughput.global_throughput.throughput_mbps < 10 %}
+                                    Débit modéré.
+                                {% else %}
+                                    Débit satisfaisant.
+                                {% endif %}</li>
+                            {% endif %}
+
+                            {% if tcp_timeout and tcp_timeout.total_connections > 0 %}
+                            <li><strong>Connexions TCP :</strong> {{ tcp_timeout.total_connections }} connexions analysées, 
+                                {% if tcp_timeout.problematic_count == 0 %}aucune n'est problématique.{% else %}{{ tcp_timeout.problematic_count }} présentent des anomalies (timeouts, fermetures brutales).{% endif %}</li>
+                            {% endif %}
+
+                            {% if asymmetric_traffic and asymmetric_traffic.summary.unidirectional_flows > 0 %}
+                            <li><strong>Trafic Unidirectionnel :</strong> {{ asymmetric_traffic.summary.unidirectional_flows }} flux unidirectionnels détectés.
+                                {% set mdns_found = false %}
+                                {% set multicast_found = false %}
+                                {% for flow in asymmetric_traffic.asymmetric_flows %}
+                                    {% if flow.is_unidirectional %}
+                                        {% if '5353' in flow.src_port|string or '5353' in flow.dst_port|string %}{% set mdns_found = true %}{% endif %}
+                                        {% if flow.dst_ip.startswith('224.') or flow.dst_ip.startswith('239.') %}{% set multicast_found = true %}{% endif %}
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if mdns_found or multicast_found %}
+                                    <br>🔍 <em>Analyse :</em> Ce trafic correspond principalement à des protocoles de découverte réseau (<strong>{% if mdns_found %}mDNS{% endif %}{% if mdns_found and multicast_found %}/{% endif %}{% if multicast_found %}Multicast{% endif %}</strong>). C'est un comportement <strong>normal</strong> où les émetteurs envoient des annonces sans attendre de réponse directe dans le même flux. Ce n'est pas une anomalie.
+                                {% else %}
+                                    <br>⚠️ À vérifier : S'il s'agit de trafic UDP autre que multicast, cela pourrait indiquer du streaming sans voie de retour visible ou une configuration de routage asymétrique.
+                                {% endif %}
+                            </li>
+                            {% endif %}
+
+                            {% if dns and dns.error_transactions > 0 %}
+                            <li><strong>Erreurs DNS :</strong> {{ dns.error_transactions }} résolutions ont échoué.
+                                {% if dns.top_problematic_domains %}
+                                <br>Domaines introuvables (NXDOMAIN) fréquents : <code>{{ dns.top_problematic_domains[0][0] }}</code>. 
+                                Cela peut être dû à des blocages (Private Relay, AdBlock) ou des domaines inexistants.
+                                {% endif %}
+                            </li>
+                            {% endif %}
+
+                            {% if temporal and temporal.periodic_patterns %}
+                            <li><strong>Trafic périodique :</strong> Détection de patterns réguliers (probablement des systèmes de monitoring ou heartbeat) toutes les {{ temporal.periodic_patterns[0].interval_seconds }} secondes.</li>
+                            {% endif %}
+                        </ul>
+                        
+                        <h4>🎯 Impact métier estimé :</h4>
+                        <ul>
+                            {% if is_very_small_capture %}
+                            <li><strong>Volume de capture :</strong> Capture de faible volume ({{ analysis_info.total_packets }} paquets sur {{ "%.0f"|format(analysis_info.capture_duration) }}s).
+                                Les métriques statistiques ne sont pas significatives - capture plus longue recommandée pour analyse fiable.</li>
+                            <li><strong>Impact utilisateur :</strong> Impossible à évaluer avec certitude sur ce faible échantillon.</li>
+                            {% elif is_small_capture %}
+                            <li><strong>Volume de capture :</strong> Capture de volume modéré ({{ analysis_info.total_packets }} paquets).
+                                Métriques indicatives - capture plus longue conseillée pour conclusions définitives.</li>
+                            <li><strong>Impact utilisateur :</strong> {% if has_incident %}Problèmes détectés - à confirmer avec capture plus longue.{% else %}Pas de problème majeur détecté sur cet échantillon.{% endif %}</li>
+                            {% else %}
+                            {% if has_incident %}
+                            <li><strong>Impact utilisateur :</strong> Dégradations de performance détectées - lenteurs possibles, timeouts applicatifs potentiels.</li>
+                            <li><strong>Impact applicatif :</strong> Les échanges entre {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "serveurs" }} et {{ top_talkers.top_ips[1].ip if top_talkers and top_talkers.top_ips|length > 1 else "clients" }} montrent des anomalies.</li>
+                            {% else %}
+                            <li><strong>Impact utilisateur :</strong> Fonctionnement normal du réseau selon les seuils définis.</li>
+                            {% endif %}
+                            {% endif %}
+                        </ul>
+
+                        <h4>🔧 Recommandations :</h4>
+                        <ul>
+                            {% if is_very_small_capture %}
+                            <li><strong>Capture plus longue :</strong> Augmenter la durée de capture (minimum 5 minutes) ou le volume de trafic pour obtenir des statistiques fiables.</li>
+                            <li><strong>Période représentative :</strong> Capturer pendant une période d'activité normale de l'application pour avoir des données significatives.</li>
+                            {% elif is_small_capture %}
+                            <li><strong>Validation recommandée :</strong> Effectuer une capture plus longue (10-15 minutes) pour confirmer les tendances observées.</li>
+                            {% if has_incident %}
+                            <li><strong>Investigation :</strong> Si problèmes confirmés sur capture longue, vérifier la charge des serveurs {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "principaux" }}.</li>
+                            {% endif %}
+                            {% elif has_incident %}
+                            <li><strong>Investigation prioritaire :</strong> Vérifier la charge CPU/mémoire des serveurs {{ top_talkers.top_ips[0].ip if top_talkers and top_talkers.top_ips else "principaux" }}.</li>
+                            <li><strong>Monitoring réseau :</strong> Contrôler l'utilisation de la bande passante sur les équipements intermédiaires.</li>
+                            <li><strong>Logs applicatifs :</strong> Corréler avec les logs pendant cette période pour identifier les timeouts.</li>
+                            {% if retransmission and retransmission.rto_count > 10 %}
+                            <li><strong>Action immédiate :</strong> La présence de RTOs indique un problème critique de congestion ou de perte de connectivité, nécessitant une investigation réseau urgente.</li>
+                            {% elif retransmission and retransmission.rto_count > 0 %}
+                            <li><strong>Action :</strong> La présence de RTOs indique des latences ponctuelles, à vérifier si elles impactent des transactions sensibles.</li>
+                            {% elif retransmission and retransmission.total_retransmissions > 5000 %}
+                            <li><strong>Action immédiate :</strong> Les pertes de paquets sont très élevées - investigation réseau urgente recommandée.</li>
+                            {% endif %}
+                            {% else %}
+                            <li><strong>Surveillance continue :</strong> Le réseau fonctionne normalement - maintenir le monitoring en place.</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Rapport généré par <strong>PCAP Analyzer</strong> - {{ analysis_info.analysis_date }}</p>
+        </div>
+    </div>
+
+    <script>
+        // Toggle collapsible sections
+        document.addEventListener('DOMContentLoaded', function() {
+            const headers = document.querySelectorAll('.collapsible-header');
+            
+            headers.forEach(header => {
+                header.addEventListener('click', function() {
+                    this.classList.toggle('active');
+                    const content = this.nextElementSibling;
+                    
+                    if (content && content.classList.contains('collapsible-content')) {
+                        content.classList.toggle('active');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
