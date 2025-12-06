@@ -19,6 +19,7 @@ class HandshakeFlow:
     syn_packet_num: Optional[int] = None
     synack_time: Optional[float] = None
     synack_packet_num: Optional[int] = None
+    synack_seq: Optional[int] = None  # Track SYN-ACK SEQ for validation
     ack_time: Optional[float] = None
     ack_packet_num: Optional[int] = None
     syn_to_synack_delay: Optional[float] = None
@@ -93,6 +94,8 @@ class TCPHandshakeAnalyzer:
                 handshake = self.incomplete_handshakes[flow_key]
                 handshake.synack_time = packet_time
                 handshake.synack_packet_num = packet_num
+                # RFC 793: Store SYN-ACK sequence number for final ACK validation
+                handshake.synack_seq = tcp.seq
 
                 if handshake.syn_time:
                     handshake.syn_to_synack_delay = packet_time - handshake.syn_time
@@ -103,26 +106,31 @@ class TCPHandshakeAnalyzer:
 
             if flow_key in self.incomplete_handshakes:
                 handshake = self.incomplete_handshakes[flow_key]
-                
-                # On ne traite que si on a vu le SYN/ACK
-                if handshake.synack_time:
-                    handshake.ack_time = packet_time
-                    handshake.ack_packet_num = packet_num
-                    handshake.synack_to_ack_delay = packet_time - handshake.synack_time
-                    
-                    if handshake.syn_time:
-                        handshake.total_handshake_time = packet_time - handshake.syn_time
-                        handshake.complete = True
-                        
-                        # Détermine le côté suspect
-                        handshake.suspected_side = self._identify_suspect_side(handshake)
-                        
-                        # Ajout aux handshakes terminés si on doit l'inclure
-                        if self._should_include_handshake(handshake):
-                            self.handshakes.append(handshake)
-                        
-                        # Suppression des incomplets
-                        del self.incomplete_handshakes[flow_key]
+
+                # RFC 793: Only process if we've seen the SYN/ACK AND verify ACK number
+                # The ACK number must equal SYN-ACK's SEQ + 1
+                if handshake.synack_time and handshake.synack_seq is not None:
+                    # RFC 793: Validate that ACK = SYN-ACK.SEQ + 1 (proper handshake completion)
+                    expected_ack = handshake.synack_seq + 1
+                    if tcp.ack == expected_ack:
+                        handshake.ack_time = packet_time
+                        handshake.ack_packet_num = packet_num
+                        handshake.synack_to_ack_delay = packet_time - handshake.synack_time
+
+                        if handshake.syn_time:
+                            handshake.total_handshake_time = packet_time - handshake.syn_time
+                            handshake.complete = True
+
+                            # Détermine le côté suspect
+                            handshake.suspected_side = self._identify_suspect_side(handshake)
+
+                            # Ajout aux handshakes terminés si on doit l'inclure
+                            if self._should_include_handshake(handshake):
+                                self.handshakes.append(handshake)
+
+                            # Suppression des incomplets
+                            del self.incomplete_handshakes[flow_key]
+                    # If ACK number doesn't match, this is not the handshake completion ACK
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""

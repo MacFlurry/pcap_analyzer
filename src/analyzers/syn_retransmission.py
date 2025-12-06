@@ -17,6 +17,7 @@ class SYNRetransmission:
     src_port: int
     dst_port: int
     first_syn_time: float
+    initial_seq: Optional[int] = None  # RFC 793: Track Initial Sequence Number (ISN)
     syn_attempts: List[float] = field(default_factory=list)
     syn_packet_nums: List[int] = field(default_factory=list)
     synack_time: Optional[float] = None
