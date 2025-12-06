@@ -14,14 +14,7 @@ from rich.table import Table
 
 from .config import get_config
 from .ssh_capture import capture_from_config
-from .analyzers import (
-    TimestampAnalyzer, TCPHandshakeAnalyzer, RetransmissionAnalyzer,
-    RTTAnalyzer, TCPWindowAnalyzer, ICMPAnalyzer, DNSAnalyzer,
-    SYNRetransmissionAnalyzer, TCPResetAnalyzer, IPFragmentationAnalyzer,
-    TopTalkersAnalyzer, ThroughputAnalyzer, TCPTimeoutAnalyzer,
-    AsymmetricTrafficAnalyzer, BurstAnalyzer, TemporalPatternAnalyzer,
-    SackAnalyzer
-)
+from .analyzer_factory import AnalyzerFactory
 from .report_generator import ReportGenerator
 
 console = Console()
@@ -92,7 +85,7 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
 
     results = {}
     
-    # Initialisation des analyseurs
+    # Initialisation des analyseurs via la factory (élimine ~110 lignes de duplication)
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -100,121 +93,36 @@ def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None,
         console=console
     ) as progress:
         task = progress.add_task("[cyan]Initialisation des analyseurs...", total=1)
-        
-        # 1. Timestamps
-        gap_threshold = latency_filter if latency_filter else thresholds.get('packet_gap', 1.0)
-        timestamp_analyzer = TimestampAnalyzer(gap_threshold=gap_threshold)
 
-        # 2. TCP Handshake
-        handshake_analyzer = TCPHandshakeAnalyzer(
-            syn_synack_threshold=thresholds.get('syn_synack_delay', 0.1),
-            total_threshold=thresholds.get('handshake_total', 0.3),
-            latency_filter=latency_filter
-        )
+        # Create all analyzers using the factory pattern
+        analyzer_dict, analyzers = AnalyzerFactory.create_analyzers(config, latency_filter)
 
-        # 3. Retransmissions
-        retrans_analyzer = RetransmissionAnalyzer(
-            retrans_low=thresholds.get('retransmission_low', 10),
-            retrans_medium=thresholds.get('retransmission_medium', 50),
-            retrans_critical=thresholds.get('retransmission_critical', 100),
-            retrans_rate_low=thresholds.get('retransmission_rate_low', 1.0),
-            retrans_rate_medium=thresholds.get('retransmission_rate_medium', 3.0),
-            retrans_rate_critical=thresholds.get('retransmission_rate_critical', 5.0)
-        )
+        # Extract individual analyzers for backward compatibility
+        timestamp_analyzer = analyzer_dict["timestamp"]
+        handshake_analyzer = analyzer_dict["handshake"]
+        retrans_analyzer = analyzer_dict["retransmission"]
+        rtt_analyzer = analyzer_dict["rtt"]
+        window_analyzer = analyzer_dict["window"]
+        icmp_analyzer = analyzer_dict["icmp"]
+        dns_analyzer = analyzer_dict["dns"]
+        syn_retrans_analyzer = analyzer_dict["syn_retransmissions"]
+        tcp_reset_analyzer = analyzer_dict["tcp_reset"]
+        ip_fragmentation_analyzer = analyzer_dict["ip_fragmentation"]
+        top_talkers_analyzer = analyzer_dict["top_talkers"]
+        throughput_analyzer = analyzer_dict["throughput"]
+        tcp_timeout_analyzer = analyzer_dict["tcp_timeout"]
+        asymmetric_analyzer = analyzer_dict["asymmetric_traffic"]
+        burst_analyzer = analyzer_dict["burst"]
+        temporal_analyzer = analyzer_dict["temporal"]
+        sack_analyzer = analyzer_dict["sack"]
 
-        # 4. RTT
-        rtt_analyzer = RTTAnalyzer(
-            rtt_warning=thresholds.get('rtt_warning', 0.1),
-            rtt_critical=thresholds.get('rtt_critical', 0.5),
-            latency_filter=latency_filter
-        )
-
-        # 5. TCP Window
-        window_analyzer = TCPWindowAnalyzer(
-            low_window_threshold=thresholds.get('low_window_threshold', 8192),
-            zero_window_duration=thresholds.get('zero_window_duration', 0.1)
-        )
-
-        # 6. ICMP / PMTU
-        icmp_analyzer = ICMPAnalyzer()
-
-        # 7. DNS
-        dns_analyzer = DNSAnalyzer(
-            response_warning=thresholds.get('dns_response_warning', 0.1),
-            response_critical=thresholds.get('dns_response_critical', 1.0),
-            timeout=thresholds.get('dns_timeout', 5.0),
-            latency_filter=latency_filter
-        )
-
-        # 8. Retransmissions SYN détaillées
-        syn_threshold = latency_filter if latency_filter else thresholds.get('syn_retrans_threshold', 2.0)
-        syn_retrans_analyzer = SYNRetransmissionAnalyzer(threshold=syn_threshold)
-        
-        # 9. TCP Reset
-        tcp_reset_analyzer = TCPResetAnalyzer()
-        
-        # 10. Fragmentation IP
-        ip_fragmentation_analyzer = IPFragmentationAnalyzer()
-        
-        # 11. Top Talkers
-        top_talkers_analyzer = TopTalkersAnalyzer()
-        
-        # 12. Throughput
-        throughput_analyzer = ThroughputAnalyzer()
-        
-        # 13. TCP Timeout
-        tcp_timeout_analyzer = TCPTimeoutAnalyzer(
-            idle_threshold=thresholds.get('tcp_idle_threshold', 30.0),
-            zombie_threshold=thresholds.get('tcp_zombie_threshold', 60.0)
-        )
-        
-        # 14. Asymmetric Traffic
-        asymmetric_analyzer = AsymmetricTrafficAnalyzer(
-            asymmetry_threshold=thresholds.get('asymmetry_threshold', 0.3),
-            min_bytes_threshold=thresholds.get('asymmetry_min_bytes', 10000)
-        )
-        
-        # 15. Burst Analyzer
-        burst_analyzer = BurstAnalyzer(
-            interval_ms=thresholds.get('burst_interval_ms', 100),
-            burst_threshold_multiplier=thresholds.get('burst_threshold_multiplier', 3.0),
-            min_packets_for_burst=thresholds.get('burst_min_packets', 50)
-        )
-        
-        # 16. Temporal Pattern Analyzer
-        temporal_analyzer = TemporalPatternAnalyzer(
-            slot_duration_seconds=thresholds.get('temporal_slot_duration', 60)
-        )
-        
-        # 17. SACK Analyzer
-        sack_analyzer = SackAnalyzer()
-        
         progress.update(task, advance=1)
-
-    # Traitement streaming
-    analyzers = [
-        timestamp_analyzer,
-        handshake_analyzer,
-        retrans_analyzer,
-        rtt_analyzer,
-        window_analyzer,
-        icmp_analyzer,
-        dns_analyzer,
-        syn_retrans_analyzer,
-        tcp_reset_analyzer,
-        ip_fragmentation_analyzer,
-        top_talkers_analyzer,
-        throughput_analyzer,
-        tcp_timeout_analyzer,
-        asymmetric_analyzer,
-        burst_analyzer,
-        temporal_analyzer,
-        sack_analyzer
-    ]
     
     load_pcap_streaming(pcap_file, analyzers)
-    
+
     # Récupération des résultats
+    # NOTE: hasattr checks exist due to inconsistent analyzer interfaces (_generate_report vs get_results)
+    # TODO: A BaseAnalyzer abstract class would eliminate the need for these hasattr checks
     results['timestamps'] = timestamp_analyzer._generate_report() if hasattr(timestamp_analyzer, '_generate_report') else {}
     results['tcp_handshake'] = handshake_analyzer._generate_report() if hasattr(handshake_analyzer, '_generate_report') else {}
     results['retransmission'] = retrans_analyzer._generate_report() if hasattr(retrans_analyzer, '_generate_report') else {}

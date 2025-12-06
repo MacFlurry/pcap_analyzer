@@ -1,5 +1,4 @@
-from typing import Dict, Any, List
-from ..config import Config # Assuming config is a class with thresholds
+from typing import Dict, Any, List, Tuple
 
 from .analyzers import (
     TimestampAnalyzer, TCPHandshakeAnalyzer, RetransmissionAnalyzer,
@@ -12,7 +11,13 @@ from .analyzers import (
 
 class AnalyzerFactory:
     @staticmethod
-    def create_analyzers(config: Any, latency_filter: float = None) -> Dict[str, Any]:
+    def create_analyzers(config: Any, latency_filter: float = None) -> Tuple[Dict[str, Any], List[Any]]:
+        """
+        Create all analyzers with configuration.
+
+        Returns:
+            Tuple of (analyzer_dict, analyzer_list) for convenient access
+        """
         thresholds = config.thresholds
         
         # 1. Timestamps
@@ -104,8 +109,9 @@ class AnalyzerFactory:
         
         # 17. SACK Analyzer
         sack_analyzer = SackAnalyzer()
-        
-        return {
+
+        # Dictionary for named access
+        analyzer_dict = {
             "timestamp": timestamp_analyzer,
             "handshake": handshake_analyzer,
             "retransmission": retrans_analyzer,
@@ -125,6 +131,25 @@ class AnalyzerFactory:
             "sack": sack_analyzer
         }
 
-    @staticmethod
-    def get_analyzer_list(analyzer_dict: Dict[str, Any]) -> List[Any]:
-        return list(analyzer_dict.values())
+        # List for streaming processing
+        analyzer_list = [
+            timestamp_analyzer,
+            handshake_analyzer,
+            retrans_analyzer,
+            rtt_analyzer,
+            window_analyzer,
+            icmp_analyzer,
+            dns_analyzer,
+            syn_retrans_analyzer,
+            tcp_reset_analyzer,
+            ip_fragmentation_analyzer,
+            top_talkers_analyzer,
+            throughput_analyzer,
+            tcp_timeout_analyzer,
+            asymmetric_analyzer,
+            burst_analyzer,
+            temporal_analyzer,
+            sack_analyzer
+        ]
+
+        return analyzer_dict, analyzer_list
