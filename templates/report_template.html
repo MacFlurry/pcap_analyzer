@@ -1623,19 +1623,51 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Activité moyenne (paquets/intervalle)</td>
+                        <td>
+                            Activité moyenne (paquets/intervalle)
+                            <div class="info-tooltip">
+                                <span class="info-icon">i</span>
+                                <span class="tooltip-text">
+                                    Nombre moyen de paquets observés dans chaque intervalle de {{ burst.summary.interval_ms }}ms. Représente le niveau de trafic de fond.
+                                </span>
+                            </div>
+                        </td>
                         <td>{{ burst.interval_stats.avg_packets_per_interval }}</td>
                     </tr>
                     <tr>
-                        <td>Activité minimale (paquets/intervalle)</td>
+                        <td>
+                            Activité minimale (paquets/intervalle)
+                            <div class="info-tooltip">
+                                <span class="info-icon">i</span>
+                                <span class="tooltip-text">
+                                    Nombre minimal de paquets observés dans un intervalle de {{ burst.summary.interval_ms }}ms. Peut indiquer des pauses ou des périodes creuses.
+                                </span>
+                            </div>
+                        </td>
                         <td>{{ burst.interval_stats.min_packets_per_interval }}</td>
                     </tr>
                     <tr>
-                        <td>Pic d'activité (Max)</td>
+                        <td>
+                            Pic d'activité (Max)
+                            <div class="info-tooltip">
+                                <span class="info-icon">i</span>
+                                <span class="tooltip-text">
+                                    Nombre maximal de paquets observés dans un seul intervalle de {{ burst.summary.interval_ms }}ms. Indique le volume de trafic le plus élevé.
+                                </span>
+                            </div>
+                        </td>
                         <td><span class="badge {% if burst.interval_stats.max_packets_per_interval > burst.interval_stats.avg_packets_per_interval * 3 %}danger{% else %}info{% endif %}">{{ burst.interval_stats.max_packets_per_interval }}</span></td>
                     </tr>
                     <tr>
-                        <td>Écart-type</td>
+                        <td>
+                            Écart-type
+                            <div class="info-tooltip">
+                                <span class="info-icon">i</span>
+                                <span class="tooltip-text">
+                                    Mesure la dispersion du nombre de paquets autour de la moyenne. Un écart-type élevé indique un trafic irrégulier.
+                                </span>
+                            </div>
+                        </td>
                         <td>{{ burst.interval_stats.std_deviation }}</td>
                     </tr>
                 </tbody>
@@ -1777,11 +1809,27 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Activité moyenne (paquets/créneau)</td>
+                        <td>
+                            Activité moyenne (paquets/créneau)
+                            <div class="info-tooltip">
+                                <span class="info-icon">i</span>
+                                <span class="tooltip-text">
+                                    Nombre moyen de paquets observés dans chaque créneau de {{ temporal.summary.slot_duration_seconds }}s. Représente le niveau de trafic moyen sur la période.
+                                </span>
+                            </div>
+                        </td>
                         <td>{{ temporal.slot_stats.avg_packets_per_slot }}</td>
                     </tr>
                     <tr>
-                        <td>Activité minimale (paquets/créneau)</td>
+                        <td>
+                            Activité minimale (paquets/créneau)
+                            <div class="info-tooltip">
+                                <span class="info-icon">i</span>
+                                <span class="tooltip-text">
+                                    Nombre minimal de paquets observés dans un créneau de {{ temporal.summary.slot_duration_seconds }}s. Peut identifier les périodes de faible activité.
+                                </span>
+                            </div>
+                        </td>
                         <td>{{ temporal.slot_stats.min_packets_per_slot }}</td>
                     </tr>
                     <tr>
@@ -1789,7 +1837,15 @@
                         <td><span class="badge {% if temporal.slot_stats.peak_to_avg_ratio > 3 %}danger{% else %}info{% endif %}">{{ temporal.slot_stats.max_packets_per_slot }}</span></td>
                     </tr>
                     <tr>
-                        <td>Ratio pic/moyenne</td>
+                        <td>
+                            Ratio pic/moyenne
+                            <div class="info-tooltip">
+                                <span class="info-icon">i</span>
+                                <span class="tooltip-text">
+                                    Rapport entre le pic d'activité (max) et l'activité moyenne. Un ratio élevé indique une grande variabilité du trafic.
+                                </span>
+                            </div>
+                        </td>
                         <td>{{ temporal.slot_stats.peak_to_avg_ratio }}x</td>
                     </tr>
                 </tbody>
