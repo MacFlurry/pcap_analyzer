@@ -1422,20 +1422,18 @@
 
         <!-- Trafic Asymétrique -->
         {% if asymmetric_traffic and asymmetric_traffic.summary.total_flows > 0 %}
-        <h2>
-            ⚖️ Analyse du Trafic Asymétrique
-            <div class="info-tooltip">
-                <span class="info-icon">i</span>
-                <span class="tooltip-text">
-                    <strong>🔍 Trafic Asymétrique :</strong>
-                    <br>Débit déséquilibré entre 2 directions.
-                    <br>• Normal : Téléchargement, streaming.
-                    <br>• Anomalie : Problème routage, perte paquets, scan UDP.
-                </span>
-            </div>
-        </h2>
+        <h2>⚖️ Analyse du Trafic Asymétrique</h2>
         <div class="section {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre le Trafic Asymétrique :</strong></p>
+                <ul>
+                    <li><strong>Définition :</strong> Un flux est dit "asymétrique" quand le volume de données envoyé dans une direction est beaucoup plus important que dans l'autre.</li>
+                    <li><strong>Normalité :</strong> C'est normal pour le téléchargement de fichiers (Download >> Upload) ou le streaming.</li>
+                    <li><strong>Anomalie :</strong> C'est suspect pour des protocoles transactionnels symétriques, ou si le trafic est quasi-unidirectionnel (ratio &lt; 0.3), ce qui peut indiquer un problème de routage, une perte de paquets de retour, ou un scan UDP.</li>
+                </ul>
+            </div>
+
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
