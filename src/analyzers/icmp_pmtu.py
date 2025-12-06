@@ -247,6 +247,25 @@ class ICMPAnalyzer:
         for msg in self.icmp_messages:
             severity_counts[msg.severity] += 1
 
+        # Agrégation des destinations injoignables
+        unreach_stats = defaultdict(lambda: {'count': 0, 'reasons': defaultdict(int)})
+        for msg in self.dest_unreachable:
+            # Utilise original_dst si dispo (la cible réelle), sinon dst_ip (le routeur qui répond, moins utile)
+            target_ip = msg.original_dst if msg.original_dst else f"Unknown (from {msg.src_ip})"
+            unreach_stats[target_ip]['count'] += 1
+            unreach_stats[target_ip]['reasons'][msg.icmp_type_name] += 1
+
+        # Formatage du Top 10
+        top_unreachable = []
+        for ip, stats in sorted(unreach_stats.items(), key=lambda item: item[1]['count'], reverse=True)[:10]:
+            # Trouve la raison la plus fréquente
+            main_reason = max(stats['reasons'].items(), key=lambda item: item[1])[0]
+            top_unreachable.append({
+                'ip': ip,
+                'count': stats['count'],
+                'reason': main_reason
+            })
+
         # Suggestions pour les problèmes PMTU
         pmtu_suggestions = []
         if self.pmtu_issues:
@@ -261,6 +280,7 @@ class ICMPAnalyzer:
             'total_icmp_messages': len(self.icmp_messages),
             'pmtu_issues_count': len(self.pmtu_issues),
             'dest_unreachable_count': len(self.dest_unreachable),
+            'top_unreachable_destinations': top_unreachable, # Added this
             'type_distribution': dict(type_counts),
             'severity_distribution': dict(severity_counts),
             'icmp_messages': [asdict(m) for m in self.icmp_messages],

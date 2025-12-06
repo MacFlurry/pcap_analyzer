@@ -897,6 +897,35 @@
         <div class="section warning">
             <h3>{{ icmp.dest_unreachable_count }} message(s) Destination Unreachable</h3>
             <p>Des destinations sont injoignables. Vérifiez la configuration réseau et les pare-feu.</p>
+
+            {% if icmp.top_unreachable_destinations %}
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">🚫 Top 10 des destinations injoignables</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Destination</th>
+                                <th>Occurrences</th>
+                                <th>Raison principale</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for dest in icmp.top_unreachable_destinations %}
+                            <tr>
+                                <td><code>{{ dest.ip }}</code></td>
+                                <td>{{ dest.count }}</td>
+                                <td><span class="badge warning">{{ dest.reason }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
         </div>
         {% endif %}
         {% endif %}
@@ -912,23 +941,30 @@
             <p><strong>Erreurs:</strong> {{ dns.error_transactions }}</p>
 
             {% if dns.top_problematic_domains %}
-            <h4>Domaines problématiques:</h4>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Domaine</th>
-                        <th>Nombre de problèmes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for domain, count in dns.top_problematic_domains %}
-                    <tr>
-                        <td><code>{{ domain }}</code></td>
-                        <td>{{ count }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">❌ Domaines problématiques (Top {{ dns.top_problematic_domains|length }})</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Domaine</th>
+                                <th>Nombre de problèmes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for domain, count in dns.top_problematic_domains %}
+                            <tr>
+                                <td><code>{{ domain }}</code></td>
+                                <td>{{ count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endif %}
         </div>
         {% endif %}
@@ -953,59 +989,73 @@
             {% endif %}
 
             <!-- Top IPs -->
-            <h3>Top 10 des hôtes par volume</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Adresse IP</th>
-                        <th>Volume total</th>
-                        <th>Envoyé</th>
-                        <th>Reçu</th>
-                        <th>Paquets</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ip_stat in top_talkers.top_ips[:10] %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td><code>{{ ip_stat.ip }}</code></td>
-                        <td><strong>{{ format_bytes(ip_stat.total_bytes) }}</strong></td>
-                        <td>{{ format_bytes(ip_stat.bytes_sent) }}</td>
-                        <td>{{ format_bytes(ip_stat.bytes_received) }}</td>
-                        <td>{{ ip_stat.packets_sent + ip_stat.packets_received }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">💻 Top 10 des hôtes par volume</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Adresse IP</th>
+                                <th>Volume total</th>
+                                <th>Envoyé</th>
+                                <th>Reçu</th>
+                                <th>Paquets</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ip_stat in top_talkers.top_ips[:10] %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td><code>{{ ip_stat.ip }}</code></td>
+                                <td><strong>{{ format_bytes(ip_stat.total_bytes) }}</strong></td>
+                                <td>{{ format_bytes(ip_stat.bytes_sent) }}</td>
+                                <td>{{ format_bytes(ip_stat.bytes_received) }}</td>
+                                <td>{{ ip_stat.packets_sent + ip_stat.packets_received }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
             <!-- Top Conversations -->
             {% if top_talkers.top_conversations %}
-            <h3>Top 10 des conversations</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Source</th>
-                        <th>Destination</th>
-                        <th>Protocole</th>
-                        <th>Volume</th>
-                        <th>Paquets</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for conv in top_talkers.top_conversations[:10] %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td><code>{{ conv.src_ip }}{% if conv.src_port %}:{{ conv.src_port }}{% endif %}</code></td>
-                        <td><code>{{ conv.dst_ip }}{% if conv.dst_port %}:{{ conv.dst_port }}{% endif %}</code></td>
-                        <td><span class="badge {% if conv.protocol == 'TCP' %}info{% elif conv.protocol == 'UDP' %}success{% else %}warning{% endif %}">{{ conv.protocol }}</span></td>
-                        <td><strong>{{ format_bytes(conv.bytes) }}</strong></td>
-                        <td>{{ conv.packets }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">🗣️ Top 10 des conversations</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Source</th>
+                                <th>Destination</th>
+                                <th>Protocole</th>
+                                <th>Volume</th>
+                                <th>Paquets</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for conv in top_talkers.top_conversations[:10] %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td><code>{{ conv.src_ip }}{% if conv.src_port %}:{{ conv.src_port }}{% endif %}</code></td>
+                                <td><code>{{ conv.dst_ip }}{% if conv.dst_port %}:{{ conv.dst_port }}{% endif %}</code></td>
+                                <td><span class="badge {% if conv.protocol == 'TCP' %}info{% elif conv.protocol == 'UDP' %}success{% else %}warning{% endif %}">{{ conv.protocol }}</span></td>
+                                <td><strong>{{ format_bytes(conv.bytes) }}</strong></td>
+                                <td>{{ conv.packets }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endif %}
         </div>
         {% endif %}
@@ -1258,6 +1308,15 @@
         <h2>⚖️ Analyse du Trafic Asymétrique</h2>
         <div class="section {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre le Trafic Asymétrique :</strong></p>
+                <ul>
+                    <li><strong>Définition :</strong> Un flux est dit "asymétrique" quand le volume de données envoyé dans une direction est beaucoup plus important que dans l'autre.</li>
+                    <li><strong>Normalité :</strong> C'est normal pour le téléchargement de fichiers (Download >> Upload) ou le streaming.</li>
+                    <li><strong>Anomalie :</strong> C'est suspect pour des protocoles transactionnels symétriques, ou si le trafic est 100% unidirectionnel (problème de routage, perte de paquets de retour, ou scan UDP).</li>
+                </ul>
+            </div>
+
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
@@ -1398,6 +1457,15 @@
         <h2>💥 Analyse des Bursts de Paquets</h2>
         <div class="section {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre les Bursts :</strong></p>
+                <ul>
+                    <li><strong>Définition :</strong> Un "burst" (rafale) est une augmentation soudaine et massive du trafic sur un intervalle très court (ici 100ms).</li>
+                    <li><strong>Impact :</strong> Ces micro-congestions invisibles sur les graphiques à la minute peuvent saturer les buffers des switchs et causer des pertes de paquets aléatoires.</li>
+                    <li><strong>Seuil :</strong> Un ratio > 10x la moyenne est considéré comme risqué.</li>
+                </ul>
+            </div>
+
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
@@ -1480,54 +1548,61 @@
 
             <!-- Liste des bursts -->
             {% if burst.bursts %}
-            <h3>📋 Tous les bursts détectés (Top 20)</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Début</th>
-                        <th>Durée</th>
-                        <th>Paquets</th>
-                        <th>Débit</th>
-                        <th>Intensité</th>
-                        <th>Source principale</th>
-                        <th>Protocoles</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for b in burst.bursts[:20] %}
-                    <tr>
-                        <td><code>{{ b.start_iso }}</code></td>
-                        <td>{{ b.duration_ms }} ms</td>
-                        <td>{{ b.packet_count }}</td>
-                        <td>
-                            <span class="badge info">{{ b.packets_per_second }} pkt/s</span>
-                            <br><small>{{ b.mbps }} Mbps</small>
-                        </td>
-                        <td>
-                            {% if b.peak_ratio > 5 %}
-                            <span class="badge danger">{{ b.peak_ratio }}x</span>
-                            {% elif b.peak_ratio > 3 %}
-                            <span class="badge warning">{{ b.peak_ratio }}x</span>
-                            {% else %}
-                            <span class="badge info">{{ b.peak_ratio }}x</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if b.top_sources %}
-                            {{ b.top_sources[0].ip }} ({{ b.top_sources[0].packets }})
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% for proto, count in b.protocol_breakdown.items() %}
-                            <span class="badge">{{ proto }}: {{ count }}</span>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">📋 Tous les bursts détectés (Top 20)</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Début</th>
+                                <th>Durée</th>
+                                <th>Paquets</th>
+                                <th>Débit</th>
+                                <th>Intensité</th>
+                                <th>Source principale</th>
+                                <th>Protocoles</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in burst.bursts[:20] %}
+                            <tr>
+                                <td><code>{{ b.start_iso }}</code></td>
+                                <td>{{ b.duration_ms }} ms</td>
+                                <td>{{ b.packet_count }}</td>
+                                <td>
+                                    <span class="badge info">{{ b.packets_per_second }} pkt/s</span>
+                                    <br><small>{{ b.mbps }} Mbps</small>
+                                </td>
+                                <td>
+                                    {% if b.peak_ratio > 5 %}
+                                    <span class="badge danger">{{ b.peak_ratio }}x</span>
+                                    {% elif b.peak_ratio > 3 %}
+                                    <span class="badge warning">{{ b.peak_ratio }}x</span>
+                                    {% else %}
+                                    <span class="badge info">{{ b.peak_ratio }}x</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if b.top_sources %}
+                                    {{ b.top_sources[0].ip }} ({{ b.top_sources[0].packets }})
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% for proto, count in b.protocol_breakdown.items() %}
+                                    <span class="badge">{{ proto }}: {{ count }}</span>
+                                    {% endfor %}
+                                </td>
+                            </tr>
                             {% endfor %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endif %}
         </div>
         {% endif %}
@@ -1537,6 +1612,15 @@
         <h2>📅 Analyse des Patterns Temporels</h2>
         <div class="section">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre les Patterns Temporels :</strong></p>
+                <ul>
+                    <li><strong>Objectif :</strong> Détecter des comportements périodiques (machines) ou des tendances humaines (pics/creux).</li>
+                    <li><strong>Périodicité :</strong> Indique souvent un script de monitoring, un heartbeat, une tâche cron ou une synchronisation automatique. Utile pour identifier du "bruit de fond" non-humain.</li>
+                    <li><strong>Pics/Creux :</strong> Permettent de corréler des incidents ou de planifier des maintenances aux heures creuses.</li>
+                </ul>
+            </div>
+
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
