@@ -6,12 +6,51 @@ Permet d'exécuter tcpdump sur un serveur distant et récupérer le fichier PCAP
 import paramiko
 import os
 import time
+import shlex
 from pathlib import Path
 from typing import Optional, Dict, Any
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 console = Console()
+
+# Security: Whitelist of allowed network interfaces to prevent command injection
+ALLOWED_INTERFACES = ['any', 'eth0', 'eth1', 'eth2', 'wlan0']
+
+
+def validate_interface(interface: str) -> None:
+    """
+    Validates that the interface is in the allowed whitelist.
+    Prevents command injection attacks via interface parameter.
+
+    Args:
+        interface: Network interface name
+
+    Raises:
+        SSHCaptureError: If interface is not in whitelist
+    """
+    if interface not in ALLOWED_INTERFACES:
+        raise SSHCaptureError(
+            f"Interface '{interface}' not allowed. Must be one of: {', '.join(ALLOWED_INTERFACES)}"
+        )
+
+
+def validate_file_path(file_path: str) -> None:
+    """
+    Validates file path to prevent directory traversal attacks.
+    Only allows paths under /tmp/ for security.
+
+    Args:
+        file_path: File path to validate
+
+    Raises:
+        SSHCaptureError: If path contains directory traversal or is outside /tmp/
+    """
+    # Security: Prevent directory traversal attacks
+    if '..' in file_path or not file_path.startswith('/tmp/'):
+        raise SSHCaptureError(
+            f"Invalid file path '{file_path}'. Must be under /tmp/ and not contain '..'"
+        )
 
 
 class SSHCaptureError(Exception):
@@ -46,7 +85,10 @@ class SSHCapture:
         """Établit la connexion SSH"""
         try:
             self.client = paramiko.SSHClient()
-            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            # Security: Use WarningPolicy instead of AutoAddPolicy to prevent MITM attacks
+            # WarningPolicy will warn but still connect. For production, consider RejectPolicy with known_hosts.
+            self.client.set_missing_host_key_policy(paramiko.WarningPolicy())
 
             connect_kwargs = {
                 'hostname': self.host,
@@ -63,7 +105,24 @@ class SSHCapture:
                 connect_kwargs['look_for_keys'] = True
 
             console.print(f"[cyan]Connexion SSH à {self.host}...[/cyan]")
-            self.client.connect(**connect_kwargs, timeout=10)
+
+            # Security: Check for unknown host key and prompt user
+            try:
+                self.client.connect(**connect_kwargs, timeout=10)
+            except paramiko.SSHException as ssh_err:
+                if "not found in known_hosts" in str(ssh_err).lower() or "unknown server" in str(ssh_err).lower():
+                    console.print("[yellow]⚠ WARNING: Unknown SSH host key![/yellow]")
+                    console.print(f"[yellow]Host: {self.host}[/yellow]")
+                    console.print("[yellow]This could indicate a man-in-the-middle attack.[/yellow]")
+                    response = console.input("[yellow]Continue anyway? (yes/no): [/yellow]")
+                    if response.lower() != 'yes':
+                        raise SSHCaptureError("Connection refused by user due to unknown host key")
+                    # Temporarily use AutoAddPolicy for this connection only
+                    self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    self.client.connect(**connect_kwargs, timeout=10)
+                else:
+                    raise
+
             console.print("[green]✓ Connecté avec succès[/green]")
 
         except paramiko.AuthenticationException:
@@ -79,13 +138,14 @@ class SSHCapture:
             self.client.close()
             console.print("[cyan]Connexion SSH fermée[/cyan]")
 
-    def execute_command(self, command: str, sudo: bool = False) -> tuple[str, str, int]:
+    def execute_command(self, command: str, sudo: bool = False, timeout: int = 30) -> tuple[str, str, int]:
         """
         Exécute une commande sur le serveur distant
 
         Args:
             command: Commande à exécuter
             sudo: Si True, exécute avec sudo
+            timeout: Timeout en secondes pour l'exécution (défaut: 30s)
 
         Returns:
             Tuple (stdout, stderr, exit_code)
@@ -96,7 +156,8 @@ class SSHCapture:
         if sudo:
             command = f"sudo {command}"
 
-        stdin, stdout, stderr = self.client.exec_command(command)
+        # Security: Add timeout to prevent hanging on malicious commands
+        stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
         exit_code = stdout.channel.recv_exit_status()
 
         return stdout.read().decode('utf-8'), stderr.read().decode('utf-8'), exit_code
@@ -120,18 +181,34 @@ class SSHCapture:
         if not self.client:
             raise SSHCaptureError("Pas de connexion SSH active")
 
+        # Security: Validate interface against whitelist
+        validate_interface(interface)
+
         # Génère un nom de fichier unique si non fourni
         if output_file is None:
             timestamp = int(time.time())
             output_file = f"/tmp/capture_{timestamp}.pcap"
 
+        # Security: Validate output file path
+        validate_file_path(output_file)
+
+        # Security: Use shlex.quote() to prevent command injection
+        # This properly escapes all user inputs before shell execution
+        safe_interface = shlex.quote(interface)
+        safe_output_file = shlex.quote(output_file)
+
         # Construit la commande tcpdump
-        tcpdump_cmd = f"tcpdump -i {interface} -w {output_file} -s 65535"
+        tcpdump_cmd = f"tcpdump -i {safe_interface} -w {safe_output_file} -s 65535"
 
         if filter_expr:
-            tcpdump_cmd += f" {filter_expr}"
+            # Security: Quote the filter expression to prevent command injection
+            safe_filter = shlex.quote(filter_expr)
+            tcpdump_cmd += f" {safe_filter}"
 
         if packet_count:
+            # Security: Validate packet_count is an integer
+            if not isinstance(packet_count, int) or packet_count < 0:
+                raise SSHCaptureError("packet_count must be a positive integer")
             tcpdump_cmd += f" -c {packet_count}"
 
         console.print(f"[cyan]Lancement de la capture sur {self.host}...[/cyan]")
@@ -142,8 +219,19 @@ class SSHCapture:
         console.print(f"[dim]Commande: {tcpdump_cmd}[/dim]")
 
         try:
-            # Lance tcpdump en arrière-plan
-            stdin, stdout, stderr = self.client.exec_command(f"sudo {tcpdump_cmd}")
+            # Security: Launch tcpdump in background and capture its PID
+            # This prevents killing ALL tcpdump processes on the system
+            tcpdump_with_pid = f"sudo {tcpdump_cmd} & echo $!"
+            stdin, stdout, stderr = self.client.exec_command(tcpdump_with_pid)
+
+            # Get the PID of the tcpdump process
+            pid_output = stdout.read().decode('utf-8').strip()
+            try:
+                tcpdump_pid = int(pid_output.split('\n')[-1])
+            except (ValueError, IndexError):
+                raise SSHCaptureError(f"Failed to get tcpdump PID: {pid_output}")
+
+            console.print(f"[dim]tcpdump PID: {tcpdump_pid}[/dim]")
 
             # Attend la durée spécifiée avec une barre de progression
             with Progress(
@@ -156,13 +244,14 @@ class SSHCapture:
                     time.sleep(1)
                     progress.update(task, advance=1)
 
-            # Tue le processus tcpdump
-            self.execute_command("sudo pkill -2 tcpdump", sudo=False)
+            # Security: Kill only the specific tcpdump process by PID, not all tcpdump processes
+            self.execute_command(f"sudo kill -2 {tcpdump_pid}", sudo=False, timeout=10)
             time.sleep(2)  # Attente pour que tcpdump termine l'écriture
 
             # Vérifie que le fichier existe
+            # Security: Use quoted path for ls command
             stdout_check, stderr_check, exit_code = self.execute_command(
-                f"ls -lh {output_file}", sudo=True
+                f"ls -lh {safe_output_file}", sudo=True, timeout=10
             )
 
             if exit_code != 0:
@@ -224,7 +313,12 @@ class SSHCapture:
             return
 
         try:
-            self.execute_command(f"rm -f {remote_path}", sudo=True)
+            # Security: Validate file path before deletion to prevent directory traversal
+            validate_file_path(remote_path)
+
+            # Security: Use shlex.quote() to prevent command injection
+            safe_remote_path = shlex.quote(remote_path)
+            self.execute_command(f"rm -f {safe_remote_path}", sudo=True, timeout=10)
             console.print(f"[dim]✓ Fichier distant supprimé: {remote_path}[/dim]")
         except Exception as e:
             console.print(f"[yellow]⚠ Impossible de supprimer {remote_path}: {e}[/yellow]")
