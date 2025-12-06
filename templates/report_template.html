@@ -595,83 +595,54 @@
             </div>
 
             {% if tcp_reset.top_reset_flows and tcp_reset.top_reset_flows|length > 0 %}
-            <h4>Top {{ tcp_reset.top_reset_flows|length }} des flux avec RST:</h4>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Flux</th>
-                        <th>Nombre RST</th>
-                        <th>Type</th>
-                        <th>Timestamps</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">📋 Détails des flux avec RST</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
                     {% for flow in tcp_reset.top_reset_flows[:10] %}
-                    <tr>
-                        <td><code>{{ flow.flow_key }}</code></td>
-                        <td><strong>{{ flow.count }}</strong></td>
-                        <td>
+                    <div class="detail-box">
+                        <div class="info-line">
+                            <span class="info-label">Flux:</span>
+                            <span class="info-value"><code>{{ flow.flow_key }}</code></span>
+                        </div>
+                        
+                        <div class="info-line">
+                            <span class="info-label">Nombre de RST:</span>
+                            <span class="info-value count">{{ flow.count }}</span>
+                        </div>
+                        
+                        <div class="info-line">
+                            <span class="info-label">Type:</span>
                             {% if flow.premature %}
-                            <span class="badge danger">Prématuré</span>
+                            <span class="problem-badge">RST Prématuré (connexion refusée)</span>
                             {% else %}
-                            <span class="badge warning">Post-données</span>
+                            <span class="problem-badge">RST Post-données (interruption)</span>
                             {% endif %}
-                        </td>
-                        <td>
-                            <small>
-                                {% for ts in flow.timestamps[:3] %}
-                                {{ "%.6f"|format(ts) }}s{% if not loop.last %}, {% endif %}
-                                {% endfor %}
-                                {% if flow.timestamps|length > 3 %}...{% endif %}
-                            </small>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </div>
+                        
+                        <div class="info-line">
+                            <span class="info-label">Timestamps des RST:</span>
+                        </div>
+                                        <ul class="timeline-list">
+                                            {% for ts in flow.timestamps %}
+                                            <li>RST #{{ loop.index }}: <span class="time-offset">{{ ts }}</span></li>
+                                            {% endfor %}
+                                        </ul>                        
+                        <div class="filter-box">
+                            <span class="filter-label">🔍 Filtre tcpdump (RST uniquement):</span>
+                            <div class="filter-command">tcpdump -r file.pcap -tttt -nn '{{ flow.flow_key }} and tcp[tcpflags] & tcp-rst != 0'</div>
+                        </div>
 
-            <h4>Détails des flux avec RST:</h4>
-            {% for flow in tcp_reset.top_reset_flows[:10] %}
-            <div class="detail-box">
-                <div class="info-line">
-                    <span class="info-label">Flux:</span>
-                    <span class="info-value"><code>{{ flow.flow_key }}</code></span>
-                </div>
-                
-                <div class="info-line">
-                    <span class="info-label">Nombre de RST:</span>
-                    <span class="info-value count">{{ flow.count }}</span>
-                </div>
-                
-                <div class="info-line">
-                    <span class="info-label">Type:</span>
-                    {% if flow.premature %}
-                    <span class="problem-badge">RST Prématuré (connexion refusée)</span>
-                    {% else %}
-                    <span class="problem-badge">RST Post-données (interruption)</span>
-                    {% endif %}
-                </div>
-                
-                <div class="info-line">
-                    <span class="info-label">Timestamps des RST:</span>
-                </div>
-                <ul class="timeline-list">
-                    {% for ts in flow.timestamps %}
-                    <li>RST #{{ loop.index }}: <span class="time-offset">{{ "%.6f"|format(ts) }}s</span></li>
+                        <div class="filter-box">
+                            <span class="filter-label">🔍 Filtre Wireshark (flux complet):</span>
+                            <div class="filter-command">{{ flow.flow_key.replace('and', '&&').replace('host', 'ip.addr ==').replace('port', 'tcp.port ==') }}</div>
+                        </div>
+                    </div>
                     {% endfor %}
-                </ul>
-                
-                <div class="filter-box">
-                    <span class="filter-label">🔍 Filtre tcpdump (RST uniquement):</span>
-                    <div class="filter-command">tcpdump -r file.pcap -tttt -nn '{{ flow.flow_key }} and tcp[tcpflags] & tcp-rst != 0'</div>
-                </div>
-
-                <div class="filter-box">
-                    <span class="filter-label">🔍 Filtre Wireshark (flux complet):</span>
-                    <div class="filter-command">{{ flow.flow_key.replace('and', '&&').replace('host', 'ip.addr ==').replace('port', 'tcp.port ==') }}</div>
                 </div>
             </div>
-            {% endfor %}
             {% endif %}
         </div>
         {% endif %}
@@ -1431,82 +1402,96 @@
 
             <!-- Top flux par volume -->
             {% if asymmetric_traffic.top_flows_by_volume %}
-            <h3>📈 Top 10 flux par volume</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Flux</th>
-                        <th>Protocole</th>
-                        <th>Volume total</th>
-                        <th>Forward →</th>
-                        <th>← Reverse</th>
-                        <th>Asymétrie</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for flow in asymmetric_traffic.top_flows_by_volume[:10] %}
-                    <tr>
-                        <td><code>{{ flow.src_ip }} ↔ {{ flow.dst_ip }}</code></td>
-                        <td><span class="badge">{{ flow.protocol }}</span></td>
-                        <td>{{ format_bytes(flow.total_bytes) }}</td>
-                        <td>{{ format_bytes(flow.forward_bytes) }}</td>
-                        <td>{{ format_bytes(flow.reverse_bytes) }}</td>
-                        <td>
-                            {% if flow.asymmetry_percent > 90 %}
-                            <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
-                            {% elif flow.asymmetry_percent > 70 %}
-                            <span class="badge warning">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
-                            {% else %}
-                            <span class="badge success">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">📈 Top 10 flux par volume</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Flux</th>
+                                <th>Protocole</th>
+                                <th>Volume total</th>
+                                <th>Forward →</th>
+                                <th>← Reverse</th>
+                                <th>Asymétrie</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for flow in asymmetric_traffic.top_flows_by_volume[:10] %}
+                            <tr>
+                                <td><code>{{ flow.src_ip }} ↔ {{ flow.dst_ip }}</code></td>
+                                <td><span class="badge">{{ flow.protocol }}</span></td>
+                                <td>{{ format_bytes(flow.total_bytes) }}</td>
+                                <td>{{ format_bytes(flow.forward_bytes) }}</td>
+                                <td>{{ format_bytes(flow.reverse_bytes) }}</td>
+                                <td>
+                                    {% if flow.asymmetry_percent > 90 %}
+                                    <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                                    {% elif flow.asymmetry_percent > 70 %}
+                                    <span class="badge warning">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                                    {% else %}
+                                    <span class="badge success">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endif %}
 
             <!-- Flux les plus asymétriques -->
             {% if asymmetric_traffic.asymmetric_flows %}
-            <h3>🔴 Flux les plus asymétriques (Top 20)</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Flux</th>
-                        <th>Proto</th>
-                        <th>Direction dominante</th>
-                        <th>Forward</th>
-                        <th>Reverse</th>
-                        <th>Ratio</th>
-                        <th>Asymétrie</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for flow in asymmetric_traffic.asymmetric_flows[:20] %}
-                    <tr>
-                        <td><code>{{ flow.src_ip }}:{{ flow.src_port }} ↔ {{ flow.dst_ip }}:{{ flow.dst_port }}</code></td>
-                        <td><span class="badge">{{ flow.protocol }}</span></td>
-                        <td>
-                            {% if flow.dominant_direction == 'forward' %}
-                            <span class="badge info">{{ flow.src_ip }} →</span>
-                            {% else %}
-                            <span class="badge info">← {{ flow.dst_ip }}</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ format_bytes(flow.forward_bytes) }} ({{ flow.forward_packets }} pkts)</td>
-                        <td>{{ format_bytes(flow.reverse_bytes) }} ({{ flow.reverse_packets }} pkts)</td>
-                        <td>{{ "%.4f"|format(flow.byte_ratio) }}</td>
-                        <td>
-                            {% if flow.is_unidirectional %}
-                            <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}% (Unidirectionnel)</span>
-                            {% else %}
-                            <span class="badge warning">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">🔴 Flux les plus asymétriques (Top 20)</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Flux</th>
+                                <th>Proto</th>
+                                <th>Direction dominante</th>
+                                <th>Forward</th>
+                                <th>Reverse</th>
+                                <th>Ratio</th>
+                                <th>Asymétrie</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for flow in asymmetric_traffic.asymmetric_flows[:20] %}
+                            <tr>
+                                <td><code>{{ flow.src_ip }}:{{ flow.src_port }} ↔ {{ flow.dst_ip }}:{{ flow.dst_port }}</code></td>
+                                <td><span class="badge">{{ flow.protocol }}</span></td>
+                                <td>
+                                    {% if flow.dominant_direction == 'forward' %}
+                                    <span class="badge info">{{ flow.src_ip }} →</span>
+                                    {% else %}
+                                    <span class="badge info">← {{ flow.dst_ip }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ format_bytes(flow.forward_bytes) }} ({{ flow.forward_packets }} pkts)</td>
+                                <td>{{ format_bytes(flow.reverse_bytes) }} ({{ flow.reverse_packets }} pkts)</td>
+                                <td>{{ "%.4f"|format(flow.byte_ratio) }}</td>
+                                <td>
+                                    {% if flow.is_unidirectional %}
+                                    <span class="badge danger">{{ "%.1f"|format(flow.asymmetry_percent) }}% (Unidirectionnel)</span>
+                                    {% else %}
+                                    <span class="badge warning">{{ "%.1f"|format(flow.asymmetry_percent) }}%</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endif %}
         </div>
         {% endif %}
@@ -1559,11 +1544,11 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Paquets/intervalle (moyenne)</td>
+                        <td>Activité moyenne (paquets/intervalle)</td>
                         <td>{{ burst.interval_stats.avg_packets_per_interval }}</td>
                     </tr>
                     <tr>
-                        <td>Paquets/intervalle (min)</td>
+                        <td>Activité minimale (paquets/intervalle)</td>
                         <td>{{ burst.interval_stats.min_packets_per_interval }}</td>
                     </tr>
                     <tr>
@@ -1713,11 +1698,11 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Paquets/créneau (moyenne)</td>
+                        <td>Activité moyenne (paquets/créneau)</td>
                         <td>{{ temporal.slot_stats.avg_packets_per_slot }}</td>
                     </tr>
                     <tr>
-                        <td>Paquets/créneau (min)</td>
+                        <td>Activité minimale (paquets/créneau)</td>
                         <td>{{ temporal.slot_stats.min_packets_per_slot }}</td>
                     </tr>
                     <tr>
@@ -2057,8 +2042,8 @@
                     {% if retransmission and (rto_rate > 0.5 or (retransmission.total_retransmissions > 5000 and retransmission.retransmission_rate > 5.0)) %}
                         {% set has_incident = true %}
                     {% endif %}
-                    {# Débit < 1 Mbps n'est un problème QUE si volume significatif ET pas de pattern périodique #}
-                    {% if throughput and throughput.global_throughput.throughput_mbps < 1 and analysis_info.total_packets > 10000 and not timestamps.get('periodic_pattern_detected', false) %}
+                    {# Débit < 0.1 Mbps n'est un problème QUE si volume significatif ET pas de pattern périodique #}
+                    {% if throughput and throughput.global_throughput.throughput_mbps < 0.1 and analysis_info.total_packets > 10000 and not timestamps.get('periodic_pattern_detected', false) %}
                         {% set has_incident = true %}
                     {% endif %}
 

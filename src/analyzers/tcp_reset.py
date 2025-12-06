@@ -6,6 +6,7 @@ Détecte et analyse les connexions TCP fermées brutalement
 from scapy.all import TCP, IP
 from typing import Dict, List, Any
 from collections import defaultdict
+from datetime import datetime
 
 
 class TCPResetAnalyzer:
@@ -50,7 +51,7 @@ class TCPResetAnalyzer:
             
             rst_info = {
                 'packet_num': packet_num,
-                'timestamp': float(packet.time),
+                'timestamp': float(packet.time), # Raw timestamp
                 'src_ip': src_ip,
                 'src_port': src_port,
                 'dst_ip': dst_ip,
@@ -97,10 +98,10 @@ class TCPResetAnalyzer:
         # Compter les flux avec RST
         flows_with_rst = len([f for f in self.flows.values() if f['rst_count'] > 0])
         
-        # Collecter les timestamps RST par flux
+        # Collecter les timestamps RST par flux et les convertir en ISO
         flow_timestamps = defaultdict(list)
         for rst in self.reset_packets:
-            flow_timestamps[rst['flow_key']].append(rst['timestamp'])
+            flow_timestamps[rst['flow_key']].append(datetime.fromtimestamp(rst['timestamp']).isoformat())
         
         # Top flux avec le plus de RST
         flow_rst_counts = []
@@ -110,7 +111,7 @@ class TCPResetAnalyzer:
                     'flow_key': flow_key,
                     'count': flow_data['rst_count'],
                     'premature': not flow_data['data_exchanged'],
-                    'timestamps': sorted(flow_timestamps[flow_key])
+                    'timestamps': sorted(flow_timestamps[flow_key]) # Already ISO
                 })
                 
         flow_rst_counts.sort(key=lambda x: x['count'], reverse=True)
@@ -120,7 +121,7 @@ class TCPResetAnalyzer:
         for rst in sorted(self.reset_packets, key=lambda x: x['timestamp'])[:20]:
             reset_details.append({
                 'packet_num': rst['packet_num'],
-                'timestamp': rst['timestamp'],
+                'timestamp': datetime.fromtimestamp(rst['timestamp']).isoformat(), # Convert to ISO
                 'flow': rst['flow_key'],
                 'type': 'Prématuré' if not rst['data_exchanged'] else 'Post-données',
                 'syn_seen': rst['syn_seen']
