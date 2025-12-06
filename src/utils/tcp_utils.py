@@ -87,3 +87,37 @@ def is_rst(tcp: Any) -> bool:
         bool: True if RST flag is set, False otherwise
     """
     return bool(tcp.flags & RST)
+
+
+def get_tcp_logical_length(tcp: Any) -> int:
+    """
+    Calculate the logical length of a TCP segment.
+
+    Per RFC 793, SYN and FIN flags consume one sequence number each,
+    so they must be included in the logical length for proper sequence
+    number tracking and retransmission detection.
+
+    Args:
+        tcp: TCP layer object with flags and payload attributes
+
+    Returns:
+        int: Logical length of the segment (payload + SYN + FIN)
+
+    Example:
+        - Data segment with 100 bytes payload: length = 100
+        - SYN packet (no data): length = 1
+        - SYN-ACK packet (no data): length = 1
+        - FIN packet (no data): length = 1
+        - Data segment with 100 bytes + FIN: length = 101
+    """
+    length = len(tcp.payload) if hasattr(tcp, 'payload') else 0
+
+    # SYN flag consumes 1 sequence number (RFC 793)
+    if tcp.flags & SYN:
+        length += 1
+
+    # FIN flag consumes 1 sequence number (RFC 793)
+    if tcp.flags & FIN:
+        length += 1
+
+    return length

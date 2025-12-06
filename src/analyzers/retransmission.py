@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Set, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 from ..utils.packet_utils import get_ip_layer
+from ..utils.tcp_utils import get_tcp_logical_length
 
 
 @dataclass
@@ -195,12 +196,11 @@ class RetransmissionAnalyzer:
         # On calcule d'abord les propriétés de séquence pour TOUS les paquets TCP
         seq = tcp.seq
         payload_len = len(tcp.payload)
-        # Pour SYN/FIN, la longueur logique est 1
-        logical_len = payload_len
-        if tcp.flags & 0x03: # SYN or FIN
-             if payload_len == 0:
-                 logical_len = 1
-        
+
+        # FIX: Use proper logical length calculation (RFC 793)
+        # SYN and FIN flags each consume one sequence number
+        logical_len = get_tcp_logical_length(tcp)
+
         next_seq = seq + logical_len
         
         # On ne cherche des retransmissions QUE si le paquet transporte des données ou SYN/FIN
@@ -227,10 +227,11 @@ class RetransmissionAnalyzer:
             reverse_key = self._get_reverse_flow_key(packet)
             if not is_retransmission and reverse_key in self._max_ack_seen:
                 max_ack = self._max_ack_seen[reverse_key]
+                # FIX: Use logical_len instead of payload_len (accounts for SYN/FIN)
                 # Si le segment entier est avant le max ACK, c'est une retransmission inutile
-                if seq + payload_len <= max_ack:
+                if seq + logical_len <= max_ack:
                     is_retransmission = True
-                    # On ne connait pas forcément l'original si le tracking a commencé après, 
+                    # On ne connait pas forcément l'original si le tracking a commencé après,
                     # mais on sait que c'est une retransmission.
                     # On garde original_num = None pour l'instant, on le settera ci-dessous
 
@@ -327,7 +328,8 @@ class RetransmissionAnalyzer:
             self._expected_ack[reverse_flow] = ack
 
         # Détection Out-of-Order
-        if len(tcp.payload) > 0:
+        # FIX: Check logical_len instead of just payload (accounts for SYN/FIN)
+        if logical_len > 0:
             seq = tcp.seq
             expected = self._expected_seq.get(flow_key, seq)
 
@@ -346,7 +348,8 @@ class RetransmissionAnalyzer:
                 self.anomalies.append(anomaly)
                 self._flow_counters[flow_key]['out_of_order'] += 1
             else:
-                self._expected_seq[flow_key] = seq + len(tcp.payload)
+                # FIX: Use logical_len (accounts for SYN/FIN flags)
+                self._expected_seq[flow_key] = seq + logical_len
 
         # Détection Zero Window
         if tcp.window == 0:
