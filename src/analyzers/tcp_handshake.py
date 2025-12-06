@@ -1,5 +1,19 @@
 """
-Analyseur du handshake TCP - Mesure des délais SYN/SYN-ACK/ACK
+TCP Handshake Analyzer - Measures SYN/SYN-ACK/ACK delays.
+
+This analyzer implements TCP three-way handshake detection and timing analysis
+according to RFC 793 (Transmission Control Protocol).
+
+Key features:
+- Detects complete and incomplete handshakes
+- Measures SYN→SYN-ACK and SYN-ACK→ACK delays
+- Identifies suspected bottlenecks (client, server, or network)
+- Validates handshake completion per RFC 793 (ACK must equal SYN-ACK.SEQ + 1)
+- Memory-optimized with periodic cleanup of stale handshakes
+
+References:
+    RFC 793: Transmission Control Protocol
+    RFC 1323: TCP Extensions for High Performance
 """
 
 from scapy.all import Packet, TCP
@@ -11,7 +25,32 @@ from ..utils.packet_utils import get_ip_layer
 
 @dataclass
 class HandshakeFlow:
-    """Représente un handshake TCP complet ou partiel"""
+    """
+    Represents a complete or partial TCP handshake.
+
+    A TCP handshake consists of three packets (RFC 793):
+    1. SYN: Client initiates connection
+    2. SYN-ACK: Server responds with synchronization acknowledgment
+    3. ACK: Client acknowledges server's response
+
+    Attributes:
+        src_ip: Source IP address (client)
+        dst_ip: Destination IP address (server)
+        src_port: Source TCP port
+        dst_port: Destination TCP port
+        syn_time: Timestamp of SYN packet
+        syn_packet_num: Packet number of SYN
+        synack_time: Timestamp of SYN-ACK packet
+        synack_packet_num: Packet number of SYN-ACK
+        synack_seq: SYN-ACK sequence number (for RFC 793 validation)
+        ack_time: Timestamp of final ACK packet
+        ack_packet_num: Packet number of final ACK
+        syn_to_synack_delay: Delay from SYN to SYN-ACK (server processing time)
+        synack_to_ack_delay: Delay from SYN-ACK to ACK (client processing time)
+        total_handshake_time: Total time from SYN to final ACK
+        complete: Whether handshake completed successfully
+        suspected_side: Suspected bottleneck ('client', 'server', 'network', 'none')
+    """
     src_ip: str
     dst_ip: str
     src_port: int
@@ -31,17 +70,39 @@ class HandshakeFlow:
 
 
 class TCPHandshakeAnalyzer:
-    """Analyseur des handshakes TCP"""
+    """
+    TCP Handshake Analyzer - Detects and measures TCP three-way handshakes.
+
+    This analyzer implements RFC 793-compliant handshake detection, tracking
+    SYN, SYN-ACK, and ACK packets to measure connection establishment delays.
+    It validates handshake completion by verifying that the final ACK number
+    equals SYN-ACK.SEQ + 1 as specified in RFC 793.
+
+    Memory Management:
+        - Periodic cleanup of stale incomplete handshakes (default: 60s timeout)
+        - Cleanup interval: every 10,000 packets
+
+    Performance Characteristics:
+        - Time complexity: O(1) per packet
+        - Space complexity: O(N) where N is number of concurrent connections
+    """
 
     def __init__(self, syn_synack_threshold: float = 0.1, total_threshold: float = 0.3,
-                 latency_filter: Optional[float] = None):
+                 latency_filter: Optional[float] = None) -> None:
         """
-        Initialise l'analyseur de handshake TCP
+        Initialize TCP handshake analyzer.
 
         Args:
-            syn_synack_threshold: Seuil d'alerte SYN→SYN/ACK en secondes
-            total_threshold: Seuil d'alerte pour le handshake complet en secondes
-            latency_filter: Si défini, ne garde que les handshakes avec latence >= ce seuil
+            syn_synack_threshold: Alert threshold for SYN→SYN-ACK delay (seconds).
+                Delays above this suggest server or network congestion.
+            total_threshold: Alert threshold for complete handshake (seconds).
+                Total time above this indicates connection establishment issues.
+            latency_filter: If set, only keep handshakes with latency >= threshold (seconds).
+                Useful for focusing on slow connections only.
+
+        Note:
+            Default thresholds (0.1s and 0.3s) are suitable for LAN environments.
+            For WAN analysis, consider higher values (e.g., 0.5s and 1.0s).
         """
         self.syn_synack_threshold = syn_synack_threshold
         self.total_threshold = total_threshold
@@ -150,8 +211,16 @@ class TCPHandshakeAnalyzer:
         """
         Remove stale incomplete handshakes to prevent memory leaks.
 
+        Handshakes that haven't completed within the timeout period (default 60s)
+        are removed from tracking. This prevents memory exhaustion in long captures
+        with many incomplete or failed connection attempts.
+
         Args:
-            current_time: Current packet timestamp
+            current_time: Current packet timestamp (seconds since epoch)
+
+        Note:
+            This is called every 10,000 packets. Timeout period is configurable
+            via _handshake_timeout attribute.
         """
         stale_keys = []
         for key, handshake in self.incomplete_handshakes.items():
@@ -221,13 +290,24 @@ class TCPHandshakeAnalyzer:
 
     def _identify_suspect_side(self, handshake: HandshakeFlow) -> str:
         """
-        Identifie le côté suspect (client, réseau, serveur)
+        Identify the suspected bottleneck in a slow handshake.
+
+        Uses heuristics to determine whether the client, server, or network
+        is responsible for handshake delays:
+        - High SYN→SYN-ACK delay (>0.5s): Server bottleneck
+        - Moderate SYN→SYN-ACK delay (>threshold): Network latency
+        - High SYN-ACK→ACK delay: Client bottleneck
+        - Normal individual delays but high total: Network jitter
 
         Args:
-            handshake: Flux de handshake
+            handshake: Handshake flow to analyze
 
         Returns:
-            Côté suspect ('client', 'network', 'server', 'unknown')
+            Suspected bottleneck: 'client', 'server', 'network', 'none', or 'unknown'
+
+        Note:
+            These heuristics work best for LAN analysis. WAN scenarios may
+            produce different patterns due to geographic latency.
         """
         if not handshake.syn_to_synack_delay:
             return "unknown"

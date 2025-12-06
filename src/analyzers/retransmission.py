@@ -1,5 +1,29 @@
 """
-Analyseur de retransmissions et anomalies TCP
+TCP Retransmission and Anomaly Analyzer.
+
+This analyzer detects TCP retransmissions, duplicate ACKs, out-of-order packets,
+and other TCP anomalies according to RFC 793 and RFC 2581 (TCP Congestion Control).
+
+Detection Methods:
+1. Exact Match: Detects retransmission of identical segments (seq, len)
+2. Spurious Retransmission: Segments already ACKed by receiver
+3. Fast Retransmission: Triggered by 3+ duplicate ACKs (RFC 2581)
+4. RTO: Timeout-based retransmission (delay > threshold)
+
+Anomaly Detection:
+- Duplicate ACKs: Same ACK number received multiple times
+- Out-of-Order: Packets with sequence numbers below expected
+- Zero Window: TCP window size is 0 (receiver buffer full)
+
+Memory Management:
+- LRU-like cleanup: Keeps newest segments when limit exceeded
+- Periodic cleanup: Every 10,000 packets
+- Max segments per flow: 10,000
+
+References:
+    RFC 793: Transmission Control Protocol
+    RFC 2581: TCP Congestion Control
+    RFC 6298: Computing TCP's Retransmission Timer
 """
 
 from scapy.all import Packet, TCP, IP
@@ -12,7 +36,24 @@ from ..utils.tcp_utils import get_tcp_logical_length
 
 @dataclass
 class TCPRetransmission:
-    """Représente une retransmission TCP"""
+    """
+    Represents a TCP retransmission event.
+
+    Attributes:
+        packet_num: Packet number of the retransmitted segment
+        timestamp: Time when retransmission occurred
+        src_ip: Source IP address
+        dst_ip: Destination IP address
+        src_port: Source TCP port
+        dst_port: Destination TCP port
+        seq_num: TCP sequence number of retransmitted segment
+        original_packet_num: Packet number of original transmission
+        delay: Time between original and retransmission (seconds)
+        retrans_type: Type of retransmission:
+            - 'RTO': Retransmission timeout (delay > threshold, typically 200ms)
+            - 'Fast Retransmission': Triggered by duplicate ACKs (delay < 50ms)
+            - 'Retransmission': Generic retransmission (between thresholds)
+    """
     packet_num: int
     timestamp: float
     src_ip: str
@@ -22,7 +63,7 @@ class TCPRetransmission:
     seq_num: int
     original_packet_num: int
     delay: float
-    retrans_type: str = "Unknown" # New field
+    retrans_type: str = "Unknown"
 
 
 @dataclass
@@ -56,26 +97,47 @@ class FlowStats:
 
 
 class RetransmissionAnalyzer:
-    """Analyseur de retransmissions et anomalies TCP"""
+    """
+    TCP Retransmission and Anomaly Analyzer.
+
+    Detects and classifies TCP retransmissions using multiple algorithms:
+    1. Exact segment matching (seq, len)
+    2. Spurious retransmission detection (already ACKed)
+    3. Fast retransmission detection (3+ duplicate ACKs per RFC 2581)
+    4. RTO classification based on delay thresholds (RFC 6298)
+
+    The analyzer also tracks TCP anomalies including duplicate ACKs,
+    out-of-order packets, and zero window conditions.
+
+    Performance:
+        - Time complexity: O(1) average per packet (with periodic cleanup)
+        - Space complexity: O(N*M) where N=flows, M=segments per flow (bounded)
+    """
 
     def __init__(self, retrans_low: int = 10, retrans_medium: int = 50,
                  retrans_critical: int = 100,
                  retrans_rate_low: float = 1.0, retrans_rate_medium: float = 3.0,
                  retrans_rate_critical: float = 5.0,
-                 rto_threshold_ms: float = 200.0, # New threshold for RTO
-                 fast_retrans_delay_max_ms: float = 50.0): # New threshold for Fast Retrans
+                 rto_threshold_ms: float = 200.0,
+                 fast_retrans_delay_max_ms: float = 50.0) -> None:
         """
-        Initialise l'analyseur de retransmissions
+        Initialize retransmission analyzer.
 
         Args:
-            retrans_low: Seuil bas de retransmissions (nombre absolu)
-            retrans_medium: Seuil moyen de retransmissions (nombre absolu)
-            retrans_critical: Seuil critique de retransmissions (nombre absolu)
-            retrans_rate_low: Seuil bas de taux de retransmission (%)
-            retrans_rate_medium: Seuil moyen de taux de retransmission (%)
-            retrans_rate_critical: Seuil critique de taux de retransmission (%)
-            rto_threshold_ms: Seuil en ms pour considérer une retransmission comme un RTO
-            fast_retrans_delay_max_ms: Délai max en ms pour considérer une retransmission comme Fast Retrans
+            retrans_low: Low severity threshold (absolute count)
+            retrans_medium: Medium severity threshold (absolute count)
+            retrans_critical: Critical severity threshold (absolute count)
+            retrans_rate_low: Low severity rate threshold (%)
+            retrans_rate_medium: Medium severity rate threshold (%)
+            retrans_rate_critical: Critical severity rate threshold (%)
+            rto_threshold_ms: Delay threshold for RTO classification (milliseconds).
+                Per RFC 6298, typical RTO is >= 200ms.
+            fast_retrans_delay_max_ms: Max delay for fast retransmission (milliseconds).
+                Per RFC 2581, fast retransmit happens quickly after 3 DUP ACKs.
+
+        Note:
+            Default thresholds are suitable for most networks. For high-throughput
+            or lossy environments, consider adjusting the rate thresholds.
         """
         self.retrans_low = retrans_low
         self.retrans_medium = retrans_medium
@@ -140,7 +202,24 @@ class RetransmissionAnalyzer:
         self._analyze_packet(packet_num, packet)
 
     def _cleanup_old_segments(self) -> None:
-        """Cleanup old segments to prevent memory exhaustion using LRU-like approach"""
+        """
+        Cleanup old segments to prevent memory exhaustion using LRU-like approach.
+
+        When a flow exceeds the maximum segment limit (10,000), this method
+        keeps only the newest half of segments based on most recent timestamp.
+        This prevents unbounded memory growth in long captures while maintaining
+        recent history for retransmission detection.
+
+        Algorithm:
+            1. For each flow exceeding max_segments_per_flow
+            2. Sort segments by most recent timestamp (descending)
+            3. Keep only the newest 50% of segments
+            4. Discard older segments
+
+        Note:
+            Called every 10,000 packets. This balances memory usage with
+            retransmission detection accuracy.
+        """
         for flow_key in list(self._seen_segments.keys()):
             segments = self._seen_segments[flow_key]
             if len(segments) > self._max_segments_per_flow:

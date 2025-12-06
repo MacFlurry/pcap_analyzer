@@ -1,5 +1,28 @@
 """
-Analyseur de RTT (Round Trip Time)
+RTT (Round Trip Time) Analyzer.
+
+Measures TCP round-trip time by tracking data segments and their corresponding
+ACKs. RTT is a critical metric for network performance analysis, indicating
+the time for a segment to travel to the receiver and for the ACK to return.
+
+Measurement Method:
+    1. Track data segments (packets with payload)
+    2. Match ACK packets that acknowledge the data
+    3. Calculate RTT = ACK_timestamp - Data_timestamp
+    4. Aggregate statistics per flow and globally
+
+This implementation is conservative and only measures RTT for segments that
+are definitively acknowledged. Per RFC 793, ACK numbers acknowledge all
+data up to but not including the ACK number.
+
+Memory Management:
+    - Periodic cleanup of unacked segments (every 5,000 packets)
+    - Timeout-based cleanup (segments unacked for 60s are removed)
+
+References:
+    RFC 793: Transmission Control Protocol
+    RFC 1323: TCP Extensions for High Performance (RTT measurement)
+    RFC 6298: Computing TCP's Retransmission Timer
 """
 
 from scapy.all import Packet, TCP, IP
@@ -12,7 +35,18 @@ from ..utils.packet_utils import get_ip_layer
 
 @dataclass
 class RTTMeasurement:
-    """Mesure individuelle de RTT"""
+    """
+    Individual RTT measurement.
+
+    Attributes:
+        timestamp: Time when ACK was received (measurement time)
+        rtt: Measured round-trip time (seconds)
+        flow_key: Flow identifier (src:sport->dst:dport)
+        seq_num: Sequence number of original data packet
+        ack_num: ACK number that acknowledged the data
+        data_packet_num: Packet number of original data segment
+        ack_packet_num: Packet number of ACK
+    """
     timestamp: float
     rtt: float
     flow_key: str
@@ -24,7 +58,23 @@ class RTTMeasurement:
 
 @dataclass
 class FlowRTTStats:
-    """Statistiques RTT pour un flux"""
+    """
+    RTT statistics for a single TCP flow.
+
+    Attributes:
+        flow_key: Flow identifier (src:sport->dst:dport)
+        src_ip: Source IP address
+        dst_ip: Destination IP address
+        src_port: Source TCP port
+        dst_port: Destination TCP port
+        measurements_count: Number of RTT measurements for this flow
+        min_rtt: Minimum RTT observed (seconds)
+        max_rtt: Maximum RTT observed (seconds)
+        mean_rtt: Average RTT (seconds)
+        median_rtt: Median RTT (seconds, less affected by outliers)
+        stdev_rtt: Standard deviation of RTT (None if < 2 measurements)
+        rtt_spikes: Count of RTT measurements above warning threshold
+    """
     flow_key: str
     src_ip: str
     dst_ip: str
@@ -40,17 +90,43 @@ class FlowRTTStats:
 
 
 class RTTAnalyzer:
-    """Analyseur de Round Trip Time"""
+    """
+    Round Trip Time (RTT) Analyzer.
+
+    Measures network latency by tracking TCP data segments and their ACKs.
+    Provides per-flow and global RTT statistics to identify network delays.
+
+    RTT Measurement Algorithm:
+        1. When data packet seen: Record (seq, timestamp, payload_len)
+        2. When ACK received: Match against unacked segments
+        3. If ACK >= seq + payload_len: Segment is acknowledged
+        4. RTT = ack_timestamp - data_timestamp
+        5. Remove acknowledged segment from tracking
+
+    This is a conservative approach that only measures definitively
+    acknowledged segments, avoiding ambiguity from retransmissions.
+
+    Performance:
+        - Time complexity: O(S) per ACK where S=unacked segments in flow
+        - Space complexity: O(N*S) where N=flows, S=unacked segments (bounded)
+    """
 
     def __init__(self, rtt_warning: float = 0.1, rtt_critical: float = 0.5,
-                 latency_filter: Optional[float] = None):
+                 latency_filter: Optional[float] = None) -> None:
         """
-        Initialise l'analyseur de RTT
+        Initialize RTT analyzer.
 
         Args:
-            rtt_warning: Seuil d'alerte RTT en secondes
-            rtt_critical: Seuil critique RTT en secondes
-            latency_filter: Si défini, ne garde que les mesures RTT >= ce seuil
+            rtt_warning: Warning threshold for RTT (seconds).
+                RTT above this suggests network congestion or high latency.
+            rtt_critical: Critical threshold for RTT (seconds).
+                RTT above this indicates severe network issues.
+            latency_filter: If set, only keep measurements >= threshold (seconds).
+                Useful for focusing on high-latency connections only.
+
+        Note:
+            Default thresholds (0.1s warning, 0.5s critical) are suitable for LAN.
+            For WAN analysis, consider higher values (e.g., 0.5s and 2.0s).
         """
         self.rtt_warning = rtt_warning
         self.rtt_critical = rtt_critical
@@ -146,7 +222,20 @@ class RTTAnalyzer:
         return self._generate_report()
 
     def _cleanup_stale_segments(self) -> None:
-        """Clean up unacked segments older than 60s to prevent memory leaks"""
+        """
+        Clean up unacked segments older than 60s to prevent memory leaks.
+
+        Segments that haven't been ACKed within 60 seconds are likely lost
+        or part of stalled connections. Removing them prevents unbounded
+        memory growth during long captures.
+
+        This timeout (60s) is conservative - typical TCP retransmission
+        timeouts (RTO) are much shorter (200ms-60s per RFC 6298), so
+        segments older than 60s are unlikely to ever be matched.
+
+        Note:
+            Called every 5,000 packets to minimize overhead.
+        """
         if not self.measurements:
             return
 
