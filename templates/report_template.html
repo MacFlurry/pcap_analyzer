@@ -201,7 +201,26 @@
 
         <!-- Analyse des timestamps -->
         {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}
-        <h2>⏱️ Analyse des timestamps</h2>
+        <h2>
+            ⏱️ Analyse des timestamps
+            <div class="info-tooltip">
+                <span class="info-icon">i</span>
+                <span class="tooltip-text">
+                    <strong>🔍 Comprendre les Gaps Temporels :</strong>
+                    <ul>
+                        <li><strong>Définition :</strong> Une période de "silence" anormalement longue entre deux paquets consécutifs dans un même flux ou globalement.</li>
+                        <li><strong>Implications :</strong>
+                            <ul>
+                                <li><strong>Côté Serveur :</strong> Peut indiquer un traitement long (traitement de base de données, Garbage Collection, attente I/O).</li>
+                                <li><strong>Côté Réseau :</strong> Peut indiquer une perte de connectivité temporaire ou un changement de route.</li>
+                                <li><strong>Côté Client :</strong> Peut être une pause utilisateur ou un script qui attend.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Investigation :</strong> Notez les timestamps exacts et corrélez-les avec les logs de vos serveurs (fichiers de log, graphiques CPU/RAM) pour voir s'il y avait une activité intense ou une erreur à ce moment-là.</li>
+                    </ul>
+                </span>
+            </div>
+        </h2>
         <div class="section {% if retransmission and retransmission.rto_count == 0 and not is_very_small_capture %}success{% else %}warning{% endif %}">
             <h3>
                 {{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }}
@@ -211,21 +230,6 @@
                     gap(s) temporel(s) anormal(aux) détecté(s)
                 {% endif %}
             </h3>
-            
-            <div class="info-box">
-                <p><strong>🔍 Comprendre les Gaps Temporels :</strong></p>
-                <ul>
-                    <li><strong>Définition :</strong> Une période de "silence" anormalement longue entre deux paquets consécutifs dans un même flux ou globalement.</li>
-                    <li><strong>Implications :</strong>
-                        <ul>
-                            <li><strong>Côté Serveur :</strong> Peut indiquer un traitement long (traitement de base de données, Garbage Collection, attente I/O).</li>
-                            <li><strong>Côté Réseau :</strong> Peut indiquer une perte de connectivité temporaire ou un changement de route.</li>
-                            <li><strong>Côté Client :</strong> Peut être une pause utilisateur ou un script qui attend.</li>
-                        </ul>
-                    </li>
-                    <li><strong>Investigation :</strong> Notez les timestamps exacts et corrélez-les avec les logs de vos serveurs (fichiers de log, graphiques CPU/RAM) pour voir s'il y avait une activité intense ou une erreur à ce moment-là.</li>
-                </ul>
-            </div>
 
             {% if timestamps.get('periodic_pattern_detected', false) %}
             <div class="alert alert-info" style="margin-bottom: 15px;">
@@ -578,12 +582,28 @@
             
             <div class="summary-grid">
                 <div class="summary-card danger">
-                    <h4>RST Prématurés</h4>
+                    <h4>
+                        RST Prématurés
+                        <div class="info-tooltip">
+                            <span class="info-icon">i</span>
+                            <span class="tooltip-text">
+                                Connexion refusée avant transfert de données (firewall, port fermé, service arrêté).
+                            </span>
+                        </div>
+                    </h4>
                     <div class="value">{{ tcp_reset.premature_resets }}</div>
                     <small>Avant échange de données</small>
                 </div>
                 <div class="summary-card warning">
-                    <h4>RST Post-données</h4>
+                    <h4>
+                        RST Post-données
+                        <div class="info-tooltip">
+                            <span class="info-icon">i</span>
+                            <span class="tooltip-text">
+                                Connexion interrompue brutalement (crash applicatif, timeout, erreur protocole).
+                            </span>
+                        </div>
+                    </h4>
                     <div class="value">{{ tcp_reset.post_data_resets }}</div>
                     <small>Après échange de données</small>
                 </div>
@@ -592,14 +612,6 @@
                     <div class="value">{{ tcp_reset.flows_with_resets }}</div>
                     <small>Connexions interrompues</small>
                 </div>
-            </div>
-
-            <div class="info-box">
-                <p><strong>🔍 Analyse:</strong></p>
-                <ul>
-                    <li><strong>RST Prématurés:</strong> Connexion refusée avant transfert de données (firewall, port fermé, service arrêté)</li>
-                    <li><strong>RST Post-données:</strong> Connexion interrompue brutalement (crash applicatif, timeout, erreur protocole)</li>
-                </ul>
             </div>
 
                         {% if tcp_reset.top_reset_flows and tcp_reset.top_reset_flows|length > 0 %}
@@ -728,7 +740,21 @@
 
         <!-- Fragmentation IP -->
         {% if ip_fragmentation.has_fragmentation %}
-        <h2>📦 Analyse de la fragmentation IP</h2>
+        <h2>
+            📦 Analyse de la fragmentation IP
+            <div class="info-tooltip">
+                <span class="info-icon">i</span>
+                <span class="tooltip-text">
+                    <strong>🔍 Fragmentation IP :</strong>
+                    <ul>
+                        <li>Se produit quand un paquet dépasse le MTU du réseau.</li>
+                        <li><strong>Problèmes courants :</strong> Fragments perdus causent des timeouts silencieux (tout ou rien).</li>
+                        <li><strong>PMTU Discovery :</strong> Mécanisme pour découvrir la taille maximale sans fragmentation.</li>
+                        <li><strong>Recommandation :</strong> Éviter la fragmentation en ajustant le MSS ou en activant PMTU Discovery.</li>
+                    </ul>
+                </span>
+            </div>
+        </h2>
         <div class="section warning">
             <h3>{{ ip_fragmentation.total_fragments }} fragment(s) IP détecté(s)</h3>
             
@@ -753,16 +779,6 @@
                     <div class="value">{{ ip_fragmentation.estimated_pmtu }}</div>
                     <small>bytes</small>
                 </div>
-            </div>
-
-            <div class="info-box">
-                <p><strong>🔍 Analyse:</strong></p>
-                <ul>
-                    <li><strong>Fragmentation IP:</strong> Se produit quand un paquet dépasse le MTU du réseau</li>
-                    <li><strong>Problèmes courants:</strong> Fragments perdus causent des timeouts silencieux (tout ou rien)</li>
-                    <li><strong>PMTU Discovery:</strong> Mécanisme pour découvrir la taille maximale sans fragmentation</li>
-                    <li><strong>Recommandation:</strong> Éviter la fragmentation en ajustant le MSS ou en activant PMTU Discovery</li>
-                </ul>
             </div>
 
             {% if ip_fragmentation.top_fragmented_flows and ip_fragmentation.top_fragmented_flows|length > 0 %}
@@ -1414,18 +1430,22 @@
 
         <!-- Trafic Asymétrique -->
         {% if asymmetric_traffic and asymmetric_traffic.summary.total_flows > 0 %}
-        <h2>⚖️ Analyse du Trafic Asymétrique</h2>
+        <h2>
+            ⚖️ Analyse du Trafic Asymétrique
+            <div class="info-tooltip">
+                <span class="info-icon">i</span>
+                <span class="tooltip-text">
+                    <strong>🔍 Comprendre le Trafic Asymétrique :</strong>
+                    <ul>
+                        <li><strong>Définition :</strong> Un flux est dit "asymétrique" quand le volume de données envoyé dans une direction est beaucoup plus important que dans l'autre.</li>
+                        <li><strong>Normalité :</strong> C'est normal pour le téléchargement de fichiers (Download >> Upload) ou le streaming.</li>
+                        <li><strong>Anomalie :</strong> C'est suspect pour des protocoles transactionnels symétriques, ou si le trafic est quasi-unidirectionnel (ratio &lt; 0.3), ce qui peut indiquer un problème de routage, une perte de paquets de retour, ou un scan UDP.</li>
+                    </ul>
+                </span>
+            </div>
+        </h2>
         <div class="section {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
             
-            <div class="info-box">
-                <p><strong>🔍 Comprendre le Trafic Asymétrique :</strong></p>
-                <ul>
-                    <li><strong>Définition :</strong> Un flux est dit "asymétrique" quand le volume de données envoyé dans une direction est beaucoup plus important que dans l'autre.</li>
-                    <li><strong>Normalité :</strong> C'est normal pour le téléchargement de fichiers (Download >> Upload) ou le streaming.</li>
-                    <li><strong>Anomalie :</strong> C'est suspect pour des protocoles transactionnels symétriques, ou si le trafic est quasi-unidirectionnel (ratio < 0.3), ce qui peut indiquer un problème de routage, une perte de paquets de retour, ou un scan UDP.</li>
-                </ul>
-            </div>
-
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
@@ -1577,18 +1597,22 @@
 
         <!-- Bursts de Paquets -->
         {% if burst and burst.summary.total_intervals > 0 %}
-        <h2>💥 Analyse des Bursts de Paquets</h2>
+        <h2>
+            💥 Analyse des Bursts de Paquets
+            <div class="info-tooltip">
+                <span class="info-icon">i</span>
+                <span class="tooltip-text">
+                    <strong>🔍 Comprendre les Bursts :</strong>
+                    <ul>
+                        <li><strong>Définition :</strong> Un "burst" (rafale) est une augmentation soudaine et massive du trafic sur un intervalle très court (ici 100ms).</li>
+                        <li><strong>Impact :</strong> Ces micro-congestions invisibles sur les graphiques à la minute peuvent saturer les buffers des switchs et causer des pertes de paquets aléatoires.</li>
+                        <li><strong>Seuil :</strong> Un ratio &gt; 10x la moyenne est considéré comme risqué.</li>
+                    </ul>
+                </span>
+            </div>
+        </h2>
         <div class="section {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
             
-            <div class="info-box">
-                <p><strong>🔍 Comprendre les Bursts :</strong></p>
-                <ul>
-                    <li><strong>Définition :</strong> Un "burst" (rafale) est une augmentation soudaine et massive du trafic sur un intervalle très court (ici 100ms).</li>
-                    <li><strong>Impact :</strong> Ces micro-congestions invisibles sur les graphiques à la minute peuvent saturer les buffers des switchs et causer des pertes de paquets aléatoires.</li>
-                    <li><strong>Seuil :</strong> Un ratio > 10x la moyenne est considéré comme risqué.</li>
-                </ul>
-            </div>
-
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
@@ -1764,18 +1788,22 @@
 
         <!-- Patterns Temporels -->
         {% if temporal and temporal.summary.total_slots > 0 %}
-        <h2>📅 Analyse des Patterns Temporels</h2>
+        <h2>
+            📅 Analyse des Patterns Temporels
+            <div class="info-tooltip">
+                <span class="info-icon">i</span>
+                <span class="tooltip-text">
+                    <strong>🔍 Comprendre les Patterns Temporels :</strong>
+                    <ul>
+                        <li><strong>Objectif :</strong> Détecter des comportements périodiques (machines) ou des tendances humaines (pics/creux).</li>
+                        <li><strong>Périodicité :</strong> Indique souvent un script de monitoring, un heartbeat, une tâche cron ou une synchronisation automatique. Utile pour identifier du "bruit de fond" non-humain.</li>
+                        <li><strong>Pics/Creux :</strong> Permettent de corréler des incidents ou de planifier des maintenances aux heures creuses.</li>
+                    </ul>
+                </span>
+            </div>
+        </h2>
         <div class="section">
             
-            <div class="info-box">
-                <p><strong>🔍 Comprendre les Patterns Temporels :</strong></p>
-                <ul>
-                    <li><strong>Objectif :</strong> Détecter des comportements périodiques (machines) ou des tendances humaines (pics/creux).</li>
-                    <li><strong>Périodicité :</strong> Indique souvent un script de monitoring, un heartbeat, une tâche cron ou une synchronisation automatique. Utile pour identifier du "bruit de fond" non-humain.</li>
-                    <li><strong>Pics/Creux :</strong> Permettent de corréler des incidents ou de planifier des maintenances aux heures creuses.</li>
-                </ul>
-            </div>
-
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
