@@ -104,6 +104,11 @@ class RetransmissionAnalyzer:
         # Tracking du plus haut ACK vu par flux (pour Spurious Retransmission)
         self._max_ack_seen: Dict[str, int] = defaultdict(int)
 
+        # Memory optimization: periodic cleanup
+        self._packet_counter = 0
+        self._cleanup_interval = 10000
+        self._max_segments_per_flow = 10000
+
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
         Analyse les retransmissions et anomalies TCP
@@ -124,13 +129,37 @@ class RetransmissionAnalyzer:
         if not packet.haslayer(TCP) or not packet.haslayer(IP):
             return
 
+        # Memory optimization: periodic cleanup
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_old_segments()
+
         self._analyze_packet(packet_num, packet)
+
+    def _cleanup_old_segments(self) -> None:
+        """Cleanup old segments to prevent memory exhaustion using LRU-like approach"""
+        for flow_key in list(self._seen_segments.keys()):
+            segments = self._seen_segments[flow_key]
+            if len(segments) > self._max_segments_per_flow:
+                # Keep only the most recent segments (by timestamp)
+                sorted_segments = sorted(
+                    segments.items(),
+                    key=lambda x: max(ts for _, ts in x[1]) if x[1] else 0,
+                    reverse=True
+                )
+                # Keep newest half
+                keep_count = self._max_segments_per_flow // 2
+                self._seen_segments[flow_key] = dict(sorted_segments[:keep_count])
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Cleanup: Clear _seen_segments to free memory
         # No longer needed after analysis is complete
         self._seen_segments.clear()
+        # Clear other tracking dicts to prevent memory leaks
+        self._highest_seq.clear()
+        self._max_ack_seen.clear()
+        self._dup_ack_count.clear()
 
         self._calculate_flow_severity()
         return self._generate_report()

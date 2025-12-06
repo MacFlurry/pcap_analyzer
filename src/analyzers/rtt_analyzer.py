@@ -61,6 +61,11 @@ class RTTAnalyzer:
         # Tracking interne : {flow_key: {seq: (packet_num, timestamp, payload_len)}}
         self._unacked_segments: Dict[str, Dict[int, Tuple[int, float, int]]] = defaultdict(dict)
 
+        # Memory optimization: periodic cleanup
+        self._packet_counter = 0
+        self._cleanup_interval = 5000
+        self._segment_timeout = 60.0  # Remove segments unacked for 60s
+
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
         Analyse le RTT des flux TCP
@@ -83,6 +88,11 @@ class RTTAnalyzer:
 
         tcp = packet[TCP]
         timestamp = float(packet.time)
+
+        # Memory optimization: periodic cleanup
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_stale_segments(timestamp)
 
         # Segment avec données
         if len(tcp.payload) > 0:
