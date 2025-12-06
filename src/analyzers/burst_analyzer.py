@@ -84,15 +84,20 @@ class BurstAnalyzer:
         
         # Stockage par intervalle: timestamp_bucket -> IntervalStats
         self.intervals: Dict[int, IntervalStats] = {}
-        
+
         # Stats globales
         self.total_packets = 0
         self.total_bytes = 0
         self.first_packet_time: Optional[float] = None
         self.last_packet_time: Optional[float] = None
-        
+
         # Bursts détectés
         self.bursts: List[BurstEvent] = []
+
+        # Memory optimization: limit intervals with sliding window
+        self.max_intervals = 100000  # Limit to prevent memory exhaustion
+        self._packet_counter = 0
+        self._cleanup_interval = 10000  # Cleanup every 10k packets
     
     def _get_interval_bucket(self, timestamp: float) -> int:
         """Calcule le bucket d'intervalle pour un timestamp."""
@@ -122,10 +127,15 @@ class BurstAnalyzer:
         # Stats globales
         self.total_packets += 1
         self.total_bytes += packet_len
-        
+
         if self.first_packet_time is None:
             self.first_packet_time = timestamp
         self.last_packet_time = timestamp
+
+        # Memory optimization: periodic cleanup of old intervals
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_old_intervals()
         
         # Bucket d'intervalle
         bucket = self._get_interval_bucket(timestamp)
@@ -148,7 +158,20 @@ class BurstAnalyzer:
         # Protocole
         proto = self._get_protocol(packet)
         interval.protocols[proto] = interval.protocols.get(proto, 0) + 1
-    
+
+    def _cleanup_old_intervals(self) -> None:
+        """Remove oldest intervals when exceeding max_intervals limit."""
+        if len(self.intervals) <= self.max_intervals:
+            return
+
+        # Sort buckets by key (time order) and keep the most recent ones
+        sorted_buckets = sorted(self.intervals.keys())
+        buckets_to_remove = sorted_buckets[:-self.max_intervals]
+
+        # Remove oldest intervals
+        for bucket in buckets_to_remove:
+            del self.intervals[bucket]
+
     def finalize(self) -> None:
         """Finalise l'analyse et détecte les bursts."""
         if not self.intervals:

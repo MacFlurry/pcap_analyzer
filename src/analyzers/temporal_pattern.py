@@ -81,9 +81,12 @@ class TemporalPatternAnalyzer:
         self.total_bytes = 0
         self.first_packet_time: Optional[float] = None
         self.last_packet_time: Optional[float] = None
-        
-        # Limiter le stockage pour la périodicité
+
+        # Memory optimization: limit stored data
         self.max_packets_per_source = 1000
+        self.max_sources = 500  # Limit total sources tracked for periodicity
+        self._packet_counter = 0
+        self._cleanup_interval = 10000  # Cleanup every 10k packets
     
     def _get_slot_key(self, timestamp: float) -> int:
         """Calcule la clé du créneau pour un timestamp."""
@@ -125,11 +128,31 @@ class TemporalPatternAnalyzer:
         elif packet.haslayer(UDP):
             slot.udp_packets += 1
         
+        # Memory optimization: periodic cleanup of sources
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_excess_sources()
+
         # Stocker timestamps pour détection de périodicité
         src_ip = ip.src
         if len(self.packet_times_by_source[src_ip]) < self.max_packets_per_source:
             self.packet_times_by_source[src_ip].append(timestamp)
-    
+
+    def _cleanup_excess_sources(self) -> None:
+        """Remove least active sources when exceeding max_sources limit."""
+        if len(self.packet_times_by_source) <= self.max_sources:
+            return
+
+        # Sort sources by packet count (activity level)
+        sources_by_activity = sorted(
+            self.packet_times_by_source.items(),
+            key=lambda x: len(x[1]),
+            reverse=True
+        )
+
+        # Keep only the most active sources
+        self.packet_times_by_source = dict(sources_by_activity[:self.max_sources])
+
     def finalize(self) -> None:
         """Finalise l'analyse."""
         pass

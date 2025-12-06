@@ -54,6 +54,11 @@ class SYNRetransmissionAnalyzer:
         self.retransmissions: List[SYNRetransmission] = []
         self.pending_syns: Dict[str, SYNRetransmission] = {}
 
+        # Memory optimization: periodic cleanup
+        self._packet_counter = 0
+        self._cleanup_interval = 5000  # Cleanup every 5k packets
+        self._pending_timeout = 60.0  # Remove pending SYNs after 60s
+
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
         Analyse les retransmissions SYN dans les paquets
@@ -77,6 +82,11 @@ class SYNRetransmissionAnalyzer:
         tcp = packet[TCP]
         ip = packet['IP']
         packet_time = float(packet.time)
+
+        # Memory optimization: periodic cleanup of stale pending SYNs
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_stale_pending_syns(packet_time)
 
         # Détection SYN (sans ACK)
         if tcp.flags & 0x02 and not tcp.flags & 0x10:
@@ -125,6 +135,23 @@ class SYNRetransmissionAnalyzer:
                         self.retransmissions.append(retrans)
                     
                     del self.pending_syns[reverse_flow]
+
+    def _cleanup_stale_pending_syns(self, current_time: float) -> None:
+        """
+        Remove stale pending SYNs to prevent memory leaks.
+
+        Args:
+            current_time: Current packet timestamp
+        """
+        stale_keys = []
+        for key, retrans in self.pending_syns.items():
+            # Calculate time since first SYN
+            if retrans.first_syn_time and (current_time - retrans.first_syn_time) > self._pending_timeout:
+                stale_keys.append(key)
+
+        # Remove stale pending SYNs
+        for key in stale_keys:
+            del self.pending_syns[key]
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
