@@ -146,7 +146,15 @@
         <h2>Vue d'ensemble</h2>
         <div class="summary-grid">
             <div class="summary-card {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) and retransmission and retransmission.rto_count > 0 %}warning{% else %}success{% endif %}">
-                <h3>Gaps anormaux</h3>
+                <h3>
+                    {% if timestamps['gaps_detected'] > 0 and (retransmission.rto_count == 0 or is_very_small_capture) %}
+                        Pauses applicatives
+                    {% elif timestamps['gaps_detected'] > 0 %}
+                        Gaps anormaux
+                    {% else %}
+                        Aucun gap anormal
+                    {% endif %}
+                </h3>
                 <div class="value">
                     {% if timestamps.get('periodic_pattern_detected', false) %}
                         {{ timestamps.get('non_periodic_gaps', 0) }}
