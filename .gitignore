@@ -44,3 +44,6 @@ Thumbs.db
 var/
 venv/
 wheels/
+generate_traffic_capture.py
+generate_traffic_simple.py
+scripts/
