@@ -996,6 +996,15 @@
         <h2>📊 Top Talkers - Analyse du volume</h2>
         <div class="section info">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre les Top Talkers :</strong></p>
+                <ul>
+                    <li><strong>Objectif :</strong> Identifier les hôtes (IP) et les conversations (flux) qui génèrent le plus grand volume de trafic.</li>
+                    <li><strong>Utilité :</strong> Essentiel pour détecter les applications gourmandes en bande passante, les transferts de fichiers importants, les éventuels abus (P2P), ou la source d'une saturation.</li>
+                    <li><strong>Investigation :</strong> Corrélez les IPs et les ports avec les services connus et les propriétaires des machines pour comprendre l'origine et la légitimité du trafic.</li>
+                </ul>
+            </div>
+
             <!-- Répartition par protocole -->
             {% if top_talkers.protocol_stats %}
             <h3>Répartition par protocole</h3>
@@ -1087,6 +1096,15 @@
         <h2>📈 Analyse du débit (Throughput)</h2>
         <div class="section info">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre le Débit (Throughput) :</strong></p>
+                <ul>
+                    <li><strong>Définition :</strong> Le débit est la quantité de données transférées par unité de temps (Mbps, Kbps).</li>
+                    <li><strong>Objectif :</strong> Mesurer la performance réelle du réseau et identifier les goulots d'étranglement ou les congestions.</li>
+                    <li><strong>Utilité :</strong> Une baisse inattendue du débit peut indiquer un problème réseau (congestion, câble défectueux) ou un ralentissement applicatif (serveur lent, disque saturé).</li>
+                </ul>
+            </div>
+
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
@@ -1182,6 +1200,15 @@
         <h2>⏱️ Analyse des Timeouts TCP</h2>
         <div class="section {% if tcp_timeout.problematic_count > 10 %}danger{% elif tcp_timeout.problematic_count > 0 %}warning{% else %}success{% endif %}">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre les Timeouts TCP :</strong></p>
+                <ul>
+                    <li><strong>Définition :</strong> Un timeout TCP se produit lorsqu'une connexion TCP attend une réponse (ACK) qui ne vient pas dans un délai raisonnable.</li>
+                    <li><strong>Impact :</strong> Entraîne des retransmissions et des retards importants. Pour l'utilisateur, cela se traduit par des lenteurs, des écrans blancs, ou des erreurs de connexion.</li>
+                    <li><strong>Causes courantes :</strong> Perte de paquets (congestion, câblage), serveurs saturés (ne répondent pas à temps), ou applications qui ne gèrent pas correctement la fermeture des connexions.</li>
+                </ul>
+            </div>
+
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
