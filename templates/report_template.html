@@ -145,7 +145,7 @@
         <!-- Vue d'ensemble -->
         <h2>Vue d'ensemble</h2>
         <div class="summary-grid">
-            <div class="summary-card {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}warning{% else %}success{% endif %}">
+            <div class="summary-card {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) and retransmission and retransmission.rto_count > 0 %}warning{% else %}success{% endif %}">
                 <h3>Gaps anormaux</h3>
                 <div class="value">
                     {% if timestamps.get('periodic_pattern_detected', false) %}
