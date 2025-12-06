@@ -6,6 +6,7 @@ from scapy.all import Packet, TCP
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 from collections import defaultdict
+from ..utils.packet_utils import get_ip_layer
 
 
 @dataclass
@@ -85,9 +86,13 @@ class TCPHandshakeAnalyzer:
             flow_key = self._get_flow_key(packet, 'client')
 
             if flow_key not in self.incomplete_handshakes:
+                ip = get_ip_layer(packet)
+                if not ip:
+                    return
+
                 handshake = HandshakeFlow(
-                    src_ip=packet['IP'].src,
-                    dst_ip=packet['IP'].dst,
+                    src_ip=ip.src,
+                    dst_ip=ip.dst,
                     src_port=tcp.sport,
                     dst_port=tcp.dport,
                     syn_time=packet_time,
@@ -180,10 +185,10 @@ class TCPHandshakeAnalyzer:
         Returns:
             Clé de flux
         """
-        if not packet.haslayer('IP') or not packet.haslayer(TCP):
+        ip = get_ip_layer(packet)
+        if not ip or not packet.haslayer(TCP):
             return ""
 
-        ip = packet['IP']
         tcp = packet[TCP]
 
         if direction == 'client':

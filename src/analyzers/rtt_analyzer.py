@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 import statistics
+from ..utils.packet_utils import get_ip_layer
 
 
 @dataclass
@@ -83,7 +84,8 @@ class RTTAnalyzer:
 
     def process_packet(self, packet: Packet, packet_num: int) -> None:
         """Traite un paquet individuel"""
-        if not packet.haslayer(TCP) or not packet.haslayer(IP):
+        ip = get_ip_layer(packet)
+        if not packet.haslayer(TCP) or not ip:
             return
 
         tcp = packet[TCP]
@@ -169,13 +171,17 @@ class RTTAnalyzer:
 
     def _get_flow_key(self, packet: Packet) -> str:
         """Génère une clé de flux unidirectionnelle"""
-        ip = packet[IP]
+        ip = get_ip_layer(packet)
+        if not ip:
+            return ""
         tcp = packet[TCP]
         return f"{ip.src}:{tcp.sport}->{ip.dst}:{tcp.dport}"
 
     def _get_reverse_flow_key(self, packet: Packet) -> str:
         """Génère la clé de flux inverse"""
-        ip = packet[IP]
+        ip = get_ip_layer(packet)
+        if not ip:
+            return ""
         tcp = packet[TCP]
         return f"{ip.dst}:{tcp.dport}->{ip.src}:{tcp.sport}"
 

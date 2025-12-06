@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, asdict, field
 from collections import defaultdict
 from datetime import datetime
+from ..utils.packet_utils import get_ip_layer
 
 
 @dataclass
@@ -76,11 +77,11 @@ class SYNRetransmissionAnalyzer:
 
     def process_packet(self, packet: Packet, packet_num: int) -> None:
         """Traite un paquet individuel"""
-        if not packet.haslayer(TCP) or not packet.haslayer('IP'):
+        ip = get_ip_layer(packet)
+        if not packet.haslayer(TCP) or not ip:
             return
 
         tcp = packet[TCP]
-        ip = packet['IP']
         packet_time = float(packet.time)
 
         # Memory optimization: periodic cleanup of stale pending SYNs

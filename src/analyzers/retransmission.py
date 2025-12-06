@@ -6,6 +6,7 @@ from scapy.all import Packet, TCP, IP
 from typing import List, Dict, Any, Set, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict
+from ..utils.packet_utils import get_ip_layer
 
 
 @dataclass
@@ -126,7 +127,8 @@ class RetransmissionAnalyzer:
 
     def process_packet(self, packet: Packet, packet_num: int) -> None:
         """Traite un paquet individuel"""
-        if not packet.haslayer(TCP) or not packet.haslayer(IP):
+        ip = get_ip_layer(packet)
+        if not packet.haslayer(TCP) or not ip:
             return
 
         # Memory optimization: periodic cleanup
@@ -167,7 +169,9 @@ class RetransmissionAnalyzer:
     def _analyze_packet(self, packet_num: int, packet: Packet) -> None:
         """Analyse un paquet TCP individuel"""
         tcp = packet[TCP]
-        ip = packet[IP]
+        ip = get_ip_layer(packet)
+        if not ip:
+            return
         timestamp = float(packet.time)
 
         flow_key = self._get_flow_key(packet)
@@ -361,13 +365,17 @@ class RetransmissionAnalyzer:
 
     def _get_flow_key(self, packet: Packet) -> str:
         """Génère une clé de flux unidirectionnelle"""
-        ip = packet[IP]
+        ip = get_ip_layer(packet)
+        if not ip:
+            return ""
         tcp = packet[TCP]
         return f"{ip.src}:{tcp.sport}->{ip.dst}:{tcp.dport}"
 
     def _get_reverse_flow_key(self, packet: Packet) -> str:
         """Génère la clé de flux inverse"""
-        ip = packet[IP]
+        ip = get_ip_layer(packet)
+        if not ip:
+            return ""
         tcp = packet[TCP]
         return f"{ip.dst}:{tcp.dport}->{ip.src}:{tcp.sport}"
 
