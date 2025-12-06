@@ -201,37 +201,38 @@
 
         <!-- Analyse des timestamps -->
         {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}
-        <h2>
-            ⏱️ Analyse des timestamps
-            <div class="info-tooltip">
-                <span class="info-icon">i</span>
-                <span class="tooltip-text">
-                    <strong>🔍 Gaps Temporels :</strong>
-                    <br>Période de silence anormale entre paquets.
-                    <br>• Serveur : Traitement long (GC, I/O).
-                    <br>• Réseau : Perte de connectivité temporaire.
-                    <br>• Client : Pause utilisateur/script.
-                    <br>Investiguer logs et corréler timestamps.
-                </span>
-            </div>
-        </h2>
-        <div class="section {% if retransmission and retransmission.rto_count == 0 and not is_very_small_capture %}success{% else %}warning{% endif %}">
-            <h3>
-                {{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }}
-                {% if retransmission and retransmission.rto_count == 0 and not is_very_small_capture %}
-                    période(s) de silence détectée(s) (Pause Applicative)
-                {% else %}
-                    gap(s) temporel(s) anormal(aux) détecté(s)
-                {% endif %}
-            </h3>
-
-            {% if timestamps.get('periodic_pattern_detected', false) %}
-            <div class="alert alert-info" style="margin-bottom: 15px;">
-                <strong>ℹ️ Pattern périodique détecté:</strong> {{ timestamps['gaps_detected'] - timestamps.get('non_periodic_gaps', 0) }} gaps réguliers ont été masqués.
-                Seuls les gaps hors pattern sont affichés ci-dessous.
-            </div>
-            {% endif %}
-
+        <h2>⏱️ Analyse des timestamps</h2>
+                <div class="section {% if retransmission and retransmission.rto_count == 0 and not is_very_small_capture %}success{% else %}warning{% endif %}">
+                    <h3>
+                        {{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }}
+                        {% if retransmission and retransmission.rto_count == 0 and not is_very_small_capture %}
+                            période(s) de silence détectée(s) (Pause Applicative)
+                        {% else %}
+                            gap(s) temporel(s) anormal(aux) détecté(s)
+                        {% endif %}
+                    </h3>
+                    
+                    <div class="info-box">
+                        <p><strong>🔍 Comprendre les Gaps Temporels :</strong></p>
+                        <ul>
+                            <li><strong>Définition :</strong> Une période de "silence" anormalement longue entre deux paquets consécutifs dans un même flux ou globalement.</li>
+                            <li><strong>Implications :</strong>
+                                <ul>
+                                    <li><strong>Côté Serveur :</strong> Peut indiquer un traitement long (traitement de base de données, Garbage Collection, attente I/O).</li>
+                                    <li><strong>Côté Réseau :</strong> Peut indiquer une perte de connectivité temporaire ou un changement de route.</li>
+                                    <li><strong>Côté Client :</strong> Peut être une pause utilisateur ou un script qui attend.</li>
+                                </ul>
+                            </li>
+                            <li><strong>Investigation :</strong> Notez les timestamps exacts et corrélez-les avec les logs de vos serveurs (fichiers de log, graphiques CPU/RAM) pour voir s'il y avait une activité intense ou une erreur à ce moment-là.</li>
+                        </ul>
+                    </div>
+                    
+                    {% if timestamps.get('periodic_pattern_detected', false) %}
+                    <div class="alert alert-info" style="margin-bottom: 15px;">
+                        <strong>ℹ️ Pattern périodique détecté:</strong> {{ timestamps['gaps_detected'] - timestamps.get('non_periodic_gaps', 0) }} gaps réguliers ont été masqués.
+                        Seuls les gaps hors pattern sont affichés ci-dessous.
+                    </div>
+                    {% endif %}
             <div class="collapsible-header">
                 <span class="toggle-icon">▶</span>
                 <span class="header-title">
