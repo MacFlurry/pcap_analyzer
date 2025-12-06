@@ -139,9 +139,13 @@ class ThroughputAnalyzer:
             'mbps': (bps * 8) / 1_000_000  # megabits per second (decimal)
         }
 
+    def finalize(self) -> Dict[str, Any]:
+        """Finalize analysis and return results"""
+        return self.get_results()
+
     def get_results(self) -> Dict[str, Any]:
         """Retourne les résultats de l'analyse"""
-        
+
         # Throughput global
         global_throughput = self._calculate_throughput(
             self.total_bytes,

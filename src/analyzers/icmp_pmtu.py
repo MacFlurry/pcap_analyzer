@@ -111,7 +111,9 @@ class ICMPAnalyzer:
                     original_src = icmp.payload.src
                 if hasattr(icmp.payload, 'dst'):
                     original_dst = icmp.payload.dst
-            except:
+            except (AttributeError, ValueError, TypeError):
+                # Malformed ICMP payload - unable to extract original packet info
+                # This can happen with truncated or corrupted packets
                 pass
 
             # MTU pour "Fragmentation Needed" (code 4)

@@ -2,6 +2,7 @@
 Analyseurs réseau pour PCAP Analyzer
 """
 
+from .base_analyzer import BaseAnalyzer
 from .timestamp_analyzer import TimestampAnalyzer
 from .tcp_handshake import TCPHandshakeAnalyzer
 from .retransmission import RetransmissionAnalyzer
@@ -21,6 +22,7 @@ from .temporal_pattern import TemporalPatternAnalyzer
 from .sack_analyzer import SackAnalyzer
 
 __all__ = [
+    'BaseAnalyzer',
     'TimestampAnalyzer',
     'TCPHandshakeAnalyzer',
     'RetransmissionAnalyzer',

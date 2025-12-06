@@ -72,7 +72,11 @@ class TCPResetAnalyzer:
             return f"{ip1}:{port1} → {ip2}:{port2}"
         else:
             return f"{ip2}:{port2} → {ip1}:{port1}"
-            
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalize analysis and return results"""
+        return self.get_results()
+
     def get_results(self) -> Dict[str, Any]:
         """Retourne les résultats de l'analyse"""
         if not self.reset_packets:

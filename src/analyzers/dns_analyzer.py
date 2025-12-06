@@ -242,8 +242,10 @@ class DNSAnalyzer:
                     if hasattr(rr, 'rdata'):
                         rdata = str(rr.rdata)
                         answers.append(rdata)
-                except:
-                    pass
+                except (IndexError, AttributeError, ValueError, TypeError) as e:
+                    # Malformed DNS answer record - skip it
+                    # Common causes: truncated packets, invalid encoding
+                    continue
 
         rcode_name = self.DNS_RCODES.get(dns.rcode, f'RCODE{dns.rcode}')
 

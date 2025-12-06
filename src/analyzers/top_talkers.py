@@ -77,9 +77,14 @@ class TopTalkersAnalyzer:
         if src_port: conv['src_port'] = src_port
         if dst_port: conv['dst_port'] = dst_port
 
+    def finalize(self) -> Dict[str, Any]:
+        """Finalize analysis and return results"""
+        return self.get_results()
+
     def get_results(self) -> Dict[str, Any]:
         """Retourne les résultats de l'analyse"""
-        
+
+
         # Top IPs by total volume (sent + received)
         sorted_ips = []
         for ip, stats in self.ip_stats.items():
