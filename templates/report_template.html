@@ -179,6 +179,7 @@
                         {% if rto_rate > 0.05 or retransmission.rto_count > 5 %}🔴{% else %}🔵{% endif %} RTO: {{ retransmission.rto_count }}
                     {% endif %}
                     {% if retransmission.fast_retrans_count > 0 %}🟠 FR: {{ retransmission.fast_retrans_count }}{% endif %}
+                    {% if retransmission.other_retrans_count > 0 %}🔵 OT: {{ retransmission.other_retrans_count }}{% endif %}
                 </small>
             </div>
 
