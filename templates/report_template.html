@@ -1585,18 +1585,7 @@
 
         <!-- Bursts de Paquets -->
         {% if burst and burst.summary.total_intervals > 0 %}
-        <h2>
-            💥 Analyse des Bursts de Paquets
-            <div class="info-tooltip">
-                <span class="info-icon">i</span>
-                <span class="tooltip-text">
-                    <strong>🔍 Bursts (Rafales) :</strong>
-                    <br>Augmentation soudaine du trafic (ex: >10x moyenne).
-                    <br>• Impact : Micro-congestions, saturation buffers, pertes.
-                    <br>• Risque : Souvent invisible sur graphiques longs.
-                </span>
-            </div>
-        </h2>
+        <h2>💥 Analyse des Bursts de Paquets</h2>
         <div class="section {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
             
             <div class="info-box">
