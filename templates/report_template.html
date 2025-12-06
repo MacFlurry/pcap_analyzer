@@ -1599,6 +1599,15 @@
         </h2>
         <div class="section {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre les Bursts :</strong></p>
+                <ul>
+                    <li><strong>Définition :</strong> Un "burst" (rafale) est une augmentation soudaine et massive du trafic sur un intervalle très court (ici 100ms).</li>
+                    <li><strong>Impact :</strong> Ces micro-congestions invisibles sur les graphiques à la minute peuvent saturer les buffers des switchs et causer des pertes de paquets aléatoires.</li>
+                    <li><strong>Seuil :</strong> Un ratio > 10x la moyenne est considéré comme risqué.</li>
+                </ul>
+            </div>
+
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
@@ -1774,20 +1783,18 @@
 
         <!-- Patterns Temporels -->
         {% if temporal and temporal.summary.total_slots > 0 %}
-        <h2>
-            📅 Analyse des Patterns Temporels
-            <div class="info-tooltip">
-                <span class="info-icon">i</span>
-                <span class="tooltip-text">
-                    <strong>🔍 Patterns Temporels :</strong>
-                    <br>Détecte comportements périodiques (machines) ou tendances humaines.
-                    <br>• Périodicité : Monitoring, heartbeat, tâche cron.
-                    <br>• Pics/Creux : Corrélation incidents, maintenance.
-                </span>
-            </div>
-        </h2>
+        <h2>📅 Analyse des Patterns Temporels</h2>
         <div class="section">
             
+            <div class="info-box">
+                <p><strong>🔍 Comprendre les Patterns Temporels :</strong></p>
+                <ul>
+                    <li><strong>Objectif :</strong> Détecter des comportements périodiques (machines) ou des tendances humaines (pics/creux).</li>
+                    <li><strong>Périodicité :</strong> Indique souvent un script de monitoring, un heartbeat, une tâche cron ou une synchronisation automatique. Utile pour identifier du "bruit de fond" non-humain.</li>
+                    <li><strong>Pics/Creux :</strong> Permettent de corréler des incidents ou de planifier des maintenances aux heures creuses.</li>
+                </ul>
+            </div>
+
             <!-- Stats globales -->
             <div class="summary-grid">
                 <div class="summary-card info">
