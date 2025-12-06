@@ -95,6 +95,7 @@
     </style>
 </head>
 <body>
+    {% set is_very_small_capture = analysis_info.total_packets < 100 %}
     {% macro format_bytes(value) %}
     {% set bytes = value or 0 %}
     {% if bytes < 1024 %}
@@ -197,8 +198,15 @@
         <!-- Analyse des timestamps -->
         {% if timestamps['gaps_detected'] > 0 and (not timestamps.get('periodic_pattern_detected', false) or timestamps.get('non_periodic_gaps', 0) > 0) %}
         <h2>⏱️ Analyse des timestamps</h2>
-        <div class="section warning">
-            <h3>{{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }} gap(s) temporel(s) anormal(aux) détecté(s)</h3>
+        <div class="section {% if retransmission and retransmission.rto_count == 0 and not is_very_small_capture %}success{% else %}warning{% endif %}">
+            <h3>
+                {{ timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) }}
+                {% if retransmission and retransmission.rto_count == 0 and not is_very_small_capture %}
+                    période(s) de silence détectée(s) (Pause Applicative)
+                {% else %}
+                    gap(s) temporel(s) anormal(aux) détecté(s)
+                {% endif %}
+            </h3>
             
             <div class="info-box">
                 <p><strong>🔍 Comprendre les Gaps Temporels :</strong></p>
@@ -1995,7 +2003,6 @@
                 <div class="interpretive-summary">
                     {% set has_incident = false %}
                     {% set is_small_capture = analysis_info.total_packets < 1000 %}
-                    {% set is_very_small_capture = analysis_info.total_packets < 100 %}
 
                     {# Logique contextuelle améliorée : ne pas alarmer sur patterns réguliers #}
                     {# Utilise non_periodic_gaps au lieu de gaps_detected total #}
