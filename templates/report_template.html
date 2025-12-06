@@ -96,6 +96,7 @@
 </head>
 <body>
     {% set is_very_small_capture = analysis_info.total_packets < 100 %}
+    {% set rto_rate = (retransmission.rto_count / analysis_info.total_packets * 100) if analysis_info.total_packets > 0 else 0 %}
     {% macro format_bytes(value) %}
     {% set bytes = value or 0 %}
     {% if bytes < 1024 %}
@@ -170,11 +171,13 @@
                 <div class="value">{{ tcp_handshake.slow_handshakes }}</div>
             </div>
 
-            <div class="summary-card {% if retransmission.total_retransmissions > 20 %}danger{% elif retransmission.total_retransmissions > 5 %}warning{% else %}success{% endif %}">
+            <div class="summary-card {% if rto_rate > 0.5 or retransmission.rto_count > 50 %}danger{% elif rto_rate > 0.05 or retransmission.rto_count > 5 %}warning{% else %}success{% endif %}">
                 <h3>Retransmissions</h3>
                 <div class="value">{{ retransmission.total_retransmissions }}</div>
                 <small>
-                    {% if retransmission.rto_count > 0 %}🔴 RTO: {{ retransmission.rto_count }}{% endif %}
+                    {% if retransmission.rto_count > 0 %}
+                        {% if rto_rate > 0.05 or retransmission.rto_count > 5 %}🔴{% else %}🔵{% endif %} RTO: {{ retransmission.rto_count }}
+                    {% endif %}
                     {% if retransmission.fast_retrans_count > 0 %}🟠 FR: {{ retransmission.fast_retrans_count }}{% endif %}
                 </small>
             </div>
@@ -974,13 +977,15 @@
                             <tr>
                                 <th>Domaine</th>
                                 <th>Nombre de problèmes</th>
+                                <th>Type principal</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for domain, count in dns.top_problematic_domains %}
+                            {% for item in dns.top_problematic_domains %}
                             <tr>
-                                <td><code>{{ domain }}</code></td>
-                                <td>{{ count }}</td>
+                                <td><code>{{ item.domain }}</code></td>
+                                <td>{{ item.count }}</td>
+                                <td><span class="badge warning">{{ item.main_error }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -1557,7 +1562,7 @@
                         <td>{{ burst.interval_stats.min_packets_per_interval }}</td>
                     </tr>
                     <tr>
-                        <td>Paquets/intervalle (max)</td>
+                        <td>Pic d'activité (Max)</td>
                         <td><span class="badge {% if burst.interval_stats.max_packets_per_interval > burst.interval_stats.avg_packets_per_interval * 3 %}danger{% else %}info{% endif %}">{{ burst.interval_stats.max_packets_per_interval }}</span></td>
                     </tr>
                     <tr>
@@ -1711,7 +1716,7 @@
                         <td>{{ temporal.slot_stats.min_packets_per_slot }}</td>
                     </tr>
                     <tr>
-                        <td>Paquets/créneau (max)</td>
+                        <td>Pic d'activité (Max)</td>
                         <td><span class="badge {% if temporal.slot_stats.peak_to_avg_ratio > 3 %}danger{% else %}info{% endif %}">{{ temporal.slot_stats.max_packets_per_slot }}</span></td>
                     </tr>
                     <tr>
@@ -2043,8 +2048,8 @@
                     {% if timestamps and timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) > 10 and not is_very_small_capture and retransmission and retransmission.rto_count > 0 %}
                         {% set has_incident = true %}
                     {% endif %}
-                    {# Retransmissions : seuils plus élevés et rate > 5% #}
-                    {% if retransmission and (retransmission.rto_count > 0 or (retransmission.total_retransmissions > 1000 and retransmission.retransmission_rate > 5.0)) %}
+                    {# Retransmissions : seuils RTO > 0.5% ou volume massif #}
+                    {% if retransmission and (rto_rate > 0.5 or (retransmission.total_retransmissions > 5000 and retransmission.retransmission_rate > 5.0)) %}
                         {% set has_incident = true %}
                     {% endif %}
                     {# Débit < 1 Mbps n'est un problème QUE si volume significatif ET pas de pattern périodique #}
@@ -2082,7 +2087,6 @@
 
                             {% if retransmission and retransmission.total_retransmissions > 0 %}
                             <li><strong>Retransmissions TCP :</strong> {{ retransmission.total_retransmissions }} paquets retransmis.
-                                {% set rto_rate = (retransmission.rto_count / analysis_info.total_packets * 100) if analysis_info.total_packets > 0 else 0 %}
 
                                 {% if rto_rate > 0.5 or retransmission.rto_count > 100 %}
                                     <br><span class="text-danger">🔴 <strong>Critique :</strong> {{ retransmission.rto_count }} RTOs détectés ({{ "%.2f"|format(rto_rate) }}%).</span> Volume élevé de timeouts : indique une congestion sévère ou une connectivité instable.

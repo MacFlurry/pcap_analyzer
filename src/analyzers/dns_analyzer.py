@@ -313,18 +313,40 @@ class DNSAnalyzer:
                 'mean_response_time': sum(response_times) / len(response_times),
             }
 
-        # Domaines problématiques
-        problematic_domains = defaultdict(int)
+        # Domaines problématiques (Agrégation enrichie)
+        problematic_domains = defaultdict(lambda: {'count': 0, 'types': defaultdict(int)})
         for t in self.transactions:
             if t.status in ['slow', 'error', 'timeout']:
-                problematic_domains[t.query.query_name] += 1
+                domain = t.query.query_name
+                problematic_domains[domain]['count'] += 1
+                
+                # Détermine le type d'erreur
+                error_type = "Unknown"
+                if t.timed_out:
+                    error_type = "Timeout"
+                elif t.status == 'slow':
+                    error_type = "Slow Response"
+                elif t.response:
+                    error_type = t.response.response_code_name
+                
+                problematic_domains[domain]['types'][error_type] += 1
 
-        # Top domaines problématiques
-        top_problematic = sorted(
-            problematic_domains.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:10]
+        # Top domaines problématiques (Format liste de dicts)
+        top_problematic = []
+        # Tri par nombre d'occurrences décroissant
+        sorted_domains = sorted(problematic_domains.items(), key=lambda x: x[1]['count'], reverse=True)[:10]
+        
+        for domain, data in sorted_domains:
+            # Trouve l'erreur la plus fréquente
+            main_error = "N/A"
+            if data['types']:
+                main_error = max(data['types'].items(), key=lambda x: x[1])[0]
+            
+            top_problematic.append({
+                'domain': domain,
+                'count': data['count'],
+                'main_error': main_error
+            })
 
         return {
             'total_queries': total_queries,
@@ -341,7 +363,7 @@ class DNSAnalyzer:
                 'critical_seconds': self.response_critical,
                 'timeout_seconds': self.timeout
             },
-            'problematic_domains': dict(problematic_domains),
+            'problematic_domains': dict(problematic_domains), # Note: defaultdict converti en dict simple
             'top_problematic_domains': top_problematic,
             'transactions': [self._transaction_to_dict(t) for t in self.transactions],
             'slow_transactions_details': [self._transaction_to_dict(t) for t in slow],
