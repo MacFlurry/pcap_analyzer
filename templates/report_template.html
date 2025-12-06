@@ -232,7 +232,13 @@
 
             <div class="collapsible-header">
                 <span class="toggle-icon">▶</span>
-                <span class="header-title">📋 Liste détaillée des gaps anormaux</span>
+                <span class="header-title">
+                    {% if retransmission and retransmission.rto_count == 0 and not is_very_small_capture %}
+                        📋 Liste détaillée des périodes de silence
+                    {% else %}
+                        📋 Liste détaillée des gaps anormaux
+                    {% endif %}
+                </span>
             </div>
             <div class="collapsible-content">
                 <div class="content-inner">
