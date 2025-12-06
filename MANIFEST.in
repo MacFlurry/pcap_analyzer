@@ -12,8 +12,9 @@ include TROUBLESHOOTING.md
 # Include configuration files
 include config.yaml
 
-# Include templates
+# Include templates and static assets
 recursive-include templates *.html
+recursive-include templates/static/css *.css
 
 # Include source files
 recursive-include src *.py

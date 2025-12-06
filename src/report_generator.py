@@ -81,12 +81,21 @@ class ReportGenerator:
             base_path = self.output_dir / output_name
 
         # Ajoute des métadonnées
+        total_packets = analysis_results.get('timestamps', {}).get('total_packets', 0)
         analysis_results['analysis_info'] = {
             'pcap_file': pcap_file,
             'analysis_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            'total_packets': analysis_results.get('timestamps', {}).get('total_packets', 0),
-            'capture_duration': analysis_results.get('timestamps', {}).get('capture_duration_seconds', 0)
+            'total_packets': total_packets,
+            'capture_duration': analysis_results.get('timestamps', {}).get('capture_duration_seconds', 0),
+            # Pre-calculated flags for template logic (moved from template to Python)
+            'is_very_small_capture': total_packets < 100,
+            'is_small_capture': total_packets < 1000
         }
+
+        # Calculate RTO rate (moved from template to Python)
+        retrans_data = analysis_results.get('retransmission', {})
+        rto_count = retrans_data.get('rto_count', 0)
+        analysis_results['analysis_info']['rto_rate'] = (rto_count / total_packets * 100) if total_packets > 0 else 0
 
         # Génère le rapport JSON
         json_path = Path(f"{base_path}.json")
@@ -108,6 +117,15 @@ class ReportGenerator:
 
     def _generate_html(self, data: Dict[str, Any], output_path: Path) -> None:
         """Génère le rapport HTML"""
+        # Load CSS file for embedding (self-contained HTML reports)
+        css_path = Path(__file__).parent.parent / "templates" / "static" / "css" / "report.css"
+        try:
+            with open(css_path, 'r', encoding='utf-8') as f:
+                embedded_css = f.read()
+        except FileNotFoundError:
+            # Fallback: use minimal CSS if file not found
+            embedded_css = "/* CSS file not found */"
+
         # Regrouper les retransmissions par flux pour l'affichage collapsible
         retrans_data = data.get('retransmission', {})
         retrans_by_flow = {}
@@ -139,6 +157,7 @@ class ReportGenerator:
         
         template = self.env.get_template("report_template.html")
         html_content = template.render(
+            embedded_css=embedded_css,
             analysis_info=data.get('analysis_info', {}),
             timestamps=data.get('timestamps', {}),
             tcp_handshake=data.get('tcp_handshake', {}),
