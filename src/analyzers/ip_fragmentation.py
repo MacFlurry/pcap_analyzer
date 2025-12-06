@@ -102,6 +102,11 @@ class IPFragmentationAnalyzer:
                 
             # Vérifier si le réassemblage est complet
             self._check_reassembly(frag_key)
+
+            # Cleanup completed fragment groups to prevent memory leaks
+            if frag_info['complete']:
+                # Mark for deletion after processing (can't delete during iteration)
+                pass
             
     def _check_reassembly(self, frag_key):
         """Vérifie si tous les fragments ont été reçus"""
@@ -133,8 +138,16 @@ class IPFragmentationAnalyzer:
     def finalize(self):
         """Finalise l'analyse - détecte les fragments perdus"""
         current_time = time.time()
-        
+
+        # Track completed fragments for cleanup
+        completed_fragments = []
+
         for frag_key, frag_info in self.fragments.items():
+            # Mark completed reassemblies for cleanup
+            if frag_info['complete']:
+                completed_fragments.append(frag_key)
+                continue
+
             # Si le fragment n'est pas complet après le timeout
             if not frag_info['complete']:
                 age = current_time - frag_info['last_seen']
@@ -153,6 +166,10 @@ class IPFragmentationAnalyzer:
                     'flow_key': flow_key
                 })
         
+        # Cleanup completed fragment groups to free memory
+        for frag_key in completed_fragments:
+            del self.fragments[frag_key]
+
         # Calculer les moyennes
         for flow_key, stats in self.fragmented_flows.items():
             if stats['fragment_count'] > 0:

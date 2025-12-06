@@ -128,6 +128,10 @@ class RetransmissionAnalyzer:
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
+        # Cleanup: Clear _seen_segments to free memory
+        # No longer needed after analysis is complete
+        self._seen_segments.clear()
+
         self._calculate_flow_severity()
         return self._generate_report()
 
@@ -250,8 +254,11 @@ class RetransmissionAnalyzer:
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]['retransmissions'] += 1
             
-            # On enregistre TOUTES les occurrences (original + retransmissions)
-            self._seen_segments[flow_key][segment_key].append((packet_num, timestamp))
+            # Store only original packet info to prevent unbounded memory growth
+            # We only need the first occurrence to detect retransmissions
+            if segment_key not in self._seen_segments[flow_key]:
+                self._seen_segments[flow_key][segment_key] = [(packet_num, timestamp)]
+            # For retransmissions, we already have the original, no need to store more
             
         # Mettre à jour le plus haut seq vu pour ce flux (POUR TOUS LES PAQUETS)
         if flow_key not in self._highest_seq or next_seq > self._highest_seq[flow_key][0]:

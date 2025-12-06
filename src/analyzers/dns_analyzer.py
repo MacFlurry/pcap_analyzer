@@ -196,6 +196,17 @@ class DNSAnalyzer:
 
         self._recent_queries[query_key] = timestamp
 
+        # Cleanup old entries from _recent_queries to prevent unbounded growth
+        # Remove entries older than 60s (well beyond the 2s repeat window)
+        cleanup_threshold = 60.0
+        keys_to_remove = []
+        for key, ts in self._recent_queries.items():
+            if timestamp - ts > cleanup_threshold:
+                keys_to_remove.append(key)
+
+        for key in keys_to_remove:
+            del self._recent_queries[key]
+
         # Enregistre la query en attente de réponse
         # Note: On utilise (id, src_ip, src_port) comme clé pour gérer les collisions d'ID
         query_full_key = (dns.id, ip.src, udp.sport)

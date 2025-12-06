@@ -125,13 +125,37 @@ class RTTAnalyzer:
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
-        self._calculate_flow_statistics()
-        return self._generate_report()
+        # Cleanup unacked segments older than 60s to prevent memory leaks
+        self._cleanup_stale_segments()
 
         # Calcule les statistiques par flux
         self._calculate_flow_statistics()
 
         return self._generate_report()
+
+    def _cleanup_stale_segments(self) -> None:
+        """Clean up unacked segments older than 60s to prevent memory leaks"""
+        if not self.measurements:
+            return
+
+        # Use the last measurement timestamp as reference
+        current_time = self.measurements[-1].timestamp if self.measurements else 0
+        timeout_threshold = 60.0  # 60 seconds
+
+        for flow_key in list(self._unacked_segments.keys()):
+            segments_to_remove = []
+            for seq, (packet_num, timestamp, payload_len) in list(self._unacked_segments[flow_key].items()):
+                # Remove segments older than 60s
+                if current_time - timestamp > timeout_threshold:
+                    segments_to_remove.append(seq)
+
+            # Remove stale segments
+            for seq in segments_to_remove:
+                del self._unacked_segments[flow_key][seq]
+
+            # Clean up empty flow entries
+            if not self._unacked_segments[flow_key]:
+                del self._unacked_segments[flow_key]
 
     def _get_flow_key(self, packet: Packet) -> str:
         """Génère une clé de flux unidirectionnelle"""
