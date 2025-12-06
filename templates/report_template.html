@@ -377,38 +377,45 @@
             {% endif %}
 
             {% if retransmission.retrans_by_flow %}
-            <h4>Détails des retransmissions par flux (Top {{ [retransmission.retrans_by_flow|length, 10]|min }}):</h4>
-            {% for flow_data in retransmission.retrans_by_flow[:10] %}
             <div class="collapsible-header">
                 <span class="toggle-icon">▶</span>
-                <span class="header-title">{{ flow_data.flow_key }}</span>
-                <span class="header-info">({{ flow_data.total_retransmissions_in_flow }} retransmissions)</span>
+                <span class="header-title">📋 Détails des retransmissions par flux (Top {{ [retransmission.retrans_by_flow|length, 10]|min }})</span>
             </div>
             <div class="collapsible-content">
                 <div class="content-inner">
-                    <div class="detail-box">
-                        <h5>Détails pour le flux <code>{{ flow_data.flow_key }}</code></h5>
-                        <ul class="timeline-list">
-                            {% for r in flow_data.details %}
-                            <li>
-                                Retransmission #{{ loop.index }}: Paquet <span class="attempt-num">{{ r.packet_num }}</span> (Original: #{{ r.original_packet_num }})
-                                <span class="time-offset">Délai: {{ "%.2f"|format(r.delay * 1000) }}ms</span>
-                                <br>Seq: {{ r.seq_num }} - Type: <strong>{{ r.retrans_type }}</strong>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                        <div class="filter-box">
-                            <span class="filter-label">🔍 Filtre tcpdump:</span>
-                            <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'tcp and host {{ flow_data.details[0].src_ip }} and port {{ flow_data.details[0].src_port }} and host {{ flow_data.details[0].dst_ip }} and port {{ flow_data.details[0].dst_port }}'</div>
-                        </div>
-                        <div class="filter-box">
-                            <span class="filter-label">🔍 Filtre Wireshark:</span>
-                            <div class="filter-command">ip.addr == {{ flow_data.details[0].src_ip }} && tcp.port == {{ flow_data.details[0].src_port }} && ip.addr == {{ flow_data.details[0].dst_ip }} && tcp.port == {{ flow_data.details[0].dst_port }}</div>
+                    {% for flow_data in retransmission.retrans_by_flow[:10] %}
+                    <div class="collapsible-header detail-header">
+                        <span class="toggle-icon">▶</span>
+                        <span class="header-title">{{ flow_data.flow_key }}</span>
+                        <span class="header-info">({{ flow_data.total_retransmissions_in_flow }} retransmissions)</span>
+                    </div>
+                    <div class="collapsible-content detail-content">
+                        <div class="content-inner">
+                            <div class="detail-box">
+                                <h5>Détails pour le flux <code>{{ flow_data.flow_key }}</code></h5>
+                                <ul class="timeline-list">
+                                    {% for r in flow_data.details %}
+                                    <li>
+                                        Retransmission #{{ loop.index }}: Paquet <span class="attempt-num">{{ r.packet_num }}</span> (Original: #{{ r.original_packet_num }})
+                                        <span class="time-offset">Délai: {{ "%.2f"|format(r.delay * 1000) }}ms</span>
+                                        <br>Seq: {{ r.seq_num }} - Type: <strong>{{ r.retrans_type }}</strong>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                <div class="filter-box">
+                                    <span class="filter-label">🔍 Filtre tcpdump:</span>
+                                    <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'tcp and host {{ flow_data.details[0].src_ip }} and port {{ flow_data.details[0].src_port }} and host {{ flow_data.details[0].dst_ip }} and port {{ flow_data.details[0].dst_port }}'</div>
+                                </div>
+                                <div class="filter-box">
+                                    <span class="filter-label">🔍 Filtre Wireshark:</span>
+                                    <div class="filter-command">ip.addr == {{ flow_data.details[0].src_ip }} && tcp.port == {{ flow_data.details[0].src_port }} && ip.addr == {{ flow_data.details[0].dst_ip }} && tcp.port == {{ flow_data.details[0].dst_port }}</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                    {% endfor %}
                 </div>
             </div>
-            {% endfor %}
             {% endif %}
         </div>
         {% endif %}
@@ -594,56 +601,115 @@
                 </ul>
             </div>
 
-            {% if tcp_reset.top_reset_flows and tcp_reset.top_reset_flows|length > 0 %}
-            <div class="collapsible-header">
-                <span class="toggle-icon">▶</span>
-                <span class="header-title">📋 Détails des flux avec RST</span>
-            </div>
-            <div class="collapsible-content">
-                <div class="content-inner">
-                    {% for flow in tcp_reset.top_reset_flows[:10] %}
-                    <div class="detail-box">
-                        <div class="info-line">
-                            <span class="info-label">Flux:</span>
-                            <span class="info-value"><code>{{ flow.flow_key }}</code></span>
-                        </div>
-                        
-                        <div class="info-line">
-                            <span class="info-label">Nombre de RST:</span>
-                            <span class="info-value count">{{ flow.count }}</span>
-                        </div>
-                        
-                        <div class="info-line">
-                            <span class="info-label">Type:</span>
-                            {% if flow.premature %}
-                            <span class="problem-badge">RST Prématuré (connexion refusée)</span>
-                            {% else %}
-                            <span class="problem-badge">RST Post-données (interruption)</span>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="info-line">
-                            <span class="info-label">Timestamps des RST:</span>
-                        </div>
-                                        <ul class="timeline-list">
-                                            {% for ts in flow.timestamps %}
-                                            <li>RST #{{ loop.index }}: <span class="time-offset">{{ ts }}</span></li>
-                                            {% endfor %}
-                                        </ul>                        
-                        <div class="filter-box">
-                            <span class="filter-label">🔍 Filtre tcpdump (RST uniquement):</span>
-                            <div class="filter-command">tcpdump -r file.pcap -tttt -nn '{{ flow.flow_key }} and tcp[tcpflags] & tcp-rst != 0'</div>
+                        {% if tcp_reset.top_reset_flows and tcp_reset.top_reset_flows|length > 0 %}
+
+                        <div class="collapsible-header">
+
+                            <span class="toggle-icon">▶</span>
+
+                            <span class="header-title">📋 Détails des flux avec RST ({{ tcp_reset.top_reset_flows|length }} flux)</span>
+
                         </div>
 
-                        <div class="filter-box">
-                            <span class="filter-label">🔍 Filtre Wireshark (flux complet):</span>
-                            <div class="filter-command">{{ flow.flow_key.replace('and', '&&').replace('host', 'ip.addr ==').replace('port', 'tcp.port ==') }}</div>
+                        <div class="collapsible-content">
+
+                            <div class="content-inner">
+
+                                {% for flow in tcp_reset.top_reset_flows[:10] %}
+
+                                <div class="collapsible-header detail-header">
+
+                                    <span class="toggle-icon">▶</span>
+
+                                    <span class="header-title">{{ flow.flow_key }}</span>
+
+                                    <span class="header-info">({{ flow.count }} RST, {% if flow.premature %}Prématuré{% else %}Post-données{% endif %})</span>
+
+                                </div>
+
+                                <div class="collapsible-content detail-content">
+
+                                    <div class="content-inner">
+
+                                        <div class="detail-box">
+
+                                            <div class="info-line">
+
+                                                <span class="info-label">Nombre de RST:</span>
+
+                                                <span class="info-value count">{{ flow.count }}</span>
+
+                                            </div>
+
+                                            
+
+                                            <div class="info-line">
+
+                                                <span class="info-label">Type:</span>
+
+                                                {% if flow.premature %}
+
+                                                <span class="problem-badge">RST Prématuré (connexion refusée)</span>
+
+                                                {% else %}
+
+                                                <span class="problem-badge">RST Post-données (interruption)</span>
+
+                                                {% endif %}
+
+                                            </div>
+
+                                            
+
+                                            <div class="info-line">
+
+                                                <span class="info-label">Timestamps des RST:</span>
+
+                                            </div>
+
+                                            <ul class="timeline-list">
+
+                                                {% for ts in flow.timestamps %}
+
+                                                <li>RST #{{ loop.index }}: <span class="time-offset">{{ ts }}</span></li>
+
+                                                {% endfor %}
+
+                                            </ul>
+
+                                            
+
+                                            <div class="filter-box">
+
+                                                <span class="filter-label">🔍 Filtre tcpdump (RST uniquement):</span>
+
+                                                <div class="filter-command">tcpdump -r file.pcap -tttt -nn '{{ flow.flow_key }} and tcp[tcpflags] & tcp-rst != 0'</div>
+
+                                            </div>
+
+            
+
+                                            <div class="filter-box">
+
+                                                <span class="filter-label">🔍 Filtre Wireshark (flux complet):</span>
+
+                                                <div class="filter-command">{{ flow.flow_key.replace('→', '&&').replace(':', '&&tcp.port==').replace(' ', '') }}</div>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                                {% endfor %}
+
+                            </div>
+
                         </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
+
+                        {% endif %}
         </div>
         {% endif %}
 
