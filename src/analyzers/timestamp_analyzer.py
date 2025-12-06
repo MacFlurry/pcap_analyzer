@@ -6,6 +6,7 @@ from scapy.all import rdpcap, Packet
 from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass, asdict
 import statistics
+from ..utils.packet_utils import get_src_ip, get_dst_ip
 
 
 @dataclass
@@ -120,19 +121,11 @@ class TimestampAnalyzer:
 
     def _get_src_ip(self, packet: Packet) -> str:
         """Extrait l'IP source du paquet"""
-        if packet.haslayer('IP'):
-            return packet['IP'].src
-        elif packet.haslayer('IPv6'):
-            return packet['IPv6'].src
-        return "N/A"
+        return get_src_ip(packet)
 
     def _get_dst_ip(self, packet: Packet) -> str:
         """Extrait l'IP destination du paquet"""
-        if packet.haslayer('IP'):
-            return packet['IP'].dst
-        elif packet.haslayer('IPv6'):
-            return packet['IPv6'].dst
-        return "N/A"
+        return get_dst_ip(packet)
 
     def _get_protocol(self, packet: Packet) -> str:
         """Détermine le protocole du paquet"""
