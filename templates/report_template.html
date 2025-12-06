@@ -680,23 +680,35 @@
 
                                             
 
-                                            <div class="filter-box">
+                                                                            <div class="filter-box">
 
-                                                <span class="filter-label">🔍 Filtre tcpdump (RST uniquement):</span>
+                                            
 
-                                                <div class="filter-command">tcpdump -r file.pcap -tttt -nn '{{ flow.flow_key }} and tcp[tcpflags] & tcp-rst != 0'</div>
+                                                                                <span class="filter-label">🔍 Filtre tcpdump (RST uniquement):</span>
 
-                                            </div>
+                                            
+
+                                                                                <div class="filter-command">tcpdump -r file.pcap -tttt -nn '{% set flow_parts = flow.flow_key.split(' → ') %}{% set src_ip_port = flow_parts[0].split(':') %}{% set dst_ip_port = flow_parts[1].split(':') %}{% set tcpdump_filter_expr = 'host ' + src_ip_port[0] + ' and port ' + src_ip_port[1] + ' and host ' + dst_ip_port[0] + ' and port ' + dst_ip_port[1] %}{{ tcpdump_filter_expr }} and tcp[tcpflags] & tcp-rst != 0'</div>
+
+                                            
+
+                                                                            </div>
 
             
 
-                                            <div class="filter-box">
+                                                                            <div class="filter-box">
 
-                                                <span class="filter-label">🔍 Filtre Wireshark (flux complet):</span>
+            
 
-                                                <div class="filter-command">{{ flow.flow_key.replace('→', '&&').replace(':', '&&tcp.port==').replace(' ', '') }}</div>
+                                                                                <span class="filter-label">🔍 Filtre Wireshark (flux complet):</span>
 
-                                            </div>
+            
+
+                                                                                <div class="filter-command">ip.addr == {{ src_ip_port[0] }} && tcp.port == {{ src_ip_port[1] }} && ip.addr == {{ dst_ip_port[0] }} && tcp.port == {{ dst_ip_port[1] }}</div>
+
+            
+
+                                                                            </div>
 
                                         </div>
 
