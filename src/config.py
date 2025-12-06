@@ -136,7 +136,29 @@ class Config:
             if key_file:
                 # Expand ~ and environment variables
                 expanded = os.path.expanduser(os.path.expandvars(key_file))
-                config['ssh']['key_file'] = expanded
+
+                # Security: Validate SSH key file exists and has secure permissions
+                if expanded and os.path.exists(expanded):
+                    # Check file permissions (should be 0600 or 0400)
+                    stat_info = os.stat(expanded)
+                    mode = stat_info.st_mode & 0o777  # Get permission bits
+
+                    # Check if group or others have any permissions (insecure)
+                    if mode & 0o077:
+                        raise ValueError(
+                            f"SSH key file has insecure permissions: {expanded}\n"
+                            f"Current permissions: {oct(mode)}\n"
+                            f"Expected: 0600 or 0400 (readable only by owner)\n"
+                            f"Fix with: chmod 600 {expanded}"
+                        )
+
+                    # Verify file is readable
+                    if not os.access(expanded, os.R_OK):
+                        raise ValueError(f"SSH key file is not readable: {expanded}")
+
+                    config['ssh']['key_file'] = expanded
+                elif expanded:
+                    raise FileNotFoundError(f"SSH key file not found: {expanded}")
 
     def get(self, key_path: str, default: Any = None) -> Any:
         """

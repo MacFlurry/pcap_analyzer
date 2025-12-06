@@ -47,8 +47,12 @@ class ReportGenerator:
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.env = Environment(loader=FileSystemLoader(template_dir))
+
+        # Enable autoescape for security (prevent XSS attacks)
+        self.env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=True
+        )
 
 
     def generate_report(self, analysis_results: Dict[str, Any],

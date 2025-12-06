@@ -36,5 +36,6 @@ __all__ = [
     'TCPTimeoutAnalyzer',
     'AsymmetricTrafficAnalyzer',
     'BurstAnalyzer',
-    'TemporalPatternAnalyzer'
+    'TemporalPatternAnalyzer',
+    'SackAnalyzer'  # Fixed: was imported but missing from __all__
 ]

@@ -1,0 +1,29 @@
+# Include documentation files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+include QUICKSTART.md
+include STRUCTURE.md
+include SUMMARY.md
+include TEST.md
+include TROUBLESHOOTING.md
+
+# Include configuration files
+include config.yaml
+
+# Include templates
+recursive-include templates *.html
+
+# Include source files
+recursive-include src *.py
+
+# Exclude compiled Python files and caches
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude *.so
+global-exclude *.dylib
+
+# Exclude test captures and generated reports
+global-exclude capture*
+global-exclude reports/*

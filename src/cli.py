@@ -300,6 +300,21 @@ def analyze(pcap_file, latency, config, output, no_report, details, details_limi
         pcap_analyzer analyze capture.pcap -d          # Afficher détails retransmissions
         pcap_analyzer analyze capture.pcap -d --details-limit 50
     """
+    # Security: Validate and canonicalize pcap_file path to prevent symlink attacks
+    try:
+        pcap_path = Path(pcap_file).resolve(strict=True)
+        # Ensure it's a file and not a directory
+        if not pcap_path.is_file():
+            raise click.BadParameter(f"Le chemin spécifié n'est pas un fichier: {pcap_file}")
+        # Prevent reading sensitive system files
+        sensitive_dirs = ['/etc', '/root', '/sys', '/proc', '/dev']
+        for sensitive_dir in sensitive_dirs:
+            if str(pcap_path).startswith(sensitive_dir):
+                raise click.BadParameter(f"Accès refusé: impossible de lire des fichiers dans {sensitive_dir}")
+        pcap_file = str(pcap_path)
+    except (OSError, RuntimeError) as e:
+        raise click.BadParameter(f"Erreur de validation du chemin: {e}")
+
     # Charge la configuration
     cfg = get_config(config)
 
@@ -342,13 +357,28 @@ def capture(duration, filter, output, config, analyze, latency):
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output = f"capture_{timestamp}.pcap"
-    
-    # Validation du chemin de sortie
-    output_path = Path(output)
-    if not output_path.parent.exists():
-        raise click.BadParameter(f"Le dossier parent n'existe pas: {output_path.parent}")
-    if output_path.parent.is_file():
-        raise click.BadParameter(f"Le chemin parent est un fichier, pas un dossier: {output_path.parent}")
+
+    # Security: Validate output path to prevent path traversal attacks
+    try:
+        output_path = Path(output).resolve()
+
+        # Prevent directory traversal
+        if '..' in output:
+            raise click.BadParameter("Chemin non autorisé: '..' n'est pas permis dans le chemin de sortie")
+
+        # Prevent writing to sensitive system directories
+        sensitive_dirs = ['/etc', '/root', '/sys', '/proc', '/dev', '/usr', '/bin', '/sbin', '/boot']
+        for sensitive_dir in sensitive_dirs:
+            if str(output_path).startswith(sensitive_dir):
+                raise click.BadParameter(f"Accès refusé: impossible d'écrire dans {sensitive_dir}")
+
+        # Validate parent directory
+        if not output_path.parent.exists():
+            raise click.BadParameter(f"Le dossier parent n'existe pas: {output_path.parent}")
+        if output_path.parent.is_file():
+            raise click.BadParameter(f"Le chemin parent est un fichier, pas un dossier: {output_path.parent}")
+    except (OSError, RuntimeError) as e:
+        raise click.BadParameter(f"Erreur de validation du chemin de sortie: {e}")
 
     try:
         # Lance la capture

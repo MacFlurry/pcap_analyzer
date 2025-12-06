@@ -1,7 +1,10 @@
-scapy>=2.5.0
-paramiko>=3.4.0
-pyyaml>=6.0
-jinja2>=3.1.2
-rich>=13.7.0
-click>=8.1.7
-numpy>=1.24.0
+# Production dependencies for PCAP Analyzer
+# These match the install_requires in setup.py with upper bounds to prevent breaking changes
+
+scapy>=2.5.0,<3.0
+paramiko>=3.4.0,<4.0
+pyyaml>=6.0,<7.0
+jinja2>=3.1.2,<4.0
+rich>=13.7.0,<14.0
+click>=8.1.7,<9.0
+numpy>=1.24.0,<2.0  # Critical: NumPy 2.0 has breaking changes
