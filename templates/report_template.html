@@ -2110,8 +2110,9 @@
                     {% if timestamps and timestamps.get('non_periodic_gaps', timestamps['gaps_detected']) > 10 and not analysis_info.is_very_small_capture and retransmission and retransmission.rto_count > 0 %}
                         {% set has_incident = true %}
                     {% endif %}
-                    {# Retransmissions : seuils RTO > 0.5% ou volume massif #}
-                    {% if retransmission and (analysis_info.rto_rate > 0.5 or (retransmission.total_retransmissions > 5000 and retransmission.retransmission_rate > 5.0)) %}
+                    {# Retransmissions : seuils RTO uniquement (Fast Retrans ne sont pas des incidents) #}
+                    {# RTO > 0.5% indique un problème réseau sévère (timeouts) #}
+                    {% if retransmission and (analysis_info.rto_rate > 0.5 or retransmission.rto_count > 100) %}
                         {% set has_incident = true %}
                     {% endif %}
                     {# Débit < 0.1 Mbps n'est un problème QUE si volume significatif ET pas de pattern périodique #}
