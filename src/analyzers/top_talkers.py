@@ -5,7 +5,10 @@ Identifie les hôtes et conversations générant le plus de trafic
 
 from scapy.all import IP, TCP, UDP
 from collections import defaultdict
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from scapy.packet import Packet
 
 # Import PacketMetadata for hybrid mode support (3-5x faster)
 try:

@@ -4,9 +4,12 @@ Détecte et analyse les connexions TCP fermées brutalement
 """
 
 from scapy.all import TCP, IP
-from typing import Dict, List, Any, Union
+from typing import Dict, List, Any, Union, TYPE_CHECKING
 from collections import defaultdict
 from datetime import datetime
+
+if TYPE_CHECKING:
+    from scapy.packet import Packet
 
 # Import PacketMetadata for hybrid mode support (3-5x faster)
 try:
