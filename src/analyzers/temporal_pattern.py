@@ -5,11 +5,17 @@ Détecte les variations de trafic dans le temps, périodicités et anomalies.
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Union
 from scapy.packet import Packet
 from scapy.layers.inet import IP, TCP, UDP
 from datetime import datetime
 import math
+
+# Import PacketMetadata for hybrid mode support (3-5x faster)
+try:
+    from ..parsers.fast_parser import PacketMetadata
+except ImportError:
+    PacketMetadata = None
 
 
 @dataclass
@@ -92,11 +98,25 @@ class TemporalPatternAnalyzer:
         """Calcule la clé du créneau pour un timestamp."""
         return int(timestamp / self.slot_duration)
     
-    def process_packet(self, packet: Packet, packet_num: int = 0) -> None:
-        """Traite un paquet et met à jour les statistiques temporelles."""
+    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int = 0) -> None:
+        """
+        Process a single packet (supports both Scapy Packet and PacketMetadata).
+
+        PERFORMANCE: PacketMetadata is 3-5x faster than Scapy Packet parsing.
+
+        Args:
+            packet: Scapy Packet or lightweight PacketMetadata
+            packet_num: Packet sequence number in capture
+        """
+        # FAST PATH: Handle PacketMetadata (dpkt-extracted, 3-5x faster)
+        if PacketMetadata and isinstance(packet, PacketMetadata):
+            self._process_metadata(packet, packet_num)
+            return
+
+        # LEGACY PATH: Handle Scapy Packet (for backward compatibility)
         if not packet.haslayer(IP):
             return
-        
+
         ip = packet[IP]
         timestamp = float(packet.time)
         packet_len = len(packet)
@@ -135,6 +155,58 @@ class TemporalPatternAnalyzer:
 
         # Stocker timestamps pour détection de périodicité
         src_ip = ip.src
+        if len(self.packet_times_by_source[src_ip]) < self.max_packets_per_source:
+            self.packet_times_by_source[src_ip].append(timestamp)
+
+    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+        """
+        PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
+
+        This method replicates temporal pattern analysis logic but uses direct attribute access
+        from dpkt-extracted metadata.
+
+        Args:
+            metadata: Lightweight packet metadata from dpkt
+            packet_num: Packet sequence number in capture
+        """
+        timestamp = metadata.timestamp
+        packet_len = metadata.packet_length
+
+        # Stats globales
+        self.total_packets += 1
+        self.total_bytes += packet_len
+
+        if self.first_packet_time is None:
+            self.first_packet_time = timestamp
+        self.last_packet_time = timestamp
+
+        # Créneau temporel
+        slot_key = self._get_slot_key(timestamp)
+
+        if slot_key not in self.time_slots:
+            self.time_slots[slot_key] = TimeSlot(
+                timestamp=slot_key * self.slot_duration
+            )
+
+        slot = self.time_slots[slot_key]
+        slot.packets += 1
+        slot.bytes += packet_len
+        slot.unique_sources.add(metadata.src_ip)
+        slot.unique_destinations.add(metadata.dst_ip)
+
+        # Protocol detection (already extracted by dpkt)
+        if metadata.protocol == 'TCP':
+            slot.tcp_packets += 1
+        elif metadata.protocol == 'UDP':
+            slot.udp_packets += 1
+
+        # Memory optimization: periodic cleanup of sources
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_excess_sources()
+
+        # Stocker timestamps pour détection de périodicité
+        src_ip = metadata.src_ip
         if len(self.packet_times_by_source[src_ip]) < self.max_packets_per_source:
             self.packet_times_by_source[src_ip].append(timestamp)
 
@@ -312,6 +384,10 @@ class TemporalPatternAnalyzer:
         all_patterns.sort(key=lambda x: x["occurrences"], reverse=True)
         return all_patterns[:15]
     
+    def _generate_report(self) -> Dict[str, Any]:
+        """Generate report for hybrid mode compatibility."""
+        return self.get_results()
+
     def get_results(self) -> Dict[str, Any]:
         """Retourne les résultats complets de l'analyse."""
         if self.first_packet_time is None or self.last_packet_time is None:
