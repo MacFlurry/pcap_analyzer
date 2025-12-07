@@ -3,11 +3,17 @@ Analyseur des retransmissions SYN - Détection détaillée des problèmes de han
 """
 
 from scapy.all import Packet, TCP
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass, asdict, field
 from collections import defaultdict
 from datetime import datetime
 from ..utils.packet_utils import get_ip_layer
+
+# Import PacketMetadata for hybrid mode support (3-5x faster)
+try:
+    from ..parsers.fast_parser import PacketMetadata
+except ImportError:
+    PacketMetadata = None
 
 
 @dataclass
@@ -75,8 +81,22 @@ class SYNRetransmissionAnalyzer:
 
         return self.finalize()
 
-    def process_packet(self, packet: Packet, packet_num: int) -> None:
-        """Traite un paquet individuel"""
+    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int) -> None:
+        """
+        Process a single packet (supports both Scapy Packet and PacketMetadata).
+
+        PERFORMANCE: PacketMetadata is 3-5x faster than Scapy Packet parsing.
+
+        Args:
+            packet: Scapy Packet or lightweight PacketMetadata
+            packet_num: Packet sequence number in capture
+        """
+        # FAST PATH: Handle PacketMetadata (dpkt-extracted, 3-5x faster)
+        if PacketMetadata and isinstance(packet, PacketMetadata):
+            self._process_metadata(packet, packet_num)
+            return
+
+        # LEGACY PATH: Handle Scapy Packet (for backward compatibility)
         ip = get_ip_layer(packet)
         if not packet.haslayer(TCP) or not ip:
             return
@@ -135,6 +155,76 @@ class SYNRetransmissionAnalyzer:
                     if retrans.total_delay >= self.threshold or retrans.retransmission_count > 0:
                         self.retransmissions.append(retrans)
                     
+                    del self.pending_syns[reverse_flow]
+
+    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+        """
+        PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
+
+        This method replicates SYN retransmission detection logic but uses direct attribute access
+        from dpkt-extracted metadata.
+
+        Args:
+            metadata: Lightweight packet metadata from dpkt
+            packet_num: Packet sequence number in capture
+        """
+        # Skip non-TCP packets
+        if metadata.protocol != 'TCP':
+            return
+
+        packet_time = metadata.timestamp
+
+        # Memory optimization: periodic cleanup of stale pending SYNs
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_stale_pending_syns(packet_time)
+
+        # Détection SYN (sans ACK)
+        if metadata.is_syn and not metadata.is_ack:
+            base_flow_key = (metadata.src_ip, metadata.dst_ip, metadata.src_port, metadata.dst_port)
+
+            # Vérifier si c'est une retransmission (même flux, même seq number)
+            if base_flow_key in self.pending_syns:
+                retrans = self.pending_syns[base_flow_key]
+                # On considère que c'est une retransmission si c'est le même flux
+                # et que le temps est cohérent (< 10s depuis le dernier SYN)
+                if retrans.syn_attempts and packet_time - retrans.syn_attempts[-1] < 10.0:
+                    retrans.syn_attempts.append(packet_time)
+                    retrans.syn_packet_nums.append(packet_num)
+                    retrans.retransmission_count += 1
+            else:
+                # Nouveau SYN
+                retrans = SYNRetransmission(
+                    src_ip=metadata.src_ip,
+                    dst_ip=metadata.dst_ip,
+                    src_port=metadata.src_port,
+                    dst_port=metadata.dst_port,
+                    first_syn_time=packet_time,
+                    syn_attempts=[packet_time],
+                    syn_packet_nums=[packet_num],
+                    retransmission_count=0
+                )
+                self.pending_syns[base_flow_key] = retrans
+
+        # Détection SYN/ACK
+        elif metadata.is_syn and metadata.is_ack:
+            reverse_flow = (metadata.dst_ip, metadata.src_ip, metadata.dst_port, metadata.src_port)
+
+            if reverse_flow in self.pending_syns:
+                retrans = self.pending_syns[reverse_flow]
+                if not retrans.synack_received:
+                    retrans.synack_received = True
+                    retrans.synack_time = packet_time
+                    retrans.synack_packet_num = packet_num
+                    retrans.total_delay = packet_time - retrans.first_syn_time
+
+                    # Analyse de la cause du délai
+                    retrans.suspected_issue = self._identify_issue(retrans)
+
+                    # Ajoute aux retransmissions complétées si délai >= seuil ou retransmissions présentes
+                    if retrans.total_delay >= self.threshold or retrans.retransmission_count > 0:
+                        self.retransmissions.append(retrans)
+
                     del self.pending_syns[reverse_flow]
 
     def _cleanup_stale_pending_syns(self, current_time: float) -> None:
