@@ -86,12 +86,12 @@
                 <div class="value">{{ tcp_handshake.slow_handshakes }}</div>
             </div>
 
-            <div class="summary-card {% if analysis_info.rto_rate > 0.5 or retransmission.rto_count > 50 %}danger{% elif analysis_info.rto_rate > 0.05 or retransmission.rto_count > 5 %}warning{% else %}success{% endif %}">
+            <div class="summary-card {% if analysis_info.rto_rate > 0.5 %}danger{% elif analysis_info.rto_rate > 0.05 %}warning{% else %}success{% endif %}">
                 <h3>Retransmissions</h3>
                 <div class="value">{{ retransmission.total_retransmissions }}</div>
                 <small>
                     {% if retransmission.rto_count > 0 %}
-                        {% if analysis_info.rto_rate > 0.05 or retransmission.rto_count > 5 %}🔴{% else %}🔵{% endif %} RTO: {{ retransmission.rto_count }}
+                        {% if analysis_info.rto_rate > 0.05 %}🔴{% else %}🔵{% endif %} RTO: {{ retransmission.rto_count }}
                     {% endif %}
                     {% if retransmission.fast_retrans_count > 0 %}🟠 FR: {{ retransmission.fast_retrans_count }}{% endif %}
                     {% if retransmission.other_retrans_count > 0 %}🔵 OT: {{ retransmission.other_retrans_count }}{% endif %}
@@ -237,7 +237,7 @@
             <p><strong>Retransmissions totales:</strong> {{ retransmission.total_retransmissions }} ({{ retransmission.unique_retransmitted_segments }} segments uniques)</p>
             <p>
                 {% if retransmission.rto_count > 0 %}
-                    {% if analysis_info.rto_rate > 0.05 or retransmission.rto_count > 5 %}
+                    {% if analysis_info.rto_rate > 0.05 %}
                     🔴 <strong>RTOs (Timeout de Retransmission):</strong> {{ retransmission.rto_count }} ({{ "%.2f"|format(analysis_info.rto_rate) }}%) - <span style="font-size:0.9em;">Indique une congestion sévère ou une perte de paquets prolongée.</span>
                     {% else %}
                     🔵 <strong>RTOs (Timeout de Retransmission):</strong> {{ retransmission.rto_count }} ({{ "%.2f"|format(analysis_info.rto_rate) }}%) - <span style="font-size:0.9em;">Volume négligeable (impact minime).</span>
@@ -2162,15 +2162,17 @@
                             {% if retransmission and retransmission.total_retransmissions > 0 %}
                             <li><strong>Retransmissions TCP :</strong> {{ retransmission.total_retransmissions }} paquets retransmis.
 
-                                {% if analysis_info.rto_rate > 0.5 or retransmission.rto_count > 100 %}
-                                    <br><span class="text-danger">🔴 <strong>Critique :</strong> {{ retransmission.rto_count }} RTOs détectés ({{ "%.2f"|format(analysis_info.rto_rate) }}%).</span> Volume élevé de timeouts : indique une congestion sévère ou une connectivité instable.
-                                {% elif analysis_info.rto_rate > 0.05 or retransmission.rto_count > 5 %}
-                                    <br><span class="text-warning">⚠️ <strong>Attention :</strong> {{ retransmission.rto_count }} RTO(s) détecté(s) ({{ "%.2f"|format(analysis_info.rto_rate) }}%).</span> Quelques délais d'attente importants. Impact ponctuel.
-                                {% elif retransmission.rto_count > 0 %}
-                                    <br><span class="text-success">ℹ️ <strong>Note :</strong> {{ retransmission.rto_count }} RTO détecté ({{ "%.2f"|format(analysis_info.rto_rate) }}%).</span> Volume négligeable, sans impact perceptible.
-                                {% elif retransmission.total_retransmissions > 5000 %}
-                                    C'est un volume très élevé qui indique des pertes de paquets fréquentes.
+                                {% if retransmission.rto_count > 0 %}
+                                    {# Seuils basés uniquement sur le taux proportionnel (pas de seuil absolu) #}
+                                    {% if analysis_info.rto_rate > 0.5 %}
+                                        <br><span class="text-danger">🔴 <strong>Critique :</strong> {{ retransmission.rto_count }} RTOs détectés ({{ "%.2f"|format(analysis_info.rto_rate) }}%).</span> Volume élevé de timeouts : indique une congestion sévère ou une connectivité instable.
+                                    {% elif analysis_info.rto_rate > 0.05 %}
+                                        <br><span class="text-warning">⚠️ <strong>Attention :</strong> {{ retransmission.rto_count }} RTO(s) détecté(s) ({{ "%.2f"|format(analysis_info.rto_rate) }}%).</span> Quelques délais d'attente importants. Impact ponctuel.
+                                    {% else %}
+                                        <br><span class="text-success">ℹ️ <strong>Note :</strong> {{ retransmission.rto_count }} RTO(s) détecté(s) ({{ "%.2f"|format(analysis_info.rto_rate) }}%).</span> Volume négligeable, sans impact perceptible.
+                                    {% endif %}
                                 {% else %}
+                                    {# Pas de RTOs : uniquement Fast Retransmissions #}
                                     Volume modéré de pertes de paquets (Fast Retransmissions), généralement géré par TCP sans impact majeur.
                                 {% endif %}</li>
                             {% endif %}
