@@ -13,7 +13,7 @@ if readme_file.exists():
 
 setup(
     name='pcap-analyzer',
-    version='2.0.0',
+    version='3.0.0',
     description='Analyseur automatisé des causes de latence réseau',
     long_description=long_description,
     long_description_content_type='text/markdown',
