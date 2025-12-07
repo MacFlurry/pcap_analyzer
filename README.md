@@ -6,22 +6,22 @@
 [![GitHub issues](https://img.shields.io/github/issues/MacFlurry/pcap_analyzer)](https://github.com/MacFlurry/pcap_analyzer/issues)
 [![Latest Release](https://img.shields.io/github/v/release/MacFlurry/pcap_analyzer?include_prereleases)](https://github.com/MacFlurry/pcap_analyzer/releases)
 
-**Version 2.0.0**
+**Version 3.0.0**
 
-Outil avancé d'analyse automatisée de fichiers PCAP. Il permet d'identifier et de diagnostiquer de manière intelligente les causes de latence et de problèmes réseau, avec une interface utilisateur intuitive.
+Outil avancé d'analyse automatisée de fichiers PCAP. Il permet d'identifier et de diagnostiquer de manière intelligente les causes de latence et de problèmes réseau, avec une interface utilisateur intuitive et des rapports HTML modernes avec support du mode sombre.
 
-Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), et RFC 6298 (RTO). Supporte IPv4 et IPv6.
+Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), et RFC 6298 (RTO). Support complet IPv4 et IPv6.
 
 ## Fonctionnalités Clés
 
 ### Analyse Réseau
 
-*   **Rapports HTML Interactifs :** Visualisation claire et pédagogique des problèmes détectés, avec des explications contextuelles et des suggestions d'investigation.
+*   **Rapports HTML Interactifs :** Visualisation claire et pédagogique des problèmes détectés, avec des explications contextuelles et des suggestions d'investigation. Support automatique du mode sombre avec excellent contraste et lisibilité.
 *   **Analyse TCP Intelligente :** Détection nuancée des retransmissions (RTO/Fast Retrans), des handshakes lents, et des problèmes de fenêtre TCP. Conforme RFC 793 et RFC 2581.
 *   **Diagnostic DNS Approfondi :** Identification des timeouts, des réponses lentes et des erreurs DNS, avec détail par domaine.
 *   **Détection d'Anomalies :** Analyse des gaps temporels (différenciant pauses applicatives et incidents réseau), des bursts de trafic, de la fragmentation IP et du trafic asymétrique.
-*   **Support IPv6 :** Analyse transparente des flux IPv4 et IPv6 à travers tous les analyseurs.
-*   **Capture à Distance via SSH :** Possibilité de lancer des captures `tcpdump` sur des serveurs distants et de les analyser automatiquement.
+*   **Support IPv6 Complet :** Analyse transparente des flux IPv4 et IPv6 à travers tous les analyseurs, avec gestion robuste des ports hexadécimaux.
+*   **Capture à Distance via SSH (Optionnelle) :** Possibilité de lancer des captures `tcpdump` sur des serveurs distants et de les analyser automatiquement. Non requis pour l'analyse locale.
 
 ### Qualité et Performance
 
@@ -36,8 +36,11 @@ Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), et RFC 6298
 
 *   Python 3.8, 3.9, 3.10, 3.11 ou 3.12
 *   `libpcap` (installé automatiquement via les dépendances)
-*   `tcpdump` installé sur le serveur distant (pour la capture SSH)
+
+**Pour la capture distante uniquement (optionnel) :**
+*   `tcpdump` installé sur le serveur distant
 *   Accès SSH avec authentification par clé au serveur de capture
+*   Configuration SSH dans `config.yaml`
 
 ### Étapes
 
@@ -61,7 +64,21 @@ pip install -r requirements-dev.txt
 
 ## Configuration
 
-Le fichier `config.yaml` à la racine du projet permet de personnaliser les seuils de détection et les paramètres SSH.
+Le fichier `config.yaml` à la racine du projet permet de personnaliser :
+*   **Seuils de détection** (requis) : RTT, retransmissions, DNS, etc.
+*   **Paramètres SSH** (optionnel) : Uniquement nécessaire pour la commande `capture`
+*   **Répertoire de sortie** des rapports
+
+Configuration minimale pour l'analyse locale :
+```yaml
+thresholds:
+  packet_gap: 1.0
+  syn_synack_delay: 0.1
+  # ... autres seuils
+
+reports:
+  output_dir: reports
+```
 
 ## Utilisation Rapide
 
@@ -78,6 +95,30 @@ pcap_analyzer analyze ma_capture.pcap
 # Capture de 10 minutes sur le serveur configuré (config.yaml) et analyse auto.
 pcap_analyzer capture --duration 600
 ```
+
+## Nouveautés Version 3.0.0
+
+### Changements Majeurs
+
+*   **Support IPv6 Complet** : Tous les analyseurs gèrent maintenant IPv4 et IPv6 de manière transparente
+*   **Configuration SSH Optionnelle** : SSH n'est plus requis pour l'analyse locale, seulement pour la capture distante
+*   **Mode Sombre Automatique** : Les rapports HTML s'adaptent automatiquement au thème système avec un excellent contraste
+
+### Améliorations
+
+*   **Rapports HTML Refactorisés** :
+    - CSS externe modulaire avec variables de thème
+    - Support du mode sombre via `@media (prefers-color-scheme: dark)`
+    - Meilleure lisibilité dans tous les thèmes
+*   **Gestion Robuste des Ports** : Correction du parsing des ports hexadécimaux retournés par Scapy
+*   **Affichage Optimisé** : Affichage du nom de fichier uniquement (pas le chemin complet) dans les rapports
+*   **Tests Améliorés** : Compatibilité Python 3.8-3.12, tous les tests passent sur toutes les plateformes
+
+### Corrections de Bugs
+
+*   Fixed: KeyError dans l'analyseur de patterns temporels
+*   Fixed: Parsing des ports TCP en hexadécimal
+*   Fixed: Lisibilité en mode sombre (info-boxes, alertes, titres)
 
 ## Tests
 
