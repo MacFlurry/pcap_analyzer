@@ -17,10 +17,16 @@ References:
 """
 
 from scapy.all import Packet, TCP
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 from ..utils.packet_utils import get_ip_layer
+
+# Import PacketMetadata for hybrid mode support (3-5x faster)
+try:
+    from ..parsers.fast_parser import PacketMetadata
+except ImportError:
+    PacketMetadata = None
 
 
 @dataclass
@@ -129,8 +135,22 @@ class TCPHandshakeAnalyzer:
             
         return self.finalize()
 
-    def process_packet(self, packet: Packet, packet_num: int) -> None:
-        """Traite un paquet individuel"""
+    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int) -> None:
+        """
+        Process a single packet (supports both Scapy Packet and PacketMetadata).
+
+        PERFORMANCE: PacketMetadata is 3-5x faster than Scapy Packet parsing.
+
+        Args:
+            packet: Scapy Packet or lightweight PacketMetadata
+            packet_num: Packet sequence number in capture
+        """
+        # FAST PATH: Handle PacketMetadata (dpkt-extracted, 3-5x faster)
+        if PacketMetadata and isinstance(packet, PacketMetadata):
+            self._process_metadata(packet, packet_num)
+            return
+
+        # LEGACY PATH: Handle Scapy Packet (for backward compatibility)
         if not packet.haslayer(TCP):
             return
 
@@ -234,6 +254,94 @@ class TCPHandshakeAnalyzer:
         # Remove stale handshakes
         for key in stale_keys:
             del self.incomplete_handshakes[key]
+
+    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+        """
+        PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
+
+        This method handles dpkt-extracted metadata, avoiding expensive Scapy parsing.
+        All TCP handshake logic is identical to process_packet(), but uses direct
+        attribute access instead of Scapy's haslayer() and packet[TCP] API.
+
+        Args:
+            metadata: Lightweight packet metadata from dpkt
+            packet_num: Packet sequence number in capture
+        """
+        # Skip non-TCP packets
+        if metadata.protocol != 'TCP':
+            return
+
+        packet_time = metadata.timestamp
+
+        # Memory optimization: periodic cleanup
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_stale_handshakes(packet_time)
+
+        tcp_flags = metadata.tcp_flags
+        if tcp_flags is None:
+            return
+
+        # Détection SYN (sans ACK) - flags: 0x02 = SYN, 0x10 = ACK
+        if tcp_flags & 0x02 and not tcp_flags & 0x10:  # SYN flag set, ACK flag not set
+            flow_key = f"{metadata.src_ip}:{metadata.src_port}->{metadata.dst_ip}:{metadata.dst_port}"
+
+            if flow_key not in self.incomplete_handshakes:
+                handshake = HandshakeFlow(
+                    src_ip=metadata.src_ip,
+                    dst_ip=metadata.dst_ip,
+                    src_port=metadata.src_port,
+                    dst_port=metadata.dst_port,
+                    syn_time=packet_time,
+                    syn_packet_num=packet_num
+                )
+                self.incomplete_handshakes[flow_key] = handshake
+
+        # Détection SYN/ACK - flags: 0x12 = SYN+ACK
+        elif tcp_flags & 0x12 == 0x12:  # SYN+ACK flags set
+            # Reverse flow key for server response
+            flow_key = f"{metadata.dst_ip}:{metadata.dst_port}->{metadata.src_ip}:{metadata.src_port}"
+
+            if flow_key in self.incomplete_handshakes:
+                handshake = self.incomplete_handshakes[flow_key]
+                handshake.synack_time = packet_time
+                handshake.synack_packet_num = packet_num
+                # RFC 793: Store SYN-ACK sequence number for final ACK validation
+                handshake.synack_seq = metadata.tcp_seq
+
+                if handshake.syn_time:
+                    handshake.syn_to_synack_delay = packet_time - handshake.syn_time
+
+        # Détection ACK final (après SYN/ACK) - flags: ACK only (no SYN)
+        elif tcp_flags & 0x10 and not tcp_flags & 0x02:  # ACK flag set, SYN not set
+            flow_key = f"{metadata.src_ip}:{metadata.src_port}->{metadata.dst_ip}:{metadata.dst_port}"
+
+            if flow_key in self.incomplete_handshakes:
+                handshake = self.incomplete_handshakes[flow_key]
+
+                # RFC 793: Only process if we've seen the SYN/ACK AND verify ACK number
+                # The ACK number must equal SYN-ACK's SEQ + 1
+                if handshake.synack_time and handshake.synack_seq is not None:
+                    # RFC 793: Validate that ACK = SYN-ACK.SEQ + 1 (proper handshake completion)
+                    expected_ack = handshake.synack_seq + 1
+                    if metadata.tcp_ack == expected_ack:
+                        handshake.ack_time = packet_time
+                        handshake.ack_packet_num = packet_num
+                        handshake.synack_to_ack_delay = packet_time - handshake.synack_time
+
+                        if handshake.syn_time:
+                            handshake.total_handshake_time = packet_time - handshake.syn_time
+                            handshake.complete = True
+
+                            # Détermine le côté suspect
+                            handshake.suspected_side = self._identify_suspect_side(handshake)
+
+                            # Ajout aux handshakes terminés si on doit l'inclure
+                            if self._should_include_handshake(handshake):
+                                self.handshakes.append(handshake)
+
+                            # Suppression des incomplets
+                            del self.incomplete_handshakes[flow_key]
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""

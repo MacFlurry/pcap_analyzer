@@ -117,9 +117,12 @@ class FastPacketParser:
                 except:
                     raise ValueError(f"Unable to read PCAP file: {self.pcap_file}")
 
+            # Detect datalink type for optimized parsing
+            datalink = pcap.datalink()
+
             for timestamp, buf in pcap:
                 try:
-                    metadata = self._extract_metadata(buf, packet_num, timestamp)
+                    metadata = self._extract_metadata(buf, packet_num, timestamp, datalink)
                     if metadata:
                         yield metadata
                     packet_num += 1
@@ -128,7 +131,7 @@ class FastPacketParser:
                     packet_num += 1
                     continue
 
-    def _extract_metadata(self, buf: bytes, packet_num: int, timestamp: float) -> Optional[PacketMetadata]:
+    def _extract_metadata(self, buf: bytes, packet_num: int, timestamp: float, datalink: int) -> Optional[PacketMetadata]:
         """
         Extract metadata from raw packet buffer.
 
@@ -136,28 +139,37 @@ class FastPacketParser:
             buf: Raw packet bytes
             packet_num: Packet number (0-indexed)
             timestamp: Packet timestamp
+            datalink: PCAP datalink type (e.g., DLT_EN10MB, DLT_LINUX_SLL2)
 
         Returns:
             PacketMetadata if packet can be parsed, None otherwise
         """
         try:
-            # Try to parse as Ethernet
-            try:
+            # Parse based on datalink type for efficiency
+            if datalink == dpkt.pcap.DLT_LINUX_SLL2:  # 276 - Linux cooked v2
+                sll2 = dpkt.sll2.SLL2(buf)
+                ip_packet = sll2.data
+            elif datalink == dpkt.pcap.DLT_LINUX_SLL:  # 113 - Linux cooked v1
+                sll = dpkt.sll.SLL(buf)
+                ip_packet = sll.data
+            elif datalink == dpkt.pcap.DLT_EN10MB:  # 1 - Ethernet
                 eth = dpkt.ethernet.Ethernet(buf)
                 ip_packet = eth.data
-            except:
-                # Maybe it's a Linux cooked capture (SLL)
+            else:
+                # Try to guess the format (fallback for other datalink types)
                 try:
-                    sll = dpkt.sll.SLL(buf)
-                    ip_packet = sll.data
+                    eth = dpkt.ethernet.Ethernet(buf)
+                    ip_packet = eth.data
                 except:
-                    # Maybe it's a Linux cooked v2 capture (SLL2)
                     try:
-                        sll2 = dpkt.sll2.SLL2(buf)
-                        ip_packet = sll2.data
+                        sll = dpkt.sll.SLL(buf)
+                        ip_packet = sll.data
                     except:
-                        # Can't parse this packet
-                        return None
+                        try:
+                            sll2 = dpkt.sll2.SLL2(buf)
+                            ip_packet = sll2.data
+                        except:
+                            return None
 
             # Check if it's IP
             if not isinstance(ip_packet, (dpkt.ip.IP, dpkt.ip6.IP6)):
