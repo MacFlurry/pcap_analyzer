@@ -129,6 +129,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     handshake_analyzer = analyzer_dict["handshake"]
     retrans_analyzer = analyzer_dict["retransmission"]
     rtt_analyzer = analyzer_dict["rtt"]
+    window_analyzer = analyzer_dict["window"]
 
     # Fast pass with dpkt
     parser = FastPacketParser(pcap_file)
@@ -149,6 +150,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
             handshake_analyzer.process_packet(metadata, packet_count - 1)
             retrans_analyzer.process_packet(metadata, packet_count - 1)
             rtt_analyzer.process_packet(metadata, packet_count - 1)
+            window_analyzer.process_packet(metadata, packet_count - 1)
 
             if packet_count % 50000 == 0:
                 gc.collect()
@@ -205,11 +207,12 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     results['tcp_handshake'] = handshake_analyzer._generate_report()
     results['retransmission'] = retrans_analyzer._generate_report()
     results['rtt'] = rtt_analyzer._generate_report()
+    results['tcp_window'] = window_analyzer._generate_report()
     results['dns'] = dns_analyzer._generate_report()
     results['icmp'] = icmp_analyzer._generate_report()
 
     # Add empty results for other analyzers (they'll be implemented next)
-    for key in ['tcp_window', 'syn_retransmissions',
+    for key in ['syn_retransmissions',
                 'tcp_reset', 'ip_fragmentation', 'top_talkers', 'throughput', 'tcp_timeout',
                 'asymmetric_traffic', 'burst', 'temporal', 'sack']:
         if key not in results:
@@ -222,6 +225,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     console.print("\n" + handshake_analyzer.get_summary())
     console.print("\n" + retrans_analyzer.get_summary())
     console.print("\n" + rtt_analyzer.get_summary())
+    console.print("\n" + window_analyzer.get_summary())
     console.print("\n" + icmp_analyzer.get_summary())
     console.print("\n" + dns_analyzer.get_summary())
 
