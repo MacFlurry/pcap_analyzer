@@ -27,11 +27,17 @@ References:
 """
 
 from scapy.all import Packet, TCP, IP
-from typing import List, Dict, Any, Set, Tuple
+from typing import List, Dict, Any, Set, Tuple, Union, Optional
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 from ..utils.packet_utils import get_ip_layer
 from ..utils.tcp_utils import get_tcp_logical_length
+
+# Import PacketMetadata for hybrid mode support (3-5x faster)
+try:
+    from ..parsers.fast_parser import PacketMetadata
+except ImportError:
+    PacketMetadata = None
 
 
 @dataclass
@@ -188,8 +194,22 @@ class RetransmissionAnalyzer:
 
         return self.finalize()
 
-    def process_packet(self, packet: Packet, packet_num: int) -> None:
-        """Traite un paquet individuel"""
+    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int) -> None:
+        """
+        Process a single packet (supports both Scapy Packet and PacketMetadata).
+
+        PERFORMANCE: PacketMetadata is 3-5x faster than Scapy Packet parsing.
+
+        Args:
+            packet: Scapy Packet or lightweight PacketMetadata
+            packet_num: Packet sequence number in capture
+        """
+        # FAST PATH: Handle PacketMetadata (dpkt-extracted, 3-5x faster)
+        if PacketMetadata and isinstance(packet, PacketMetadata):
+            self._process_metadata(packet, packet_num)
+            return
+
+        # LEGACY PATH: Handle Scapy Packet (for backward compatibility)
         ip = get_ip_layer(packet)
         if not packet.haslayer(TCP) or not ip:
             return
@@ -232,6 +252,204 @@ class RetransmissionAnalyzer:
                 # Keep newest half
                 keep_count = self._max_segments_per_flow // 2
                 self._seen_segments[flow_key] = dict(sorted_segments[:keep_count])
+
+    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+        """
+        PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
+
+        This method replicates the exact logic of _analyze_packet() but uses direct
+        attribute access from dpkt-extracted metadata instead of Scapy's API.
+
+        Implements RFC 793 and RFC 2581 retransmission detection:
+        1. Exact segment matching (seq, payload_len)
+        2. Spurious retransmission (already ACKed)
+        3. Fast retransmission (triggered by 3+ DUP ACKs)
+        4. RTO classification based on delay
+
+        Args:
+            metadata: Lightweight packet metadata from dpkt
+            packet_num: Packet sequence number in capture
+        """
+        # Skip non-TCP packets
+        if metadata.protocol != 'TCP':
+            return
+
+        # Memory optimization: periodic cleanup
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_old_segments()
+
+        timestamp = metadata.timestamp
+
+        # Build flow key from metadata
+        flow_key = f"{metadata.src_ip}:{metadata.src_port}->{metadata.dst_ip}:{metadata.dst_port}"
+        reverse_key = f"{metadata.dst_ip}:{metadata.dst_port}->{metadata.src_ip}:{metadata.src_port}"
+
+        self._flow_counters[flow_key]['total'] += 1
+
+        # Gestion des nouvelles connexions (SYN)
+        if metadata.is_syn:  # SYN flag
+            if flow_key in self._highest_seq:
+                del self._highest_seq[flow_key]
+            if flow_key in self._max_ack_seen:
+                del self._max_ack_seen[flow_key]
+
+        # Mise à jour du Max ACK vu pour ce flux
+        if metadata.is_ack:  # ACK flag
+            ack = metadata.tcp_ack
+            if flow_key not in self._max_ack_seen or ack > self._max_ack_seen[flow_key]:
+                self._max_ack_seen[flow_key] = ack
+
+        # Calcul de la longueur logique TCP (RFC 793: payload + SYN + FIN)
+        seq = metadata.tcp_seq
+        payload_len = metadata.tcp_payload_len
+
+        logical_len = payload_len
+        if metadata.is_syn:
+            logical_len += 1
+        if metadata.is_fin:
+            logical_len += 1
+
+        next_seq = seq + logical_len
+
+        # On ne cherche des retransmissions QUE si le paquet transporte des données ou SYN/FIN
+        has_payload_or_flags = (payload_len > 0) or metadata.is_syn or metadata.is_fin
+
+        if has_payload_or_flags:
+            # Clé unique: seq + longueur de payload pour distinguer retransmissions partielles
+            segment_key = (seq, payload_len)
+
+            is_retransmission = False
+            original_num = None
+            original_time = None
+
+            # Méthode combinée (Wireshark-like + Exact Match)
+
+            # 1. Vérifier si le segment exact (seq, len) a déjà été vu
+            if segment_key in self._seen_segments[flow_key]:
+                is_retransmission = True
+                original_num, original_time = self._seen_segments[flow_key][segment_key][0]
+
+            # 2. Vérifier si c'est une Spurious Retransmission (déjà ACKé par l'autre côté)
+            if not is_retransmission and reverse_key in self._max_ack_seen:
+                max_ack = self._max_ack_seen[reverse_key]
+                if seq + logical_len <= max_ack:
+                    is_retransmission = True
+
+            # 3. Vérifier Fast Retransmission (SEQ attendu par >2 DUP ACKs)
+            if not is_retransmission and self._dup_ack_count[reverse_key] > 2:
+                expected_seq = self._last_ack[reverse_key]
+                if seq == expected_seq:
+                    is_retransmission = True
+
+            if is_retransmission:
+                # Essayer de trouver le paquet original exact
+                if original_num is None:
+                    if segment_key in self._seen_segments[flow_key] and len(self._seen_segments[flow_key][segment_key]) > 0:
+                        original_num, original_time = self._seen_segments[flow_key][segment_key][0]
+                    elif flow_key in self._highest_seq:
+                        _, highest_pkt, highest_time = self._highest_seq[flow_key]
+                        original_num = highest_pkt
+                        original_time = highest_time
+                    else:
+                        original_num = packet_num
+                        original_time = timestamp
+
+                delay = timestamp - original_time
+
+                # Determine retransmission type based on delay heuristics
+                retrans_type = "Retransmission"
+                if delay >= self.rto_threshold:
+                    retrans_type = "RTO"
+                elif delay <= self.fast_retrans_delay_max:
+                    retrans_type = "Fast Retransmission"
+
+                retrans = TCPRetransmission(
+                    packet_num=packet_num,
+                    timestamp=timestamp,
+                    src_ip=metadata.src_ip,
+                    dst_ip=metadata.dst_ip,
+                    src_port=metadata.src_port,
+                    dst_port=metadata.dst_port,
+                    seq_num=seq,
+                    original_packet_num=original_num,
+                    delay=delay,
+                    retrans_type=retrans_type
+                )
+                self.retransmissions.append(retrans)
+                self._flow_counters[flow_key]['retransmissions'] += 1
+
+            # Store only original packet info
+            if segment_key not in self._seen_segments[flow_key]:
+                self._seen_segments[flow_key][segment_key] = [(packet_num, timestamp)]
+
+        # Mettre à jour le plus haut seq vu pour ce flux
+        if flow_key not in self._highest_seq or next_seq > self._highest_seq[flow_key][0]:
+            self._highest_seq[flow_key] = (next_seq, packet_num, timestamp)
+
+        # Détection de DUP ACK et Fast Retransmission
+        if metadata.is_ack:  # ACK flag
+            ack = metadata.tcp_ack
+
+            # Vérifier si c'est un DUP ACK
+            if reverse_key in self._last_ack and ack == self._last_ack[reverse_key]:
+                # C'est un DUP ACK
+                self._dup_ack_count[reverse_key] += 1
+
+                anomaly = TCPAnomaly(
+                    anomaly_type='dup_ack',
+                    packet_num=packet_num,
+                    timestamp=timestamp,
+                    src_ip=metadata.src_ip,
+                    dst_ip=metadata.dst_ip,
+                    src_port=metadata.src_port,
+                    dst_port=metadata.dst_port,
+                    details=f"Duplicate ACK #{self._dup_ack_count[reverse_key]} for seq {ack}"
+                )
+                self.anomalies.append(anomaly)
+                self._flow_counters[flow_key]['dup_acks'] += 1
+            else:
+                # Nouvel ACK, réinitialiser le compteur de DUP ACK
+                self._dup_ack_count[reverse_key] = 0
+
+            self._last_ack[reverse_key] = ack
+            self._expected_ack[reverse_key] = ack
+
+        # Détection Out-of-Order
+        if logical_len > 0:
+            expected = self._expected_seq.get(flow_key, seq)
+
+            if seq < expected:
+                # Paquet reçu avec un numéro de séquence inférieur à celui attendu
+                anomaly = TCPAnomaly(
+                    anomaly_type='out_of_order',
+                    packet_num=packet_num,
+                    timestamp=timestamp,
+                    src_ip=metadata.src_ip,
+                    dst_ip=metadata.dst_ip,
+                    src_port=metadata.src_port,
+                    dst_port=metadata.dst_port,
+                    details=f"Expected seq {expected}, got {seq}"
+                )
+                self.anomalies.append(anomaly)
+                self._flow_counters[flow_key]['out_of_order'] += 1
+            else:
+                self._expected_seq[flow_key] = seq + logical_len
+
+        # Détection Zero Window
+        if metadata.tcp_window == 0:
+            anomaly = TCPAnomaly(
+                anomaly_type='zero_window',
+                packet_num=packet_num,
+                timestamp=timestamp,
+                src_ip=metadata.src_ip,
+                dst_ip=metadata.dst_ip,
+                src_port=metadata.src_port,
+                dst_port=metadata.dst_port,
+                details="TCP window size is 0"
+            )
+            self.anomalies.append(anomaly)
+            self._flow_counters[flow_key]['zero_windows'] += 1
 
     def finalize(self) -> Dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""

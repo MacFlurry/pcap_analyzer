@@ -127,6 +127,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     # Get analyzers that support fast metadata processing
     timestamp_analyzer = analyzer_dict["timestamp"]
     handshake_analyzer = analyzer_dict["handshake"]
+    retrans_analyzer = analyzer_dict["retransmission"]
 
     # Fast pass with dpkt
     parser = FastPacketParser(pcap_file)
@@ -145,6 +146,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
             # Pass metadata to compatible analyzers (much faster than Scapy)
             timestamp_analyzer.process_packet(metadata, packet_count - 1)
             handshake_analyzer.process_packet(metadata, packet_count - 1)
+            retrans_analyzer.process_packet(metadata, packet_count - 1)
 
             if packet_count % 50000 == 0:
                 gc.collect()
@@ -199,11 +201,12 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     # Collect results (growing list of dpkt-compatible analyzers)
     results['timestamps'] = timestamp_analyzer._generate_report()
     results['tcp_handshake'] = handshake_analyzer._generate_report()
+    results['retransmission'] = retrans_analyzer._generate_report()
     results['dns'] = dns_analyzer._generate_report()
     results['icmp'] = icmp_analyzer._generate_report()
 
     # Add empty results for other analyzers (they'll be implemented next)
-    for key in ['retransmission', 'rtt', 'tcp_window', 'syn_retransmissions',
+    for key in ['rtt', 'tcp_window', 'syn_retransmissions',
                 'tcp_reset', 'ip_fragmentation', 'top_talkers', 'throughput', 'tcp_timeout',
                 'asymmetric_traffic', 'burst', 'temporal', 'sack']:
         if key not in results:
@@ -214,6 +217,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     console.print(Panel.fit("📊 Résultats de l'analyse (Hybrid Mode)", style="bold blue"))
     console.print("\n" + timestamp_analyzer.get_gaps_summary())
     console.print("\n" + handshake_analyzer.get_summary())
+    console.print("\n" + retrans_analyzer.get_summary())
     console.print("\n" + icmp_analyzer.get_summary())
     console.print("\n" + dns_analyzer.get_summary())
 
