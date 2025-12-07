@@ -121,4 +121,4 @@ def has_ip_layer(packet: Any) -> bool:
     Returns:
         bool: True if packet has IPv4 or IPv6 layer
     """
-    return packet.haslayer('IP') or packet.haslayer('IPv6')
+    return bool(packet.haslayer('IP') or packet.haslayer('IPv6'))

@@ -27,7 +27,7 @@ def is_syn(tcp: Any) -> bool:
     Returns:
         bool: True if SYN is set and ACK is not set, False otherwise
     """
-    return (tcp.flags & SYN) and not (tcp.flags & ACK)
+    return bool((tcp.flags & SYN) and not (tcp.flags & ACK))
 
 
 def is_synack(tcp: Any) -> bool:
@@ -42,7 +42,7 @@ def is_synack(tcp: Any) -> bool:
     Returns:
         bool: True if both SYN and ACK are set, False otherwise
     """
-    return (tcp.flags & SYN) and (tcp.flags & ACK)
+    return bool((tcp.flags & SYN) and (tcp.flags & ACK))
 
 
 def is_ack(tcp: Any) -> bool:
