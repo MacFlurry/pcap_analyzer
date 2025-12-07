@@ -3,7 +3,7 @@ Analyseur ICMP et détection de problèmes PMTU
 """
 
 from scapy.all import Packet, ICMP, IP, TCP, IPv6, ICMPv6DestUnreach
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 
@@ -176,7 +176,7 @@ class ICMPAnalyzer:
         self.icmp_messages.append(icmp_msg)
         self.dest_unreachable.append(icmp_msg)
 
-    def _classify_icmp_message(self, icmp_type: int, icmp_code: int, mtu: int) -> tuple[str, str]:
+    def _classify_icmp_message(self, icmp_type: int, icmp_code: int, mtu: int) -> Tuple[str, str]:
         """
         Classifie un message ICMP et détermine sa sévérité
 

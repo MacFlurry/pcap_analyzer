@@ -8,7 +8,7 @@ import os
 import time
 import shlex
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -138,7 +138,7 @@ class SSHCapture:
             self.client.close()
             console.print("[cyan]Connexion SSH fermée[/cyan]")
 
-    def execute_command(self, command: str, sudo: bool = False, timeout: int = 30) -> tuple[str, str, int]:
+    def execute_command(self, command: str, sudo: bool = False, timeout: int = 30) -> Tuple[str, str, int]:
         """
         Exécute une commande sur le serveur distant
 
