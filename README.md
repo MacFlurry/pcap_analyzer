@@ -1,7 +1,7 @@
 # PCAP Analyzer - Analyseur automatisé des causes de latence réseau
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8-3.12](https://img.shields.io/badge/python-3.8%20|%203.9%20|%203.10%20|%203.11%20|%203.12-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9-3.12](https://img.shields.io/badge/python-3.9%20|%203.10%20|%203.11%20|%203.12-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](.github/workflows/test.yml)
 [![GitHub issues](https://img.shields.io/github/issues/MacFlurry/pcap_analyzer)](https://github.com/MacFlurry/pcap_analyzer/issues)
 [![Latest Release](https://img.shields.io/github/v/release/MacFlurry/pcap_analyzer?include_prereleases)](https://github.com/MacFlurry/pcap_analyzer/releases)
@@ -27,14 +27,14 @@ Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), et RFC 6298
 
 *   **Optimisation Mémoire :** Gestion intelligente de la mémoire avec cleanup périodique pour les captures de longue durée.
 *   **Tests Complets :** Suite de tests unitaires et d'intégration avec couverture >80% (pytest).
-*   **CI/CD :** Tests automatisés sur Ubuntu et macOS avec Python 3.8-3.12.
+*   **CI/CD :** Tests automatisés sur Ubuntu et macOS avec Python 3.9-3.12.
 *   **Sécurité Renforcée :** Protection contre XSS, path traversal, et validation stricte des entrées.
 
 ## Installation
 
 ### Prérequis
 
-*   Python 3.8, 3.9, 3.10, 3.11 ou 3.12
+*   Python 3.9, 3.10, 3.11 ou 3.12
 *   `libpcap` (installé automatiquement via les dépendances)
 
 **Pour la capture distante uniquement (optionnel) :**
@@ -112,7 +112,7 @@ pcap_analyzer capture --duration 600
     - Meilleure lisibilité dans tous les thèmes
 *   **Gestion Robuste des Ports** : Correction du parsing des ports hexadécimaux retournés par Scapy
 *   **Affichage Optimisé** : Affichage du nom de fichier uniquement (pas le chemin complet) dans les rapports
-*   **Tests Améliorés** : Compatibilité Python 3.8-3.12, tous les tests passent sur toutes les plateformes
+*   **Tests Améliorés** : Compatibilité Python 3.9-3.12, tous les tests passent sur toutes les plateformes
 
 ### Corrections de Bugs
 

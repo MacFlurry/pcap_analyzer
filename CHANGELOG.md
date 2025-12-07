@@ -73,10 +73,11 @@ pcap_analyzer analyze capture.pcap -d --details-limit 50 # Détails (50 max)
   - Plus lisible et portable
   - Utilisation de `Path(pcap_file).name` dans `report_generator.py`
 
-- **Tests Améliorés** : Compatibilité Python 3.8-3.12, tous les tests passent sur toutes les plateformes
+- **Tests Améliorés** : Compatibilité Python 3.9-3.12, tous les tests passent sur toutes les plateformes
   - 46/46 tests passing sur Ubuntu et macOS
-  - Support de Python 3.8, 3.9, 3.10, 3.11, 3.12
+  - Support de Python 3.9, 3.10, 3.11, 3.12
   - CI/CD avec GitHub Actions
+  - Retrait du support Python 3.8 (EOL octobre 2024)
 
 ### 🔧 Corrections de Bugs
 
@@ -97,8 +98,8 @@ pcap_analyzer analyze capture.pcap -d --details-limit 50 # Détails (50 max)
   - `is_syn()`, `is_synack()`, `has_ip_layer()` retournent maintenant `bool` au lieu de `Flag`
   - Wrapper `bool()` pour compatibilité avec les assertions de test
 
-- **Fixed: Compatibilité Python 3.8**
-  - Remplacement de `tuple[str, str]` par `Tuple[str, str]` (from typing)
+- **Fixed: Type hints pour meilleure compatibilité**
+  - Utilisation de `Tuple` au lieu de `tuple` (from typing)
   - Correction dans `icmp_pmtu.py` et `ssh_capture.py`
 
 ### 📝 Documentation
@@ -232,7 +233,7 @@ pcap_analyzer analyze capture.pcap -d --details-limit 50 # Détails (50 max)
 
 #### Technologies
 
-- Python 3.8+
+- Python 3.9+
 - Scapy pour analyse de paquets
 - Paramiko pour SSH/SFTP
 - Rich pour interface console

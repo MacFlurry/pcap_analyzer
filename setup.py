@@ -40,7 +40,7 @@ setup(
             'pcap_analyzer=src.cli:main',
         ],
     },
-    python_requires='>=3.8',
+    python_requires='>=3.9',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: System Administrators',
@@ -49,10 +49,10 @@ setup(
         'Topic :: System :: Networking :: Monitoring',
         'Topic :: System :: Systems Administration',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
     ],
     keywords='network pcap analysis latency tcp dns icmp monitoring',
 )
