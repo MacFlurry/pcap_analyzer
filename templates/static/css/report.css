@@ -270,6 +270,12 @@ code {
     color: #721c24;
 }
 
+.alert.alert-info {
+    background: #d1ecf1;
+    border-left-color: var(--color-info);
+    color: #0c5460;
+}
+
 .alert h4 {
     margin-bottom: var(--spacing-xs);
     font-size: 1.2em;
@@ -741,6 +747,16 @@ tr:hover {
 
     .alert.alert-danger h4 {
         color: #e57373;
+    }
+
+    .alert.alert-info {
+        background: #1a3a52;
+        border-left-color: #64b5f6;
+        color: #90caf9;
+    }
+
+    .alert.alert-info h4 {
+        color: #64b5f6;
     }
 
     /* Fix interpretation-details h4 for dark mode */
