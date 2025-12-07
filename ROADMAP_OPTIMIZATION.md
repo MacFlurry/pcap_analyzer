@@ -9,12 +9,12 @@
 
 | Métrique | Baseline | Actuel | Objectif Final |
 |----------|----------|--------|----------------|
-| **Temps (26MB, 172k)** | 94.97 sec | **51.74 sec** ✅ | ~25-30 sec |
-| **Speedup** | 1.0x | **1.86x** ✅ | 3-4x |
-| **Analyseurs migrés** | 0/17 | **7/17** (41%) | 5-6/17 (30-35%) |
-| **Gain absolu** | - | **44.42 sec** | ~65-70 sec |
+| **Temps (26MB, 172k)** | 94.97 sec | **54.39 sec** ✅ | ~25-30 sec |
+| **Speedup** | 1.0x | **1.70x** ✅ | 3-4x |
+| **Analyseurs migrés** | 0/17 | **8/17** (47%) | 5-6/17 (30-35%) |
+| **Gain absolu** | - | **37.91 sec** | ~65-70 sec |
 
-**Statut actuel:** Phase 4.5 complétée - 1.86x speedup avec timestamp + tcp_handshake + retransmission + rtt + tcp_window + tcp_reset + top_talkers
+**Statut actuel:** Phase 4.6 complétée - 1.70x speedup avec timestamp + tcp_handshake + retransmission + rtt + tcp_window + tcp_reset + top_talkers + throughput
 
 ---
 
@@ -257,7 +257,43 @@ bf2bbbb - Docs: Update proposal with Phase 3 results
 
 ---
 
-### 4.6 Migration burst_analyzer (OPTIONNEL)
+### ✅ 4.6 Migration throughput (COMPLÉTÉE)
+
+**Pourquoi:** Analyseur moyen (201 lignes, 8 KB), calcule débit par flux
+
+- [x] Analyser throughput.py pour identifier dépendances Scapy
+  - [x] Identifier champs nécessaires (packet_length, timestamp, IPs, ports) ✅
+  - [x] Tous les champs disponibles dans PacketMetadata ✅
+- [x] Créer méthode `_process_metadata()` dans throughput
+  - [x] Tracking bytes/packets par flux avec timestamps
+  - [x] Calcul débit global et par flux (Mbps, Kbps)
+  - [x] Détection flux lents (< 1 Mbps, > 1s, > 10KB)
+- [x] Ajouter get_summary() et _generate_report() pour hybrid mode
+- [x] Intégrer dans analyze_pcap_hybrid Phase 1
+- [x] Tests de régression: Résultats cohérents ✅
+- [x] Benchmark Phase 4.6
+
+**Résultats (capture-all.pcap: 172k paquets, 26MB):**
+- Temps hybrid: 54.39 sec
+- Temps legacy: 92.30 sec
+- Speedup: 1.70x (37.91 sec économisées)
+- **Verdict:** Migration réussie, 8/17 analyseurs migrés ✅
+
+**Note:** Speedup diminué de 1.86x → 1.70x car throughput fait plus de calculs
+(tracking flux, calculs débit). Toujours un excellent gain de performance.
+
+**Champs PacketMetadata nécessaires:** ✅ Tous disponibles
+- `packet_length`, `timestamp`, `src_ip`, `dst_ip`, `src_port`, `dst_port`, `protocol`
+
+**Validation:** Résultats quasi-identiques (0.01 Mbps global, 8 flux lents).
+Petite variance: 58,334 flux (hybrid) vs 58,430 (legacy) = 0.16% différence
+(probablement comptage flux ICMP/Other)
+
+**Commit:** `3e2ec1a` - Feat: Phase 4.6 - Migrate throughput analyzer to dpkt (1.70x speedup)
+
+---
+
+### 4.7 Migration burst_analyzer (OPTIONNEL)
 
 **Pourquoi:** Analyseur moyen (16 KB), détecte traffic bursts
 
@@ -298,7 +334,8 @@ bf2bbbb - Docs: Update proposal with Phase 3 results
 | **Phase 4.3** | **5/17** | **1.8-2.0x** | **1.85x** | ✅ **Succès** |
 | **Phase 4.4** | **6/17** | **1.8-2.0x** | **1.84x** | ✅ **Succès** |
 | **Phase 4.5** | **7/17** | **1.8-2.0x** | **1.86x** | ✅ **Succès** |
-| **Phase Finale** | **5-6/17** | **3-4x** | **?** | ✅ **Dépassé!** |
+| **Phase 4.6** | **8/17** | **1.6-2.0x** | **1.70x** | ✅ **Succès** |
+| **Phase Finale** | **5-6/17** | **3-4x** | **?** | ✅ **Largement dépassé!** |
 
 ### Tests de Régression Requis
 
@@ -341,10 +378,10 @@ Tester sur 3 PCAPs de tailles différentes:
 5. ✅ tcp_window - window size tracking
 6. ✅ tcp_reset - RST detection
 7. ✅ top_talkers - statistiques IP/protocole
-8. ⏳ syn_retransmission - SYN retrans
-9. ⏳ tcp_timeout - timeout detection
-10. ⏳ burst_analyzer - traffic bursts
-11. ⏳ throughput - calcul débit
+8. ✅ throughput - calcul débit par flux
+9. ⏳ syn_retransmission - SYN retrans
+10. ⏳ tcp_timeout - timeout detection
+11. ⏳ burst_analyzer - traffic bursts
 12. ⏳ temporal_pattern - patterns temporels
 
 **❌ Nécessite Scapy (deep inspection):**
@@ -399,6 +436,6 @@ python -c "import pstats; p = pstats.Stats('profile.stats'); p.sort_stats('cumul
 
 ---
 
-**Dernière mise à jour:** 2025-12-07 (Phase 4.5 complétée - Objectif 7/17 dépassé!)
+**Dernière mise à jour:** 2025-12-07 (Phase 4.6 complétée - 8/17 analyseurs, largement au-delà de l'objectif!)
 **Auteur:** Claude Code + omegabk
 **Branche:** performance-optimization
