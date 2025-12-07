@@ -714,6 +714,34 @@ tr:hover {
         background: var(--bg-code);
         color: #8ab4f8;
     }
+
+    /* Fix info-box for dark mode */
+    .info-box {
+        background: #1a3a52;
+        border-left-color: #64b5f6;
+        color: var(--text-primary);
+    }
+
+    /* Fix alert colors for dark mode */
+    .alert.alert-success {
+        background: var(--bg-section-success);
+        border-left-color: #4caf50;
+        color: #a5d6a7;
+    }
+
+    .alert.alert-success h4 {
+        color: #81c784;
+    }
+
+    .alert.alert-danger {
+        background: var(--bg-section-danger);
+        border-left-color: #ef5350;
+        color: #ef9a9a;
+    }
+
+    .alert.alert-danger h4 {
+        color: #e57373;
+    }
 }
 
 /* ============================================
