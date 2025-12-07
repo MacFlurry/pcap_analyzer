@@ -9,12 +9,12 @@
 
 | Métrique | Baseline | Actuel | Objectif Final |
 |----------|----------|--------|----------------|
-| **Temps (26MB, 172k)** | 94.97 sec | **54.39 sec** ✅ | ~25-30 sec |
-| **Speedup** | 1.0x | **1.70x** ✅ | 3-4x |
-| **Analyseurs migrés** | 0/17 | **8/17** (47%) | 5-6/17 (30-35%) |
-| **Gain absolu** | - | **37.91 sec** | ~65-70 sec |
+| **Temps (26MB, 172k)** | 94.97 sec | **54.44 sec** ✅ | ~25-30 sec |
+| **Speedup** | 1.0x | **1.71x** ✅ | 3-4x |
+| **Analyseurs migrés** | 0/17 | **9/17** (53%) | 5-6/17 (30-35%) |
+| **Gain absolu** | - | **38.82 sec** | ~65-70 sec |
 
-**Statut actuel:** Phase 4.6 complétée - 1.70x speedup avec timestamp + tcp_handshake + retransmission + rtt + tcp_window + tcp_reset + top_talkers + throughput
+**Statut actuel:** Phase 4.7 complétée - 1.71x speedup avec timestamp + tcp_handshake + retransmission + rtt + tcp_window + tcp_reset + top_talkers + throughput + syn_retransmission
 
 ---
 
@@ -293,7 +293,38 @@ Petite variance: 58,334 flux (hybrid) vs 58,430 (legacy) = 0.16% différence
 
 ---
 
-### 4.7 Migration burst_analyzer (OPTIONNEL)
+### ✅ 4.7 Migration syn_retransmission (COMPLÉTÉE)
+
+**Pourquoi:** Analyseur moyen (310 lignes, 16 KB), détecte retransmissions SYN problématiques
+
+- [x] Analyser syn_retransmission.py pour identifier dépendances Scapy
+  - [x] Identifier champs nécessaires (is_syn, is_ack, IPs, ports, timestamp) ✅
+  - [x] Tous les champs disponibles dans PacketMetadata ✅
+- [x] Créer méthode `_process_metadata()` dans syn_retransmission
+  - [x] Détection SYN (is_syn and not is_ack)
+  - [x] Détection SYN/ACK (is_syn and is_ack)
+  - [x] Tracking retransmissions et délais
+  - [x] Identification problèmes réseau (délais, no response)
+- [x] Intégrer dans analyze_pcap_hybrid Phase 1
+- [x] Tests de régression: Résultats identiques ✅
+- [x] Benchmark Phase 4.7
+
+**Résultats (capture-all.pcap: 172k paquets, 26MB):**
+- Temps hybrid: 54.44 sec
+- Temps legacy: 93.26 sec
+- Speedup: 1.71x (38.82 sec économisées)
+- **Verdict:** Migration réussie, 9/17 analyseurs migrés ✅
+
+**Champs PacketMetadata nécessaires:** ✅ Tous disponibles
+- `is_syn`, `is_ack`, `src_ip`, `dst_ip`, `src_port`, `dst_port`, `timestamp`
+
+**Validation:** Résultats identiques - Aucune retransmission SYN détectée (hybrid vs legacy)
+
+**Commit:** `03f65ee` - Feat: Phase 4.7 - Migrate syn_retransmission analyzer to dpkt (1.71x speedup)
+
+---
+
+### 4.8 Migration burst_analyzer (OPTIONNEL)
 
 **Pourquoi:** Analyseur moyen (16 KB), détecte traffic bursts
 
@@ -335,6 +366,7 @@ Petite variance: 58,334 flux (hybrid) vs 58,430 (legacy) = 0.16% différence
 | **Phase 4.4** | **6/17** | **1.8-2.0x** | **1.84x** | ✅ **Succès** |
 | **Phase 4.5** | **7/17** | **1.8-2.0x** | **1.86x** | ✅ **Succès** |
 | **Phase 4.6** | **8/17** | **1.6-2.0x** | **1.70x** | ✅ **Succès** |
+| **Phase 4.7** | **9/17** | **1.6-2.0x** | **1.71x** | ✅ **Succès** |
 | **Phase Finale** | **5-6/17** | **3-4x** | **?** | ✅ **Largement dépassé!** |
 
 ### Tests de Régression Requis
@@ -379,7 +411,7 @@ Tester sur 3 PCAPs de tailles différentes:
 6. ✅ tcp_reset - RST detection
 7. ✅ top_talkers - statistiques IP/protocole
 8. ✅ throughput - calcul débit par flux
-9. ⏳ syn_retransmission - SYN retrans
+9. ✅ syn_retransmission - SYN retrans
 10. ⏳ tcp_timeout - timeout detection
 11. ⏳ burst_analyzer - traffic bursts
 12. ⏳ temporal_pattern - patterns temporels
@@ -436,6 +468,6 @@ python -c "import pstats; p = pstats.Stats('profile.stats'); p.sort_stats('cumul
 
 ---
 
-**Dernière mise à jour:** 2025-12-07 (Phase 4.6 complétée - 8/17 analyseurs, largement au-delà de l'objectif!)
+**Dernière mise à jour:** 2025-12-07 (Phase 4.7 complétée - 9/17 analyseurs, 53% migrés!)
 **Auteur:** Claude Code + omegabk
 **Branche:** performance-optimization
