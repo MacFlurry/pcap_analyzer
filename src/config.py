@@ -71,13 +71,16 @@ class Config:
         Raises:
             ValueError: Si la configuration est invalide
         """
-        required_sections = ['thresholds', 'ssh', 'reports']
+        # Only thresholds and reports are required for local analysis
+        # SSH is optional and only validated when needed (for capture command)
+        required_sections = ['thresholds', 'reports']
         missing_sections = [section for section in required_sections if section not in config]
 
         if missing_sections:
             raise ValueError(
                 f"Sections manquantes dans {self.config_path}: {', '.join(missing_sections)}\n"
-                f"Sections requises: {', '.join(required_sections)}"
+                f"Sections requises: {', '.join(required_sections)}\n"
+                f"Note: La section 'ssh' est optionnelle et requise uniquement pour la capture distante"
             )
 
         # Validate thresholds section
@@ -106,16 +109,11 @@ class Config:
                     f"reçu: {type(value).__name__} ({value})"
                 )
 
-        # Validate SSH section
-        if not isinstance(config['ssh'], dict):
-            raise ValueError("La section 'ssh' doit être un dictionnaire")
-
-        required_ssh_fields = ['host', 'port', 'username']
-        missing_ssh = [f for f in required_ssh_fields if f not in config['ssh']]
-        if missing_ssh:
-            raise ValueError(
-                f"Champs manquants dans 'ssh': {', '.join(missing_ssh)}"
-            )
+        # SSH section is optional - only validate if present
+        # It will be validated when needed by validate_ssh_config() method
+        if 'ssh' in config and config['ssh'] is not None:
+            if not isinstance(config['ssh'], dict):
+                raise ValueError("La section 'ssh' doit être un dictionnaire")
 
         # Validate reports section
         if not isinstance(config['reports'], dict):
@@ -131,34 +129,40 @@ class Config:
         Args:
             config: Configuration to modify in-place
         """
-        if 'ssh' in config and 'key_file' in config['ssh']:
+        if 'ssh' in config and config['ssh'] is not None and 'key_file' in config['ssh']:
             key_file = config['ssh']['key_file']
             if key_file:
                 # Expand ~ and environment variables
                 expanded = os.path.expanduser(os.path.expandvars(key_file))
+                config['ssh']['key_file'] = expanded
 
-                # Security: Validate SSH key file exists and has secure permissions
-                if expanded and os.path.exists(expanded):
-                    # Check file permissions (should be 0600 or 0400)
-                    stat_info = os.stat(expanded)
-                    mode = stat_info.st_mode & 0o777  # Get permission bits
+    def validate_ssh_config(self) -> None:
+        """
+        Validate SSH configuration when needed (for capture command).
 
-                    # Check if group or others have any permissions (insecure)
-                    if mode & 0o077:
-                        raise ValueError(
-                            f"SSH key file has insecure permissions: {expanded}\n"
-                            f"Current permissions: {oct(mode)}\n"
-                            f"Expected: 0600 or 0400 (readable only by owner)\n"
-                            f"Fix with: chmod 600 {expanded}"
-                        )
+        Raises:
+            ValueError: If SSH configuration is missing or invalid
+        """
+        if 'ssh' not in self.config or self.config['ssh'] is None:
+            raise ValueError(
+                "Configuration SSH manquante.\n"
+                "La section 'ssh' est requise pour la commande 'capture'.\n"
+                "Ajoutez une section 'ssh' dans votre fichier config.yaml avec les champs: host, port, username"
+            )
 
-                    # Verify file is readable
-                    if not os.access(expanded, os.R_OK):
-                        raise ValueError(f"SSH key file is not readable: {expanded}")
+        ssh_config = self.config['ssh']
 
-                    config['ssh']['key_file'] = expanded
-                elif expanded:
-                    raise FileNotFoundError(f"SSH key file not found: {expanded}")
+        if not isinstance(ssh_config, dict):
+            raise ValueError("La section 'ssh' doit être un dictionnaire")
+
+        required_ssh_fields = ['host', 'port', 'username']
+        missing_ssh = [f for f in required_ssh_fields if f not in ssh_config]
+
+        if missing_ssh:
+            raise ValueError(
+                f"Champs manquants dans 'ssh': {', '.join(missing_ssh)}\n"
+                f"Champs requis pour la capture: {', '.join(required_ssh_fields)}"
+            )
 
     def get(self, key_path: str, default: Any = None) -> Any:
         """

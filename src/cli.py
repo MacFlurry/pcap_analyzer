@@ -352,6 +352,13 @@ def capture(duration, filter, output, config, analyze, latency):
     # Charge la configuration
     cfg = get_config(config)
 
+    # Validate SSH configuration is present for capture command
+    try:
+        cfg.validate_ssh_config()
+    except ValueError as e:
+        console.print(f"[red]❌ {e}[/red]")
+        sys.exit(1)
+
     # Nom du fichier de sortie
     if output is None:
         from datetime import datetime
