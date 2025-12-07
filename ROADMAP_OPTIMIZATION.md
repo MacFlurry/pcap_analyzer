@@ -9,12 +9,12 @@
 
 | Métrique | Baseline | Actuel | Objectif Final |
 |----------|----------|--------|----------------|
-| **Temps (26MB, 172k)** | 94.97 sec | **54.55 sec** ✅ | ~25-30 sec |
-| **Speedup** | 1.0x | **1.72x** ✅ | 3-4x |
-| **Analyseurs migrés** | 0/17 | **10/17** (59%) | 5-6/17 (30-35%) |
-| **Gain absolu** | - | **39.16 sec** | ~65-70 sec |
+| **Temps (26MB, 172k)** | 94.97 sec | **56.08 sec** ✅ | ~25-30 sec |
+| **Speedup** | 1.0x | **1.65x** ✅ | 3-4x |
+| **Analyseurs migrés** | 0/17 | **11/17** (65%) | 5-6/17 (30-35%) |
+| **Gain absolu** | - | **36.65 sec** | ~65-70 sec |
 
-**Statut actuel:** Phase 4.8 complétée - 1.72x speedup avec timestamp + tcp_handshake + retransmission + rtt + tcp_window + tcp_reset + top_talkers + throughput + syn_retransmission + tcp_timeout
+**Statut actuel:** Phase 4.9 complétée - 1.65x speedup avec timestamp + tcp_handshake + retransmission + rtt + tcp_window + tcp_reset + top_talkers + throughput + syn_retransmission + tcp_timeout + burst_analyzer
 
 ---
 
@@ -357,13 +357,42 @@ Petite variance: 58,334 flux (hybrid) vs 58,430 (legacy) = 0.16% différence
 
 ---
 
-### 4.9 Migration burst_analyzer (OPTIONNEL)
+### ✅ 4.9 Migration burst_analyzer (COMPLÉTÉE)
 
-**Pourquoi:** Analyseur moyen (16 KB), détecte traffic bursts
+**Pourquoi:** Analyseur moyen (405 lignes, 16 KB), détecte traffic bursts
 
-- [ ] Analyser burst_analyzer.py pour identifier dépendances Scapy
-- [ ] Évaluer complexité migration
-- [ ] Décider si migration justifiée vs gain potentiel
+- [x] Analyser burst_analyzer.py pour identifier dépendances Scapy
+  - [x] Identifier champs nécessaires (timestamp, packet_length, src_ip, dst_ip, protocol) ✅
+  - [x] Tous les champs disponibles dans PacketMetadata ✅
+- [x] Créer méthode `_process_metadata()` dans burst_analyzer
+  - [x] Time-based interval bucketing (100ms)
+  - [x] Tracking packets/bytes/sources/destinations/protocols per interval
+  - [x] Burst detection (3x average traffic threshold)
+  - [x] Memory optimization with periodic cleanup
+- [x] Ajouter _generate_report() pour hybrid mode
+- [x] Intégrer dans analyze_pcap_hybrid Phase 1
+- [x] Tests de régression: Résultats cohérents ✅
+- [x] Benchmark Phase 4.9
+
+**Résultats (capture-all.pcap: 131,408 paquets, 26MB):**
+- Temps hybrid: 56.08 sec
+- Temps legacy: 92.73 sec
+- Speedup: 1.65x (36.65 sec économisées)
+- **Verdict:** Migration réussie, 11/17 analyseurs migrés ✅
+
+**Note:** Speedup diminué de 1.72x → 1.65x car burst_analyzer fait beaucoup de calculs
+(bucketing temporel, agrégation stats, détection bursts). Toujours un excellent gain.
+
+**Champs PacketMetadata nécessaires:** ✅ Tous disponibles
+- `timestamp`, `packet_length`, `src_ip`, `dst_ip`, `protocol`
+
+**Validation:** Résultats quasi-identiques:
+- Intervals: 13,129 vs 13,097 (0.24% variance)
+- Bursts: 219 (both modes)
+- CV: 135.4% vs 135.2%
+- Regularity: "Très irrégulier" (both modes)
+
+**Commit:** `7c77057` - Feat: Phase 4.9 - Migrate burst_analyzer to dpkt (1.65x speedup)
 
 ---
 
@@ -401,6 +430,7 @@ Petite variance: 58,334 flux (hybrid) vs 58,430 (legacy) = 0.16% différence
 | **Phase 4.6** | **8/17** | **1.6-2.0x** | **1.70x** | ✅ **Succès** |
 | **Phase 4.7** | **9/17** | **1.6-2.0x** | **1.71x** | ✅ **Succès** |
 | **Phase 4.8** | **10/17** | **1.6-2.0x** | **1.72x** | ✅ **Succès** |
+| **Phase 4.9** | **11/17** | **1.6-2.0x** | **1.65x** | ✅ **Succès** |
 | **Phase Finale** | **5-6/17** | **3-4x** | **?** | ✅ **Largement dépassé!** |
 
 ### Tests de Régression Requis
@@ -447,7 +477,7 @@ Tester sur 3 PCAPs de tailles différentes:
 8. ✅ throughput - calcul débit par flux
 9. ✅ syn_retransmission - SYN retrans
 10. ✅ tcp_timeout - timeout/zombie detection
-11. ⏳ burst_analyzer - traffic bursts
+11. ✅ burst_analyzer - traffic bursts
 12. ⏳ temporal_pattern - patterns temporels
 
 **❌ Nécessite Scapy (deep inspection):**
@@ -502,6 +532,6 @@ python -c "import pstats; p = pstats.Stats('profile.stats'); p.sort_stats('cumul
 
 ---
 
-**Dernière mise à jour:** 2025-12-07 (Phase 4.8 complétée - 10/17 analyseurs, 59% migrés!)
+**Dernière mise à jour:** 2025-12-07 (Phase 4.9 complétée - 11/17 analyseurs, 65% migrés!)
 **Auteur:** Claude Code + omegabk
 **Branche:** performance-optimization
