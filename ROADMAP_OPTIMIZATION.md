@@ -9,12 +9,12 @@
 
 | Métrique | Baseline | Actuel | Objectif Final |
 |----------|----------|--------|----------------|
-| **Temps (26MB, 172k)** | 94.97 sec | **54.44 sec** ✅ | ~25-30 sec |
-| **Speedup** | 1.0x | **1.71x** ✅ | 3-4x |
-| **Analyseurs migrés** | 0/17 | **9/17** (53%) | 5-6/17 (30-35%) |
-| **Gain absolu** | - | **38.82 sec** | ~65-70 sec |
+| **Temps (26MB, 172k)** | 94.97 sec | **54.55 sec** ✅ | ~25-30 sec |
+| **Speedup** | 1.0x | **1.72x** ✅ | 3-4x |
+| **Analyseurs migrés** | 0/17 | **10/17** (59%) | 5-6/17 (30-35%) |
+| **Gain absolu** | - | **39.16 sec** | ~65-70 sec |
 
-**Statut actuel:** Phase 4.7 complétée - 1.71x speedup avec timestamp + tcp_handshake + retransmission + rtt + tcp_window + tcp_reset + top_talkers + throughput + syn_retransmission
+**Statut actuel:** Phase 4.8 complétée - 1.72x speedup avec timestamp + tcp_handshake + retransmission + rtt + tcp_window + tcp_reset + top_talkers + throughput + syn_retransmission + tcp_timeout
 
 ---
 
@@ -324,7 +324,40 @@ Petite variance: 58,334 flux (hybrid) vs 58,430 (legacy) = 0.16% différence
 
 ---
 
-### 4.8 Migration burst_analyzer (OPTIONNEL)
+### ✅ 4.8 Migration tcp_timeout (COMPLÉTÉE)
+
+**Pourquoi:** Analyseur moyen (328 lignes, 16 KB), détecte connexions timeout/zombie
+
+- [x] Analyser tcp_timeout.py pour identifier dépendances Scapy
+  - [x] Identifier champs nécessaires (is_syn, is_ack, is_fin, is_rst, IPs, ports, timestamp, packet_length) ✅
+  - [x] Tous les champs disponibles dans PacketMetadata ✅
+- [x] Créer méthode `_process_metadata()` dans tcp_timeout
+  - [x] Détection états TCP: SYN, SYN-ACK, ACK, FIN, RST
+  - [x] Classification connexions: syn_timeout, half_open, zombie, idle, closed_fin, closed_rst, active
+  - [x] Tracking bytes et compteurs par connexion
+- [x] Intégrer dans analyze_pcap_hybrid Phase 1
+- [x] Tests de régression: Résultats identiques ✅
+- [x] Benchmark Phase 4.8
+
+**Résultats (capture-all.pcap: 131,408 paquets, 26MB):**
+- Temps hybrid: 54.55 sec
+- Temps legacy: 93.71 sec
+- Speedup: 1.72x (39.16 sec économisées)
+- **Verdict:** Migration réussie, 10/17 analyseurs migrés ✅
+
+**Champs PacketMetadata nécessaires:** ✅ Tous disponibles
+- `is_syn`, `is_ack`, `is_fin`, `is_rst`, `src_ip`, `dst_ip`, `src_port`, `dst_port`, `timestamp`, `packet_length`, `tcp_payload_len`
+
+**Validation:** Résultats identiques:
+- Total connections: 7 (both modes)
+- Problematic: 1 zombie (both modes)
+- Closed (FIN): 5 (both modes)
+
+**Commit:** `a34dbc9` - Feat: Phase 4.8 - Migrate tcp_timeout analyzer to dpkt (1.72x speedup)
+
+---
+
+### 4.9 Migration burst_analyzer (OPTIONNEL)
 
 **Pourquoi:** Analyseur moyen (16 KB), détecte traffic bursts
 
@@ -367,6 +400,7 @@ Petite variance: 58,334 flux (hybrid) vs 58,430 (legacy) = 0.16% différence
 | **Phase 4.5** | **7/17** | **1.8-2.0x** | **1.86x** | ✅ **Succès** |
 | **Phase 4.6** | **8/17** | **1.6-2.0x** | **1.70x** | ✅ **Succès** |
 | **Phase 4.7** | **9/17** | **1.6-2.0x** | **1.71x** | ✅ **Succès** |
+| **Phase 4.8** | **10/17** | **1.6-2.0x** | **1.72x** | ✅ **Succès** |
 | **Phase Finale** | **5-6/17** | **3-4x** | **?** | ✅ **Largement dépassé!** |
 
 ### Tests de Régression Requis
@@ -412,7 +446,7 @@ Tester sur 3 PCAPs de tailles différentes:
 7. ✅ top_talkers - statistiques IP/protocole
 8. ✅ throughput - calcul débit par flux
 9. ✅ syn_retransmission - SYN retrans
-10. ⏳ tcp_timeout - timeout detection
+10. ✅ tcp_timeout - timeout/zombie detection
 11. ⏳ burst_analyzer - traffic bursts
 12. ⏳ temporal_pattern - patterns temporels
 
@@ -468,6 +502,6 @@ python -c "import pstats; p = pstats.Stats('profile.stats'); p.sort_stats('cumul
 
 ---
 
-**Dernière mise à jour:** 2025-12-07 (Phase 4.7 complétée - 9/17 analyseurs, 53% migrés!)
+**Dernière mise à jour:** 2025-12-07 (Phase 4.8 complétée - 10/17 analyseurs, 59% migrés!)
 **Auteur:** Claude Code + omegabk
 **Branche:** performance-optimization
