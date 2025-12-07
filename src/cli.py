@@ -130,6 +130,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     retrans_analyzer = analyzer_dict["retransmission"]
     rtt_analyzer = analyzer_dict["rtt"]
     window_analyzer = analyzer_dict["window"]
+    reset_analyzer = analyzer_dict["tcp_reset"]
 
     # Fast pass with dpkt
     parser = FastPacketParser(pcap_file)
@@ -151,6 +152,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
             retrans_analyzer.process_packet(metadata, packet_count - 1)
             rtt_analyzer.process_packet(metadata, packet_count - 1)
             window_analyzer.process_packet(metadata, packet_count - 1)
+            reset_analyzer.process_packet(metadata, packet_count - 1)
 
             if packet_count % 50000 == 0:
                 gc.collect()
@@ -208,12 +210,13 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     results['retransmission'] = retrans_analyzer._generate_report()
     results['rtt'] = rtt_analyzer._generate_report()
     results['tcp_window'] = window_analyzer._generate_report()
+    results['tcp_reset'] = reset_analyzer._generate_report()
     results['dns'] = dns_analyzer._generate_report()
     results['icmp'] = icmp_analyzer._generate_report()
 
     # Add empty results for other analyzers (they'll be implemented next)
     for key in ['syn_retransmissions',
-                'tcp_reset', 'ip_fragmentation', 'top_talkers', 'throughput', 'tcp_timeout',
+                'ip_fragmentation', 'top_talkers', 'throughput', 'tcp_timeout',
                 'asymmetric_traffic', 'burst', 'temporal', 'sack']:
         if key not in results:
             results[key] = {}
@@ -226,6 +229,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     console.print("\n" + retrans_analyzer.get_summary())
     console.print("\n" + rtt_analyzer.get_summary())
     console.print("\n" + window_analyzer.get_summary())
+    console.print("\n" + reset_analyzer.get_summary())
     console.print("\n" + icmp_analyzer.get_summary())
     console.print("\n" + dns_analyzer.get_summary())
 

@@ -4,9 +4,15 @@ Détecte et analyse les connexions TCP fermées brutalement
 """
 
 from scapy.all import TCP, IP
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Union
 from collections import defaultdict
 from datetime import datetime
+
+# Import PacketMetadata for hybrid mode support (3-5x faster)
+try:
+    from ..parsers.fast_parser import PacketMetadata
+except ImportError:
+    PacketMetadata = None
 
 
 class TCPResetAnalyzer:
@@ -21,11 +27,25 @@ class TCPResetAnalyzer:
             'rst_count': 0
         })
         
-    def process_packet(self, packet, packet_num: int):
-        """Analyse un paquet pour détecter les RST"""
+    def process_packet(self, packet: Union['Packet', 'PacketMetadata'], packet_num: int):
+        """
+        Process a single packet (supports both Scapy Packet and PacketMetadata).
+
+        PERFORMANCE: PacketMetadata is 3-5x faster than Scapy Packet parsing.
+
+        Args:
+            packet: Scapy Packet or lightweight PacketMetadata
+            packet_num: Packet sequence number in capture
+        """
+        # FAST PATH: Handle PacketMetadata (dpkt-extracted, 3-5x faster)
+        if PacketMetadata and isinstance(packet, PacketMetadata):
+            self._process_metadata(packet, packet_num)
+            return
+
+        # LEGACY PATH: Handle Scapy Packet (for backward compatibility)
         if not packet.haslayer(TCP) or not packet.haslayer(IP):
             return
-            
+
         tcp = packet[TCP]
         ip = packet[IP]
         
@@ -73,9 +93,95 @@ class TCPResetAnalyzer:
         else:
             return f"{ip2}:{port2} → {ip1}:{port1}"
 
+    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+        """
+        PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
+
+        This method replicates RST detection logic but uses direct attribute access
+        from dpkt-extracted metadata.
+
+        Args:
+            metadata: Lightweight packet metadata from dpkt
+            packet_num: Packet sequence number in capture
+        """
+        # Skip non-TCP packets
+        if metadata.protocol != 'TCP':
+            return
+
+        src_ip = metadata.src_ip
+        dst_ip = metadata.dst_ip
+        src_port = metadata.src_port
+        dst_port = metadata.dst_port
+        timestamp = metadata.timestamp
+
+        # Clé de flux bidirectionnelle (normalisée)
+        flow_key = self._get_flow_key(src_ip, src_port, dst_ip, dst_port)
+
+        # Suivre l'état du flux
+        if metadata.is_syn:  # SYN flag
+            self.flows[flow_key]['syn_seen'] = True
+
+        # Détecter échange de données (PSH ou payload)
+        if metadata.is_psh or metadata.tcp_payload_len > 0:
+            self.flows[flow_key]['data_exchanged'] = True
+
+        # Détecter RST
+        if metadata.is_rst:  # RST flag
+            self.flows[flow_key]['rst_count'] += 1
+
+            rst_info = {
+                'packet_num': packet_num,
+                'timestamp': timestamp,
+                'src_ip': src_ip,
+                'src_port': src_port,
+                'dst_ip': dst_ip,
+                'dst_port': dst_port,
+                'flow_key': flow_key,
+                'syn_seen': self.flows[flow_key]['syn_seen'],
+                'data_exchanged': self.flows[flow_key]['data_exchanged'],
+                'flags': metadata.tcp_flags,
+                'seq': metadata.tcp_seq,
+                'ack': metadata.tcp_ack if metadata.is_ack else None
+            }
+
+            self.reset_packets.append(rst_info)
+
     def finalize(self) -> Dict[str, Any]:
         """Finalize analysis and return results"""
         return self.get_results()
+
+    def _generate_report(self) -> Dict[str, Any]:
+        """Generate report for hybrid mode compatibility"""
+        return self.get_results()
+
+    def get_summary(self) -> str:
+        """Retourne un résumé textuel de l'analyse des RST TCP"""
+        results = self.get_results()
+
+        total = results['total_resets']
+        premature = results['premature_resets']
+        post_data = results['post_data_resets']
+        flows = results['flows_with_resets']
+
+        summary = f"📊 Analyse des Reset TCP (RST):\n"
+        summary += f"  - Reset totaux: {total}\n"
+
+        if total == 0:
+            summary += "\n✓ Aucun paquet RST détecté."
+            return summary
+
+        summary += f"  - Reset prématurés: {premature}\n"
+        summary += f"  - Reset post-données: {post_data}\n"
+        summary += f"  - Flux affectés: {flows}\n"
+
+        if premature > total * 0.5:
+            summary += "\n⚠️  ATTENTION: Nombre élevé de RST prématurés (avant échange de données)."
+        elif total > 10:
+            summary += f"\n⚠️  {total} paquets RST détectés - vérifier les connexions."
+        else:
+            summary += "\n✓ Nombre de RST dans les limites normales."
+
+        return summary
 
     def get_results(self) -> Dict[str, Any]:
         """Retourne les résultats de l'analyse"""
