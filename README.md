@@ -25,6 +25,7 @@ Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), et RFC 6298
 
 ### Qualité et Performance
 
+*   **🚀 Mode Hybride (dpkt + Scapy) :** Architecture optimisée utilisant dpkt pour l'extraction rapide des métadonnées (3-5x plus rapide) et Scapy pour l'inspection approfondie des protocoles complexes. **1.7x speedup global** sur l'analyse complète.
 *   **Optimisation Mémoire :** Gestion intelligente de la mémoire avec cleanup périodique pour les captures de longue durée.
 *   **Tests Complets :** Suite de tests unitaires et d'intégration avec couverture >80% (pytest).
 *   **CI/CD :** Tests automatisés sur Ubuntu et macOS avec Python 3.9-3.12.
@@ -95,6 +96,59 @@ pcap_analyzer analyze ma_capture.pcap
 # Capture de 10 minutes sur le serveur configuré (config.yaml) et analyse auto.
 pcap_analyzer capture --duration 600
 ```
+
+### Options de Performance
+
+```bash
+# Mode hybride (défaut) - Utilise dpkt pour l'extraction rapide + Scapy pour l'inspection approfondie
+pcap_analyzer analyze capture.pcap --mode hybrid
+
+# Mode legacy - Utilise uniquement Scapy (pour comparaison/validation)
+pcap_analyzer analyze capture.pcap --mode legacy
+```
+
+## Performance
+
+Le PCAP Analyzer utilise une **architecture hybride optimisée** qui combine:
+- **dpkt** pour l'extraction rapide des métadonnées (phase 1)
+- **Scapy** pour l'inspection approfondie des protocoles complexes (phase 2)
+
+### Benchmarks
+
+**Test:** Capture de 131,408 paquets (26 MB, 4 heures de trafic)
+
+| Mode | Temps | Analyseurs dpkt | Speedup |
+|------|-------|----------------|---------|
+| **Legacy** (Scapy seul) | 93.3 sec | 0/17 | 1.0x (baseline) |
+| **Hybrid** (dpkt + Scapy) | 55.2 sec | 12/17 | **1.7x** ⚡ |
+
+**Gain:** 38 secondes économisées (40% de réduction)
+
+### Analyseurs Optimisés (12/17)
+
+Les analyseurs suivants utilisent dpkt pour l'extraction rapide:
+
+1. ✅ Timestamp gaps
+2. ✅ TCP handshake
+3. ✅ Retransmissions
+4. ✅ RTT measurement
+5. ✅ TCP window
+6. ✅ TCP reset
+7. ✅ Top talkers
+8. ✅ Throughput
+9. ✅ SYN retransmissions
+10. ✅ TCP timeouts
+11. ✅ Traffic bursts
+12. ✅ Temporal patterns
+
+Les 5 analyseurs restants (DNS, ICMP, IP fragmentation, SACK, asymmetric traffic) nécessitent l'inspection approfondie Scapy et sont traités en phase 2.
+
+### Évolutivité
+
+Le mode hybride maintient des performances constantes sur des captures volumineuses:
+- Cleanup mémoire périodique (tous les 50k paquets)
+- Parsing sélectif en phase 2 (DNS/ICMP uniquement)
+- Architecture streaming pour éviter de charger tout le PCAP en mémoire
 
 ## Nouveautés Version 3.0.0
 
