@@ -83,7 +83,7 @@ class ReportGenerator:
         # Ajoute des métadonnées
         total_packets = analysis_results.get('timestamps', {}).get('total_packets', 0)
         analysis_results['analysis_info'] = {
-            'pcap_file': pcap_file,
+            'pcap_file': Path(pcap_file).name,  # Show only filename, not full path
             'analysis_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'total_packets': total_packets,
             'capture_duration': analysis_results.get('timestamps', {}).get('capture_duration_seconds', 0),
