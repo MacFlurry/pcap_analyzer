@@ -3,14 +3,15 @@ include README.md
 include LICENSE
 include CHANGELOG.md
 include CONTRIBUTING.md
-include QUICKSTART.md
-include STRUCTURE.md
-include SUMMARY.md
-include TEST.md
-include TROUBLESHOOTING.md
+include OPTIMIZATION_SUMMARY.md
+include PERFORMANCE_OPTIMIZATION_PROPOSAL.md
+include ROADMAP_OPTIMIZATION.md
 
 # Include configuration files
 include config.yaml
+include pytest.ini
+include requirements.txt
+include requirements-dev.txt
 
 # Include templates and static assets
 recursive-include templates *.html
