@@ -43,4 +43,4 @@ var/
 venv/
 wheels/
 scripts/
-capture*
+capture**.stats
