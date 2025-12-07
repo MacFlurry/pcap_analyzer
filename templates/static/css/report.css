@@ -742,6 +742,11 @@ tr:hover {
     .alert.alert-danger h4 {
         color: #e57373;
     }
+
+    /* Fix interpretation-details h4 for dark mode */
+    .interpretation-details h4 {
+        color: #90caf9;
+    }
 }
 
 /* ============================================
