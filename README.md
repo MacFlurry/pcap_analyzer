@@ -6,7 +6,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/MacFlurry/pcap_analyzer)](https://github.com/MacFlurry/pcap_analyzer/issues)
 [![Latest Release](https://img.shields.io/github/v/release/MacFlurry/pcap_analyzer?include_prereleases)](https://github.com/MacFlurry/pcap_analyzer/releases)
 
-**Version 3.0.0**
+**Version 3.1.0**
 
 Outil avancé d'analyse automatisée de fichiers PCAP. Il permet d'identifier et de diagnostiquer de manière intelligente les causes de latence et de problèmes réseau, avec une interface utilisateur intuitive et des rapports HTML modernes avec support du mode sombre.
 
@@ -149,6 +149,33 @@ Le mode hybride maintient des performances constantes sur des captures volumineu
 - Cleanup mémoire périodique (tous les 50k paquets)
 - Parsing sélectif en phase 2 (DNS/ICMP uniquement)
 - Architecture streaming pour éviter de charger tout le PCAP en mémoire
+
+## Nouveautés Version 3.1.0
+
+### Améliorations des Rapports
+
+*   **Rapports Plus Concis** :
+    - Liste des périodes de silence réduite de 20 à 10 éléments (Top 10)
+    - Liste des bursts détectés réduite de Top 20 à Top 10
+    - Sections collapsibles pour "Pics de trafic" et "Distribution horaire"
+
+*   **Détection d'Incidents Améliorée** :
+    - Nouveau titre "⏸️ Pause Applicative Probable" pour les gaps sans RTOs
+    - Distinction claire entre incidents réseau et pauses applicatives
+    - Logique de détection plus précise et contextuelle
+
+*   **Mode Sombre Amélioré** :
+    - Correction de la lisibilité des alertes info (`.alert-info`)
+    - Meilleur contraste pour les titres h4 en dark mode
+    - Support complet du thème sombre pour toutes les alertes
+
+### Performance
+
+*   **Architecture Hybride dpkt + Scapy** :
+    - Migration de 12 analyseurs sur 17 vers dpkt (extraction rapide)
+    - **Speedup global de 1.7x** sur l'analyse complète
+    - Réduction de 40% du temps d'analyse (38 secondes économisées sur 131K paquets)
+    - Mode hybride activé par défaut
 
 ## Nouveautés Version 3.0.0
 
