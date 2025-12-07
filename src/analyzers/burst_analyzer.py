@@ -5,10 +5,16 @@ Détecte les pics de trafic qui peuvent causer des congestions.
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 from scapy.packet import Packet
 from scapy.layers.inet import IP, TCP, UDP
 from datetime import datetime
+
+# Import PacketMetadata for hybrid mode support (3-5x faster)
+try:
+    from ..parsers.fast_parser import PacketMetadata
+except ImportError:
+    PacketMetadata = None
 
 
 @dataclass
@@ -113,13 +119,25 @@ class BurstAnalyzer:
             return "IP"
         return "Other"
     
-    def process_packet(self, packet: Packet, packet_num: int = 0) -> None:
+    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int = 0) -> None:
         """
-        Traite un paquet et met à jour les statistiques d'intervalle.
+        Process a single packet (supports both Scapy Packet and PacketMetadata).
+
+        PERFORMANCE: PacketMetadata is 3-5x faster than Scapy Packet parsing.
+
+        Args:
+            packet: Scapy Packet or lightweight PacketMetadata
+            packet_num: Packet sequence number in capture
         """
+        # FAST PATH: Handle PacketMetadata (dpkt-extracted, 3-5x faster)
+        if PacketMetadata and isinstance(packet, PacketMetadata):
+            self._process_metadata(packet, packet_num)
+            return
+
+        # LEGACY PATH: Handle Scapy Packet (for backward compatibility)
         if not packet.haslayer(IP):
             return
-        
+
         ip = packet[IP]
         timestamp = float(packet.time)
         packet_len = len(packet)
@@ -157,6 +175,55 @@ class BurstAnalyzer:
         
         # Protocole
         proto = self._get_protocol(packet)
+        interval.protocols[proto] = interval.protocols.get(proto, 0) + 1
+
+    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+        """
+        PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
+
+        This method replicates burst detection logic but uses direct attribute access
+        from dpkt-extracted metadata.
+
+        Args:
+            metadata: Lightweight packet metadata from dpkt
+            packet_num: Packet sequence number in capture
+        """
+        timestamp = metadata.timestamp
+        packet_len = metadata.packet_length
+
+        # Stats globales
+        self.total_packets += 1
+        self.total_bytes += packet_len
+
+        if self.first_packet_time is None:
+            self.first_packet_time = timestamp
+        self.last_packet_time = timestamp
+
+        # Memory optimization: periodic cleanup of old intervals
+        self._packet_counter += 1
+        if self._packet_counter % self._cleanup_interval == 0:
+            self._cleanup_old_intervals()
+
+        # Bucket d'intervalle
+        bucket = self._get_interval_bucket(timestamp)
+
+        if bucket not in self.intervals:
+            self.intervals[bucket] = IntervalStats(
+                start_time=bucket * self.interval_sec
+            )
+
+        interval = self.intervals[bucket]
+        interval.packets += 1
+        interval.bytes += packet_len
+
+        # Sources et destinations
+        src_ip = metadata.src_ip
+        dst_ip = metadata.dst_ip
+        interval.sources[src_ip] = interval.sources.get(src_ip, 0) + 1
+        interval.destinations[dst_ip] = interval.destinations.get(dst_ip, 0) + 1
+
+        # Protocole (already extracted by dpkt)
+        proto = metadata.protocol
         interval.protocols[proto] = interval.protocols.get(proto, 0) + 1
 
     def _cleanup_old_intervals(self) -> None:
@@ -289,6 +356,10 @@ class BurstAnalyzer:
         
         self.bursts.append(burst)
     
+    def _generate_report(self) -> Dict[str, Any]:
+        """Generate report for hybrid mode compatibility."""
+        return self.get_results()
+
     def get_results(self) -> Dict[str, Any]:
         """Retourne les résultats complets de l'analyse."""
         if self.first_packet_time is None or self.last_packet_time is None:
