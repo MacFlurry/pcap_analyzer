@@ -1,4 +1,3 @@
-
 __pycache__/
 .agent-notes
 .DS_Store
@@ -28,7 +27,6 @@ __pycache__/
 # Virtual environments
 build/
 config_local.yaml
-config.yaml.backup
 develop-eggs/
 dist/
 downloads/
@@ -44,8 +42,5 @@ Thumbs.db
 var/
 venv/
 wheels/
-generate_traffic_capture.py
-generate_traffic_simple.py
 scripts/
-config.yaml.backup
 capture*
