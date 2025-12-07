@@ -213,6 +213,8 @@ class FastPacketParser:
                 metadata.tcp_flags = transport.flags
                 metadata.tcp_window = transport.win
                 metadata.tcp_payload_len = len(transport.data)
+                # Re-compute convenience flags after setting tcp_flags
+                metadata.__post_init__()
 
             elif isinstance(transport, dpkt.udp.UDP):
                 metadata.protocol = 'UDP'
