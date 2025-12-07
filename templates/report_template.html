@@ -172,7 +172,7 @@
                         <tbody>
                             {% set count = namespace(value=0) %}
                             {% for gap in timestamps['gaps'] %}
-                            {% if gap.is_abnormal and count.value < 20 %}
+                            {% if gap.is_abnormal and count.value < 10 %}
                             {% set count.value = count.value + 1 %}
                             <tr>
                                 <td>#{{ gap.packet_num_before }} → #{{ gap.packet_num_after }}</td>
@@ -1628,7 +1628,7 @@
             {% if burst.bursts %}
             <div class="collapsible-header">
                 <span class="toggle-icon">▶</span>
-                <span class="header-title">📋 Tous les bursts détectés (Top 20)</span>
+                <span class="header-title">📋 Tous les bursts détectés (Top 10)</span>
             </div>
             <div class="collapsible-content">
                 <div class="content-inner">
@@ -1645,7 +1645,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for b in burst.bursts[:20] %}
+                            {% for b in burst.bursts[:10] %}
                             <tr>
                                 <td><code>{{ b.start_iso }}</code></td>
                                 <td>{{ b.duration_ms }} ms</td>
@@ -1776,54 +1776,68 @@
 
             <!-- Distribution horaire -->
             {% if temporal.hourly_distribution %}
-            <h3>🕐 Distribution horaire</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Heure</th>
-                        <th>Paquets</th>
-                        <th>Volume</th>
-                        <th>Moy/créneau</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for hour in temporal.hourly_distribution %}
-                    <tr>
-                        <td><code>{{ hour.hour_label }}</code></td>
-                        <td>{{ hour.packets }}</td>
-                        <td>{{ format_bytes(hour.bytes) }}</td>
-                        <td>{{ hour.avg_per_slot }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">🕐 Distribution horaire</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Heure</th>
+                                <th>Paquets</th>
+                                <th>Volume</th>
+                                <th>Moy/créneau</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hour in temporal.hourly_distribution %}
+                            <tr>
+                                <td><code>{{ hour.hour_label }}</code></td>
+                                <td>{{ hour.packets }}</td>
+                                <td>{{ format_bytes(hour.bytes) }}</td>
+                                <td>{{ hour.avg_per_slot }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endif %}
 
             <!-- Pics de trafic -->
             {% if temporal.peaks %}
-            <h3>📈 Pics de trafic (Top 10)</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Heure</th>
-                        <th>Paquets</th>
-                        <th>Volume</th>
-                        <th>Ratio</th>
-                        <th>Sources uniques</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for peak in temporal.peaks[:10] %}
-                    <tr>
-                        <td><code>{{ peak.time }}</code></td>
-                        <td>{{ peak.packets }}</td>
-                        <td>{{ format_bytes(peak.bytes) }}</td>
-                        <td><span class="badge danger">{{ peak.ratio }}x</span></td>
-                        <td>{{ peak.unique_sources }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="collapsible-header">
+                <span class="toggle-icon">▶</span>
+                <span class="header-title">📈 Pics de trafic (Top 10)</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="content-inner">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Heure</th>
+                                <th>Paquets</th>
+                                <th>Volume</th>
+                                <th>Ratio</th>
+                                <th>Sources uniques</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for peak in temporal.peaks[:10] %}
+                            <tr>
+                                <td><code>{{ peak.time }}</code></td>
+                                <td>{{ peak.packets }}</td>
+                                <td>{{ format_bytes(peak.bytes) }}</td>
+                                <td><span class="badge danger">{{ peak.ratio }}x</span></td>
+                                <td>{{ peak.unique_sources }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             {% endif %}
 
             <!-- Patterns périodiques -->
@@ -2088,6 +2102,7 @@
                 <h3>Résumé pour les équipes métier et management</h3>
                 <div class="interpretive-summary">
                     {% set has_incident = false %}
+                    {% set is_app_pause = false %}
 
                     {# Logique contextuelle améliorée : ne pas alarmer sur patterns réguliers #}
                     {# Utilise non_periodic_gaps au lieu de gaps_detected total #}
@@ -2103,11 +2118,20 @@
                     {% if throughput and throughput.global_throughput.throughput_mbps < 0.1 and analysis_info.total_packets > 10000 and not timestamps.get('periodic_pattern_detected', false) %}
                         {% set has_incident = true %}
                     {% endif %}
+                    {# Détection de pause applicative : gaps sans RTO #}
+                    {% if timestamps and timestamps['gaps_detected'] > 0 and retransmission and retransmission.rto_count == 0 and not analysis_info.is_very_small_capture %}
+                        {% set is_app_pause = true %}
+                    {% endif %}
 
                     {% if has_incident %}
                     <div class="alert alert-danger">
                         <h4>🚨 Incident détecté</h4>
                         <p>Il y a un problème de performance réseau qui impacte probablement l'expérience utilisateur.</p>
+                    </div>
+                    {% elif is_app_pause %}
+                    <div class="alert alert-info">
+                        <h4>⏸️ Pause Applicative Probable</h4>
+                        <p>Des périodes de silence ont été détectées, mais sans timeouts réseau (RTO). Ceci indique que le réseau était disponible mais que l'application (ou l'utilisateur) ne transmettait pas de données.</p>
                     </div>
                     {% else %}
                     <div class="alert alert-success">
