@@ -44,3 +44,9 @@ venv/
 wheels/
 scripts/
 capture**.stats
+
+# Documentation d'optimisation (interne)
+OPTIMIZATION_SUMMARY.md
+PERFORMANCE_OPTIMIZATION_PROPOSAL.md
+ROADMAP_OPTIMIZATION.md
+profile*.stats

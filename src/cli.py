@@ -14,7 +14,7 @@ from scapy.layers.inet import IP, TCP, UDP, ICMP
 from scapy.layers.inet6 import IPv6
 from scapy.layers.dns import DNS
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 from rich.table import Table
 
@@ -37,70 +37,6 @@ def configure_scapy_performance():
     conf.verb = 0
 
 
-def load_pcap_streaming(pcap_file: str, analyzers: list) -> int:
-    """
-    Charge et analyse un fichier PCAP en mode streaming
-
-    Args:
-        pcap_file: Chemin vers le fichier PCAP
-        analyzers: Liste des analyseurs à appliquer
-
-    Returns:
-        Nombre de paquets traités
-    """
-    try:
-        packet_count = 0
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[cyan]Analyse du fichier PCAP: {pcap_file}[/cyan]".format(pcap_file=pcap_file)),
-            console=console
-        ) as progress:
-            task = progress.add_task("[cyan]Chargement et analyse...", total=None)
-
-            with PcapReader(pcap_file) as reader:
-                for packet in reader:
-                    packet_count += 1
-
-                    # Passe le paquet à chaque analyseur
-                    for analyzer in analyzers:
-                        if hasattr(analyzer, 'process_packet'):
-                            analyzer.process_packet(packet, packet_count - 1)
-
-                    # Performance optimization: Periodic garbage collection for large files
-                    # Helps prevent memory fragmentation and reduces memory pressure
-                    if packet_count % 50000 == 0:
-                        gc.collect()
-                        progress.update(task, description=f"[cyan]Traité {packet_count} paquets... (GC)")
-                    # Mise à jour périodique
-                    elif packet_count % 10000 == 0:
-                        progress.update(task, description=f"[cyan]Traité {packet_count} paquets...")
-        
-        console.print(f"[green]✓ {packet_count} paquets analysés[/green]")
-        
-        # Finalise tous les analyseurs avec spinner
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[cyan]Finalisation des analyses..."),
-            console=console
-        ) as progress:
-            task = progress.add_task("[cyan]Calcul des statistiques...", total=None)
-            for analyzer in analyzers:
-                if hasattr(analyzer, 'finalize'):
-                    analyzer.finalize()
-        
-        return packet_count
-        
-    except FileNotFoundError:
-        console.print(f"[red]❌ Fichier non trouvé: {pcap_file}[/red]")
-        sys.exit(1)
-    except Exception as e:
-        console.print(f"[red]❌ Erreur lors du chargement: {e}[/red]")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-
-
 def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, show_details: bool = False, details_limit: int = 20):
     """
     PHASE 2 OPTIMIZATION: Hybrid analysis using dpkt + Scapy.
@@ -116,10 +52,10 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     thresholds = config.thresholds
     results = {}
 
-    console.print("[cyan]🚀 Phase 2: Hybrid Analysis (dpkt + Scapy)...[/cyan]")
+    console.print("[cyan]🚀 Analyse hybride (dpkt + Scapy)...[/cyan]")
 
     # Step 1: Fast metadata extraction with dpkt (3-5x faster than Scapy)
-    console.print("[cyan]Phase 1/2: Fast metadata extraction (dpkt)...[/cyan]")
+    console.print("[cyan]Phase 1/2: Extraction rapide des métadonnées (dpkt)...[/cyan]")
 
     # Create analyzers
     analyzer_dict, analyzers = AnalyzerFactory.create_analyzers(config, latency_filter)
@@ -172,10 +108,10 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
             elif packet_count % 10000 == 0:
                 progress.update(task, description=f"[cyan]Processed {packet_count} packets...")
 
-    console.print(f"[green]✓ Phase 1 complete: {packet_count} packets processed with dpkt[/green]")
+    console.print(f"[green]✓ Phase 1 terminée: {packet_count} paquets traités avec dpkt[/green]")
 
     # Step 2: Scapy pass for complex analysis only (DNS, ICMP, etc.)
-    console.print("[cyan]Phase 2/2: Deep analysis for complex protocols (Scapy)...[/cyan]")
+    console.print("[cyan]Phase 2/2: Analyse approfondie des protocoles complexes (Scapy)...[/cyan]")
     configure_scapy_performance()
 
     # Only these analyzers need Scapy's deep packet inspection
@@ -258,207 +194,6 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     return results
 
 
-def analyze_pcap_streaming(pcap_file: str, config, latency_filter: float = None, show_details: bool = False, details_limit: int = 20):
-    """Analyse un fichier PCAP en mode streaming optimisé (Legacy Scapy-only mode)"""
-    # Performance optimization: Configure Scapy for selective layer parsing
-    # This provides a significant performance boost by only dissecting necessary layers
-    configure_scapy_performance()
-
-    thresholds = config.thresholds
-
-    results = {}
-
-    # Initialisation des analyseurs via la factory (élimine ~110 lignes de duplication)
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        console=console
-    ) as progress:
-        task = progress.add_task("[cyan]Initialisation des analyseurs...", total=1)
-
-        # Create all analyzers using the factory pattern
-        analyzer_dict, analyzers = AnalyzerFactory.create_analyzers(config, latency_filter)
-
-        # Extract individual analyzers for backward compatibility
-        timestamp_analyzer = analyzer_dict["timestamp"]
-        handshake_analyzer = analyzer_dict["handshake"]
-        retrans_analyzer = analyzer_dict["retransmission"]
-        rtt_analyzer = analyzer_dict["rtt"]
-        window_analyzer = analyzer_dict["window"]
-        icmp_analyzer = analyzer_dict["icmp"]
-        dns_analyzer = analyzer_dict["dns"]
-        syn_retrans_analyzer = analyzer_dict["syn_retransmissions"]
-        tcp_reset_analyzer = analyzer_dict["tcp_reset"]
-        ip_fragmentation_analyzer = analyzer_dict["ip_fragmentation"]
-        top_talkers_analyzer = analyzer_dict["top_talkers"]
-        throughput_analyzer = analyzer_dict["throughput"]
-        tcp_timeout_analyzer = analyzer_dict["tcp_timeout"]
-        asymmetric_analyzer = analyzer_dict["asymmetric_traffic"]
-        burst_analyzer = analyzer_dict["burst"]
-        temporal_analyzer = analyzer_dict["temporal"]
-        sack_analyzer = analyzer_dict["sack"]
-
-        progress.update(task, advance=1)
-    
-    load_pcap_streaming(pcap_file, analyzers)
-
-    # Récupération des résultats
-    # NOTE: hasattr checks exist due to inconsistent analyzer interfaces (_generate_report vs get_results)
-    # TODO: A BaseAnalyzer abstract class would eliminate the need for these hasattr checks
-    results['timestamps'] = timestamp_analyzer._generate_report() if hasattr(timestamp_analyzer, '_generate_report') else {}
-    results['tcp_handshake'] = handshake_analyzer._generate_report() if hasattr(handshake_analyzer, '_generate_report') else {}
-    results['retransmission'] = retrans_analyzer._generate_report() if hasattr(retrans_analyzer, '_generate_report') else {}
-    results['rtt'] = rtt_analyzer._generate_report() if hasattr(rtt_analyzer, '_generate_report') else {}
-    results['tcp_window'] = window_analyzer._generate_report() if hasattr(window_analyzer, '_generate_report') else {}
-    results['icmp'] = icmp_analyzer._generate_report() if hasattr(icmp_analyzer, '_generate_report') else {}
-    results['dns'] = dns_analyzer._generate_report() if hasattr(dns_analyzer, '_generate_report') else {}
-    results['syn_retransmissions'] = syn_retrans_analyzer._generate_report() if hasattr(syn_retrans_analyzer, '_generate_report') else {}
-    results['tcp_reset'] = tcp_reset_analyzer.get_results()
-    results['ip_fragmentation'] = ip_fragmentation_analyzer.get_results()
-    results['top_talkers'] = top_talkers_analyzer.get_results()
-    results['throughput'] = throughput_analyzer.get_results()
-    results['tcp_timeout'] = tcp_timeout_analyzer.get_results()
-    results['asymmetric_traffic'] = asymmetric_analyzer.get_results()
-    results['burst'] = burst_analyzer.get_results()
-    results['temporal'] = temporal_analyzer.get_results()
-    results['sack'] = sack_analyzer.get_results()
-
-    # Affichage des résumés
-    console.print("\n")
-    console.print(Panel.fit("📊 Résultats de l'analyse", style="bold blue"))
-
-    console.print("\n" + timestamp_analyzer.get_gaps_summary())
-    console.print("\n" + handshake_analyzer.get_summary())
-    console.print("\n" + retrans_analyzer.get_summary())
-    
-    # Affichage des détails des retransmissions si demandé
-    if show_details and retrans_analyzer:
-        details = retrans_analyzer.get_details(limit=details_limit)
-        if details:
-            console.print("\n" + details)
-    
-    console.print("\n" + rtt_analyzer.get_summary())
-    console.print("\n" + window_analyzer.get_summary())
-    console.print("\n" + icmp_analyzer.get_summary())
-    console.print("\n" + dns_analyzer.get_summary())
-    console.print("\n" + syn_retrans_analyzer.get_summary())
-    
-    # Résumé TCP Reset
-    reset_results = results['tcp_reset']
-    console.print("\n[bold cyan]🔴 Analyse des TCP Reset (RST)[/bold cyan]")
-    console.print(f"Total RST détectés: {reset_results['total_resets']}")
-    console.print(f"RST prématurés (avant échange de données): {reset_results['premature_resets']}")
-    console.print(f"RST post-données: {reset_results['post_data_resets']}")
-    console.print(f"Flux impactés: {reset_results['flows_with_resets']}")
-    
-    # Résumé Fragmentation IP
-    frag_results = results['ip_fragmentation']
-    console.print("\n[bold cyan]📦 Analyse de la fragmentation IP[/bold cyan]")
-    console.print(f"Total fragments détectés: {frag_results['total_fragments']}")
-    if frag_results['has_fragmentation']:
-        console.print(f"Groupes de fragments: {frag_results['total_fragment_groups']}")
-        console.print(f"Réassemblages complets: {frag_results['complete_reassemblies']}")
-        console.print(f"Réassemblages incomplets: {frag_results['incomplete_reassemblies']}")
-        console.print(f"PMTU estimé: {frag_results['estimated_pmtu']} bytes")
-    else:
-        console.print("[green]✓ Aucune fragmentation IP détectée[/green]")
-    
-    # Résumé Top Talkers
-    talkers = results['top_talkers']
-    console.print("\n[bold cyan]📊 Top Talkers[/bold cyan]")
-    if talkers['top_ips']:
-        console.print("Top 5 IPs par volume:")
-        for i, ip_stat in enumerate(talkers['top_ips'][:5], 1):
-            total_mb = ip_stat['total_bytes'] / (1024 * 1024)
-            console.print(f"  {i}. {ip_stat['ip']}: {total_mb:.2f} MB ({ip_stat['packets_sent'] + ip_stat['packets_received']} paquets)")
-    
-    # Protocoles
-    if talkers['protocol_stats']:
-        console.print("Répartition par protocole:")
-        for proto, stats in talkers['protocol_stats'].items():
-            mb = stats['bytes'] / (1024 * 1024)
-            console.print(f"  - {proto}: {mb:.2f} MB ({stats['packets']} paquets)")
-    
-    # Résumé Throughput
-    tp = results['throughput']
-    console.print("\n[bold cyan]📈 Analyse du débit (Throughput)[/bold cyan]")
-    console.print(f"Débit global: {tp['global_throughput']['throughput_mbps']:.2f} Mbps")
-    console.print(f"Durée totale: {tp['global_throughput']['duration_seconds']:.2f}s")
-    console.print(f"Flux analysés: {tp['total_flows']}")
-    if tp['slow_flows']:
-        console.print(f"[yellow]Flux lents détectés: {len(tp['slow_flows'])}[/yellow]")
-    
-    # Résumé TCP Timeout
-    timeout = results['tcp_timeout']
-    cats = timeout['categories']
-    console.print("\n[bold cyan]⏱️ Analyse des Timeouts TCP[/bold cyan]")
-    console.print(f"Connexions totales: {timeout['total_connections']}")
-    console.print(f"Connexions problématiques: {timeout['problematic_count']}")
-    if timeout['problematic_count'] > 0:
-        console.print(f"  - SYN timeout: {cats['syn_timeout_count']}")
-        console.print(f"  - Half-open: {cats['half_open_count']}")
-        console.print(f"  - Zombie: {cats['zombie_count']}")
-        console.print(f"  - Idle: {cats['idle_count']}")
-        console.print(f"  - Établies sans données: {cats['established_idle_count']}")
-    
-    # Résumé Trafic Asymétrique
-    asym = results['asymmetric_traffic']
-    asym_summary = asym['summary']
-    console.print("\n[bold cyan]⚖️ Analyse du Trafic Asymétrique[/bold cyan]")
-    console.print(f"Flux analysés: {asym_summary['total_flows']}")
-    console.print(f"Flux asymétriques (ratio < {asym_summary['asymmetry_threshold']}): {asym_summary['asymmetric_flows']} ({asym_summary['asymmetric_percentage']:.1f}%)")
-    console.print(f"Flux quasi-unidirectionnels: {asym_summary['unidirectional_flows']}")
-    if asym['asymmetric_flows']:
-        console.print("Top 3 flux les plus asymétriques:")
-        for i, f in enumerate(asym['asymmetric_flows'][:3], 1):
-            console.print(f"  {i}. {f['src_ip']}:{f['src_port']} → {f['dst_ip']}:{f['dst_port']} ({f['protocol']}): {f['asymmetry_percent']:.1f}% asymétrique")
-    
-    # Résumé Bursts
-    burst = results['burst']
-    burst_summary = burst['summary']
-    burst_interval = burst['interval_stats']
-    console.print("\n[bold cyan]💥 Analyse des Bursts de Paquets[/bold cyan]")
-    console.print(f"Intervalles analysés: {burst_summary['total_intervals']} (intervalle: {burst_summary['interval_ms']}ms)")
-    console.print(f"Régularité du trafic: {burst_interval['traffic_regularity']} (CV: {burst_interval['coefficient_of_variation']}%)")
-    console.print(f"Bursts détectés: {burst_summary['bursts_detected']}")
-    if burst['worst_burst']:
-        wb = burst['worst_burst']
-        console.print(f"[yellow]Pire burst: {wb['start_iso']} - {wb['packet_count']} paquets ({wb['packets_per_second']:.0f} pkt/s, {wb['peak_ratio']:.1f}x la moyenne)[/yellow]")
-    
-    # Résumé Patterns Temporels
-    temporal = results['temporal']
-    temp_summary = temporal['summary']
-    temp_slots = temporal['slot_stats']
-    console.print("\n[bold cyan]📅 Analyse des Patterns Temporels[/bold cyan]")
-    console.print(f"Période: {temp_summary['capture_start']} → {temp_summary['capture_end']}")
-    console.print(f"Créneaux analysés: {temp_summary['total_slots']} (durée: {temp_summary['slot_duration_seconds']}s)")
-    console.print(f"Paquets/créneau: moy={temp_slots['avg_packets_per_slot']:.0f}, max={temp_slots['max_packets_per_slot']} ({temp_slots['peak_to_avg_ratio']}x)")
-    console.print(f"Pics détectés: {temp_summary['peaks_detected']}, Creux: {temp_summary['valleys_detected']}")
-    if temporal['periodic_patterns']:
-        console.print(f"[yellow]Patterns périodiques: {temp_summary['periodic_patterns_detected']}[/yellow]")
-        for p in temporal['periodic_patterns'][:2]:
-            console.print(f"  - {p['source_ip']}: toutes les {p['description']} ({p['confidence']}% confiance)")
-
-    # Résumé SACK/D-SACK
-    sack = results['sack']
-    sack_summary = sack['summary']
-    sack_efficiency = sack['efficiency']
-    console.print("\n[bold cyan]🔄 Analyse SACK/D-SACK[/bold cyan]")
-    console.print(f"Paquets TCP avec SACK: {sack_summary['sack_packets']} ({sack_summary['sack_usage_percentage']}%)")
-    console.print(f"D-SACK détectés: {sack_summary['dsack_packets']} ({sack_summary['dsack_ratio_percentage']}% des SACK)")
-    console.print(f"Flux utilisant SACK: {sack_summary['flows_using_sack']}")
-    
-    if sack_summary['sack_packets'] > 0:
-        console.print(f"[green]Économie estimée: {sack_efficiency['estimated_retransmission_savings_mb']} MB en retransmissions évitées[/green]")
-        if sack_efficiency['flows_with_dsack'] > 0:
-            console.print(f"[yellow]⚠️ {sack_efficiency['flows_with_dsack']} flux avec D-SACK (problématiques)[/yellow]")
-    else:
-        console.print("[dim]Aucune utilisation SACK détectée[/dim]")
-
-    return results
-
-
 @click.group()
 def cli():
     """Analyseur automatisé des causes de latence réseau"""
@@ -471,21 +206,20 @@ def cli():
 @click.option('-c', '--config', type=click.Path(exists=True), help='Fichier de configuration personnalisé')
 @click.option('-o', '--output', help='Nom de base pour les rapports de sortie')
 @click.option('--no-report', is_flag=True, help='Ne pas générer de rapports HTML/JSON')
-@click.option('-d', '--details', is_flag=True, help='Afficher les détails des retransmissions')
+@click.option('--no-details', is_flag=True, help='Ne pas afficher les détails des retransmissions')
 @click.option('--details-limit', type=int, default=20, help='Nombre max de retransmissions à afficher (défaut: 20)')
-@click.option('--mode', type=click.Choice(['hybrid', 'legacy'], case_sensitive=False), default='hybrid',
-              help='Mode d\'analyse: hybrid (dpkt+Scapy, 3-5x plus rapide) ou legacy (Scapy seul)')
-def analyze(pcap_file, latency, config, output, no_report, details, details_limit, mode):
+def analyze(pcap_file, latency, config, output, no_report, no_details, details_limit):
     """
-    Analyse un fichier PCAP pour détecter les causes de latence
+    Analyse un fichier PCAP local pour détecter les causes de latence
+
+    Utilise le mode hybride optimisé (dpkt + Scapy) - 1.7x plus rapide
+    Les détails des retransmissions sont affichés par défaut
 
     Exemple:
         pcap_analyzer analyze capture.pcap
-        pcap_analyzer analyze capture.pcap --mode hybrid  # 3-5x plus rapide (défaut)
-        pcap_analyzer analyze capture.pcap --mode legacy  # Scapy seul
         pcap_analyzer analyze capture.pcap -l 2.0
-        pcap_analyzer analyze capture.pcap -d          # Afficher détails retransmissions
-        pcap_analyzer analyze capture.pcap -d --details-limit 50
+        pcap_analyzer analyze capture.pcap --no-details
+        pcap_analyzer analyze capture.pcap --details-limit 50
     """
     # Security: Validate and canonicalize pcap_file path to prevent symlink attacks
     try:
@@ -509,13 +243,12 @@ def analyze(pcap_file, latency, config, output, no_report, details, details_limi
     if latency:
         console.print(f"[yellow]Mode filtrage: analyse des paquets avec latence >= {latency}s[/yellow]")
 
-    # Choose analysis mode
-    if mode == 'hybrid':
-        console.print("[green]⚡ Using HYBRID mode (dpkt + Scapy) - 3-5x faster![/green]")
-        results = analyze_pcap_hybrid(pcap_file, cfg, latency_filter=latency, show_details=details, details_limit=details_limit)
-    else:
-        console.print("[yellow]Using LEGACY mode (Scapy only)[/yellow]")
-        results = analyze_pcap_streaming(pcap_file, cfg, latency_filter=latency, show_details=details, details_limit=details_limit)
+    # Détails par défaut (sauf si --no-details)
+    show_details = not no_details
+
+    # Analyse avec le mode hybride optimisé (dpkt + Scapy)
+    console.print("[green]⚡ Analyse optimisée (dpkt + Scapy) - 1.7x plus rapide[/green]")
+    results = analyze_pcap_hybrid(pcap_file, cfg, latency_filter=latency, show_details=show_details, details_limit=details_limit)
 
     # Génération des rapports
     if not no_report:
@@ -594,7 +327,7 @@ def capture(duration, filter, output, config, analyze, latency):
         # Analyse automatique si demandé
         if analyze:
             console.print("\n[cyan]Lancement de l'analyse automatique...[/cyan]")
-            results = analyze_pcap_streaming(local_pcap, cfg, latency_filter=latency)
+            results = analyze_pcap_hybrid(local_pcap, cfg, latency_filter=latency, show_details=True)
 
             # Génération des rapports
             console.print("\n[cyan]Génération des rapports...[/cyan]")
