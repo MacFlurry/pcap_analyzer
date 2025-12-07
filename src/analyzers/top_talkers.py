@@ -5,7 +5,13 @@ Identifie les hôtes et conversations générant le plus de trafic
 
 from scapy.all import IP, TCP, UDP
 from collections import defaultdict
-from typing import Dict, Any
+from typing import Dict, Any, Union
+
+# Import PacketMetadata for hybrid mode support (3-5x faster)
+try:
+    from ..parsers.fast_parser import PacketMetadata
+except ImportError:
+    PacketMetadata = None
 
 class TopTalkersAnalyzer:
     """Analyse les volumes de trafic par IP et protocole"""
@@ -31,8 +37,22 @@ class TopTalkersAnalyzer:
             'dst_port': None
         })
 
-    def process_packet(self, packet, packet_num: int):
-        """Traite un paquet pour les statistiques de volume"""
+    def process_packet(self, packet: Union['Packet', 'PacketMetadata'], packet_num: int):
+        """
+        Process a single packet (supports both Scapy Packet and PacketMetadata).
+
+        PERFORMANCE: PacketMetadata is 3-5x faster than Scapy Packet parsing.
+
+        Args:
+            packet: Scapy Packet or lightweight PacketMetadata
+            packet_num: Packet sequence number in capture
+        """
+        # FAST PATH: Handle PacketMetadata (dpkt-extracted, 3-5x faster)
+        if PacketMetadata and isinstance(packet, PacketMetadata):
+            self._process_metadata(packet, packet_num)
+            return
+
+        # LEGACY PATH: Handle Scapy Packet (for backward compatibility)
         if not packet.haslayer(IP):
             return
 
@@ -77,9 +97,83 @@ class TopTalkersAnalyzer:
         if src_port: conv['src_port'] = src_port
         if dst_port: conv['dst_port'] = dst_port
 
+    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+        """
+        PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
+
+        This method replicates traffic statistics logic but uses direct attribute access
+        from dpkt-extracted metadata.
+
+        Args:
+            metadata: Lightweight packet metadata from dpkt
+            packet_num: Packet sequence number in capture
+        """
+        src_ip = metadata.src_ip
+        dst_ip = metadata.dst_ip
+        length = metadata.packet_length  # Full packet length (like len(packet) in Scapy)
+        proto = metadata.protocol
+
+        # IP Stats
+        self.ip_stats[src_ip]['bytes_sent'] += length
+        self.ip_stats[src_ip]['packets_sent'] += 1
+        self.ip_stats[dst_ip]['bytes_received'] += length
+        self.ip_stats[dst_ip]['packets_received'] += 1
+
+        # Get ports if available
+        src_port = metadata.src_port
+        dst_port = metadata.dst_port
+
+        # Protocol Stats
+        self.protocol_stats[proto]['bytes'] += length
+        self.protocol_stats[proto]['packets'] += 1
+
+        # Conversation Stats
+        conv_key = f"{src_ip} -> {dst_ip}"
+        conv = self.conversations[conv_key]
+        conv['bytes'] += length
+        conv['packets'] += 1
+        conv['protocol'] = proto
+        if src_port:
+            conv['src_port'] = src_port
+        if dst_port:
+            conv['dst_port'] = dst_port
+
     def finalize(self) -> Dict[str, Any]:
         """Finalize analysis and return results"""
         return self.get_results()
+
+    def _generate_report(self) -> Dict[str, Any]:
+        """Generate report for hybrid mode compatibility"""
+        return self.get_results()
+
+    def get_summary(self) -> str:
+        """Retourne un résumé textuel de l'analyse Top Talkers"""
+        results = self.get_results()
+
+        top_ips = results['top_ips']
+        protocol_stats = results['protocol_stats']
+
+        summary = f"📊 Top Talkers:\n"
+
+        if not top_ips:
+            summary += "\n✓ Aucune statistique de trafic disponible."
+            return summary
+
+        # Top 3 IPs
+        summary += f"  - Top 3 IPs par volume:\n"
+        for i, ip_stat in enumerate(top_ips[:3], 1):
+            ip = ip_stat['ip']
+            total_mb = ip_stat['total_bytes'] / (1024 * 1024)
+            summary += f"    {i}. {ip}: {total_mb:.2f} MB\n"
+
+        # Protocol breakdown
+        summary += f"\n  - Répartition par protocole:\n"
+        for proto, stats in sorted(protocol_stats.items(), key=lambda x: x[1]['bytes'], reverse=True):
+            bytes_mb = stats['bytes'] / (1024 * 1024)
+            packets = stats['packets']
+            summary += f"    • {proto}: {bytes_mb:.2f} MB ({packets:,} paquets)\n"
+
+        return summary
 
     def get_results(self) -> Dict[str, Any]:
         """Retourne les résultats de l'analyse"""

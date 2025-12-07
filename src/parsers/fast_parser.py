@@ -36,10 +36,11 @@ class PacketMetadata:
     dst_ip: str
     ip_version: int  # 4 or 6
     ttl: int
-    total_length: int
+    total_length: int  # IP layer length (for IP fragmentation analysis)
+    packet_length: int  # Full packet length including all headers (equivalent to len(packet) in Scapy)
+    protocol: str  # 'TCP', 'UDP', 'ICMP', 'Other'
 
     # Transport layer (TCP/UDP)
-    protocol: str  # 'TCP', 'UDP', 'ICMP', 'Other'
     src_port: Optional[int] = None
     dst_port: Optional[int] = None
 
@@ -198,6 +199,7 @@ class FastPacketParser:
                 ip_version=ip_version,
                 ttl=ttl,
                 total_length=total_length,
+                packet_length=len(buf),  # Full packet size (including all headers)
                 protocol='Other'
             )
 
