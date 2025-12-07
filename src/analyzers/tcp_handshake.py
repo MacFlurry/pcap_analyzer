@@ -151,11 +151,15 @@ class TCPHandshakeAnalyzer:
                 if not ip:
                     return
 
+                # Ensure ports are integers (they can sometimes be hex strings)
+                sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+                dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+
                 handshake = HandshakeFlow(
                     src_ip=ip.src,
                     dst_ip=ip.dst,
-                    src_port=tcp.sport,
-                    dst_port=tcp.dport,
+                    src_port=sport,
+                    dst_port=dport,
                     syn_time=packet_time,
                     syn_packet_num=packet_num
                 )
@@ -260,10 +264,14 @@ class TCPHandshakeAnalyzer:
 
         tcp = packet[TCP]
 
+        # Ensure ports are integers (they can sometimes be hex strings)
+        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+
         if direction == 'client':
-            return f"{ip.src}:{tcp.sport}->{ip.dst}:{tcp.dport}"
+            return f"{ip.src}:{sport}->{ip.dst}:{dport}"
         else:  # server
-            return f"{ip.dst}:{tcp.dport}->{ip.src}:{tcp.sport}"
+            return f"{ip.dst}:{dport}->{ip.src}:{sport}"
 
     def _should_include_handshake(self, handshake: HandshakeFlow) -> bool:
         """

@@ -189,8 +189,9 @@ class SackAnalyzer:
         # Informations du flux
         src_ip = ip.src
         dst_ip = ip.dst
-        src_port = tcp.sport
-        dst_port = tcp.dport
+        # Ensure ports are integers (they can sometimes be hex strings)
+        src_port = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        dst_port = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
         flow_key = self._get_flow_key(src_ip, dst_ip, src_port, dst_port)
         
         # Calculer octets SACK

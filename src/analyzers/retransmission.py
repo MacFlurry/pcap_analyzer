@@ -451,7 +451,10 @@ class RetransmissionAnalyzer:
         if not ip:
             return ""
         tcp = packet[TCP]
-        return f"{ip.src}:{tcp.sport}->{ip.dst}:{tcp.dport}"
+        # Ensure ports are integers (they can sometimes be hex strings)
+        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        return f"{ip.src}:{sport}->{ip.dst}:{dport}"
 
     def _get_reverse_flow_key(self, packet: Packet) -> str:
         """Génère la clé de flux inverse"""
@@ -459,55 +462,76 @@ class RetransmissionAnalyzer:
         if not ip:
             return ""
         tcp = packet[TCP]
-        return f"{ip.dst}:{tcp.dport}->{ip.src}:{tcp.sport}"
+        # Ensure ports are integers (they can sometimes be hex strings)
+        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        return f"{ip.dst}:{dport}->{ip.src}:{sport}"
 
     def _calculate_flow_severity(self) -> None:
         """Calcule la sévérité pour chaque flux"""
         for flow_key, counters in self._flow_counters.items():
-            parts = flow_key.split('->')
-            src_part, dst_part = parts[0].split(':'), parts[1].split(':')
+            try:
+                parts = flow_key.split('->')
+                src_part, dst_part = parts[0].split(':'), parts[1].split(':')
 
-            retrans_count = counters['retransmissions']
-            total_packets = counters['total']
-            
-            # Calcul du taux de retransmission en pourcentage
-            retrans_rate = (retrans_count / total_packets * 100) if total_packets > 0 else 0
+                retrans_count = counters['retransmissions']
+                total_packets = counters['total']
 
-            # La sévérité est déterminée par le taux, MAIS il faut un minimum absolu de retransmissions
-            # pour éviter de flagger les très petits flux (ex: 1 retrans sur 4 paquets = 25%)
-            
-            severity = 'none'
-            
-            # On vérifie d'abord si on dépasse le seuil absolu minimal (low)
-            if retrans_count >= self.retrans_low:
-                if retrans_rate >= self.retrans_rate_critical:
-                    severity = 'critical'
-                elif retrans_rate >= self.retrans_rate_medium:
-                    severity = 'medium'
-                elif retrans_rate >= self.retrans_rate_low:
-                    severity = 'low'
-                
-                # Fallback: si le nombre absolu est très élevé, on flag quand même
-                # même si le taux est bas (ex: flux très long)
-                if severity == 'none' and retrans_count >= self.retrans_critical:
-                    severity = 'low'  # On reste en low si c'est juste du volume mais taux faible
+                # Calcul du taux de retransmission en pourcentage
+                retrans_rate = (retrans_count / total_packets * 100) if total_packets > 0 else 0
 
-            stats = FlowStats(
-                flow_key=flow_key,
-                src_ip=src_part[0],
-                dst_ip=dst_part[0],
-                src_port=int(src_part[1]),
-                dst_port=int(dst_part[1]),
-                total_packets=counters['total'],
-                retransmissions=counters['retransmissions'],
-                dup_acks=counters['dup_acks'],
-                out_of_order=counters['out_of_order'],
-                zero_windows=counters['zero_windows'],
-                severity=severity,
-                retransmission_rate=retrans_rate
-            )
+                # La sévérité est déterminée par le taux, MAIS il faut un minimum absolu de retransmissions
+                # pour éviter de flagger les très petits flux (ex: 1 retrans sur 4 paquets = 25%)
 
-            self.flow_stats[flow_key] = stats
+                severity = 'none'
+
+                # On vérifie d'abord si on dépasse le seuil absolu minimal (low)
+                if retrans_count >= self.retrans_low:
+                    if retrans_rate >= self.retrans_rate_critical:
+                        severity = 'critical'
+                    elif retrans_rate >= self.retrans_rate_medium:
+                        severity = 'medium'
+                    elif retrans_rate >= self.retrans_rate_low:
+                        severity = 'low'
+
+                    # Fallback: si le nombre absolu est très élevé, on flag quand même
+                    # même si le taux est bas (ex: flux très long)
+                    if severity == 'none' and retrans_count >= self.retrans_critical:
+                        severity = 'low'  # On reste en low si c'est juste du volume mais taux faible
+
+                # Parse ports with error handling for hex strings or invalid values
+                try:
+                    src_port = int(src_part[1])
+                except ValueError:
+                    # Try parsing as hex if decimal fails
+                    src_port = int(src_part[1], 16)
+
+                try:
+                    dst_port = int(dst_part[1])
+                except ValueError:
+                    # Try parsing as hex if decimal fails
+                    dst_port = int(dst_part[1], 16)
+
+                stats = FlowStats(
+                    flow_key=flow_key,
+                    src_ip=src_part[0],
+                    dst_ip=dst_part[0],
+                    src_port=src_port,
+                    dst_port=dst_port,
+                    total_packets=counters['total'],
+                    retransmissions=counters['retransmissions'],
+                    dup_acks=counters['dup_acks'],
+                    out_of_order=counters['out_of_order'],
+                    zero_windows=counters['zero_windows'],
+                    severity=severity,
+                    retransmission_rate=retrans_rate
+                )
+
+                self.flow_stats[flow_key] = stats
+            except (ValueError, IndexError) as e:
+                # Skip malformed flow keys
+                print(f"Warning: Skipping malformed flow key '{flow_key}': {e}")
+                continue
 
     def _count_unique_retransmitted_segments(self) -> int:
         """

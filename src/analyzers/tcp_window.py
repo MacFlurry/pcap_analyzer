@@ -199,7 +199,10 @@ class TCPWindowAnalyzer:
         """Génère une clé de flux unidirectionnelle"""
         ip = packet[IP]
         tcp = packet[TCP]
-        return f"{ip.src}:{tcp.sport}->{ip.dst}:{tcp.dport}"
+        # Ensure ports are integers (they can sometimes be hex strings)
+        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        return f"{ip.src}:{sport}->{ip.dst}:{dport}"
 
     def _get_window_scale(self, tcp: TCP, flow_key: str) -> int:
         """
@@ -231,50 +234,68 @@ class TCPWindowAnalyzer:
     def _calculate_flow_statistics(self) -> None:
         """Calcule les statistiques de fenêtre par flux à partir des agrégats"""
         for flow_key, stats in self._flow_aggregates.items():
-            parts = flow_key.split('->')
-            src_part, dst_part = parts[0].split(':'), parts[1].split(':')
+            try:
+                parts = flow_key.split('->')
+                src_part, dst_part = parts[0].split(':'), parts[1].split(':')
 
-            zero_duration = stats['zero_duration']
-            zero_count = stats['zero_window_count']
-            
-            # Calcul du pourcentage de fenêtres basses sur la partie stable
-            low_window_percentage = 0
-            if stats['stable_count'] > 0:
-                low_window_percentage = (stats['low_window_count'] / stats['stable_count']) * 100
+                zero_duration = stats['zero_duration']
+                zero_count = stats['zero_window_count']
 
-            # Détermination du goulot d'étranglement
-            suspected = 'none'
-            
-            # On ignore les flux trop courts
-            if stats['count'] >= 30:
-                if zero_count > 5 or zero_duration > 1.0:
-                    suspected = 'application'
-                elif low_window_percentage > 30 and (zero_count > 0 or zero_duration > 0):
-                    suspected = 'receiver'
+                # Calcul du pourcentage de fenêtres basses sur la partie stable
+                low_window_percentage = 0
+                if stats['stable_count'] > 0:
+                    low_window_percentage = (stats['low_window_count'] / stats['stable_count']) * 100
 
-            # Valeurs min/max/moy
-            # Si on a des données stables, on les privilégie pour le min
-            min_win = stats['stable_min'] if stats['stable_count'] > 0 else stats['min']
-            if min_win == float('inf'): min_win = 0
-            
-            mean_win = stats['sum'] / stats['count'] if stats['count'] > 0 else 0
+                # Détermination du goulot d'étranglement
+                suspected = 'none'
 
-            flow_stats = FlowWindowStats(
-                flow_key=flow_key,
-                src_ip=src_part[0],
-                dst_ip=dst_part[0],
-                src_port=int(src_part[1]),
-                dst_port=int(dst_part[1]),
-                min_window=int(min_win),
-                max_window=int(stats['max']),
-                mean_window=mean_win,
-                zero_window_count=zero_count,
-                low_window_count=stats['low_window_count'],
-                zero_window_total_duration=zero_duration,
-                suspected_bottleneck=suspected
-            )
+                # On ignore les flux trop courts
+                if stats['count'] >= 30:
+                    if zero_count > 5 or zero_duration > 1.0:
+                        suspected = 'application'
+                    elif low_window_percentage > 30 and (zero_count > 0 or zero_duration > 0):
+                        suspected = 'receiver'
 
-            self.flow_stats[flow_key] = flow_stats
+                # Valeurs min/max/moy
+                # Si on a des données stables, on les privilégie pour le min
+                min_win = stats['stable_min'] if stats['stable_count'] > 0 else stats['min']
+                if min_win == float('inf'): min_win = 0
+
+                mean_win = stats['sum'] / stats['count'] if stats['count'] > 0 else 0
+
+                # Parse ports with error handling for hex strings or invalid values
+                try:
+                    src_port = int(src_part[1])
+                except ValueError:
+                    # Try parsing as hex if decimal fails
+                    src_port = int(src_part[1], 16)
+
+                try:
+                    dst_port = int(dst_part[1])
+                except ValueError:
+                    # Try parsing as hex if decimal fails
+                    dst_port = int(dst_part[1], 16)
+
+                flow_stats = FlowWindowStats(
+                    flow_key=flow_key,
+                    src_ip=src_part[0],
+                    dst_ip=dst_part[0],
+                    src_port=src_port,
+                    dst_port=dst_port,
+                    min_window=int(min_win),
+                    max_window=int(stats['max']),
+                    mean_window=mean_win,
+                    zero_window_count=zero_count,
+                    low_window_count=stats['low_window_count'],
+                    zero_window_total_duration=zero_duration,
+                    suspected_bottleneck=suspected
+                )
+
+                self.flow_stats[flow_key] = flow_stats
+            except (ValueError, IndexError) as e:
+                # Skip malformed flow keys
+                print(f"Warning: Skipping malformed flow key '{flow_key}': {e}")
+                continue
 
     def _generate_report(self) -> Dict[str, Any]:
         """Génère le rapport d'analyse des fenêtres TCP"""

@@ -170,7 +170,7 @@ class RTTAnalyzer:
         # Memory optimization: periodic cleanup
         self._packet_counter += 1
         if self._packet_counter % self._cleanup_interval == 0:
-            self._cleanup_stale_segments(timestamp)
+            self._cleanup_stale_segments()
 
         # Segment avec données
         if len(tcp.payload) > 0:
@@ -264,7 +264,10 @@ class RTTAnalyzer:
         if not ip:
             return ""
         tcp = packet[TCP]
-        return f"{ip.src}:{tcp.sport}->{ip.dst}:{tcp.dport}"
+        # Ensure ports are integers (they can sometimes be hex strings)
+        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        return f"{ip.src}:{sport}->{ip.dst}:{dport}"
 
     def _get_reverse_flow_key(self, packet: Packet) -> str:
         """Génère la clé de flux inverse"""
@@ -272,7 +275,10 @@ class RTTAnalyzer:
         if not ip:
             return ""
         tcp = packet[TCP]
-        return f"{ip.dst}:{tcp.dport}->{ip.src}:{tcp.sport}"
+        # Ensure ports are integers (they can sometimes be hex strings)
+        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        return f"{ip.dst}:{dport}->{ip.src}:{sport}"
 
     def _calculate_flow_statistics(self) -> None:
         """Calcule les statistiques RTT par flux"""
@@ -287,27 +293,45 @@ class RTTAnalyzer:
             if not rtts:
                 continue
 
-            parts = flow_key.split('->')
-            src_part, dst_part = parts[0].split(':'), parts[1].split(':')
+            try:
+                parts = flow_key.split('->')
+                src_part, dst_part = parts[0].split(':'), parts[1].split(':')
 
-            rtt_spikes = sum(1 for rtt in rtts if rtt > self.rtt_warning)
+                rtt_spikes = sum(1 for rtt in rtts if rtt > self.rtt_warning)
 
-            stats = FlowRTTStats(
-                flow_key=flow_key,
-                src_ip=src_part[0],
-                dst_ip=dst_part[0],
-                src_port=int(src_part[1]),
-                dst_port=int(dst_part[1]),
-                measurements_count=len(rtts),
-                min_rtt=min(rtts),
-                max_rtt=max(rtts),
-                mean_rtt=statistics.mean(rtts),
-                median_rtt=statistics.median(rtts),
-                stdev_rtt=statistics.stdev(rtts) if len(rtts) > 1 else None,
-                rtt_spikes=rtt_spikes
-            )
+                # Parse ports with error handling for hex strings or invalid values
+                try:
+                    src_port = int(src_part[1])
+                except ValueError:
+                    # Try parsing as hex if decimal fails
+                    src_port = int(src_part[1], 16)
 
-            self.flow_stats[flow_key] = stats
+                try:
+                    dst_port = int(dst_part[1])
+                except ValueError:
+                    # Try parsing as hex if decimal fails
+                    dst_port = int(dst_part[1], 16)
+
+                stats = FlowRTTStats(
+                    flow_key=flow_key,
+                    src_ip=src_part[0],
+                    dst_ip=dst_part[0],
+                    src_port=src_port,
+                    dst_port=dst_port,
+                    measurements_count=len(rtts),
+                    min_rtt=min(rtts),
+                    max_rtt=max(rtts),
+                    mean_rtt=statistics.mean(rtts),
+                    median_rtt=statistics.median(rtts),
+                    stdev_rtt=statistics.stdev(rtts) if len(rtts) > 1 else None,
+                    rtt_spikes=rtt_spikes
+                )
+
+                self.flow_stats[flow_key] = stats
+            except (ValueError, IndexError) as e:
+                # Skip malformed flow keys
+                print(f"Warning: Skipping malformed flow key '{flow_key}': {e}")
+                continue
 
     def _generate_report(self) -> Dict[str, Any]:
         """Génère le rapport d'analyse RTT"""
