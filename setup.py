@@ -28,6 +28,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'scapy>=2.5.0,<3.0',
+        'dpkt>=1.9.8,<2.0',  # Fast packet parsing (3-5x faster than Scapy)
         'paramiko>=3.4.0,<4.0',
         'pyyaml>=6.0,<7.0',
         'jinja2>=3.1.2,<4.0',
