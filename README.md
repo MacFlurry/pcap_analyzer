@@ -156,13 +156,91 @@ Voir [tests/README.md](tests/README.md) pour plus de détails.
 
 ### Architecture
 
-Le projet est organisé en modules spécialisés :
+#### Structure du Projet
 
-*   `src/analyzers/` : Analyseurs TCP, DNS, etc. (tous héritent de `BaseAnalyzer`)
-*   `src/utils/` : Utilitaires pour manipulation de paquets (support IPv4/IPv6)
-*   `src/report_generator.py` : Génération de rapports HTML sécurisés
-*   `src/cli.py` : Interface en ligne de commande
-*   `templates/` : Templates Jinja2 pour les rapports HTML
+```
+pcap_analyzer/
+├── src/                         # Code source
+│   ├── cli.py                   # Interface en ligne de commande (point d'entrée)
+│   ├── config.py                # Gestion de la configuration
+│   ├── ssh_capture.py           # Module de capture SSH/tcpdump (optionnel)
+│   ├── report_generator.py      # Générateur de rapports JSON/HTML
+│   ├── analyzer_factory.py      # Factory pour créer les analyseurs
+│   │
+│   ├── analyzers/               # 17 analyseurs spécialisés
+│   │   ├── timestamp_analyzer.py      # Analyse des timestamps et gaps
+│   │   ├── tcp_handshake.py           # Analyse handshake TCP
+│   │   ├── syn_retransmission.py      # Retransmissions SYN détaillées
+│   │   ├── retransmission.py          # Retransmissions et anomalies
+│   │   ├── rtt_analyzer.py            # Round Trip Time
+│   │   ├── tcp_window.py              # Fenêtres TCP et saturation
+│   │   ├── icmp_pmtu.py               # ICMP et PMTU
+│   │   ├── dns_analyzer.py            # Résolutions DNS
+│   │   ├── tcp_reset.py               # Analyse TCP RST
+│   │   ├── ip_fragmentation.py        # Fragmentation IP
+│   │   ├── top_talkers.py             # Top talkers
+│   │   ├── throughput.py              # Débit et throughput
+│   │   ├── tcp_timeout.py             # Timeouts TCP
+│   │   ├── asymmetric_traffic.py      # Trafic asymétrique
+│   │   ├── burst.py                   # Bursts de paquets
+│   │   ├── temporal_pattern.py        # Patterns temporels
+│   │   └── sack_analyzer.py           # Analyse SACK/D-SACK
+│   │
+│   └── utils/                   # Utilitaires
+│       ├── packet_utils.py      # Extraction d'infos paquets (IPv4/IPv6)
+│       └── tcp_utils.py         # Utilitaires TCP (flags, longueur logique)
+│
+├── templates/                   # Templates Jinja2 pour rapports HTML
+│   ├── report_template.html
+│   └── static/css/
+│       └── report.css           # Styles avec support mode sombre
+│
+├── tests/                       # Tests unitaires et d'intégration
+├── config.yaml                  # Configuration (seuils, SSH optionnel)
+└── reports/                     # Rapports générés (ignoré par git)
+```
+
+#### Flux de Données
+
+```
+┌──────────────┐
+│   CAPTURE    │ Option 1: Capture distante via SSH (optionnel)
+│   (SSH)      ├──────────────────────────────┐
+└──────────────┘                              │
+                                              │
+┌──────────────┐                              │
+│   PCAP FILE  │ Option 2: Fichier existant  │
+│   (Local)    ├──────────────────────────────┤
+└──────────────┘                              │
+                                              ▼
+                                    ┌──────────────────┐
+                                    │  Load PCAP       │
+                                    │  (Scapy)         │
+                                    └────────┬─────────┘
+                                             │
+                    ┌────────────────────────┴────────────────────────┐
+                    │                                                  │
+                    ▼                                                  ▼
+        ┌───────────────────────┐                         ┌───────────────────────┐
+        │  17 ANALYZERS         │                         │   LATENCY FILTER      │
+        │  Process packets      │◄────────────────────────┤   (-l option)         │
+        │  in streaming mode    │                         └───────────────────────┘
+        └───────────┬───────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │  AGGREGATED RESULTS   │
+        │  (Python Dict)        │
+        └───────────┬───────────┘
+                    │
+                    ├──────────────────────┬──────────────────────┐
+                    │                      │                      │
+                    ▼                      ▼                      ▼
+        ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+        │  Console Output  │  │   JSON Report    │  │   HTML Report    │
+        │  (Rich)          │  │   (Structured)   │  │   (Visual)       │
+        └──────────────────┘  └──────────────────┘  └──────────────────┘
+```
 
 ### Analyseurs Disponibles
 

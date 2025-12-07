@@ -7,6 +7,26 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [3.0.0] - 2025-12-07
+
+### 🚀 Changements Majeurs
+
+- **Support IPv6 Complet** : Tous les analyseurs gèrent maintenant IPv4 et IPv6 de manière transparente
+  - Détection automatique du protocole IP (IPv4/IPv6)
+  - Extraction unifiée des adresses IP via `get_ip_layer()`, `get_src_ip()`, `get_dst_ip()`
+  - Gestion robuste des ports hexadécimaux retournés par Scapy pour IPv6
+  - Badge dynamique "IPv4 & IPv6" dans les rapports HTML
+
+- **Configuration SSH Optionnelle** : SSH n'est plus requis pour l'analyse locale
+  - SSH uniquement nécessaire pour la commande `capture` (capture distante)
+  - Commande `analyze` fonctionne sans configuration SSH
+  - Validation SSH conditionnelle via `validate_ssh_config()`
+
+- **Mode Sombre Automatique** : Les rapports HTML s'adaptent au thème système
+  - Détection automatique via `@media (prefers-color-scheme: dark)`
+  - Excellent contraste et lisibilité dans tous les thèmes
+  - Variables CSS pour cohérence visuelle
+
 ### ✨ Ajouts
 
 - **Option `-d` / `--details`** : Affiche le détail de chaque retransmission détectée
@@ -36,12 +56,68 @@ pcap_analyzer analyze capture.pcap -d                    # Détails (20 max)
 pcap_analyzer analyze capture.pcap -d --details-limit 50 # Détails (50 max)
 ```
 
+### 🎨 Améliorations
+
+- **Rapports HTML Refactorisés** :
+  - CSS externe modulaire avec variables de thème (`templates/static/css/report.css`)
+  - Support du mode sombre via `@media (prefers-color-scheme: dark)`
+  - Meilleure lisibilité des info-boxes, alertes, et titres dans tous les thèmes
+  - CSS embarqué dans les rapports pour portabilité
+
+- **Gestion Robuste des Ports** : Correction du parsing des ports hexadécimaux retournés par Scapy
+  - Détection automatique du format (entier ou hexadécimal)
+  - Normalisation dans tous les analyseurs de flux TCP
+  - Évite les `ValueError: invalid literal for int() with base 10`
+
+- **Affichage Optimisé** : Affichage du nom de fichier uniquement (pas le chemin complet) dans les rapports
+  - Plus lisible et portable
+  - Utilisation de `Path(pcap_file).name` dans `report_generator.py`
+
+- **Tests Améliorés** : Compatibilité Python 3.8-3.12, tous les tests passent sur toutes les plateformes
+  - 46/46 tests passing sur Ubuntu et macOS
+  - Support de Python 3.8, 3.9, 3.10, 3.11, 3.12
+  - CI/CD avec GitHub Actions
+
+### 🔧 Corrections de Bugs
+
+- **Fixed: KeyError dans l'analyseur de patterns temporels**
+  - Utilisation de `defaultdict(list, ...)` dans `_cleanup_excess_sources()`
+  - Évite les crashes lors du nettoyage mémoire
+
+- **Fixed: Parsing des ports TCP en hexadécimal**
+  - Ajout de logique de normalisation dans 5 analyseurs
+  - Gestion des ports retournés comme chaînes hex ('e0a') par Scapy
+
+- **Fixed: Lisibilité en mode sombre**
+  - Info-boxes : fond bleu foncé (#1a3a52) avec texte clair
+  - Alertes success : fond vert foncé avec contraste amélioré
+  - Titres h4 : couleur bleue claire (#90caf9, #81c784)
+
+- **Fixed: Retours de type booléen**
+  - `is_syn()`, `is_synack()`, `has_ip_layer()` retournent maintenant `bool` au lieu de `Flag`
+  - Wrapper `bool()` pour compatibilité avec les assertions de test
+
+- **Fixed: Compatibilité Python 3.8**
+  - Remplacement de `tuple[str, str]` par `Tuple[str, str]` (from typing)
+  - Correction dans `icmp_pmtu.py` et `ssh_capture.py`
+
 ### 📝 Documentation
 
-- Mise à jour de README.md avec la 8ème dimension d'analyse
-- Ajout de `syn_retransmission.py` dans STRUCTURE.md
-- Mise à jour de SUMMARY.md pour refléter les 8 analyseurs
-- Documentation du nouveau seuil `syn_retrans_threshold` dans config.yaml
+- Consolidation de la documentation dans README.md
+  - Architecture complète avec structure du projet et flux de données
+  - Fusion de STRUCTURE.md dans README.md
+  - Suppression de fichiers redondants (QUICKSTART.md, TEST.md, TROUBLESHOOTING.md)
+- Mise à jour pour refléter les 17 analyseurs
+- Documentation du support IPv6 complet
+- Exemples d'utilisation programmatique mis à jour
+
+### 🗑️ Suppressions
+
+- Suppression de fichiers de documentation redondants :
+  - QUICKSTART.md (contenu intégré dans README.md)
+  - TEST.md (informations de test dans README.md et tests/README.md)
+  - TROUBLESHOOTING.md (obsolète, focalisé sur SSH)
+  - STRUCTURE.md (fusionné dans README.md Architecture)
 
 ## [1.0.3] - 2025-12-04
 
