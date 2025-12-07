@@ -134,6 +134,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     toptalkers_analyzer = analyzer_dict["top_talkers"]
     throughput_analyzer = analyzer_dict["throughput"]
     syn_retrans_analyzer = analyzer_dict["syn_retransmissions"]
+    tcp_timeout_analyzer = analyzer_dict["tcp_timeout"]
 
     # Fast pass with dpkt
     parser = FastPacketParser(pcap_file)
@@ -159,6 +160,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
             toptalkers_analyzer.process_packet(metadata, packet_count - 1)
             throughput_analyzer.process_packet(metadata, packet_count - 1)
             syn_retrans_analyzer.process_packet(metadata, packet_count - 1)
+            tcp_timeout_analyzer.process_packet(metadata, packet_count - 1)
 
             if packet_count % 50000 == 0:
                 gc.collect()
@@ -220,12 +222,12 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     results['top_talkers'] = toptalkers_analyzer._generate_report()
     results['throughput'] = throughput_analyzer._generate_report()
     results['syn_retransmissions'] = syn_retrans_analyzer._generate_report()
+    results['tcp_timeout'] = tcp_timeout_analyzer.get_results()
     results['dns'] = dns_analyzer._generate_report()
     results['icmp'] = icmp_analyzer._generate_report()
 
     # Add empty results for other analyzers (they'll be implemented next)
-    for key in ['ip_fragmentation', 'tcp_timeout',
-                'asymmetric_traffic', 'burst', 'temporal', 'sack']:
+    for key in ['ip_fragmentation', 'asymmetric_traffic', 'burst', 'temporal', 'sack']:
         if key not in results:
             results[key] = {}
 
@@ -239,6 +241,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     console.print("\n" + window_analyzer.get_summary())
     console.print("\n" + reset_analyzer.get_summary())
     console.print("\n" + syn_retrans_analyzer.get_summary())
+    console.print("\n" + tcp_timeout_analyzer.get_summary())
     console.print("\n" + throughput_analyzer.get_summary())
     console.print("\n" + icmp_analyzer.get_summary())
     console.print("\n" + dns_analyzer.get_summary())

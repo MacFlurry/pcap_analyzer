@@ -3,10 +3,16 @@ Analyseur des timeouts TCP - Détection des connexions abandonnées et zombie
 """
 
 from scapy.all import Packet, TCP, IP
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from dataclasses import dataclass, field
 from collections import defaultdict
 from datetime import datetime
+
+# Import PacketMetadata for hybrid mode support (3-5x faster)
+try:
+    from ..parsers.fast_parser import PacketMetadata
+except ImportError:
+    PacketMetadata = None
 
 
 @dataclass
@@ -81,13 +87,27 @@ class TCPTimeoutAnalyzer:
         else:
             return f"{dst_ip}:{dst_port}<->{src_ip}:{src_port}"
 
-    def process_packet(self, packet: Packet, packet_num: int) -> None:
-        """Traite un paquet individuel"""
+    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int) -> None:
+        """
+        Process a single packet (supports both Scapy Packet and PacketMetadata).
+
+        PERFORMANCE: PacketMetadata is 3-5x faster than Scapy Packet parsing.
+
+        Args:
+            packet: Scapy Packet or lightweight PacketMetadata
+            packet_num: Packet sequence number in capture
+        """
+        # FAST PATH: Handle PacketMetadata (dpkt-extracted, 3-5x faster)
+        if PacketMetadata and isinstance(packet, PacketMetadata):
+            self._process_metadata(packet, packet_num)
+            return
+
+        # LEGACY PATH: Handle Scapy Packet (for backward compatibility)
         if not packet.haslayer(TCP) or not packet.haslayer(IP):
             return
-        
+
         self.packet_count += 1
-        
+
         ip = packet[IP]
         tcp = packet[TCP]
         packet_time = float(packet.time)
@@ -149,6 +169,83 @@ class TCPTimeoutAnalyzer:
         
         # RST - Fermeture brutale
         if flags & 0x04:
+            conn.rst_seen = True
+            self.total_rst_packets += 1  # Comptage global pour cohérence
+
+    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+        """
+        PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
+
+        This method replicates TCP timeout detection logic but uses direct attribute access
+        from dpkt-extracted metadata.
+
+        Args:
+            metadata: Lightweight packet metadata from dpkt
+            packet_num: Packet sequence number in capture
+        """
+        # Skip non-TCP packets
+        if metadata.protocol != 'TCP':
+            return
+
+        self.packet_count += 1
+
+        packet_time = metadata.timestamp
+
+        # Mise à jour des timestamps globaux
+        if self.first_packet_time is None:
+            self.first_packet_time = packet_time
+        self.last_packet_time = packet_time
+
+        # Clé normalisée pour le flux
+        flow_key = self._normalize_flow_key(
+            metadata.src_ip, metadata.dst_ip,
+            metadata.src_port, metadata.dst_port
+        )
+
+        # Créer ou récupérer l'état de connexion
+        if flow_key not in self.connections:
+            conn = TCPConnectionState(
+                src_ip=metadata.src_ip,
+                dst_ip=metadata.dst_ip,
+                src_port=metadata.src_port,
+                dst_port=metadata.dst_port,
+                first_seen=packet_time,
+                last_seen=packet_time
+            )
+            self.connections[flow_key] = conn
+        else:
+            conn = self.connections[flow_key]
+
+        # Mise à jour des compteurs
+        conn.packet_count += 1
+        conn.bytes_total += metadata.packet_length
+        conn.last_seen = packet_time
+        conn.last_packet_num = packet_num
+
+        # Détection des flags TCP via convenience flags
+        # SYN (sans ACK) - Début de connexion
+        if metadata.is_syn and not metadata.is_ack:
+            conn.syn_seen = True
+            if conn.syn_packet_num is None:
+                conn.syn_packet_num = packet_num
+
+        # SYN-ACK - Réponse du serveur
+        elif metadata.is_syn and metadata.is_ack:
+            conn.syn_ack_seen = True
+
+        # ACK (sans SYN) - Potentiellement fin de handshake ou données
+        elif metadata.is_ack and not metadata.is_syn:
+            if conn.syn_ack_seen and not conn.ack_seen:
+                conn.ack_seen = True
+            if metadata.tcp_payload_len > 0:
+                conn.data_seen = True
+
+        # FIN - Fermeture propre
+        if metadata.is_fin:
+            conn.fin_seen = True
+
+        # RST - Fermeture brutale
+        if metadata.is_rst:
             conn.rst_seen = True
             self.total_rst_packets += 1  # Comptage global pour cohérence
 
