@@ -151,7 +151,7 @@ class TemporalPatternAnalyzer:
         )
 
         # Keep only the most active sources
-        self.packet_times_by_source = dict(sources_by_activity[:self.max_sources])
+        self.packet_times_by_source = defaultdict(list, sources_by_activity[:self.max_sources])
 
     def finalize(self) -> None:
         """Finalise l'analyse."""
