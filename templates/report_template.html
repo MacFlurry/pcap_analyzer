@@ -2116,8 +2116,9 @@
                     {% if retransmission and analysis_info.rto_rate > 0.5 %}
                         {% set has_incident = true %}
                     {% endif %}
-                    {# Débit < 0.1 Mbps n'est un problème QUE si volume significatif ET pas de pattern périodique #}
-                    {% if throughput and throughput.global_throughput.throughput_mbps < 0.1 and analysis_info.total_packets > 10000 and not timestamps.get('periodic_pattern_detected', false) %}
+                    {# Débit < 0.1 Mbps n'est un problème QUE si volume significatif ET pas de pattern périodique ET pas de pause applicative #}
+                    {# Si gaps sans RTOs (pause applicative), le débit faible est NORMAL et n'est PAS un incident #}
+                    {% if throughput and throughput.global_throughput.throughput_mbps < 0.1 and analysis_info.total_packets > 10000 and not timestamps.get('periodic_pattern_detected', false) and not (timestamps and timestamps.get('gaps_detected', 0) > 0 and retransmission and retransmission.rto_count == 0) %}
                         {% set has_incident = true %}
                     {% endif %}
                     {# Détection de pause applicative : gaps sans RTO #}
