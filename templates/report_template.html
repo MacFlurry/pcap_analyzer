@@ -2307,7 +2307,7 @@
             // Theme toggle functionality
             const themeToggle = document.getElementById('theme-toggle');
             const themeIcon = themeToggle.querySelector('.theme-icon');
-            const htmlElement = document.documentElement;
+            const bodyElement = document.body;
 
             // Check for saved theme preference or default to system preference
             const savedTheme = localStorage.getItem('theme');
@@ -2315,37 +2315,39 @@
 
             // Initialize theme
             if (savedTheme) {
-                htmlElement.setAttribute('data-theme', savedTheme);
-                updateThemeIcon(savedTheme);
+                applyTheme(savedTheme);
             } else if (systemPrefersDark) {
-                htmlElement.setAttribute('data-theme', 'dark');
-                updateThemeIcon('dark');
+                applyTheme('dark');
             } else {
-                htmlElement.setAttribute('data-theme', 'light');
-                updateThemeIcon('light');
+                applyTheme('light');
             }
 
             // Theme toggle click handler
             themeToggle.addEventListener('click', function() {
-                const currentTheme = htmlElement.getAttribute('data-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                const isDark = bodyElement.classList.contains('dark-theme');
+                const newTheme = isDark ? 'light' : 'dark';
 
-                htmlElement.setAttribute('data-theme', newTheme);
+                applyTheme(newTheme);
                 localStorage.setItem('theme', newTheme);
-                updateThemeIcon(newTheme);
             });
 
-            // Update icon based on theme
-            function updateThemeIcon(theme) {
-                themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+            // Apply theme function
+            function applyTheme(theme) {
+                if (theme === 'dark') {
+                    bodyElement.classList.add('dark-theme');
+                    bodyElement.classList.remove('light-theme');
+                    themeIcon.textContent = '☀️';
+                } else {
+                    bodyElement.classList.add('light-theme');
+                    bodyElement.classList.remove('dark-theme');
+                    themeIcon.textContent = '🌙';
+                }
             }
 
             // Listen for system theme changes when no manual preference is set
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
                 if (!localStorage.getItem('theme')) {
-                    const newTheme = e.matches ? 'dark' : 'light';
-                    htmlElement.setAttribute('data-theme', newTheme);
-                    updateThemeIcon(newTheme);
+                    applyTheme(e.matches ? 'dark' : 'light');
                 }
             });
         });
