@@ -661,11 +661,46 @@ tr:hover {
     font-weight: bold;
 }
 
+/* Theme Toggle Button */
+.theme-toggle {
+    background: var(--bg-section);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 1.5em;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 50px;
+}
+
+.theme-toggle:hover {
+    background: var(--bg-section-warning);
+    transform: scale(1.05);
+}
+
+.theme-toggle:active {
+    transform: scale(0.95);
+}
+
+.theme-icon {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+.theme-toggle:hover .theme-icon {
+    transform: rotate(20deg);
+}
+
 /* ============================================
    7. Dark Mode Support
    ============================================ */
+
+/* Auto dark mode based on system preference */
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         /* Override colors for dark mode */
         --text-primary: #e0e0e0;
         --text-secondary: #b0b0b0;
@@ -763,6 +798,107 @@ tr:hover {
     .interpretation-details h4 {
         color: #90caf9;
     }
+}
+
+/* Manual dark mode via data-theme attribute */
+:root[data-theme="dark"] {
+    /* Override colors for dark mode */
+    --text-primary: #e0e0e0;
+    --text-secondary: #b0b0b0;
+    --text-light: #d0d0d0;
+
+    --bg-body: #1a1a1a;
+    --bg-container: #2a2a2a;
+    --bg-section: #333333;
+    --bg-section-warning: #3d3420;
+    --bg-section-danger: #3d2626;
+    --bg-section-success: #1e3a2e;
+    --bg-code: #1e1e1e;
+    --bg-detail-box: #1e1e1e;
+
+    --border-light: #404040;
+    --border-dark: #ecf0f1;
+}
+
+:root[data-theme="dark"] body {
+    background: var(--bg-body);
+    color: var(--text-primary);
+}
+
+:root[data-theme="dark"] .container {
+    background: var(--bg-container);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+:root[data-theme="dark"] header {
+    background: linear-gradient(135deg, #434343 0%, #2c2c2c 100%);
+    border-bottom: 3px solid #555555;
+}
+
+:root[data-theme="dark"] .section {
+    background: var(--bg-section);
+    border-left: 4px solid var(--color-primary);
+}
+
+:root[data-theme="dark"] h2, :root[data-theme="dark"] h3, :root[data-theme="dark"] h4 {
+    color: var(--text-primary);
+}
+
+:root[data-theme="dark"] table {
+    background: var(--bg-section);
+}
+
+:root[data-theme="dark"] thead {
+    background: #404040;
+}
+
+:root[data-theme="dark"] tbody tr:hover {
+    background: #3a3a3a;
+}
+
+:root[data-theme="dark"] code, :root[data-theme="dark"] .detail-box {
+    background: var(--bg-code);
+    color: #8ab4f8;
+}
+
+:root[data-theme="dark"] .info-box {
+    background: #1a3a52;
+    border-left-color: #64b5f6;
+    color: var(--text-primary);
+}
+
+:root[data-theme="dark"] .alert.alert-success {
+    background: var(--bg-section-success);
+    border-left-color: #4caf50;
+    color: #a5d6a7;
+}
+
+:root[data-theme="dark"] .alert.alert-success h4 {
+    color: #81c784;
+}
+
+:root[data-theme="dark"] .alert.alert-danger {
+    background: var(--bg-section-danger);
+    border-left-color: #ef5350;
+    color: #ef9a9a;
+}
+
+:root[data-theme="dark"] .alert.alert-danger h4 {
+    color: #e57373;
+}
+
+:root[data-theme="dark"] .alert.alert-info {
+    background: #1a3a52;
+    border-left-color: #64b5f6;
+    color: #90caf9;
+}
+
+:root[data-theme="dark"] .alert.alert-info h4 {
+    color: #64b5f6;
+}
+
+:root[data-theme="dark"] .interpretation-details h4 {
+    color: #90caf9;
 }
 
 /* ============================================

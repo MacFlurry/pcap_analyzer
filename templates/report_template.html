@@ -49,7 +49,12 @@
 
     <div class="container">
         <header>
-            <h1>📊 PCAP Analyzer</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>📊 PCAP Analyzer</h1>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
+                    <span class="theme-icon">🌙</span>
+                </button>
+            </div>
             <div class="meta-info">
                 <strong>Fichier PCAP:</strong> {{ analysis_info.pcap_file }}<br>
                 <strong>Date d'analyse:</strong> {{ analysis_info.analysis_date }}<br>
@@ -2287,16 +2292,61 @@
         // Toggle collapsible sections
         document.addEventListener('DOMContentLoaded', function() {
             const headers = document.querySelectorAll('.collapsible-header');
-            
+
             headers.forEach(header => {
                 header.addEventListener('click', function() {
                     this.classList.toggle('active');
                     const content = this.nextElementSibling;
-                    
+
                     if (content && content.classList.contains('collapsible-content')) {
                         content.classList.toggle('active');
                     }
                 });
+            });
+
+            // Theme toggle functionality
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = themeToggle.querySelector('.theme-icon');
+            const htmlElement = document.documentElement;
+
+            // Check for saved theme preference or default to system preference
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            // Initialize theme
+            if (savedTheme) {
+                htmlElement.setAttribute('data-theme', savedTheme);
+                updateThemeIcon(savedTheme);
+            } else if (systemPrefersDark) {
+                htmlElement.setAttribute('data-theme', 'dark');
+                updateThemeIcon('dark');
+            } else {
+                htmlElement.setAttribute('data-theme', 'light');
+                updateThemeIcon('light');
+            }
+
+            // Theme toggle click handler
+            themeToggle.addEventListener('click', function() {
+                const currentTheme = htmlElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+                htmlElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                updateThemeIcon(newTheme);
+            });
+
+            // Update icon based on theme
+            function updateThemeIcon(theme) {
+                themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+            }
+
+            // Listen for system theme changes when no manual preference is set
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (!localStorage.getItem('theme')) {
+                    const newTheme = e.matches ? 'dark' : 'light';
+                    htmlElement.setAttribute('data-theme', newTheme);
+                    updateThemeIcon(newTheme);
+                }
             });
         });
     </script>
