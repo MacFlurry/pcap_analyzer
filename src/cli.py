@@ -14,7 +14,7 @@ from scapy.layers.inet import IP, TCP, UDP, ICMP
 from scapy.layers.inet6 import IPv6
 from scapy.layers.dns import DNS
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.panel import Panel
 from rich.table import Table
 
@@ -83,6 +83,8 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     with Progress(
         SpinnerColumn(),
         TextColumn("[cyan]Processing..."),
+        BarColumn(),
+        TaskProgressColumn(),
         console=console
     ) as progress:
         task = progress.add_task("[cyan]Extracting metadata...", total=total_packets)
@@ -124,6 +126,8 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     with Progress(
         SpinnerColumn(),
         TextColumn("[cyan]Processing complex protocols..."),
+        BarColumn(),
+        TaskProgressColumn(),
         console=console
     ) as progress:
         task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
@@ -147,6 +151,8 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     with Progress(
         SpinnerColumn(),
         TextColumn("[cyan]Finalisation..."),
+        BarColumn(),
+        TaskProgressColumn(),
         console=console
     ) as progress:
         task = progress.add_task("[cyan]Computing statistics...", total=len(analyzers))
