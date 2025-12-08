@@ -3,9 +3,6 @@ include README.md
 include LICENSE
 include CHANGELOG.md
 include CONTRIBUTING.md
-include OPTIMIZATION_SUMMARY.md
-include PERFORMANCE_OPTIMIZATION_PROPOSAL.md
-include ROADMAP_OPTIMIZATION.md
 
 # Include configuration files
 include config.yaml
