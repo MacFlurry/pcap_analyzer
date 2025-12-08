@@ -227,12 +227,14 @@ code {
     background: var(--bg-section-success);
 }
 
-/* Interpretive Summary */
+/* Interpretive Summary - Default light mode styling */
 .interpretive-summary {
-    background: var(--bg-container);
-    padding: var(--spacing-lg);
-    border-radius: var(--radius-lg);
+    background: #e3f2fd;
+    padding: 15px;
+    border-radius: 4px;
     margin: 15px 0;
+    border-left: 4px solid #2196f3;
+    color: #1a1a1a;
 }
 
 .interpretive-summary h4 {
@@ -273,6 +275,10 @@ code {
 .alert.alert-info {
     background: #d1ecf1;
     border-left-color: var(--color-info);
+    color: #0c5460;
+}
+
+.alert.alert-info h4 {
     color: #0c5460;
 }
 
@@ -641,6 +647,7 @@ tr:hover {
     padding: 15px;
     margin: 15px 0;
     border-radius: 4px;
+    color: #1a1a1a;
 }
 
 .info-box ul {
@@ -703,9 +710,9 @@ tr:hover {
    7. Dark Mode Support
    ============================================ */
 
-/* Auto dark mode based on system preference */
+/* Auto dark mode based on system preference - only when no manual theme class is present */
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    body:not(.light-theme):not(.dark-theme) {
         /* Override colors for dark mode */
         --text-primary: #e0e0e0;
         --text-secondary: #b0b0b0;
@@ -727,81 +734,93 @@ tr:hover {
         --shadow-lg: 0 4px 12px rgba(0,0,0,0.6);
     }
 
-    body {
+    body:not(.light-theme):not(.dark-theme) {
         color: var(--text-primary);
         background: var(--bg-body);
     }
 
-    .container {
+    body:not(.light-theme):not(.dark-theme) .container {
         background: var(--bg-container);
     }
 
-    header {
+    body:not(.light-theme):not(.dark-theme) header {
         border-bottom-color: var(--border-primary);
     }
 
-    h1, h2, h3, h4, h5, h6 {
+    body:not(.light-theme):not(.dark-theme) h1,
+    body:not(.light-theme):not(.dark-theme) h2,
+    body:not(.light-theme):not(.dark-theme) h3,
+    body:not(.light-theme):not(.dark-theme) h4,
+    body:not(.light-theme):not(.dark-theme) h5,
+    body:not(.light-theme):not(.dark-theme) h6 {
         color: var(--text-primary);
     }
 
-    table {
+    body:not(.light-theme):not(.dark-theme) table {
         background: var(--bg-container);
     }
 
-    th {
+    body:not(.light-theme):not(.dark-theme) th {
         background: #1e1e1e;
     }
 
-    tr:hover {
+    body:not(.light-theme):not(.dark-theme) tr:hover {
         background: #3a3a3a;
     }
 
-    code {
+    body:not(.light-theme):not(.dark-theme) code {
         background: var(--bg-code);
         color: #8ab4f8;
     }
 
     /* Fix info-box for dark mode */
-    .info-box {
+    body:not(.light-theme):not(.dark-theme) .info-box {
         background: #1a3a52;
         border-left-color: #64b5f6;
         color: var(--text-primary);
     }
 
     /* Fix alert colors for dark mode */
-    .alert.alert-success {
+    body:not(.light-theme):not(.dark-theme) .alert.alert-success {
         background: var(--bg-section-success);
         border-left-color: #4caf50;
         color: #a5d6a7;
     }
 
-    .alert.alert-success h4 {
+    body:not(.light-theme):not(.dark-theme) .alert.alert-success h4 {
         color: #81c784;
     }
 
-    .alert.alert-danger {
+    body:not(.light-theme):not(.dark-theme) .alert.alert-danger {
         background: var(--bg-section-danger);
         border-left-color: #ef5350;
         color: #ef9a9a;
     }
 
-    .alert.alert-danger h4 {
+    body:not(.light-theme):not(.dark-theme) .alert.alert-danger h4 {
         color: #e57373;
     }
 
-    .alert.alert-info {
+    body:not(.light-theme):not(.dark-theme) .alert.alert-info {
         background: #1a3a52;
         border-left-color: #64b5f6;
         color: #90caf9;
     }
 
-    .alert.alert-info h4 {
-        color: #64b5f6;
+    body:not(.light-theme):not(.dark-theme) .alert.alert-info h4 {
+        color: #e3f2fd;
     }
 
     /* Fix interpretation-details h4 for dark mode */
-    .interpretation-details h4 {
+    body:not(.light-theme):not(.dark-theme) .interpretation-details h4 {
         color: #90caf9;
+    }
+
+    /* Fix interpretive-summary for auto dark mode - ONLY when no manual theme is set */
+    body:not(.light-theme):not(.dark-theme) .interpretive-summary {
+        background: #1a3a52;
+        border-left-color: #64b5f6;
+        color: #e0e0e0;
     }
 }
 
@@ -910,7 +929,7 @@ body.dark-theme .alert.alert-info {
 }
 
 body.dark-theme .alert.alert-info h4 {
-    color: #64b5f6;
+    color: #e3f2fd !important;
 }
 
 body.dark-theme .interpretation-details h4 {
@@ -994,6 +1013,219 @@ body.dark-theme thead {
 
 body.dark-theme th {
     color: #ffffff;
+}
+
+/* Light theme explicit styles */
+body.light-theme .collapsible-header {
+    background: #e9ecef;
+    border-left: 4px solid var(--color-primary);
+}
+
+body.light-theme .collapsible-header:hover {
+    background: #dee2e6;
+}
+
+body.light-theme .collapsible-header .toggle-icon {
+    color: var(--color-primary);
+}
+
+body.light-theme .collapsible-header .header-title {
+    color: #2c3e50;
+}
+
+body.light-theme .collapsible-header .header-info {
+    color: #6c757d;
+}
+
+body.light-theme .collapsible-content {
+    background: #f8f9fa;
+    border-left-color: #dee2e6;
+}
+
+body.light-theme .collapsible-content .content-inner {
+    color: #333333;
+}
+
+body.light-theme .collapsible-content table {
+    background: #ffffff;
+    color: #333333;
+}
+
+body.light-theme .collapsible-content td,
+body.light-theme .collapsible-content th {
+    color: #333333;
+}
+
+body.light-theme .collapsible-content thead {
+    background: #495057;
+}
+
+body.light-theme .collapsible-content th {
+    background: #495057;
+    color: #ffffff;
+}
+
+body.light-theme tr:hover {
+    background: #f8f9fa;
+}
+
+body.light-theme .collapsible-content tr:hover {
+    background: #e9ecef;
+}
+
+body.light-theme .collapsible-content tbody tr {
+    background: #ffffff;
+}
+
+body.light-theme .collapsible-content tbody tr:hover {
+    background: #f8f9fa;
+}
+
+body.light-theme .info-box {
+    background: #e3f2fd !important;
+    border-left-color: #2196f3 !important;
+    color: #1a1a1a !important;
+}
+
+body.light-theme .alert.alert-info h4 {
+    color: #0c5460 !important;
+}
+
+body.light-theme .alert.alert-success h4 {
+    color: #155724 !important;
+}
+
+body.light-theme .alert.alert-danger h4 {
+    color: #721c24 !important;
+}
+
+body.light-theme .filter-box {
+    background: #fafafa !important;
+    border: 1px solid #e0e0e0 !important;
+}
+
+body.light-theme .filter-box .filter-label {
+    color: #6f42c1 !important;
+}
+
+body.light-theme .filter-box .filter-command {
+    color: #0056b3 !important;
+}
+
+body.light-theme .filter-box .filter-command:hover {
+    background: #f5f5f5 !important;
+}
+
+body.light-theme .detail-box {
+    background: #f8f9fa !important;
+    color: #212529 !important;
+    border-left-color: var(--color-danger) !important;
+}
+
+body.light-theme .detail-box code {
+    background: #e9ecef !important;
+    color: #0056b3 !important;
+}
+
+body.light-theme .detail-box h5 {
+    color: #2c3e50 !important;
+    border-bottom-color: #dee2e6 !important;
+}
+
+body.light-theme .detail-box .connection-title {
+    color: #0056b3 !important;
+}
+
+body.light-theme .detail-box .connection-arrow {
+    color: #28a745 !important;
+}
+
+body.light-theme .detail-box .info-label {
+    color: #6c757d !important;
+}
+
+body.light-theme .detail-box .info-value {
+    color: #212529 !important;
+}
+
+body.light-theme .detail-box .info-value.timestamp {
+    color: #28a745 !important;
+}
+
+body.light-theme .detail-box .info-value.count {
+    color: #fd7e14 !important;
+}
+
+body.light-theme .detail-box .timeline-list li {
+    color: #212529 !important;
+}
+
+body.light-theme .detail-box .timeline-list .attempt-num {
+    color: #856404 !important;
+}
+
+body.light-theme .detail-box .timeline-list .time-offset {
+    color: #0056b3 !important;
+}
+
+body.light-theme .detail-box .success-indicator {
+    color: #28a745 !important;
+}
+
+body.light-theme .detail-box .error-indicator {
+    color: #dc3545 !important;
+}
+
+/* CRITICAL: Must be after media query to override with higher specificity */
+html body.light-theme .interpretive-summary {
+    background: #e3f2fd !important;
+    border-left: 4px solid #2196f3 !important;
+    padding: 15px !important;
+    color: #1a1a1a !important;
+}
+
+body.light-theme .interpretive-summary h4 {
+    color: #2c3e50 !important;
+}
+
+body.light-theme .interpretive-summary ul,
+body.light-theme .interpretive-summary li {
+    color: #1a1a1a !important;
+}
+
+/* Interpretive card wrapper - transparent container for the interpretive summary */
+.interpretive-card {
+    padding: var(--spacing-lg);
+    margin: 15px 0;
+}
+
+.interpretive-card h3 {
+    color: var(--color-secondary);
+    margin: 0 0 15px 0;
+    font-size: 1.2em;
+}
+
+body.light-theme .interpretive-card {
+    background: transparent;
+    color: inherit;
+}
+
+body.light-theme .interpretive-card h3 {
+    color: #2c3e50;
+}
+
+body.dark-theme .interpretive-card h3 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .interpretive-summary {
+    background: #1a3a52 !important;
+    border-left-color: #64b5f6 !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme .interpretive-summary h4 {
+    color: #90caf9 !important;
 }
 
 /* ============================================
