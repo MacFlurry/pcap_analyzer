@@ -868,6 +868,7 @@ body.dark-theme .section {
     border-left: 4px solid var(--color-primary);
 }
 
+body.dark-theme h1,
 body.dark-theme h2,
 body.dark-theme h3,
 body.dark-theme h4 {
