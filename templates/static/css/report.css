@@ -525,8 +525,8 @@ tr:hover {
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease-out;
-    background: var(--bg-detail-box);
-    border-left: 4px solid #555;
+    background: var(--bg-section);
+    border-left: 4px solid var(--border-light);
     margin-left: 20px;
 }
 
@@ -537,6 +537,11 @@ tr:hover {
 
 .collapsible-content .content-inner {
     padding: 16px;
+    color: var(--text-primary);
+}
+
+.collapsible-content table {
+    color: var(--text-primary);
 }
 
 /* Filter Box */
