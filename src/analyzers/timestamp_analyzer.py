@@ -322,11 +322,16 @@ class TimestampAnalyzer:
             'non_periodic_gaps': non_periodic_gaps
         }
 
-    def get_gaps_summary(self) -> str:
-        """Retourne un résumé textuel des gaps détectés"""
+    def get_gaps_summary(self, max_display: int = 5) -> str:
+        """
+        Retourne un résumé textuel des gaps détectés
+
+        Args:
+            max_display: Nombre maximum de gaps à afficher (défaut: 5)
+        """
         # Filtrer pour ne garder que les gaps anormaux
         abnormal_gaps = [gap for gap in self.gaps if getattr(gap, 'is_abnormal', True)]
-        
+
         if not abnormal_gaps:
             if self.gaps:
                 return f"ℹ️ {len(self.gaps)} gap(s) périodique(s) détecté(s) (comportement normal)."
@@ -334,16 +339,56 @@ class TimestampAnalyzer:
 
         summary = f"🔴 {len(abnormal_gaps)} gap(s) temporel(s) anormal(aux) détecté(s)"
         if len(self.gaps) > len(abnormal_gaps):
-            summary += f" (sur {len(self.gaps)} total):\n"
+            summary += f" (sur {len(self.gaps)} total)"
+
+        # Limiter l'affichage aux N premiers gaps
+        gaps_to_display = abnormal_gaps[:max_display]
+
+        if len(abnormal_gaps) > max_display:
+            summary += f" - Affichage des {max_display} premiers:\n"
         else:
             summary += ":\n"
 
-        for i, gap in enumerate(abnormal_gaps, 1):
+        for i, gap in enumerate(gaps_to_display, 1):
             summary += f"\n  Gap #{i}:\n"
             summary += f"    - Entre paquets {gap.packet_num_before} et {gap.packet_num_after}\n"
             summary += f"    - Durée: {gap.gap_duration:.3f}s\n"
             summary += f"    - Direction: {gap.src_ip} → {gap.dst_ip}\n"
             summary += f"    - Protocole: {gap.protocol}\n"
+
+        # Si plus de gaps que max_display, ajouter des commandes pour les retrouver
+        if len(abnormal_gaps) > max_display:
+            summary += f"\n  ... et {len(abnormal_gaps) - max_display} autre(s) gap(s)\n"
+            summary += "\n  💡 Pour visualiser tous les gaps:\n"
+
+            # Construire un filtre avec les numéros de paquets de tous les gaps
+            packet_numbers = []
+            for gap in abnormal_gaps:
+                packet_numbers.append(str(gap.packet_num_before))
+                packet_numbers.append(str(gap.packet_num_after))
+
+            # Commande tcpdump (affiche les paquets autour des gaps)
+            # Note: tcpdump n'a pas de filtre par numéro de frame, on utilise les IPs
+            unique_ips = set()
+            for gap in abnormal_gaps[:10]:  # Limiter aux 10 premiers gaps
+                unique_ips.add(gap.src_ip)
+                unique_ips.add(gap.dst_ip)
+
+            if len(unique_ips) <= 20:  # Si pas trop d'IPs différentes
+                ip_filter = " or ".join([f"host {ip}" for ip in list(unique_ips)[:10]])
+                summary += f"\n  📌 tcpdump (paquets des connexions avec gaps):\n"
+                summary += f"     tcpdump -r <fichier.pcap> -nn '{ip_filter}'\n"
+            else:
+                summary += f"\n  📌 tcpdump (exemple pour le premier gap):\n"
+                first_gap = abnormal_gaps[0]
+                summary += f"     tcpdump -r <fichier.pcap> -nn 'host {first_gap.src_ip} and host {first_gap.dst_ip}'\n"
+
+            # Commande Wireshark
+            summary += f"\n  📌 Wireshark filter (numéros de frames):\n"
+            summary += f"     frame.number in {{{','.join(packet_numbers[:20])}}}\n"
+
+            # Info pour le rapport complet
+            summary += f"\n  ℹ️  Consultez le rapport HTML pour la liste complète des gaps\n"
 
         return summary
 
