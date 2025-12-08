@@ -52,10 +52,8 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
     thresholds = config.thresholds
     results = {}
 
-    console.print("[cyan]🚀 Analyse hybride (dpkt + Scapy)...[/cyan]")
-
     # Step 1: Fast metadata extraction with dpkt (3-5x faster than Scapy)
-    console.print("[cyan]Phase 1/2: Extraction rapide des métadonnées (dpkt)...[/cyan]")
+    console.print("[cyan]Phase 1/2: Extraction des métadonnées...[/cyan]")
 
     # Create analyzers
     analyzer_dict, analyzers = AnalyzerFactory.create_analyzers(config, latency_filter)
@@ -76,14 +74,18 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
 
     # Fast pass with dpkt
     parser = FastPacketParser(pcap_file)
+
+    # Count total packets first for accurate progress reporting
+    total_packets = sum(1 for _ in FastPacketParser(pcap_file).parse())
+
     packet_count = 0
 
     with Progress(
         SpinnerColumn(),
-        TextColumn("[cyan]Processing with dpkt..."),
+        TextColumn("[cyan]Processing..."),
         console=console
     ) as progress:
-        task = progress.add_task("[cyan]Extracting metadata...", total=None)
+        task = progress.add_task("[cyan]Extracting metadata...", total=total_packets)
 
         for metadata in parser.parse():
             packet_count += 1
@@ -104,14 +106,14 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
 
             if packet_count % 50000 == 0:
                 gc.collect()
-                progress.update(task, description=f"[cyan]Processed {packet_count} packets (dpkt)...")
-            elif packet_count % 10000 == 0:
-                progress.update(task, description=f"[cyan]Processed {packet_count} packets...")
 
-    console.print(f"[green]✓ Phase 1 terminée: {packet_count} paquets traités avec dpkt[/green]")
+            if packet_count % 1000 == 0:
+                progress.update(task, completed=packet_count)
+
+    console.print(f"[green]✓ Phase 1 terminée: {packet_count} paquets traités[/green]")
 
     # Step 2: Scapy pass for complex analysis only (DNS, ICMP, etc.)
-    console.print("[cyan]Phase 2/2: Analyse approfondie des protocoles complexes (Scapy)...[/cyan]")
+    console.print("[cyan]Phase 2/2: Analyse approfondie des protocoles complexes...[/cyan]")
     configure_scapy_performance()
 
     # Only these analyzers need Scapy's deep packet inspection
@@ -124,7 +126,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
         TextColumn("[cyan]Processing complex protocols..."),
         console=console
     ) as progress:
-        task = progress.add_task("[cyan]Scapy pass...", total=None)
+        task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
 
         with PcapReader(pcap_file) as reader:
             for i, packet in enumerate(reader):
@@ -136,21 +138,22 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
                     icmp_analyzer.process_packet(packet, i)
                     complex_packet_count += 1
 
-                if i % 10000 == 0:
-                    progress.update(task, description=f"[cyan]Scapy: {complex_packet_count} complex packets...")
+                if i % 1000 == 0:
+                    progress.update(task, completed=i)
 
-    console.print(f"[green]✓ Phase 2 complete: {complex_packet_count} packets needed deep inspection[/green]")
+    console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
 
     # Finalize all analyzers
     with Progress(
         SpinnerColumn(),
-        TextColumn("[cyan]Finalizing analyses..."),
+        TextColumn("[cyan]Finalisation..."),
         console=console
     ) as progress:
-        task = progress.add_task("[cyan]Computing statistics...", total=None)
-        for analyzer in analyzers:
+        task = progress.add_task("[cyan]Computing statistics...", total=len(analyzers))
+        for idx, analyzer in enumerate(analyzers):
             if hasattr(analyzer, 'finalize'):
                 analyzer.finalize()
+            progress.update(task, completed=idx + 1)
 
     # Collect results (growing list of dpkt-compatible analyzers)
     results['timestamps'] = timestamp_analyzer._generate_report()
@@ -247,7 +250,6 @@ def analyze(pcap_file, latency, config, output, no_report, no_details, details_l
     show_details = not no_details
 
     # Analyse avec le mode hybride optimisé (dpkt + Scapy)
-    console.print("[green]⚡ Analyse optimisée (dpkt + Scapy) - 1.7x plus rapide[/green]")
     results = analyze_pcap_hybrid(pcap_file, cfg, latency_filter=latency, show_details=show_details, details_limit=details_limit)
 
     # Génération des rapports
