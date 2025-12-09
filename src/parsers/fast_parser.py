@@ -14,9 +14,13 @@ Usage:
 
 import dpkt
 import socket
+import logging
+import struct
 from dataclasses import dataclass
 from typing import Iterator, Optional
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -110,12 +114,15 @@ class FastPacketParser:
         with open(self.pcap_file, 'rb') as f:
             try:
                 pcap = dpkt.pcap.Reader(f)
+                logger.debug(f"Detected PCAP format for {self.pcap_file}")
             except ValueError:
                 # Try pcapng format
                 try:
                     f.seek(0)
                     pcap = dpkt.pcapng.Reader(f)
-                except:
+                    logger.debug(f"Detected PCAPNG format for {self.pcap_file}")
+                except (ValueError, dpkt.dpkt.UnpackError) as e:
+                    logger.error(f"Unable to read PCAP file {self.pcap_file}: {e}")
                     raise ValueError(f"Unable to read PCAP file: {self.pcap_file}")
 
             # Detect datalink type for optimized parsing
@@ -127,8 +134,9 @@ class FastPacketParser:
                     if metadata:
                         yield metadata
                     packet_num += 1
-                except Exception:
-                    # Skip malformed packets
+                except Exception as e:
+                    # Skip malformed packets but log for debugging
+                    logger.debug(f"Skipping malformed packet #{packet_num}: {e}")
                     packet_num += 1
                     continue
 
@@ -161,15 +169,16 @@ class FastPacketParser:
                 try:
                     eth = dpkt.ethernet.Ethernet(buf)
                     ip_packet = eth.data
-                except:
+                except (dpkt.dpkt.UnpackError, dpkt.dpkt.NeedData, struct.error):
                     try:
                         sll = dpkt.sll.SLL(buf)
                         ip_packet = sll.data
-                    except:
+                    except (dpkt.dpkt.UnpackError, dpkt.dpkt.NeedData, struct.error):
                         try:
                             sll2 = dpkt.sll2.SLL2(buf)
                             ip_packet = sll2.data
-                        except:
+                        except (dpkt.dpkt.UnpackError, dpkt.dpkt.NeedData, struct.error) as e:
+                            logger.debug(f"Packet #{packet_num}: Unable to parse datalink layer (type {datalink}): {e}")
                             return None
 
             # Check if it's IP
@@ -232,7 +241,8 @@ class FastPacketParser:
 
             return metadata
 
-        except Exception:
+        except (dpkt.dpkt.UnpackError, dpkt.dpkt.NeedData, struct.error, OSError) as e:
+            logger.debug(f"Failed to extract metadata from packet #{packet_num}: {e}")
             return None
 
     def count_packets(self) -> int:

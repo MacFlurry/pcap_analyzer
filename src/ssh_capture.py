@@ -1,6 +1,15 @@
 """
 Module de capture PCAP via SSH
 Permet d'exécuter tcpdump sur un serveur distant et récupérer le fichier PCAP
+
+Security features implemented:
+- Command injection prevention via shlex.quote() on all user inputs
+- Directory traversal protection with path validation
+- Interface whitelist to prevent malicious interface names
+- PID-based process management (no killall)
+- Input validation for all parameters
+- SSH timeout to prevent hanging connections
+- Host key verification with user confirmation
 """
 
 import paramiko
@@ -15,7 +24,8 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 console = Console()
 
 # Security: Whitelist of allowed network interfaces to prevent command injection
-ALLOWED_INTERFACES = ['any', 'eth0', 'eth1', 'eth2', 'wlan0']
+# Note: Users can extend this list in their own code if needed
+ALLOWED_INTERFACES = ['any', 'eth0', 'eth1', 'eth2', 'eth3', 'wlan0', 'wlan1', 'lo', 'ens33', 'ens160']
 
 
 def validate_interface(interface: str) -> None:

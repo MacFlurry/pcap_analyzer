@@ -26,6 +26,34 @@ from .parsers.fast_parser import FastPacketParser
 
 console = Console()
 
+# Performance constants
+MEMORY_CLEANUP_INTERVAL = 50_000  # packets - periodic memory cleanup interval
+PROGRESS_UPDATE_INTERVAL = 1_000  # packets - progress bar update frequency
+
+
+def _generate_reports(results, pcap_file, output, cfg):
+    """
+    Generate JSON and HTML reports.
+
+    Args:
+        results: Analysis results dictionary
+        pcap_file: Path to the PCAP file analyzed
+        output: Optional output name for reports
+        cfg: Configuration object
+
+    Returns:
+        Dictionary with paths to generated report files
+    """
+    console.print("\n[cyan]Génération des rapports...[/cyan]")
+    report_gen = ReportGenerator(output_dir=cfg.get('reports.output_dir', 'reports'))
+    report_files = report_gen.generate_report(results, pcap_file, output)
+
+    console.print(f"[green]✓ Rapport JSON: {report_files['json']}[/green]")
+    console.print(f"[green]✓ Rapport HTML: {report_files['html']}[/green]")
+
+    return report_files
+
+
 # Performance optimization: Configure Scapy to only dissect necessary layers
 # This can provide 30-50% performance boost by skipping unnecessary protocol parsing
 def configure_scapy_performance():
@@ -106,10 +134,10 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
             burst_analyzer.process_packet(metadata, packet_count - 1)
             temporal_analyzer.process_packet(metadata, packet_count - 1)
 
-            if packet_count % 50000 == 0:
+            if packet_count % MEMORY_CLEANUP_INTERVAL == 0:
                 gc.collect()
 
-            if packet_count % 1000 == 0:
+            if packet_count % PROGRESS_UPDATE_INTERVAL == 0:
                 progress.update(task, completed=packet_count)
 
     console.print(f"[green]✓ Phase 1 terminée: {packet_count} paquets traités[/green]")
@@ -142,7 +170,7 @@ def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, sh
                     icmp_analyzer.process_packet(packet, i)
                     complex_packet_count += 1
 
-                if i % 1000 == 0:
+                if i % PROGRESS_UPDATE_INTERVAL == 0:
                     progress.update(task, completed=i)
 
     console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
@@ -260,12 +288,7 @@ def analyze(pcap_file, latency, config, output, no_report, no_details, details_l
 
     # Génération des rapports
     if not no_report:
-        console.print("\n[cyan]Génération des rapports...[/cyan]")
-        report_gen = ReportGenerator(output_dir=cfg.get('reports.output_dir', 'reports'))
-        report_files = report_gen.generate_report(results, pcap_file, output)
-
-        console.print(f"[green]✓ Rapport JSON: {report_files['json']}[/green]")
-        console.print(f"[green]✓ Rapport HTML: {report_files['html']}[/green]")
+        _generate_reports(results, pcap_file, output, cfg)
 
 
 @cli.command()
@@ -338,12 +361,7 @@ def capture(duration, filter, output, config, analyze, latency):
             results = analyze_pcap_hybrid(local_pcap, cfg, latency_filter=latency, show_details=True)
 
             # Génération des rapports
-            console.print("\n[cyan]Génération des rapports...[/cyan]")
-            report_gen = ReportGenerator(output_dir=cfg.get('reports.output_dir', 'reports'))
-            report_files = report_gen.generate_report(results, local_pcap, None)
-
-            console.print(f"[green]✓ Rapport JSON: {report_files['json']}[/green]")
-            console.print(f"[green]✓ Rapport HTML: {report_files['html']}[/green]")
+            _generate_reports(results, local_pcap, None, cfg)
 
     except Exception as e:
         console.print(f"[red]❌ Erreur lors de la capture: {e}[/red]")
