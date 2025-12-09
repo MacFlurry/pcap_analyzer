@@ -12,14 +12,15 @@ Security features implemented:
 - Host key verification with user confirmation
 """
 
-import paramiko
+import logging
 import os
-import time
 import shlex
 import subprocess
-import logging
+import time
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Any, Dict, Optional, Tuple
+
+import paramiko
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -29,7 +30,7 @@ console = Console()
 
 # Security: Whitelist of allowed network interfaces to prevent command injection
 # Note: Users can extend this list in their own code if needed
-ALLOWED_INTERFACES = ['any', 'eth0', 'eth1', 'eth2', 'eth3', 'wlan0', 'wlan1', 'lo', 'ens33', 'ens160']
+ALLOWED_INTERFACES = ["any", "eth0", "eth1", "eth2", "eth3", "wlan0", "wlan1", "lo", "ens33", "ens160"]
 
 
 def validate_interface(interface: str) -> None:
@@ -44,9 +45,7 @@ def validate_interface(interface: str) -> None:
         SSHCaptureError: If interface is not in whitelist
     """
     if interface not in ALLOWED_INTERFACES:
-        raise SSHCaptureError(
-            f"Interface '{interface}' not allowed. Must be one of: {', '.join(ALLOWED_INTERFACES)}"
-        )
+        raise SSHCaptureError(f"Interface '{interface}' not allowed. Must be one of: {', '.join(ALLOWED_INTERFACES)}")
 
 
 def validate_file_path(file_path: str) -> None:
@@ -61,10 +60,8 @@ def validate_file_path(file_path: str) -> None:
         SSHCaptureError: If path contains directory traversal or is outside /tmp/
     """
     # Security: Prevent directory traversal attacks
-    if '..' in file_path or not file_path.startswith('/tmp/'):
-        raise SSHCaptureError(
-            f"Invalid file path '{file_path}'. Must be under /tmp/ and not contain '..'"
-        )
+    if ".." in file_path or not file_path.startswith("/tmp/"):
+        raise SSHCaptureError(f"Invalid file path '{file_path}'. Must be under /tmp/ and not contain '..'")
 
 
 def validate_bpf_filter(bpf_filter: str, timeout: int = 5) -> bool:
@@ -101,11 +98,11 @@ def validate_bpf_filter(bpf_filter: str, timeout: int = 5) -> bool:
         # Use tcpdump -ddd to compile (but not execute) the filter
         # -ddd outputs C program fragment instead of assembler, doesn't require network permissions
         result = subprocess.run(
-            ['tcpdump', '-ddd', bpf_filter],
+            ["tcpdump", "-ddd", bpf_filter],
             capture_output=True,
             timeout=timeout,
             text=True,
-            check=False  # Don't raise on non-zero exit
+            check=False,  # Don't raise on non-zero exit
         )
 
         if result.returncode == 0 and result.stdout.strip():
@@ -133,6 +130,7 @@ def validate_bpf_filter(bpf_filter: str, timeout: int = 5) -> bool:
 
 class SSHCaptureError(Exception):
     """Exception levée lors d'erreurs de capture SSH"""
+
     pass
 
 
@@ -218,8 +216,9 @@ class SSHCaptureRateLimiter:
 class SSHCapture:
     """Gestionnaire de capture PCAP via SSH"""
 
-    def __init__(self, host: str, username: str, port: int = 22,
-                 password: Optional[str] = None, key_file: Optional[str] = None):
+    def __init__(
+        self, host: str, username: str, port: int = 22, password: Optional[str] = None, key_file: Optional[str] = None
+    ):
         """
         Initialise la connexion SSH
 
@@ -248,18 +247,18 @@ class SSHCapture:
             self.client.set_missing_host_key_policy(paramiko.WarningPolicy())
 
             connect_kwargs = {
-                'hostname': self.host,
-                'port': self.port,
-                'username': self.username,
+                "hostname": self.host,
+                "port": self.port,
+                "username": self.username,
             }
 
             if self.key_file and os.path.exists(self.key_file):
-                connect_kwargs['key_filename'] = self.key_file
+                connect_kwargs["key_filename"] = self.key_file
             elif self.password:
-                connect_kwargs['password'] = self.password
+                connect_kwargs["password"] = self.password
             else:
                 # Tente l'authentification par agent SSH
-                connect_kwargs['look_for_keys'] = True
+                connect_kwargs["look_for_keys"] = True
 
             console.print(f"[cyan]Connexion SSH à {self.host}...[/cyan]")
 
@@ -272,7 +271,7 @@ class SSHCapture:
                     console.print(f"[yellow]Host: {self.host}[/yellow]")
                     console.print("[yellow]This could indicate a man-in-the-middle attack.[/yellow]")
                     response = console.input("[yellow]Continue anyway? (yes/no): [/yellow]")
-                    if response.lower() != 'yes':
+                    if response.lower() != "yes":
                         raise SSHCaptureError("Connection refused by user due to unknown host key")
                     # Temporarily use AutoAddPolicy for this connection only
                     self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -317,11 +316,16 @@ class SSHCapture:
         stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
         exit_code = stdout.channel.recv_exit_status()
 
-        return stdout.read().decode('utf-8'), stderr.read().decode('utf-8'), exit_code
+        return stdout.read().decode("utf-8"), stderr.read().decode("utf-8"), exit_code
 
-    def capture_packets(self, interface: str = "any", filter_expr: str = "",
-                        duration: int = 60, output_file: str = None,
-                        packet_count: int = None) -> str:
+    def capture_packets(
+        self,
+        interface: str = "any",
+        filter_expr: str = "",
+        duration: int = 60,
+        output_file: str = None,
+        packet_count: int = None,
+    ) -> str:
         """
         Lance une capture tcpdump sur le serveur distant
 
@@ -393,9 +397,9 @@ class SSHCapture:
             stdin, stdout, stderr = self.client.exec_command(tcpdump_with_pid)
 
             # Get the PID of the tcpdump process
-            pid_output = stdout.read().decode('utf-8').strip()
+            pid_output = stdout.read().decode("utf-8").strip()
             try:
-                tcpdump_pid = int(pid_output.split('\n')[-1])
+                tcpdump_pid = int(pid_output.split("\n")[-1])
             except (ValueError, IndexError):
                 raise SSHCaptureError(f"Failed to get tcpdump PID: {pid_output}")
 
@@ -403,9 +407,7 @@ class SSHCapture:
 
             # Attend la durée spécifiée avec une barre de progression
             with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console
+                SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
             ) as progress:
                 task = progress.add_task(f"Capture en cours ({duration}s)...", total=duration)
                 for _ in range(duration):
@@ -453,10 +455,7 @@ class SSHCapture:
             file_size = sftp.stat(remote_path).st_size
 
             with Progress(console=console) as progress:
-                task = progress.add_task(
-                    f"[cyan]Téléchargement de {os.path.basename(remote_path)}",
-                    total=file_size
-                )
+                task = progress.add_task(f"[cyan]Téléchargement de {os.path.basename(remote_path)}", total=file_size)
 
                 def progress_callback(transferred, total):
                     progress.update(task, completed=transferred)
@@ -491,9 +490,9 @@ class SSHCapture:
         except Exception as e:
             console.print(f"[yellow]⚠ Impossible de supprimer {remote_path}: {e}[/yellow]")
 
-    def capture_and_download(self, local_path: str, interface: str = "any",
-                             filter_expr: str = "", duration: int = 60,
-                             cleanup: bool = True) -> str:
+    def capture_and_download(
+        self, local_path: str, interface: str = "any", filter_expr: str = "", duration: int = 60, cleanup: bool = True
+    ) -> str:
         """
         Capture et télécharge un fichier PCAP en une seule opération
 
@@ -511,11 +510,7 @@ class SSHCapture:
 
         try:
             self.connect()
-            remote_file = self.capture_packets(
-                interface=interface,
-                filter_expr=filter_expr,
-                duration=duration
-            )
+            remote_file = self.capture_packets(interface=interface, filter_expr=filter_expr, duration=duration)
             self.download_file(remote_file, local_path)
 
             if cleanup and remote_file:
@@ -527,8 +522,9 @@ class SSHCapture:
             self.disconnect()
 
 
-def capture_from_config(config: Dict[str, Any], local_path: str,
-                       duration: int = 60, filter_override: str = None) -> str:
+def capture_from_config(
+    config: Dict[str, Any], local_path: str, duration: int = 60, filter_override: str = None
+) -> str:
     """
     Effectue une capture en utilisant la configuration fournie
 
@@ -541,23 +537,23 @@ def capture_from_config(config: Dict[str, Any], local_path: str,
     Returns:
         Chemin du fichier PCAP local
     """
-    ssh_config = config.get('ssh', {})
-    tcpdump_config = ssh_config.get('tcpdump', {})
+    ssh_config = config.get("ssh", {})
+    tcpdump_config = ssh_config.get("tcpdump", {})
 
     capture = SSHCapture(
-        host=ssh_config.get('host'),
-        username=ssh_config.get('username'),
-        port=ssh_config.get('port', 22),
-        password=ssh_config.get('password'),
-        key_file=ssh_config.get('key_file')
+        host=ssh_config.get("host"),
+        username=ssh_config.get("username"),
+        port=ssh_config.get("port", 22),
+        password=ssh_config.get("password"),
+        key_file=ssh_config.get("key_file"),
     )
 
-    filter_expr = filter_override or tcpdump_config.get('filter', '')
+    filter_expr = filter_override or tcpdump_config.get("filter", "")
 
     return capture.capture_and_download(
         local_path=local_path,
-        interface=tcpdump_config.get('interface', 'any'),
+        interface=tcpdump_config.get("interface", "any"),
         filter_expr=filter_expr,
         duration=duration,
-        cleanup=True
+        cleanup=True,
     )

@@ -40,16 +40,16 @@ def get_protocol(packet: Any) -> str:
     Returns:
         str: Protocol name ('TCP', 'UDP', 'ICMP', 'IP', or 'Other')
     """
-    if packet.haslayer('TCP'):
-        return 'TCP'
-    elif packet.haslayer('UDP'):
-        return 'UDP'
-    elif packet.haslayer('ICMP'):
-        return 'ICMP'
-    elif packet.haslayer('IP'):
-        return 'IP'
+    if packet.haslayer("TCP"):
+        return "TCP"
+    elif packet.haslayer("UDP"):
+        return "UDP"
+    elif packet.haslayer("ICMP"):
+        return "ICMP"
+    elif packet.haslayer("IP"):
+        return "IP"
     else:
-        return 'Other'
+        return "Other"
 
 
 def get_ip_layer(packet: Any) -> Optional[Any]:
@@ -72,10 +72,10 @@ def get_ip_layer(packet: Any) -> Optional[Any]:
         >>>     src_ip = ip.src
         >>>     dst_ip = ip.dst
     """
-    if packet.haslayer('IP'):
-        return packet['IP']
-    elif packet.haslayer('IPv6'):
-        return packet['IPv6']
+    if packet.haslayer("IP"):
+        return packet["IP"]
+    elif packet.haslayer("IPv6"):
+        return packet["IPv6"]
     return None
 
 
@@ -121,4 +121,4 @@ def has_ip_layer(packet: Any) -> bool:
     Returns:
         bool: True if packet has IPv4 or IPv6 layer
     """
-    return bool(packet.haslayer('IP') or packet.haslayer('IPv6'))
+    return bool(packet.haslayer("IP") or packet.haslayer("IPv6"))

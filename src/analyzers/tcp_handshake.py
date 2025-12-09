@@ -16,10 +16,12 @@ References:
     RFC 1323: TCP Extensions for High Performance
 """
 
-from scapy.all import Packet, TCP
-from typing import List, Dict, Any, Optional, Union
-from dataclasses import dataclass, asdict
 from collections import defaultdict
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional, Union
+
+from scapy.all import TCP, Packet
+
 from ..utils.packet_utils import get_ip_layer
 
 # Import PacketMetadata for hybrid mode support (3-5x faster)
@@ -57,6 +59,7 @@ class HandshakeFlow:
         complete: Whether handshake completed successfully
         suspected_side: Suspected bottleneck ('client', 'server', 'network', 'none')
     """
+
     src_ip: str
     dst_ip: str
     src_port: int
@@ -93,8 +96,9 @@ class TCPHandshakeAnalyzer:
         - Space complexity: O(N) where N is number of concurrent connections
     """
 
-    def __init__(self, syn_synack_threshold: float = 0.1, total_threshold: float = 0.3,
-                 latency_filter: Optional[float] = None) -> None:
+    def __init__(
+        self, syn_synack_threshold: float = 0.1, total_threshold: float = 0.3, latency_filter: Optional[float] = None
+    ) -> None:
         """
         Initialize TCP handshake analyzer.
 
@@ -132,10 +136,10 @@ class TCPHandshakeAnalyzer:
         """
         for i, packet in enumerate(packets):
             self.process_packet(packet, i)
-            
+
         return self.finalize()
 
-    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int) -> None:
+    def process_packet(self, packet: Union[Packet, "PacketMetadata"], packet_num: int) -> None:
         """
         Process a single packet (supports both Scapy Packet and PacketMetadata).
 
@@ -164,7 +168,7 @@ class TCPHandshakeAnalyzer:
 
         # Détection SYN (sans ACK)
         if tcp.flags & 0x02 and not tcp.flags & 0x10:  # SYN flag set, ACK flag not set
-            flow_key = self._get_flow_key(packet, 'client')
+            flow_key = self._get_flow_key(packet, "client")
 
             if flow_key not in self.incomplete_handshakes:
                 ip = get_ip_layer(packet)
@@ -172,8 +176,16 @@ class TCPHandshakeAnalyzer:
                     return
 
                 # Ensure ports are integers (they can sometimes be hex strings)
-                sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
-                dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+                sport = (
+                    int(tcp.sport)
+                    if isinstance(tcp.sport, int)
+                    else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+                )
+                dport = (
+                    int(tcp.dport)
+                    if isinstance(tcp.dport, int)
+                    else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+                )
 
                 handshake = HandshakeFlow(
                     src_ip=ip.src,
@@ -181,13 +193,13 @@ class TCPHandshakeAnalyzer:
                     src_port=sport,
                     dst_port=dport,
                     syn_time=packet_time,
-                    syn_packet_num=packet_num
+                    syn_packet_num=packet_num,
                 )
                 self.incomplete_handshakes[flow_key] = handshake
 
         # Détection SYN/ACK
         elif tcp.flags & 0x12 == 0x12:  # SYN+ACK flags set
-            flow_key = self._get_flow_key(packet, 'server')
+            flow_key = self._get_flow_key(packet, "server")
 
             if flow_key in self.incomplete_handshakes:
                 handshake = self.incomplete_handshakes[flow_key]
@@ -201,7 +213,7 @@ class TCPHandshakeAnalyzer:
 
         # Détection ACK final (après SYN/ACK)
         elif tcp.flags & 0x10 and not tcp.flags & 0x02:  # ACK flag set, SYN not set
-            flow_key = self._get_flow_key(packet, 'client')
+            flow_key = self._get_flow_key(packet, "client")
 
             if flow_key in self.incomplete_handshakes:
                 handshake = self.incomplete_handshakes[flow_key]
@@ -255,7 +267,7 @@ class TCPHandshakeAnalyzer:
         for key in stale_keys:
             del self.incomplete_handshakes[key]
 
-    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+    def _process_metadata(self, metadata: "PacketMetadata", packet_num: int) -> None:
         """
         PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
 
@@ -268,7 +280,7 @@ class TCPHandshakeAnalyzer:
             packet_num: Packet sequence number in capture
         """
         # Skip non-TCP packets
-        if metadata.protocol != 'TCP':
+        if metadata.protocol != "TCP":
             return
 
         packet_time = metadata.timestamp
@@ -293,7 +305,7 @@ class TCPHandshakeAnalyzer:
                     src_port=metadata.src_port,
                     dst_port=metadata.dst_port,
                     syn_time=packet_time,
-                    syn_packet_num=packet_num
+                    syn_packet_num=packet_num,
                 )
                 self.incomplete_handshakes[flow_key] = handshake
 
@@ -373,10 +385,18 @@ class TCPHandshakeAnalyzer:
         tcp = packet[TCP]
 
         # Ensure ports are integers (they can sometimes be hex strings)
-        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
-        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        sport = (
+            int(tcp.sport)
+            if isinstance(tcp.sport, int)
+            else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        )
+        dport = (
+            int(tcp.dport)
+            if isinstance(tcp.dport, int)
+            else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        )
 
-        if direction == 'client':
+        if direction == "client":
             return f"{ip.src}:{sport}->{ip.dst}:{dport}"
         else:  # server
             return f"{ip.dst}:{dport}->{ip.src}:{sport}"
@@ -451,8 +471,7 @@ class TCPHandshakeAnalyzer:
         incomplete_handshakes = [h for h in self.handshakes if not h.complete]
 
         slow_handshakes = [
-            h for h in complete_handshakes
-            if h.total_handshake_time and h.total_handshake_time > self.total_threshold
+            h for h in complete_handshakes if h.total_handshake_time and h.total_handshake_time > self.total_threshold
         ]
 
         # Statistiques par côté suspect
@@ -461,17 +480,14 @@ class TCPHandshakeAnalyzer:
             suspect_counts[handshake.suspected_side] += 1
 
         return {
-            'total_handshakes': len(self.handshakes),
-            'complete_handshakes': len(complete_handshakes),
-            'incomplete_handshakes': len(incomplete_handshakes),
-            'slow_handshakes': len(slow_handshakes),
-            'thresholds': {
-                'syn_synack_seconds': self.syn_synack_threshold,
-                'total_seconds': self.total_threshold
-            },
-            'suspect_side_distribution': dict(suspect_counts),
-            'handshakes': [asdict(h) for h in self.handshakes],
-            'slow_handshake_details': [asdict(h) for h in slow_handshakes]
+            "total_handshakes": len(self.handshakes),
+            "complete_handshakes": len(complete_handshakes),
+            "incomplete_handshakes": len(incomplete_handshakes),
+            "slow_handshakes": len(slow_handshakes),
+            "thresholds": {"syn_synack_seconds": self.syn_synack_threshold, "total_seconds": self.total_threshold},
+            "suspect_side_distribution": dict(suspect_counts),
+            "handshakes": [asdict(h) for h in self.handshakes],
+            "slow_handshake_details": [asdict(h) for h in slow_handshakes],
         }
 
     def get_summary(self) -> str:
@@ -479,8 +495,7 @@ class TCPHandshakeAnalyzer:
         complete = sum(1 for h in self.handshakes if h.complete)
         incomplete = len(self.handshakes) - complete
         slow = sum(
-            1 for h in self.handshakes
-            if h.total_handshake_time and h.total_handshake_time > self.total_threshold
+            1 for h in self.handshakes if h.total_handshake_time and h.total_handshake_time > self.total_threshold
         )
 
         summary = f"📊 Analyse des handshakes TCP:\n"

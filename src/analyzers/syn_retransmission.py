@@ -2,11 +2,13 @@
 Analyseur des retransmissions SYN - Détection détaillée des problèmes de handshake TCP
 """
 
-from scapy.all import Packet, TCP
-from typing import List, Dict, Any, Optional, Tuple, Union
-from dataclasses import dataclass, asdict, field
 from collections import defaultdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from scapy.all import TCP, Packet
+
 from ..utils.packet_utils import get_ip_layer
 
 # Import PacketMetadata for hybrid mode support (3-5x faster)
@@ -19,6 +21,7 @@ except ImportError:
 @dataclass
 class SYNRetransmission:
     """Représente une séquence de retransmissions SYN"""
+
     src_ip: str
     dst_ip: str
     src_port: int
@@ -33,16 +36,15 @@ class SYNRetransmission:
     retransmission_count: int = 0
     synack_received: bool = False
     suspected_issue: str = "unknown"
-    
+
     def to_human_readable(self) -> Dict[str, Any]:
         """Convertit en format lisible avec timestamps ISO"""
         result = asdict(self)
-        result['first_syn_time_iso'] = datetime.fromtimestamp(self.first_syn_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        result["first_syn_time_iso"] = datetime.fromtimestamp(self.first_syn_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         if self.synack_time:
-            result['synack_time_iso'] = datetime.fromtimestamp(self.synack_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        result['syn_attempts_iso'] = [
-            datetime.fromtimestamp(t).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] 
-            for t in self.syn_attempts
+            result["synack_time_iso"] = datetime.fromtimestamp(self.synack_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        result["syn_attempts_iso"] = [
+            datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] for t in self.syn_attempts
         ]
         return result
 
@@ -81,7 +83,7 @@ class SYNRetransmissionAnalyzer:
 
         return self.finalize()
 
-    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int) -> None:
+    def process_packet(self, packet: Union[Packet, "PacketMetadata"], packet_num: int) -> None:
         """
         Process a single packet (supports both Scapy Packet and PacketMetadata).
 
@@ -112,7 +114,7 @@ class SYNRetransmissionAnalyzer:
         # Détection SYN (sans ACK)
         if tcp.flags & 0x02 and not tcp.flags & 0x10:
             base_flow_key = (ip.src, ip.dst, tcp.sport, tcp.dport)
-            
+
             # Vérifier si c'est une retransmission (même flux, même seq number)
             if base_flow_key in self.pending_syns:
                 retrans = self.pending_syns[base_flow_key]
@@ -132,14 +134,14 @@ class SYNRetransmissionAnalyzer:
                     first_syn_time=packet_time,
                     syn_attempts=[packet_time],
                     syn_packet_nums=[packet_num],
-                    retransmission_count=0
+                    retransmission_count=0,
                 )
                 self.pending_syns[base_flow_key] = retrans
 
         # Détection SYN/ACK
         elif tcp.flags & 0x12 == 0x12:
             reverse_flow = (ip.dst, ip.src, tcp.dport, tcp.sport)
-            
+
             if reverse_flow in self.pending_syns:
                 retrans = self.pending_syns[reverse_flow]
                 if not retrans.synack_received:
@@ -147,17 +149,17 @@ class SYNRetransmissionAnalyzer:
                     retrans.synack_time = packet_time
                     retrans.synack_packet_num = packet_num
                     retrans.total_delay = packet_time - retrans.first_syn_time
-                    
+
                     # Analyse de la cause du délai
                     retrans.suspected_issue = self._identify_issue(retrans)
-                    
+
                     # Ajoute aux retransmissions complétées si délai >= seuil ou retransmissions présentes
                     if retrans.total_delay >= self.threshold or retrans.retransmission_count > 0:
                         self.retransmissions.append(retrans)
-                    
+
                     del self.pending_syns[reverse_flow]
 
-    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+    def _process_metadata(self, metadata: "PacketMetadata", packet_num: int) -> None:
         """
         PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
 
@@ -169,7 +171,7 @@ class SYNRetransmissionAnalyzer:
             packet_num: Packet sequence number in capture
         """
         # Skip non-TCP packets
-        if metadata.protocol != 'TCP':
+        if metadata.protocol != "TCP":
             return
 
         packet_time = metadata.timestamp
@@ -202,7 +204,7 @@ class SYNRetransmissionAnalyzer:
                     first_syn_time=packet_time,
                     syn_attempts=[packet_time],
                     syn_packet_nums=[packet_num],
-                    retransmission_count=0
+                    retransmission_count=0,
                 )
                 self.pending_syns[base_flow_key] = retrans
 
@@ -269,36 +271,32 @@ class SYNRetransmissionAnalyzer:
         """
         if not retrans.synack_received:
             return "no_response"
-        
+
         if retrans.total_delay is None:
             return "unknown"
-        
+
         # Calcule les intervalles entre retransmissions
         intervals = []
         for i in range(1, len(retrans.syn_attempts)):
-            intervals.append(retrans.syn_attempts[i] - retrans.syn_attempts[i-1])
-        
+            intervals.append(retrans.syn_attempts[i] - retrans.syn_attempts[i - 1])
+
         # Pattern typique : 1s, 2s (exponential backoff)
         if len(intervals) >= 2:
             if 0.9 <= intervals[0] <= 1.1 and 1.9 <= intervals[1] <= 2.1:
                 if retrans.total_delay >= 3.0:
                     return "server_delayed_response"
-        
+
         if retrans.total_delay >= 3.0:
             return "severe_network_delay"
         elif retrans.total_delay >= 1.0:
             return "moderate_network_delay"
-        
+
         return "normal"
 
     def _generate_report(self) -> Dict[str, Any]:
         """Génère le rapport d'analyse des retransmissions SYN"""
         # Trie par délai décroissant
-        sorted_retrans = sorted(
-            self.retransmissions,
-            key=lambda r: r.total_delay if r.total_delay else 0,
-            reverse=True
-        )
+        sorted_retrans = sorted(self.retransmissions, key=lambda r: r.total_delay if r.total_delay else 0, reverse=True)
 
         # Statistiques par type de problème
         issue_counts = defaultdict(int)
@@ -312,28 +310,28 @@ class SYNRetransmissionAnalyzer:
         stats = {}
         if delays:
             stats = {
-                'min_delay': min(delays),
-                'max_delay': max(delays),
-                'avg_delay': sum(delays) / len(delays),
-                'median_delay': sorted(delays)[len(delays) // 2]
+                "min_delay": min(delays),
+                "max_delay": max(delays),
+                "avg_delay": sum(delays) / len(delays),
+                "median_delay": sorted(delays)[len(delays) // 2],
             }
-        
+
         retrans_stats = {}
         if retrans_counts:
             retrans_stats = {
-                'min_retrans': min(retrans_counts),
-                'max_retrans': max(retrans_counts),
-                'avg_retrans': sum(retrans_counts) / len(retrans_counts)
+                "min_retrans": min(retrans_counts),
+                "max_retrans": max(retrans_counts),
+                "avg_retrans": sum(retrans_counts) / len(retrans_counts),
             }
 
         return {
-            'total_syn_retransmissions': len(self.retransmissions),
-            'threshold_seconds': self.threshold,
-            'issue_distribution': dict(issue_counts),
-            'delay_statistics': stats,
-            'retransmission_statistics': retrans_stats,
-            'top_problematic_connections': [r.to_human_readable() for r in sorted_retrans[:10]],
-            'all_retransmissions': [r.to_human_readable() for r in self.retransmissions]
+            "total_syn_retransmissions": len(self.retransmissions),
+            "threshold_seconds": self.threshold,
+            "issue_distribution": dict(issue_counts),
+            "delay_statistics": stats,
+            "retransmission_statistics": retrans_stats,
+            "top_problematic_connections": [r.to_human_readable() for r in sorted_retrans[:10]],
+            "all_retransmissions": [r.to_human_readable() for r in self.retransmissions],
         }
 
     def get_summary(self) -> str:
@@ -342,11 +340,7 @@ class SYNRetransmissionAnalyzer:
             return "✅ Aucune retransmission SYN problématique détectée.\n"
 
         # Trie par délai
-        sorted_retrans = sorted(
-            self.retransmissions,
-            key=lambda r: r.total_delay if r.total_delay else 0,
-            reverse=True
-        )
+        sorted_retrans = sorted(self.retransmissions, key=lambda r: r.total_delay if r.total_delay else 0, reverse=True)
 
         summary = f"🔍 Analyse des retransmissions SYN:\n"
         summary += f"  - Total de connexions problématiques: {len(self.retransmissions)}\n"
@@ -364,21 +358,25 @@ class SYNRetransmissionAnalyzer:
         summary += "🔴 Top 5 des connexions les plus lentes:\n\n"
         for i, retrans in enumerate(sorted_retrans[:5], 1):
             summary += f"#{i} - {retrans.src_ip}:{retrans.src_port} → {retrans.dst_ip}:{retrans.dst_port}\n"
-            summary += f"     Premier SYN: {datetime.fromtimestamp(retrans.first_syn_time).strftime('%H:%M:%S.%f')[:-3]}\n"
-            
+            summary += (
+                f"     Premier SYN: {datetime.fromtimestamp(retrans.first_syn_time).strftime('%H:%M:%S.%f')[:-3]}\n"
+            )
+
             if retrans.synack_time:
-                summary += f"     SYN/ACK reçu: {datetime.fromtimestamp(retrans.synack_time).strftime('%H:%M:%S.%f')[:-3]}\n"
+                summary += (
+                    f"     SYN/ACK reçu: {datetime.fromtimestamp(retrans.synack_time).strftime('%H:%M:%S.%f')[:-3]}\n"
+                )
                 summary += f"     Délai total: {retrans.total_delay:.3f}s\n"
-            
+
             summary += f"     Retransmissions SYN: {retrans.retransmission_count}\n"
-            
+
             # Détail des tentatives
             if len(retrans.syn_attempts) > 1:
                 summary += f"     Timeline des SYN:\n"
                 for j, syn_time in enumerate(retrans.syn_attempts, 1):
                     delay_from_first = syn_time - retrans.first_syn_time
                     summary += f"       - Tentative #{j}: +{delay_from_first:.3f}s\n"
-            
+
             summary += f"     Problème identifié: {retrans.suspected_issue}\n\n"
 
         return summary

@@ -2,11 +2,13 @@
 Analyseur de timestamps - Détection des ruptures de flux et délais anormaux
 """
 
-from scapy.all import rdpcap, Packet
-from typing import List, Dict, Any, Tuple, Union
-from dataclasses import dataclass, asdict
 import statistics
-from ..utils.packet_utils import get_src_ip, get_dst_ip
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Tuple, Union
+
+from scapy.all import Packet, rdpcap
+
+from ..utils.packet_utils import get_dst_ip, get_src_ip
 
 # Support for fast parser metadata
 try:
@@ -18,6 +20,7 @@ except ImportError:
 @dataclass
 class TimestampGap:
     """Représente un gap temporel anormal entre deux paquets"""
+
     packet_num_before: int
     packet_num_after: int
     timestamp_before: float
@@ -71,7 +74,7 @@ class TimestampAnalyzer:
 
         return self.finalize()
 
-    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int) -> None:
+    def process_packet(self, packet: Union[Packet, "PacketMetadata"], packet_num: int) -> None:
         """
         Traite un paquet individuel (Scapy Packet ou PacketMetadata).
 
@@ -84,7 +87,7 @@ class TimestampAnalyzer:
             return
 
         # Handle Scapy Packet (legacy)
-        if not hasattr(packet, 'time'):
+        if not hasattr(packet, "time"):
             return
 
         self._packet_count += 1
@@ -98,7 +101,7 @@ class TimestampAnalyzer:
 
         # Calcul de l'intervalle avec le paquet précédent
         # Note: On stocke prev_time dans l'instance maintenant
-        if hasattr(self, '_prev_time') and self._prev_time is not None:
+        if hasattr(self, "_prev_time") and self._prev_time is not None:
             interval = current_time - self._prev_time
 
             # Memory optimization: use sliding window to limit memory usage
@@ -106,7 +109,7 @@ class TimestampAnalyzer:
                 self.packet_intervals.append(interval)
             else:
                 # Keep only the most recent intervals (sliding window)
-                self.packet_intervals = self.packet_intervals[-self._max_intervals+1:] + [interval]
+                self.packet_intervals = self.packet_intervals[-self._max_intervals + 1 :] + [interval]
 
             # Détection de gap anormal
             if interval > self.gap_threshold:
@@ -123,13 +126,13 @@ class TimestampAnalyzer:
                     src_ip=src_ip,
                     dst_ip=dst_ip,
                     protocol=protocol,
-                    is_abnormal=True
+                    is_abnormal=True,
                 )
                 self.gaps.append(gap)
 
         self._prev_time = current_time
 
-    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+    def _process_metadata(self, metadata: "PacketMetadata", packet_num: int) -> None:
         """
         PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata instead of full Scapy packet.
 
@@ -148,7 +151,7 @@ class TimestampAnalyzer:
         self.last_timestamp = current_time
 
         # Calcul de l'intervalle avec le paquet précédent
-        if hasattr(self, '_prev_time') and self._prev_time is not None:
+        if hasattr(self, "_prev_time") and self._prev_time is not None:
             interval = current_time - self._prev_time
 
             # Memory optimization: use sliding window to limit memory usage
@@ -156,7 +159,7 @@ class TimestampAnalyzer:
                 self.packet_intervals.append(interval)
             else:
                 # Keep only the most recent intervals (sliding window)
-                self.packet_intervals = self.packet_intervals[-self._max_intervals+1:] + [interval]
+                self.packet_intervals = self.packet_intervals[-self._max_intervals + 1 :] + [interval]
 
             # Détection de gap anormal
             if interval > self.gap_threshold:
@@ -169,7 +172,7 @@ class TimestampAnalyzer:
                     src_ip=metadata.src_ip,
                     dst_ip=metadata.dst_ip,
                     protocol=metadata.protocol,
-                    is_abnormal=True
+                    is_abnormal=True,
                 )
                 self.gaps.append(gap)
 
@@ -180,7 +183,7 @@ class TimestampAnalyzer:
         # Met à jour total_packets avec le compteur streaming
         if self._packet_count > 0:
             self.total_packets = self._packet_count
-            
+
         if self.first_timestamp and self.last_timestamp:
             self.capture_duration = self.last_timestamp - self.first_timestamp
 
@@ -195,30 +198,30 @@ class TimestampAnalyzer:
             tuple: (src_ip, dst_ip, protocol)
         """
         # Try IPv4 first (most common)
-        if packet.haslayer('IP'):
-            ip_layer = packet['IP']
+        if packet.haslayer("IP"):
+            ip_layer = packet["IP"]
             src_ip = ip_layer.src
             dst_ip = ip_layer.dst
 
             # Determine protocol from what's above IP
-            if packet.haslayer('TCP'):
-                protocol = 'TCP'
-            elif packet.haslayer('UDP'):
-                protocol = 'UDP'
-            elif packet.haslayer('ICMP'):
-                protocol = 'ICMP'
+            if packet.haslayer("TCP"):
+                protocol = "TCP"
+            elif packet.haslayer("UDP"):
+                protocol = "UDP"
+            elif packet.haslayer("ICMP"):
+                protocol = "ICMP"
             else:
-                protocol = 'IP'
+                protocol = "IP"
 
             return (src_ip, dst_ip, protocol)
 
         # Try IPv6
-        elif packet.haslayer('IPv6'):
-            ip_layer = packet['IPv6']
-            return (ip_layer.src, ip_layer.dst, 'IPv6')
+        elif packet.haslayer("IPv6"):
+            ip_layer = packet["IPv6"]
+            return (ip_layer.src, ip_layer.dst, "IPv6")
 
         # No IP layer
-        return ('N/A', 'N/A', 'Other')
+        return ("N/A", "N/A", "Other")
 
     def _get_src_ip(self, packet: Packet) -> str:
         """Extrait l'IP source du paquet"""
@@ -230,17 +233,17 @@ class TimestampAnalyzer:
 
     def _get_protocol(self, packet: Packet) -> str:
         """Détermine le protocole du paquet"""
-        if packet.haslayer('TCP'):
-            return 'TCP'
-        elif packet.haslayer('UDP'):
-            return 'UDP'
-        elif packet.haslayer('ICMP'):
-            return 'ICMP'
-        elif packet.haslayer('IPv6'):
-            return 'IPv6'
-        elif packet.haslayer('IP'):
-            return 'IP'
-        return 'Other'
+        if packet.haslayer("TCP"):
+            return "TCP"
+        elif packet.haslayer("UDP"):
+            return "UDP"
+        elif packet.haslayer("ICMP"):
+            return "ICMP"
+        elif packet.haslayer("IPv6"):
+            return "IPv6"
+        elif packet.haslayer("IP"):
+            return "IP"
+        return "Other"
 
     def _detect_periodic_pattern(self) -> bool:
         """
@@ -265,7 +268,7 @@ class TimestampAnalyzer:
 
         # Si l'écart-type est < 10% de la moyenne, c'est probablement périodique
         # (variance très faible = comportement régulier)
-        coefficient_of_variation = (stdev_gap / mean_gap) if mean_gap > 0 else float('inf')
+        coefficient_of_variation = (stdev_gap / mean_gap) if mean_gap > 0 else float("inf")
 
         return coefficient_of_variation < 0.10
 
@@ -291,35 +294,35 @@ class TimestampAnalyzer:
 
         if self.packet_intervals:
             stats = {
-                'min_interval': min(self.packet_intervals),
-                'max_interval': max(self.packet_intervals),
-                'mean_interval': statistics.mean(self.packet_intervals),
-                'median_interval': statistics.median(self.packet_intervals),
+                "min_interval": min(self.packet_intervals),
+                "max_interval": max(self.packet_intervals),
+                "mean_interval": statistics.mean(self.packet_intervals),
+                "median_interval": statistics.median(self.packet_intervals),
             }
 
             if len(self.packet_intervals) > 1:
-                stats['stdev_interval'] = statistics.stdev(self.packet_intervals)
+                stats["stdev_interval"] = statistics.stdev(self.packet_intervals)
 
         # Détection de pattern périodique dans les gaps
         periodic_pattern_detected = self._detect_periodic_pattern()
-        
+
         non_periodic_gaps = len(self.gaps)
         if periodic_pattern_detected:
             self._mark_periodic_gaps()
             non_periodic_gaps = sum(1 for gap in self.gaps if gap.is_abnormal)
 
         return {
-            'total_packets': self.total_packets,
-            'capture_duration_seconds': self.capture_duration,
-            'first_timestamp': self.first_timestamp,
-            'last_timestamp': self.last_timestamp,
-            'gap_threshold_seconds': self.gap_threshold,
-            'gaps_detected': len(self.gaps),
-            'gaps': [asdict(gap) for gap in self.gaps],
-            'interval_statistics': stats,
-            'packets_per_second': self.total_packets / self.capture_duration if self.capture_duration > 0 else 0,
-            'periodic_pattern_detected': periodic_pattern_detected,
-            'non_periodic_gaps': non_periodic_gaps
+            "total_packets": self.total_packets,
+            "capture_duration_seconds": self.capture_duration,
+            "first_timestamp": self.first_timestamp,
+            "last_timestamp": self.last_timestamp,
+            "gap_threshold_seconds": self.gap_threshold,
+            "gaps_detected": len(self.gaps),
+            "gaps": [asdict(gap) for gap in self.gaps],
+            "interval_statistics": stats,
+            "packets_per_second": self.total_packets / self.capture_duration if self.capture_duration > 0 else 0,
+            "periodic_pattern_detected": periodic_pattern_detected,
+            "non_periodic_gaps": non_periodic_gaps,
         }
 
     def get_gaps_summary(self, max_display: int = 5) -> str:
@@ -330,7 +333,7 @@ class TimestampAnalyzer:
             max_display: Nombre maximum de gaps à afficher (défaut: 5)
         """
         # Filtrer pour ne garder que les gaps anormaux
-        abnormal_gaps = [gap for gap in self.gaps if getattr(gap, 'is_abnormal', True)]
+        abnormal_gaps = [gap for gap in self.gaps if getattr(gap, "is_abnormal", True)]
 
         if not abnormal_gaps:
             if self.gaps:

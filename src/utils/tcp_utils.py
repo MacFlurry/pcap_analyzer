@@ -110,7 +110,7 @@ def get_tcp_logical_length(tcp: Any) -> int:
         - FIN packet (no data): length = 1
         - Data segment with 100 bytes + FIN: length = 101
     """
-    length = len(tcp.payload) if hasattr(tcp, 'payload') else 0
+    length = len(tcp.payload) if hasattr(tcp, "payload") else 0
 
     # SYN flag consumes 1 sequence number (RFC 793)
     if tcp.flags & SYN:

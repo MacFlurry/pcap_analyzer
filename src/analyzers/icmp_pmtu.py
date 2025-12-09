@@ -2,15 +2,17 @@
 Analyseur ICMP et détection de problèmes PMTU
 """
 
-from scapy.all import Packet, ICMP, IP, TCP, IPv6, ICMPv6DestUnreach
-from typing import List, Dict, Any, Tuple
-from dataclasses import dataclass, asdict
 from collections import defaultdict
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Tuple
+
+from scapy.all import ICMP, IP, TCP, ICMPv6DestUnreach, IPv6, Packet
 
 
 @dataclass
 class ICMPMessage:
     """Message ICMP détecté"""
+
     packet_num: int
     timestamp: float
     icmp_type: int
@@ -104,12 +106,12 @@ class ICMPAnalyzer:
         mtu = 0
 
         # Pour Destination Unreachable, le payload contient le paquet original
-        if icmp_type == 3 and hasattr(icmp, 'payload') and icmp.payload:
+        if icmp_type == 3 and hasattr(icmp, "payload") and icmp.payload:
             try:
                 # Le payload ICMP contient l'en-tête IP + 8 octets du paquet original
-                if hasattr(icmp.payload, 'src'):
+                if hasattr(icmp.payload, "src"):
                     original_src = icmp.payload.src
-                if hasattr(icmp.payload, 'dst'):
+                if hasattr(icmp.payload, "dst"):
                     original_dst = icmp.payload.dst
             except (AttributeError, ValueError, TypeError):
                 # Malformed ICMP payload - unable to extract original packet info
@@ -118,9 +120,9 @@ class ICMPAnalyzer:
 
             # MTU pour "Fragmentation Needed" (code 4)
             if icmp_code == 4:
-                if hasattr(icmp, 'nexthopmtu'):
+                if hasattr(icmp, "nexthopmtu"):
                     mtu = icmp.nexthopmtu
-                elif hasattr(icmp, 'unused') and icmp.unused:
+                elif hasattr(icmp, "unused") and icmp.unused:
                     # Ancienne méthode : MTU dans le champ unused
                     mtu = icmp.unused
 
@@ -144,7 +146,7 @@ class ICMPAnalyzer:
             original_dst=original_dst,
             mtu=mtu,
             message=message,
-            severity=severity
+            severity=severity,
         )
 
         self.icmp_messages.append(icmp_msg)
@@ -170,7 +172,7 @@ class ICMPAnalyzer:
             src_ip=ipv6.src,
             dst_ip=ipv6.dst,
             message="ICMPv6 Destination Unreachable",
-            severity="warning"
+            severity="warning",
         )
 
         self.icmp_messages.append(icmp_msg)
@@ -191,8 +193,10 @@ class ICMPAnalyzer:
         # Fragmentation Needed (PMTU Discovery)
         if icmp_type == 3 and icmp_code == 4:
             if mtu > 0:
-                message = (f"⚠️ Fragmentation nécessaire (PMTU). MTU max: {mtu} bytes. "
-                          "Le paquet DF (Don't Fragment) est trop grand.")
+                message = (
+                    f"⚠️ Fragmentation nécessaire (PMTU). MTU max: {mtu} bytes. "
+                    "Le paquet DF (Don't Fragment) est trop grand."
+                )
             else:
                 message = "⚠️ Fragmentation nécessaire (PMTU). Paquet trop grand avec DF flag."
             return message, "error"
@@ -250,23 +254,19 @@ class ICMPAnalyzer:
             severity_counts[msg.severity] += 1
 
         # Agrégation des destinations injoignables
-        unreach_stats = defaultdict(lambda: {'count': 0, 'reasons': defaultdict(int)})
+        unreach_stats = defaultdict(lambda: {"count": 0, "reasons": defaultdict(int)})
         for msg in self.dest_unreachable:
             # Utilise original_dst si dispo (la cible réelle), sinon dst_ip (le routeur qui répond, moins utile)
             target_ip = msg.original_dst if msg.original_dst else f"Unknown (from {msg.src_ip})"
-            unreach_stats[target_ip]['count'] += 1
-            unreach_stats[target_ip]['reasons'][msg.icmp_type_name] += 1
+            unreach_stats[target_ip]["count"] += 1
+            unreach_stats[target_ip]["reasons"][msg.icmp_type_name] += 1
 
         # Formatage du Top 10
         top_unreachable = []
-        for ip, stats in sorted(unreach_stats.items(), key=lambda item: item[1]['count'], reverse=True)[:10]:
+        for ip, stats in sorted(unreach_stats.items(), key=lambda item: item[1]["count"], reverse=True)[:10]:
             # Trouve la raison la plus fréquente
-            main_reason = max(stats['reasons'].items(), key=lambda item: item[1])[0]
-            top_unreachable.append({
-                'ip': ip,
-                'count': stats['count'],
-                'reason': main_reason
-            })
+            main_reason = max(stats["reasons"].items(), key=lambda item: item[1])[0]
+            top_unreachable.append({"ip": ip, "count": stats["count"], "reason": main_reason})
 
         # Suggestions pour les problèmes PMTU
         pmtu_suggestions = []
@@ -275,20 +275,20 @@ class ICMPAnalyzer:
                 "🔧 Vérifier la configuration MTU sur les interfaces réseau",
                 "🔧 Considérer l'activation de Path MTU Discovery",
                 "🔧 Ajuster la MSS (Maximum Segment Size) TCP si nécessaire",
-                f"🔧 MTU suggéré par les messages ICMP: {max((m.mtu for m in self.pmtu_issues if m.mtu > 0), default=1500)} bytes"
+                f"🔧 MTU suggéré par les messages ICMP: {max((m.mtu for m in self.pmtu_issues if m.mtu > 0), default=1500)} bytes",
             ]
 
         return {
-            'total_icmp_messages': len(self.icmp_messages),
-            'pmtu_issues_count': len(self.pmtu_issues),
-            'dest_unreachable_count': len(self.dest_unreachable),
-            'top_unreachable_destinations': top_unreachable, # Added this
-            'type_distribution': dict(type_counts),
-            'severity_distribution': dict(severity_counts),
-            'icmp_messages': [asdict(m) for m in self.icmp_messages],
-            'pmtu_issues': [asdict(m) for m in self.pmtu_issues],
-            'dest_unreachable': [asdict(m) for m in self.dest_unreachable],
-            'pmtu_suggestions': pmtu_suggestions
+            "total_icmp_messages": len(self.icmp_messages),
+            "pmtu_issues_count": len(self.pmtu_issues),
+            "dest_unreachable_count": len(self.dest_unreachable),
+            "top_unreachable_destinations": top_unreachable,  # Added this
+            "type_distribution": dict(type_counts),
+            "severity_distribution": dict(severity_counts),
+            "icmp_messages": [asdict(m) for m in self.icmp_messages],
+            "pmtu_issues": [asdict(m) for m in self.pmtu_issues],
+            "dest_unreachable": [asdict(m) for m in self.dest_unreachable],
+            "pmtu_suggestions": pmtu_suggestions,
         }
 
     def get_summary(self) -> str:

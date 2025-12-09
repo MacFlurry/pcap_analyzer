@@ -2,15 +2,17 @@
 Analyseur de résolutions DNS
 """
 
-from scapy.all import Packet, DNS, DNSQR, DNSRR, UDP, IP
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
 from collections import defaultdict
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional
+
+from scapy.all import DNS, DNSQR, DNSRR, IP, UDP, Packet
 
 
 @dataclass
 class DNSQuery:
     """Requête DNS"""
+
     packet_num: int
     timestamp: float
     query_id: int
@@ -24,6 +26,7 @@ class DNSQuery:
 @dataclass
 class DNSResponse:
     """Réponse DNS"""
+
     packet_num: int
     timestamp: float
     query_id: int
@@ -38,6 +41,7 @@ class DNSResponse:
 @dataclass
 class DNSTransaction:
     """Transaction DNS complète (query + response)"""
+
     query: DNSQuery
     response: Optional[DNSResponse]
     response_time: Optional[float]  # Temps de réponse en secondes
@@ -50,29 +54,27 @@ class DNSAnalyzer:
     """Analyseur de résolutions DNS"""
 
     DNS_TYPES = {
-        1: 'A',
-        2: 'NS',
-        5: 'CNAME',
-        6: 'SOA',
-        12: 'PTR',
-        15: 'MX',
-        16: 'TXT',
-        28: 'AAAA',
-        33: 'SRV',
-        255: 'ANY'
+        1: "A",
+        2: "NS",
+        5: "CNAME",
+        6: "SOA",
+        12: "PTR",
+        15: "MX",
+        16: "TXT",
+        28: "AAAA",
+        33: "SRV",
+        255: "ANY",
     }
 
-    DNS_RCODES = {
-        0: 'NOERROR',
-        1: 'FORMERR',
-        2: 'SERVFAIL',
-        3: 'NXDOMAIN',
-        4: 'NOTIMP',
-        5: 'REFUSED'
-    }
+    DNS_RCODES = {0: "NOERROR", 1: "FORMERR", 2: "SERVFAIL", 3: "NXDOMAIN", 4: "NOTIMP", 5: "REFUSED"}
 
-    def __init__(self, response_warning: float = 0.1, response_critical: float = 1.0,
-                 timeout: float = 5.0, latency_filter: Optional[float] = None):
+    def __init__(
+        self,
+        response_warning: float = 0.1,
+        response_critical: float = 1.0,
+        timeout: float = 5.0,
+        latency_filter: Optional[float] = None,
+    ):
         """
         Initialise l'analyseur DNS
 
@@ -97,7 +99,7 @@ class DNSAnalyzer:
         # Pour détecter les requêtes répétées: {(query_name, query_type): timestamp}
         self._recent_queries: Dict[tuple, float] = {}
 
-        self.last_packet_time: Optional[float] = None # NEW: Track last packet time for timeouts
+        self.last_packet_time: Optional[float] = None  # NEW: Track last packet time for timeouts
 
     def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
         """
@@ -122,11 +124,11 @@ class DNSAnalyzer:
         # Vérifie si le paquet contient une couche UDP (DNS par défaut utilise UDP)
         # Certains DNS peuvent utiliser TCP, mais l'analyseur se concentre sur UDP pour l'instant
         if not packet.haslayer(UDP):
-            return # Ignore les paquets DNS qui ne sont pas sur UDP
-        
-        self.last_packet_time = float(packet.time) # NEW: Update last_packet_time
+            return  # Ignore les paquets DNS qui ne sont pas sur UDP
+
+        self.last_packet_time = float(packet.time)  # NEW: Update last_packet_time
         dns = packet[DNS]
-        
+
         # Requête DNS (qr=0)
         if dns.qr == 0:
             self._process_query(packet_num, packet, dns)
@@ -145,7 +147,7 @@ class DNSAnalyzer:
             # Check if enough time has passed since the query for a timeout to be valid
             # We need last_packet_time to be at least timeout seconds after the query
             if self.last_packet_time and (self.last_packet_time - query.timestamp >= self.timeout):
-                is_repeated = getattr(query, 'repeated', False)
+                is_repeated = getattr(query, "repeated", False)
 
                 transaction = DNSTransaction(
                     query=query,
@@ -153,7 +155,7 @@ class DNSAnalyzer:
                     response_time=None,
                     timed_out=True,
                     repeated=is_repeated,
-                    status='timeout'
+                    status="timeout",
                 )
                 self.transactions.append(transaction)
                 queries_to_remove.append(query_full_key)
@@ -174,8 +176,8 @@ class DNSAnalyzer:
         ip = packet[IP]
         udp = packet[UDP]
 
-        query_name = dns.qd.qname.decode('utf-8') if isinstance(dns.qd.qname, bytes) else dns.qd.qname
-        query_type = self.DNS_TYPES.get(dns.qd.qtype, f'TYPE{dns.qd.qtype}')
+        query_name = dns.qd.qname.decode("utf-8") if isinstance(dns.qd.qname, bytes) else dns.qd.qname
+        query_type = self.DNS_TYPES.get(dns.qd.qtype, f"TYPE{dns.qd.qtype}")
 
         query = DNSQuery(
             packet_num=packet_num,
@@ -185,7 +187,7 @@ class DNSAnalyzer:
             query_type=query_type,
             src_ip=ip.src,
             dst_ip=ip.dst,
-            src_port=udp.sport
+            src_port=udp.sport,
         )
 
         self.queries.append(query)
@@ -231,7 +233,7 @@ class DNSAnalyzer:
         # Extrait le nom de domaine de la question
         query_name = ""
         if dns.qd:
-            query_name = dns.qd.qname.decode('utf-8') if isinstance(dns.qd.qname, bytes) else dns.qd.qname
+            query_name = dns.qd.qname.decode("utf-8") if isinstance(dns.qd.qname, bytes) else dns.qd.qname
 
         # Extrait les réponses
         answers = []
@@ -239,7 +241,7 @@ class DNSAnalyzer:
             for i in range(dns.ancount):
                 try:
                     rr = dns.an[i]
-                    if hasattr(rr, 'rdata'):
+                    if hasattr(rr, "rdata"):
                         rdata = str(rr.rdata)
                         answers.append(rdata)
                 except (IndexError, AttributeError, ValueError, TypeError) as e:
@@ -247,7 +249,7 @@ class DNSAnalyzer:
                     # Common causes: truncated packets, invalid encoding
                     continue
 
-        rcode_name = self.DNS_RCODES.get(dns.rcode, f'RCODE{dns.rcode}')
+        rcode_name = self.DNS_RCODES.get(dns.rcode, f"RCODE{dns.rcode}")
 
         response = DNSResponse(
             packet_num=packet_num,
@@ -258,7 +260,7 @@ class DNSAnalyzer:
             response_code_name=rcode_name,
             answers=answers,
             src_ip=ip.src,
-            dst_ip=ip.dst
+            dst_ip=ip.dst,
         )
 
         self.responses.append(response)
@@ -282,13 +284,13 @@ class DNSAnalyzer:
             # Détermine le statut
             if dns.rcode == 0:  # NOERROR
                 if response_time > self.response_critical:
-                    status = 'slow'
+                    status = "slow"
                 else:
-                    status = 'success'
+                    status = "success"
             else:
-                status = 'error'
+                status = "error"
 
-            is_repeated = hasattr(matching_query, 'repeated') and matching_query.repeated
+            is_repeated = hasattr(matching_query, "repeated") and matching_query.repeated
 
             # Applique le filtre de latence si défini
             if self.latency_filter is None or response_time >= self.latency_filter:
@@ -298,7 +300,7 @@ class DNSAnalyzer:
                     response_time=response_time,
                     timed_out=False,
                     repeated=is_repeated,
-                    status=status
+                    status=status,
                 )
 
                 self.transactions.append(transaction)
@@ -314,9 +316,9 @@ class DNSAnalyzer:
         total_transactions = len(self.transactions)
 
         # Transactions avec réponse
-        successful = [t for t in self.transactions if t.status == 'success']
-        slow = [t for t in self.transactions if t.status == 'slow']
-        errors = [t for t in self.transactions if t.status == 'error']
+        successful = [t for t in self.transactions if t.status == "success"]
+        slow = [t for t in self.transactions if t.status == "slow"]
+        errors = [t for t in self.transactions if t.status == "error"]
         timeouts = [t for t in self.transactions if t.timed_out]
         repeated = [t for t in self.transactions if t.repeated]
 
@@ -326,77 +328,73 @@ class DNSAnalyzer:
         stats = {}
         if response_times:
             stats = {
-                'min_response_time': min(response_times),
-                'max_response_time': max(response_times),
-                'mean_response_time': sum(response_times) / len(response_times),
+                "min_response_time": min(response_times),
+                "max_response_time": max(response_times),
+                "mean_response_time": sum(response_times) / len(response_times),
             }
 
         # Domaines problématiques (Agrégation enrichie)
-        problematic_domains = defaultdict(lambda: {'count': 0, 'types': defaultdict(int)})
+        problematic_domains = defaultdict(lambda: {"count": 0, "types": defaultdict(int)})
         for t in self.transactions:
-            if t.status in ['slow', 'error', 'timeout']:
+            if t.status in ["slow", "error", "timeout"]:
                 domain = t.query.query_name
-                problematic_domains[domain]['count'] += 1
-                
+                problematic_domains[domain]["count"] += 1
+
                 # Détermine le type d'erreur
                 error_type = "Unknown"
                 if t.timed_out:
                     error_type = "Timeout"
-                elif t.status == 'slow':
+                elif t.status == "slow":
                     error_type = "Slow Response"
                 elif t.response:
                     error_type = t.response.response_code_name
-                
-                problematic_domains[domain]['types'][error_type] += 1
+
+                problematic_domains[domain]["types"][error_type] += 1
 
         # Top domaines problématiques (Format liste de dicts)
         top_problematic = []
         # Tri par nombre d'occurrences décroissant
-        sorted_domains = sorted(problematic_domains.items(), key=lambda x: x[1]['count'], reverse=True)[:10]
-        
+        sorted_domains = sorted(problematic_domains.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
+
         for domain, data in sorted_domains:
             # Trouve l'erreur la plus fréquente
             main_error = "N/A"
-            if data['types']:
-                main_error = max(data['types'].items(), key=lambda x: x[1])[0]
-            
-            top_problematic.append({
-                'domain': domain,
-                'count': data['count'],
-                'main_error': main_error
-            })
+            if data["types"]:
+                main_error = max(data["types"].items(), key=lambda x: x[1])[0]
+
+            top_problematic.append({"domain": domain, "count": data["count"], "main_error": main_error})
 
         return {
-            'total_queries': total_queries,
-            'total_responses': total_responses,
-            'total_transactions': total_transactions,
-            'successful_transactions': len(successful),
-            'slow_transactions': len(slow),
-            'error_transactions': len(errors),
-            'timeout_transactions': len(timeouts),
-            'repeated_queries': len(repeated),
-            'response_time_statistics': stats,
-            'thresholds': {
-                'warning_seconds': self.response_warning,
-                'critical_seconds': self.response_critical,
-                'timeout_seconds': self.timeout
+            "total_queries": total_queries,
+            "total_responses": total_responses,
+            "total_transactions": total_transactions,
+            "successful_transactions": len(successful),
+            "slow_transactions": len(slow),
+            "error_transactions": len(errors),
+            "timeout_transactions": len(timeouts),
+            "repeated_queries": len(repeated),
+            "response_time_statistics": stats,
+            "thresholds": {
+                "warning_seconds": self.response_warning,
+                "critical_seconds": self.response_critical,
+                "timeout_seconds": self.timeout,
             },
-            'problematic_domains': dict(problematic_domains), # Note: defaultdict converti en dict simple
-            'top_problematic_domains': top_problematic,
-            'transactions': [self._transaction_to_dict(t) for t in self.transactions],
-            'slow_transactions_details': [self._transaction_to_dict(t) for t in slow],
-            'timeout_details': [self._transaction_to_dict(t) for t in timeouts]
+            "problematic_domains": dict(problematic_domains),  # Note: defaultdict converti en dict simple
+            "top_problematic_domains": top_problematic,
+            "transactions": [self._transaction_to_dict(t) for t in self.transactions],
+            "slow_transactions_details": [self._transaction_to_dict(t) for t in slow],
+            "timeout_details": [self._transaction_to_dict(t) for t in timeouts],
         }
 
     def _transaction_to_dict(self, transaction: DNSTransaction) -> Dict[str, Any]:
         """Convertit une transaction DNS en dictionnaire"""
         return {
-            'query': asdict(transaction.query),
-            'response': asdict(transaction.response) if transaction.response else None,
-            'response_time': transaction.response_time,
-            'timed_out': transaction.timed_out,
-            'repeated': transaction.repeated,
-            'status': transaction.status
+            "query": asdict(transaction.query),
+            "response": asdict(transaction.response) if transaction.response else None,
+            "response_time": transaction.response_time,
+            "timed_out": transaction.timed_out,
+            "repeated": transaction.repeated,
+            "status": transaction.status,
         }
 
     def get_summary(self) -> str:
@@ -405,8 +403,8 @@ class DNSAnalyzer:
             return "📊 Aucune transaction DNS détectée."
 
         timeouts = [t for t in self.transactions if t.timed_out]
-        slow = [t for t in self.transactions if t.status == 'slow']
-        errors = [t for t in self.transactions if t.status == 'error']
+        slow = [t for t in self.transactions if t.status == "slow"]
+        errors = [t for t in self.transactions if t.status == "error"]
         repeated = [t for t in self.transactions if t.repeated]
 
         summary = f"📊 Analyse DNS:\n"
