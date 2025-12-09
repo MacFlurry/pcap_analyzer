@@ -23,13 +23,13 @@ thresholds:
 
   # Retransmissions TCP
   # Logique hybride : Il faut dépasser le seuil absolu (low) ET le seuil de taux (%)
-  
+
   # 1. Seuils absolus (Nombre de paquets retransmis)
   # Minimum requis pour déclencher une alerte (évite les faux positifs sur les très petits flux)
   retransmission_low: 10      # Augmenté de 5 à 10 pour réduire le bruit sur les petits flux
   retransmission_medium: 50
   retransmission_critical: 100 # Si ce nombre est atteint, on alerte même si le taux est bas (volume important)
-  
+
   # 2. Seuils relatifs (Taux de perte en %)
   # C'est le critère principal de sévérité une fois le seuil absolu 'low' dépassé
   retransmission_rate_low: 1.0       # 1% de perte - Début de dégradation

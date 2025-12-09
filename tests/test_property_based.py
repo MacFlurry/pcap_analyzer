@@ -5,14 +5,16 @@ These tests verify properties that should hold for all valid inputs,
 rather than testing specific examples.
 """
 
-import pytest
-from hypothesis import given, strategies as st, assume
 from pathlib import Path
 
+import pytest
+from hypothesis import assume, given
+from hypothesis import strategies as st
+
+from src.analyzers.rtt_analyzer import RTTAnalyzer
+from src.analyzers.tcp_handshake import TCPHandshakeAnalyzer
 from src.config import Config
 from src.parsers.fast_parser import PacketMetadata
-from src.analyzers.tcp_handshake import TCPHandshakeAnalyzer
-from src.analyzers.rtt_analyzer import RTTAnalyzer
 
 
 class TestConfigProperties:
@@ -23,14 +25,12 @@ class TestConfigProperties:
         syn_synack_delay=st.floats(min_value=0.001, max_value=1.0, allow_nan=False, allow_infinity=False),
         handshake_total=st.floats(min_value=0.001, max_value=2.0, allow_nan=False, allow_infinity=False),
     )
-    def test_threshold_values_are_positive(
-        self, packet_gap, syn_synack_delay, handshake_total
-    ):
+    def test_threshold_values_are_positive(self, packet_gap, syn_synack_delay, handshake_total):
         """All threshold values should be non-negative."""
-        import tempfile
         import os
+        import tempfile
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             # Format numbers to avoid scientific notation in YAML
             config_content = f"""
 thresholds:
@@ -54,19 +54,19 @@ reports:
             config = Config(config_file)
 
             # Property: All thresholds should be non-negative
-            assert config.thresholds['packet_gap'] >= 0
-            assert config.thresholds['syn_synack_delay'] >= 0
-            assert config.thresholds['handshake_total'] >= 0
+            assert config.thresholds["packet_gap"] >= 0
+            assert config.thresholds["syn_synack_delay"] >= 0
+            assert config.thresholds["handshake_total"] >= 0
         finally:
             os.unlink(config_file)
 
     @given(threshold_value=st.floats(min_value=-100.0, max_value=-0.001))
     def test_negative_thresholds_are_rejected(self, threshold_value):
         """Negative threshold values should be rejected."""
-        import tempfile
         import os
+        import tempfile
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             config_content = f"""
 thresholds:
   packet_gap: {threshold_value}
@@ -104,9 +104,7 @@ class TestPacketMetadataProperties:
         tcp_seq=st.integers(min_value=0, max_value=2**32 - 1),
         tcp_ack=st.integers(min_value=0, max_value=2**32 - 1),
     )
-    def test_packet_metadata_tcp_ports_are_valid(
-        self, packet_num, timestamp, src_port, dst_port, tcp_seq, tcp_ack
-    ):
+    def test_packet_metadata_tcp_ports_are_valid(self, packet_num, timestamp, src_port, dst_port, tcp_seq, tcp_ack):
         """TCP ports should always be in valid range (1-65535)."""
         metadata = PacketMetadata(
             packet_num=packet_num,
@@ -128,9 +126,7 @@ class TestPacketMetadataProperties:
         assert 1 <= metadata.src_port <= 65535
         assert 1 <= metadata.dst_port <= 65535
 
-    @given(
-        tcp_flags=st.integers(min_value=0, max_value=255)
-    )
+    @given(tcp_flags=st.integers(min_value=0, max_value=255))
     def test_tcp_flags_consistency(self, tcp_flags):
         """TCP flags should be consistently parsed into boolean flags."""
         metadata = PacketMetadata(
@@ -166,10 +162,7 @@ class TestAnalyzerProperties:
         """TCPHandshakeAnalyzer should respect configured thresholds."""
         assume(total_threshold > syn_threshold)  # Total should be larger than SYN delay
 
-        analyzer = TCPHandshakeAnalyzer(
-            syn_synack_threshold=syn_threshold,
-            total_threshold=total_threshold
-        )
+        analyzer = TCPHandshakeAnalyzer(syn_synack_threshold=syn_threshold, total_threshold=total_threshold)
 
         # Property: Thresholds should be stored correctly
         assert analyzer.syn_synack_threshold == syn_threshold
@@ -177,8 +170,8 @@ class TestAnalyzerProperties:
 
         # Property: Initial stats should be zero
         results = analyzer.finalize()
-        assert results['total_handshakes'] == 0
-        assert results['slow_handshakes'] == 0
+        assert results["total_handshakes"] == 0
+        assert results["slow_handshakes"] == 0
 
     @given(
         rtt_warning=st.floats(min_value=0.01, max_value=0.5),
@@ -188,29 +181,20 @@ class TestAnalyzerProperties:
         """RTTAnalyzer critical threshold should be greater than warning."""
         assume(rtt_critical > rtt_warning)
 
-        analyzer = RTTAnalyzer(
-            rtt_warning=rtt_warning,
-            rtt_critical=rtt_critical
-        )
+        analyzer = RTTAnalyzer(rtt_warning=rtt_warning, rtt_critical=rtt_critical)
 
         # Property: Critical threshold should be greater than warning
         assert analyzer.rtt_critical > analyzer.rtt_warning
 
         # Property: Initial measurements should be zero
         results = analyzer.finalize()
-        assert results['total_measurements'] == 0
+        assert results["total_measurements"] == 0
 
 
 class TestIPAddressProperties:
     """Property-based tests for IP address handling."""
 
-    @given(
-        ip_octets=st.lists(
-            st.integers(min_value=0, max_value=255),
-            min_size=4,
-            max_size=4
-        )
-    )
+    @given(ip_octets=st.lists(st.integers(min_value=0, max_value=255), min_size=4, max_size=4))
     def test_ipv4_address_format(self, ip_octets):
         """IPv4 addresses should be formatted correctly."""
         ip_str = ".".join(map(str, ip_octets))
@@ -228,13 +212,11 @@ class TestIPAddressProperties:
         )
 
         # Property: IP should be parseable back to octets
-        parts = metadata.src_ip.split('.')
+        parts = metadata.src_ip.split(".")
         assert len(parts) == 4
         assert all(0 <= int(p) <= 255 for p in parts)
 
-    @given(
-        ttl=st.integers(min_value=1, max_value=255)
-    )
+    @given(ttl=st.integers(min_value=1, max_value=255))
     def test_ttl_range(self, ttl):
         """TTL should always be in valid range (1-255)."""
         metadata = PacketMetadata(
@@ -258,26 +240,23 @@ class TestPathValidationProperties:
 
     @given(
         filename=st.text(
-            alphabet=st.characters(
-                blacklist_categories=('Cs', 'Cc'),
-                blacklist_characters='/\\:*?"<>|'
-            ),
+            alphabet=st.characters(blacklist_categories=("Cs", "Cc"), blacklist_characters='/\\:*?"<>|'),
             min_size=1,
-            max_size=50
+            max_size=50,
         )
     )
     def test_safe_filename_generation(self, filename):
         """Generated filenames should not contain path separators."""
         # Property: Safe filenames should not contain path separators
-        assume('/' not in filename)
-        assume('\\' not in filename)
-        assume('..' not in filename)
+        assume("/" not in filename)
+        assume("\\" not in filename)
+        assume(".." not in filename)
 
         # If we get here, the filename is safe
-        assert '/' not in filename
-        assert '\\' not in filename
-        assert '..' not in filename
+        assert "/" not in filename
+        assert "\\" not in filename
+        assert ".." not in filename
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

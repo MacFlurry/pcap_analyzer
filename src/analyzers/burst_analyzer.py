@@ -29,9 +29,9 @@ class BurstEvent:
     packets_per_second: float
     bytes_per_second: float
     peak_ratio: float  # Ratio par rapport à la moyenne
-    top_sources: List[Dict[str, Any]] = field(default_factory=list)
-    top_destinations: List[Dict[str, Any]] = field(default_factory=list)
-    protocol_breakdown: Dict[str, int] = field(default_factory=dict)
+    top_sources: list[dict[str, Any]] = field(default_factory=list)
+    top_destinations: list[dict[str, Any]] = field(default_factory=list)
+    protocol_breakdown: dict[str, int] = field(default_factory=dict)
 
     def duration_ms(self) -> float:
         """Durée du burst en millisecondes."""
@@ -53,9 +53,9 @@ class IntervalStats:
     start_time: float
     packets: int = 0
     bytes: int = 0
-    sources: Dict[str, int] = field(default_factory=dict)
-    destinations: Dict[str, int] = field(default_factory=dict)
-    protocols: Dict[str, int] = field(default_factory=dict)
+    sources: dict[str, int] = field(default_factory=dict)
+    destinations: dict[str, int] = field(default_factory=dict)
+    protocols: dict[str, int] = field(default_factory=dict)
 
 
 class BurstAnalyzer:
@@ -94,7 +94,7 @@ class BurstAnalyzer:
         self.merge_gap_ms = merge_gap_ms
 
         # Stockage par intervalle: timestamp_bucket -> IntervalStats
-        self.intervals: Dict[int, IntervalStats] = {}
+        self.intervals: dict[int, IntervalStats] = {}
 
         # Stats globales
         self.total_packets = 0
@@ -103,7 +103,7 @@ class BurstAnalyzer:
         self.last_packet_time: Optional[float] = None
 
         # Bursts détectés
-        self.bursts: List[BurstEvent] = []
+        self.bursts: list[BurstEvent] = []
 
         # Memory optimization: limit intervals with sliding window
         self.max_intervals = 100000  # Limit to prevent memory exhaustion
@@ -297,7 +297,7 @@ class BurstAnalyzer:
         for burst_intervals_group in merged_bursts:
             self._create_burst_event(burst_intervals_group, avg_packets, avg_bytes)
 
-    def _create_burst_event(self, intervals: List[tuple], avg_packets: float, avg_bytes: float) -> None:
+    def _create_burst_event(self, intervals: list[tuple], avg_packets: float, avg_bytes: float) -> None:
         """Crée un événement de burst à partir d'intervalles."""
         if not intervals:
             return
@@ -311,9 +311,9 @@ class BurstAnalyzer:
         # Agréger les stats
         total_packets = 0
         total_bytes = 0
-        sources: Dict[str, int] = defaultdict(int)
-        destinations: Dict[str, int] = defaultdict(int)
-        protocols: Dict[str, int] = defaultdict(int)
+        sources: dict[str, int] = defaultdict(int)
+        destinations: dict[str, int] = defaultdict(int)
+        protocols: dict[str, int] = defaultdict(int)
 
         for bucket, interval in intervals:
             total_packets += interval.packets
@@ -353,11 +353,11 @@ class BurstAnalyzer:
 
         self.bursts.append(burst)
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Generate report for hybrid mode compatibility."""
         return self.get_results()
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Retourne les résultats complets de l'analyse."""
         if self.first_packet_time is None or self.last_packet_time is None:
             capture_duration = 0
@@ -427,7 +427,7 @@ class BurstAnalyzer:
             "worst_burst": self._get_worst_burst() if self.bursts else None,
         }
 
-    def _get_worst_burst(self) -> Optional[Dict[str, Any]]:
+    def _get_worst_burst(self) -> Optional[dict[str, Any]]:
         """Retourne le burst le plus intense."""
         if not self.bursts:
             return None

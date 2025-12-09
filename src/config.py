@@ -27,7 +27,7 @@ class Config:
         self.config_path = Path(config_path)
         self.config = self._load_config()
 
-    def _load_config(self) -> Dict[str, Any]:
+    def _load_config(self) -> dict[str, Any]:
         """Charge la configuration depuis le fichier YAML"""
         if not self.config_path.exists():
             raise FileNotFoundError(
@@ -36,7 +36,7 @@ class Config:
             )
 
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with open(self.config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
         except yaml.YAMLError as e:
             raise ValueError(
@@ -60,7 +60,7 @@ class Config:
 
         return config
 
-    def _validate_config(self, config: Dict[str, Any]) -> None:
+    def _validate_config(self, config: dict[str, Any]) -> None:
         """
         Valide la structure de la configuration
 
@@ -126,7 +126,7 @@ class Config:
         if "output_dir" not in config["reports"]:
             raise ValueError("Champ 'output_dir' manquant dans 'reports'")
 
-    def _expand_paths(self, config: Dict[str, Any]) -> None:
+    def _expand_paths(self, config: dict[str, Any]) -> None:
         """
         Expand user paths (like ~/.ssh/id_rsa) in SSH configuration
 
@@ -191,17 +191,17 @@ class Config:
         return value
 
     @property
-    def thresholds(self) -> Dict[str, float]:
+    def thresholds(self) -> dict[str, float]:
         """Retourne tous les seuils configurés"""
         return self.config.get("thresholds", {})
 
     @property
-    def ssh_config(self) -> Dict[str, Any]:
+    def ssh_config(self) -> dict[str, Any]:
         """Retourne la configuration SSH"""
         return self.config.get("ssh", {})
 
     @property
-    def report_config(self) -> Dict[str, Any]:
+    def report_config(self) -> dict[str, Any]:
         """Retourne la configuration des rapports"""
         return self.config.get("reports", {})
 

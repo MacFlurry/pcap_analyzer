@@ -28,8 +28,8 @@ class SYNRetransmission:
     dst_port: int
     first_syn_time: float
     initial_seq: Optional[int] = None  # RFC 793: Track Initial Sequence Number (ISN)
-    syn_attempts: List[float] = field(default_factory=list)
-    syn_packet_nums: List[int] = field(default_factory=list)
+    syn_attempts: list[float] = field(default_factory=list)
+    syn_packet_nums: list[int] = field(default_factory=list)
     synack_time: Optional[float] = None
     synack_packet_num: Optional[int] = None
     total_delay: Optional[float] = None
@@ -37,7 +37,7 @@ class SYNRetransmission:
     synack_received: bool = False
     suspected_issue: str = "unknown"
 
-    def to_human_readable(self) -> Dict[str, Any]:
+    def to_human_readable(self) -> dict[str, Any]:
         """Convertit en format lisible avec timestamps ISO"""
         result = asdict(self)
         result["first_syn_time_iso"] = datetime.fromtimestamp(self.first_syn_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -60,15 +60,15 @@ class SYNRetransmissionAnalyzer:
             threshold: Seuil en secondes pour considérer un délai comme problématique
         """
         self.threshold = threshold
-        self.retransmissions: List[SYNRetransmission] = []
-        self.pending_syns: Dict[str, SYNRetransmission] = {}
+        self.retransmissions: list[SYNRetransmission] = []
+        self.pending_syns: dict[str, SYNRetransmission] = {}
 
         # Memory optimization: periodic cleanup
         self._packet_counter = 0
         self._cleanup_interval = 5000  # Cleanup every 5k packets
         self._pending_timeout = 60.0  # Remove pending SYNs after 60s
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyse les retransmissions SYN dans les paquets
 
@@ -246,7 +246,7 @@ class SYNRetransmissionAnalyzer:
         for key in stale_keys:
             del self.pending_syns[key]
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Ajoute les SYN sans réponse
         for retrans in self.pending_syns.values():
@@ -293,7 +293,7 @@ class SYNRetransmissionAnalyzer:
 
         return "normal"
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse des retransmissions SYN"""
         # Trie par délai décroissant
         sorted_retrans = sorted(self.retransmissions, key=lambda r: r.total_delay if r.total_delay else 0, reverse=True)
@@ -381,7 +381,7 @@ class SYNRetransmissionAnalyzer:
 
         return summary
 
-    def get_detailed_connection(self, src_ip: str, src_port: int) -> Optional[Dict[str, Any]]:
+    def get_detailed_connection(self, src_ip: str, src_port: int) -> Optional[dict[str, Any]]:
         """
         Retourne les détails d'une connexion spécifique
 

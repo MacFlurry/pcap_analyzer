@@ -3,6 +3,7 @@ Unit tests for TCP Handshake Analyzer.
 """
 
 import pytest
+
 from src.analyzers.tcp_handshake import TCPHandshakeAnalyzer
 
 
@@ -34,10 +35,10 @@ class TestTCPHandshakeAnalyzer:
 
         results = analyzer.analyze(tcp_handshake_packets)
 
-        assert results['total_handshakes'] == 1
-        assert results['complete_handshakes'] == 1
-        assert results['incomplete_handshakes'] == 0
-        assert results['slow_handshakes'] == 0
+        assert results["total_handshakes"] == 1
+        assert results["complete_handshakes"] == 1
+        assert results["incomplete_handshakes"] == 0
+        assert results["slow_handshakes"] == 0
 
     def test_slow_handshake(self, tcp_handshake_packets):
         """Test detection of a slow handshake."""
@@ -50,9 +51,9 @@ class TestTCPHandshakeAnalyzer:
 
         results = analyzer.analyze(tcp_handshake_packets)
 
-        assert results['total_handshakes'] == 1
-        assert results['complete_handshakes'] == 1
-        assert results['slow_handshakes'] == 1
+        assert results["total_handshakes"] == 1
+        assert results["complete_handshakes"] == 1
+        assert results["slow_handshakes"] == 1
 
     def test_incomplete_handshake_syn_only(self, sample_tcp_syn_packet):
         """Test detection of incomplete handshake (SYN only)."""
@@ -62,17 +63,17 @@ class TestTCPHandshakeAnalyzer:
         results = analyzer.analyze([sample_tcp_syn_packet])
 
         # SYN-only is considered incomplete
-        assert results['total_handshakes'] >= 0
-        assert results['incomplete_handshakes'] >= 0
+        assert results["total_handshakes"] >= 0
+        assert results["incomplete_handshakes"] >= 0
 
     def test_empty_packet_list(self):
         """Test analyzer with empty packet list."""
         analyzer = TCPHandshakeAnalyzer()
         results = analyzer.analyze([])
 
-        assert results['total_handshakes'] == 0
-        assert results['complete_handshakes'] == 0
-        assert results['incomplete_handshakes'] == 0
+        assert results["total_handshakes"] == 0
+        assert results["complete_handshakes"] == 0
+        assert results["incomplete_handshakes"] == 0
 
     def test_process_packet_incremental(self, sample_tcp_syn_packet):
         """Test process_packet method (incremental processing)."""
@@ -97,11 +98,11 @@ class TestTCPHandshakeAnalyzer:
         results = analyzer.analyze(tcp_handshake_packets)
 
         # Check that handshake was detected
-        assert results['total_handshakes'] == 1
-        handshakes = results['handshakes']
+        assert results["total_handshakes"] == 1
+        handshakes = results["handshakes"]
         if handshakes:
             # Server should be suspected (long SYN->SYN-ACK)
-            assert handshakes[0]['suspected_side'] in ['server', 'network']
+            assert handshakes[0]["suspected_side"] in ["server", "network"]
 
     def test_latency_filter(self, tcp_handshake_packets):
         """Test latency filter functionality."""
@@ -115,7 +116,7 @@ class TestTCPHandshakeAnalyzer:
         results = analyzer.analyze(tcp_handshake_packets)
 
         # Should be filtered because total time < 200ms
-        assert results['total_handshakes'] == 0
+        assert results["total_handshakes"] == 0
 
     def test_ipv6_handshake(self, sample_ipv6_packet):
         """Test that IPv6 handshakes are supported."""
@@ -139,8 +140,8 @@ class TestTCPHandshakeAnalyzer:
         results = analyzer.finalize()
 
         assert isinstance(results, dict)
-        assert 'total_handshakes' in results
-        assert 'complete_handshakes' in results
+        assert "total_handshakes" in results
+        assert "complete_handshakes" in results
 
     def test_memory_cleanup_stale_handshakes(self, sample_tcp_syn_packet):
         """Test that stale handshakes are cleaned up."""
@@ -155,6 +156,7 @@ class TestTCPHandshakeAnalyzer:
 
         # Simulate cleanup with packet far in the future
         from scapy.all import IP, TCP, Ether
+
         future_packet = Ether() / IP(src="1.1.1.1", dst="2.2.2.2") / TCP(flags="S")
         future_packet.time = 100.0  # 99 seconds later
 

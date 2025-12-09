@@ -33,7 +33,7 @@ class DNSResponse:
     query_name: str
     response_code: int
     response_code_name: str
-    answers: List[str]
+    answers: list[str]
     src_ip: str
     dst_ip: str
 
@@ -89,19 +89,19 @@ class DNSAnalyzer:
         self.timeout = timeout
         self.latency_filter = latency_filter
 
-        self.queries: List[DNSQuery] = []
-        self.responses: List[DNSResponse] = []
-        self.transactions: List[DNSTransaction] = []
+        self.queries: list[DNSQuery] = []
+        self.responses: list[DNSResponse] = []
+        self.transactions: list[DNSTransaction] = []
 
         # Tracking interne: {query_id: DNSQuery}
-        self._pending_queries: Dict[int, DNSQuery] = {}
+        self._pending_queries: dict[int, DNSQuery] = {}
 
         # Pour détecter les requêtes répétées: {(query_name, query_type): timestamp}
-        self._recent_queries: Dict[tuple, float] = {}
+        self._recent_queries: dict[tuple, float] = {}
 
         self.last_packet_time: Optional[float] = None  # NEW: Track last packet time for timeouts
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyse les transactions DNS
 
@@ -137,7 +137,7 @@ class DNSAnalyzer:
         elif dns.qr == 1:
             self._process_response(packet_num, packet, dns)
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Traiter les requêtes DNS en attente qui ont dépassé le seuil de timeout
         # FIX: Only mark as timeout if we've seen enough packets AFTER the query
@@ -309,7 +309,7 @@ class DNSAnalyzer:
             if query_full_key:
                 del self._pending_queries[query_full_key]
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse DNS"""
         total_queries = len(self.queries)
         total_responses = len(self.responses)
@@ -386,7 +386,7 @@ class DNSAnalyzer:
             "timeout_details": [self._transaction_to_dict(t) for t in timeouts],
         }
 
-    def _transaction_to_dict(self, transaction: DNSTransaction) -> Dict[str, Any]:
+    def _transaction_to_dict(self, transaction: DNSTransaction) -> dict[str, Any]:
         """Convertit une transaction DNS en dictionnaire"""
         return {
             "query": asdict(transaction.query),

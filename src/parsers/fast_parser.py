@@ -15,9 +15,10 @@ Usage:
 import logging
 import socket
 import struct
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Optional
 
 import dpkt
 

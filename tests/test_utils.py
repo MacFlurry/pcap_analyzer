@@ -3,9 +3,10 @@ Unit tests for utility modules.
 """
 
 import pytest
-from scapy.all import IP, TCP, IPv6, Ether
-from src.utils.packet_utils import get_ip_layer, get_src_ip, get_dst_ip, has_ip_layer
-from src.utils.tcp_utils import is_syn, is_synack, is_ack, is_fin, is_rst, get_tcp_logical_length, SYN, ACK, FIN, RST
+from scapy.all import IP, TCP, Ether, IPv6
+
+from src.utils.packet_utils import get_dst_ip, get_ip_layer, get_src_ip, has_ip_layer
+from src.utils.tcp_utils import ACK, FIN, RST, SYN, get_tcp_logical_length, is_ack, is_fin, is_rst, is_syn, is_synack
 
 
 class TestPacketUtils:
@@ -15,15 +16,15 @@ class TestPacketUtils:
         """Test get_ip_layer with IPv4 packet."""
         ip_layer = get_ip_layer(sample_tcp_packet)
         assert ip_layer is not None
-        assert hasattr(ip_layer, 'src')
-        assert hasattr(ip_layer, 'dst')
+        assert hasattr(ip_layer, "src")
+        assert hasattr(ip_layer, "dst")
 
     def test_get_ip_layer_ipv6(self, sample_ipv6_packet):
         """Test get_ip_layer with IPv6 packet."""
         ip_layer = get_ip_layer(sample_ipv6_packet)
         assert ip_layer is not None
-        assert hasattr(ip_layer, 'src')
-        assert hasattr(ip_layer, 'dst')
+        assert hasattr(ip_layer, "src")
+        assert hasattr(ip_layer, "dst")
 
     def test_get_ip_layer_no_ip(self):
         """Test get_ip_layer with packet without IP layer."""

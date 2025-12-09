@@ -10,7 +10,7 @@ from typing import Dict, List
 import numpy as np
 
 
-def calculate_stats(values: List[float]) -> Dict[str, float]:
+def calculate_stats(values: list[float]) -> dict[str, float]:
     """
     Calculate comprehensive statistics for a list of values.
 

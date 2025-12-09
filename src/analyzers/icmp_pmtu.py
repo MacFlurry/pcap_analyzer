@@ -56,11 +56,11 @@ class ICMPAnalyzer:
 
     def __init__(self):
         """Initialise l'analyseur ICMP"""
-        self.icmp_messages: List[ICMPMessage] = []
-        self.pmtu_issues: List[ICMPMessage] = []
-        self.dest_unreachable: List[ICMPMessage] = []
+        self.icmp_messages: list[ICMPMessage] = []
+        self.pmtu_issues: list[ICMPMessage] = []
+        self.dest_unreachable: list[ICMPMessage] = []
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyse les messages ICMP
 
@@ -85,7 +85,7 @@ class ICMPAnalyzer:
         elif packet.haslayer(ICMPv6DestUnreach):
             self._analyze_icmpv6_packet(packet_num, packet)
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         return self._generate_report()
 
@@ -178,7 +178,7 @@ class ICMPAnalyzer:
         self.icmp_messages.append(icmp_msg)
         self.dest_unreachable.append(icmp_msg)
 
-    def _classify_icmp_message(self, icmp_type: int, icmp_code: int, mtu: int) -> Tuple[str, str]:
+    def _classify_icmp_message(self, icmp_type: int, icmp_code: int, mtu: int) -> tuple[str, str]:
         """
         Classifie un message ICMP et détermine sa sévérité
 
@@ -241,7 +241,7 @@ class ICMPAnalyzer:
         else:
             return f"Message ICMP type {icmp_type} code {icmp_code}", "info"
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse ICMP"""
         # Compte par type ICMP
         type_counts = defaultdict(int)

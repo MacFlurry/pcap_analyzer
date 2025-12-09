@@ -46,7 +46,7 @@ class BaseAnalyzer(ABC):
         pass
 
     @abstractmethod
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """
         Finalize analysis and return results.
 
@@ -65,7 +65,7 @@ class BaseAnalyzer(ABC):
         """
         pass
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyze a list of packets (convenience method).
 
@@ -110,7 +110,7 @@ class BaseAnalyzer(ABC):
         # Subclasses can override to customize error handling
         logger.debug(f"{self.__class__.__name__}: Error processing packet #{packet_num}: {error}", exc_info=False)
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """
         Get analysis results (alias for finalize).
 

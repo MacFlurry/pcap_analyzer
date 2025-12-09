@@ -33,7 +33,7 @@ MEMORY_CLEANUP_INTERVAL = 50_000  # packets - periodic memory cleanup interval
 PROGRESS_UPDATE_INTERVAL = 1_000  # packets - progress bar update frequency
 
 
-def _generate_reports(results: Dict[str, Any], pcap_file: str, output: Optional[str], cfg: Config) -> Dict[str, str]:
+def _generate_reports(results: dict[str, Any], pcap_file: str, output: Optional[str], cfg: Config) -> dict[str, str]:
     """
     Generate JSON and HTML reports.
 
@@ -73,7 +73,7 @@ def analyze_pcap_hybrid(
     latency_filter: Optional[float] = None,
     show_details: bool = False,
     details_limit: int = 20,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     PHASE 2 OPTIMIZATION: Hybrid analysis using dpkt + Scapy.
 

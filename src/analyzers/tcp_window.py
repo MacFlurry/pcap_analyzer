@@ -63,12 +63,12 @@ class TCPWindowAnalyzer:
         self.low_window_threshold = low_window_threshold
         self.zero_window_duration_threshold = zero_window_duration
 
-        self.window_events: List[WindowEvent] = []
-        self.flow_stats: Dict[str, FlowWindowStats] = {}
+        self.window_events: list[WindowEvent] = []
+        self.flow_stats: dict[str, FlowWindowStats] = {}
 
         # Tracking interne optimisé
-        self._flow_scales: Dict[str, int] = {}  # Cache des facteurs d'échelle
-        self._zero_window_start: Dict[str, Tuple[int, float, WindowEvent]] = {}
+        self._flow_scales: dict[str, int] = {}  # Cache des facteurs d'échelle
+        self._zero_window_start: dict[str, tuple[int, float, WindowEvent]] = {}
 
         # Agrégation des stats pour éviter de stocker toutes les fenêtres (mémoire & CPU)
         # Structure: {
@@ -76,7 +76,7 @@ class TCPWindowAnalyzer:
         #   'stable_count': int, 'stable_sum': float, 'stable_min': int, 'stable_max': int,
         #   'low_window_count': int, 'zero_window_count': int, 'zero_duration': float
         # }
-        self._flow_aggregates: Dict[str, Dict[str, Any]] = defaultdict(
+        self._flow_aggregates: dict[str, dict[str, Any]] = defaultdict(
             lambda: {
                 "count": 0,
                 "sum": 0.0,
@@ -92,7 +92,7 @@ class TCPWindowAnalyzer:
             }
         )
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyse les fenêtres TCP
 
@@ -231,7 +231,7 @@ class TCPWindowAnalyzer:
             )
             self.window_events.append(event)
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Termine les zero windows en cours
         if hasattr(self, "_last_packet_time"):
@@ -445,7 +445,7 @@ class TCPWindowAnalyzer:
                 print(f"Warning: Skipping malformed flow key '{flow_key}': {e}")
                 continue
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse des fenêtres TCP"""
         flows_with_issues = [f for f in self.flow_stats.values() if f.suspected_bottleneck != "none"]
 

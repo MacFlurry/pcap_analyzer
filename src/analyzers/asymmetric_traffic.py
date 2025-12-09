@@ -130,7 +130,7 @@ class AsymmetricTrafficAnalyzer:
         self.min_packets_threshold = min_packets_threshold
 
         # Stockage des flux: clé normalisée -> FlowAsymmetry
-        self.flows: Dict[str, FlowAsymmetry] = {}
+        self.flows: dict[str, FlowAsymmetry] = {}
 
         # Stats globales
         self.total_packets = 0
@@ -138,7 +138,7 @@ class AsymmetricTrafficAnalyzer:
 
     def _normalize_flow_key(
         self, src_ip: str, dst_ip: str, src_port: int, dst_port: int, protocol: str
-    ) -> Tuple[str, bool]:
+    ) -> tuple[str, bool]:
         """
         Génère une clé normalisée pour un flux bidirectionnel.
 
@@ -228,7 +228,7 @@ class AsymmetricTrafficAnalyzer:
         """Finalise l'analyse (pas d'action nécessaire ici)."""
         pass
 
-    def get_asymmetric_flows(self) -> List[FlowAsymmetry]:
+    def get_asymmetric_flows(self) -> list[FlowAsymmetry]:
         """
         Retourne les flux asymétriques triés par degré d'asymétrie.
         """
@@ -250,13 +250,13 @@ class AsymmetricTrafficAnalyzer:
 
         return asymmetric
 
-    def get_unidirectional_flows(self) -> List[FlowAsymmetry]:
+    def get_unidirectional_flows(self) -> list[FlowAsymmetry]:
         """
         Retourne les flux quasi-unidirectionnels (>95% dans une direction).
         """
         return [f for f in self.get_asymmetric_flows() if f.is_unidirectional()]
 
-    def get_top_download_flows(self, top_n: int = 10) -> List[FlowAsymmetry]:
+    def get_top_download_flows(self, top_n: int = 10) -> list[FlowAsymmetry]:
         """
         Retourne les flux avec le plus de données entrantes (download).
         Pour cette analyse, on considère "download" comme la direction avec le plus d'octets.
@@ -272,7 +272,7 @@ class AsymmetricTrafficAnalyzer:
 
         return result
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """
         Retourne les résultats complets de l'analyse.
         """

@@ -117,14 +117,14 @@ class TCPHandshakeAnalyzer:
         self.syn_synack_threshold = syn_synack_threshold
         self.total_threshold = total_threshold
         self.latency_filter = latency_filter
-        self.handshakes: List[HandshakeFlow] = []
-        self.incomplete_handshakes: Dict[str, HandshakeFlow] = {}
+        self.handshakes: list[HandshakeFlow] = []
+        self.incomplete_handshakes: dict[str, HandshakeFlow] = {}
         # Memory optimization: cleanup stale handshakes periodically
         self._cleanup_interval = 10000  # Cleanup every 10k packets
         self._packet_counter = 0
         self._handshake_timeout = 60.0  # Remove incomplete handshakes after 60s
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyse les handshakes TCP dans les paquets
 
@@ -355,7 +355,7 @@ class TCPHandshakeAnalyzer:
                             # Suppression des incomplets
                             del self.incomplete_handshakes[flow_key]
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Ajoute les handshakes incomplets à la liste finale
         for handshake in self.incomplete_handshakes.values():
@@ -465,7 +465,7 @@ class TCPHandshakeAnalyzer:
 
         return "none"
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse des handshakes TCP"""
         complete_handshakes = [h for h in self.handshakes if h.complete]
         incomplete_handshakes = [h for h in self.handshakes if not h.complete]
