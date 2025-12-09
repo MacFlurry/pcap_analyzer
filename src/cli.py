@@ -7,6 +7,7 @@ import click
 import sys
 import gc
 from pathlib import Path
+from typing import Dict, Any, Optional
 from scapy.all import PcapReader
 from scapy.config import conf
 from scapy.layers.l2 import Ether
@@ -18,7 +19,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 from rich.panel import Panel
 from rich.table import Table
 
-from .config import get_config
+from .config import get_config, Config
 from .ssh_capture import capture_from_config
 from .analyzer_factory import AnalyzerFactory
 from .report_generator import ReportGenerator
@@ -31,7 +32,12 @@ MEMORY_CLEANUP_INTERVAL = 50_000  # packets - periodic memory cleanup interval
 PROGRESS_UPDATE_INTERVAL = 1_000  # packets - progress bar update frequency
 
 
-def _generate_reports(results, pcap_file, output, cfg):
+def _generate_reports(
+    results: Dict[str, Any],
+    pcap_file: str,
+    output: Optional[str],
+    cfg: Config
+) -> Dict[str, str]:
     """
     Generate JSON and HTML reports.
 
@@ -56,7 +62,7 @@ def _generate_reports(results, pcap_file, output, cfg):
 
 # Performance optimization: Configure Scapy to only dissect necessary layers
 # This can provide 30-50% performance boost by skipping unnecessary protocol parsing
-def configure_scapy_performance():
+def configure_scapy_performance() -> None:
     """Configure Scapy for optimal performance with selective layer parsing."""
     # Only dissect layers we actually use in our analyzers
     conf.layers.filter([Ether, IP, IPv6, TCP, UDP, ICMP, DNS])
@@ -65,7 +71,13 @@ def configure_scapy_performance():
     conf.verb = 0
 
 
-def analyze_pcap_hybrid(pcap_file: str, config, latency_filter: float = None, show_details: bool = False, details_limit: int = 20):
+def analyze_pcap_hybrid(
+    pcap_file: str,
+    config: Config,
+    latency_filter: Optional[float] = None,
+    show_details: bool = False,
+    details_limit: int = 20
+) -> Dict[str, Any]:
     """
     PHASE 2 OPTIMIZATION: Hybrid analysis using dpkt + Scapy.
 

@@ -5,13 +5,13 @@ Module de gestion de la configuration
 import yaml
 import os
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 
 class Config:
     """Gestionnaire de configuration pour l'analyseur PCAP"""
 
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: Optional[str] = None) -> None:
         """
         Initialise la configuration
 
@@ -207,7 +207,7 @@ class Config:
         return self.config.get('reports', {})
 
 
-def get_config(config_path: str = None) -> Config:
+def get_config(config_path: Optional[str] = None) -> Config:
     """
     Crée et retourne une instance de configuration
 

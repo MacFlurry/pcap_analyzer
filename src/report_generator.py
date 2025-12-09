@@ -4,7 +4,7 @@ Générateur de rapports JSON et HTML
 
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 
@@ -37,7 +37,7 @@ class ReportGenerator:
         8080: "HTTP-Alt"
     }
 
-    def __init__(self, output_dir: str = "reports", template_dir: str = "templates"):
+    def __init__(self, output_dir: str = "reports", template_dir: str = "templates") -> None:
         """
         Initialise le générateur de rapports
 
@@ -55,8 +55,12 @@ class ReportGenerator:
         )
 
 
-    def generate_report(self, analysis_results: Dict[str, Any],
-                       pcap_file: str, output_name: str = None) -> Dict[str, str]:
+    def generate_report(
+        self,
+        analysis_results: Dict[str, Any],
+        pcap_file: str,
+        output_name: Optional[str] = None
+    ) -> Dict[str, str]:
         """
         Génère les rapports JSON et HTML
 
