@@ -5,10 +5,11 @@ All analyzers should inherit from BaseAnalyzer to ensure a consistent
 interface and proper error handling.
 """
 
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
-from scapy.packet import Packet
 import logging
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
+
+from scapy.packet import Packet
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +94,7 @@ class BaseAnalyzer(ABC):
 
         return self.finalize()
 
-    def _handle_packet_error(self, packet: Packet, packet_num: int,
-                            error: Exception) -> None:
+    def _handle_packet_error(self, packet: Packet, packet_num: int, error: Exception) -> None:
         """
         Handle errors during packet processing.
 
@@ -108,10 +108,7 @@ class BaseAnalyzer(ABC):
         """
         # Default: log error and continue
         # Subclasses can override to customize error handling
-        logger.debug(
-            f"{self.__class__.__name__}: Error processing packet #{packet_num}: {error}",
-            exc_info=False
-        )
+        logger.debug(f"{self.__class__.__name__}: Error processing packet #{packet_num}: {error}", exc_info=False)
 
     def get_results(self) -> Dict[str, Any]:
         """

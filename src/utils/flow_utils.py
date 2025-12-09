@@ -9,11 +9,7 @@ from typing import Optional
 
 
 def normalize_flow_key(
-    src_ip: str,
-    dst_ip: str,
-    src_port: Optional[int] = None,
-    dst_port: Optional[int] = None,
-    bidirectional: bool = True
+    src_ip: str, dst_ip: str, src_port: Optional[int] = None, dst_port: Optional[int] = None, bidirectional: bool = True
 ) -> str:
     """
     Generate a standardized flow key for tracking network flows.

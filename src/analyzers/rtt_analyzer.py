@@ -25,11 +25,13 @@ References:
     RFC 6298: Computing TCP's Retransmission Timer
 """
 
-from scapy.all import Packet, TCP, IP
-from typing import List, Dict, Any, Optional, Tuple, Union
-from dataclasses import dataclass, asdict
-from collections import defaultdict
 import statistics
+from collections import defaultdict
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from scapy.all import IP, TCP, Packet
+
 from ..utils.packet_utils import get_ip_layer
 
 # Import PacketMetadata for hybrid mode support (3-5x faster)
@@ -53,6 +55,7 @@ class RTTMeasurement:
         data_packet_num: Packet number of original data segment
         ack_packet_num: Packet number of ACK
     """
+
     timestamp: float
     rtt: float
     flow_key: str
@@ -81,6 +84,7 @@ class FlowRTTStats:
         stdev_rtt: Standard deviation of RTT (None if < 2 measurements)
         rtt_spikes: Count of RTT measurements above warning threshold
     """
+
     flow_key: str
     src_ip: str
     dst_ip: str
@@ -117,8 +121,9 @@ class RTTAnalyzer:
         - Space complexity: O(N*S) where N=flows, S=unacked segments (bounded)
     """
 
-    def __init__(self, rtt_warning: float = 0.1, rtt_critical: float = 0.5,
-                 latency_filter: Optional[float] = None) -> None:
+    def __init__(
+        self, rtt_warning: float = 0.1, rtt_critical: float = 0.5, latency_filter: Optional[float] = None
+    ) -> None:
         """
         Initialize RTT analyzer.
 
@@ -164,7 +169,7 @@ class RTTAnalyzer:
 
         return self.finalize()
 
-    def process_packet(self, packet: Union[Packet, 'PacketMetadata'], packet_num: int) -> None:
+    def process_packet(self, packet: Union[Packet, "PacketMetadata"], packet_num: int) -> None:
         """
         Process a single packet (supports both Scapy Packet and PacketMetadata).
 
@@ -208,9 +213,7 @@ class RTTAnalyzer:
             ack = tcp.ack
 
             # Cherche les segments correspondants
-            for seq, (data_pkt_num, data_time, payload_len) in list(
-                self._unacked_segments[reverse_flow].items()
-            ):
+            for seq, (data_pkt_num, data_time, payload_len) in list(self._unacked_segments[reverse_flow].items()):
                 # Si l'ACK couvre ce segment
                 if ack >= seq + payload_len:
                     rtt = timestamp - data_time
@@ -224,14 +227,14 @@ class RTTAnalyzer:
                             seq_num=seq,
                             ack_num=ack,
                             data_packet_num=data_pkt_num,
-                            ack_packet_num=packet_num
+                            ack_packet_num=packet_num,
                         )
                         self.measurements.append(measurement)
 
                     # Supprime le segment ACKé
                     del self._unacked_segments[reverse_flow][seq]
 
-    def _process_metadata(self, metadata: 'PacketMetadata', packet_num: int) -> None:
+    def _process_metadata(self, metadata: "PacketMetadata", packet_num: int) -> None:
         """
         PERFORMANCE OPTIMIZED: Process lightweight PacketMetadata (3-5x faster than Scapy).
 
@@ -249,7 +252,7 @@ class RTTAnalyzer:
             packet_num: Packet sequence number in capture
         """
         # Skip non-TCP packets
-        if metadata.protocol != 'TCP':
+        if metadata.protocol != "TCP":
             return
 
         timestamp = metadata.timestamp
@@ -275,9 +278,7 @@ class RTTAnalyzer:
             ack = metadata.tcp_ack
 
             # Cherche les segments correspondants
-            for seq, (data_pkt_num, data_time, payload_len) in list(
-                self._unacked_segments[reverse_flow].items()
-            ):
+            for seq, (data_pkt_num, data_time, payload_len) in list(self._unacked_segments[reverse_flow].items()):
                 # Si l'ACK couvre ce segment
                 if ack >= seq + payload_len:
                     rtt = timestamp - data_time
@@ -291,7 +292,7 @@ class RTTAnalyzer:
                             seq_num=seq,
                             ack_num=ack,
                             data_packet_num=data_pkt_num,
-                            ack_packet_num=packet_num
+                            ack_packet_num=packet_num,
                         )
                         self.measurements.append(measurement)
 
@@ -352,8 +353,16 @@ class RTTAnalyzer:
             return ""
         tcp = packet[TCP]
         # Ensure ports are integers (they can sometimes be hex strings)
-        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
-        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        sport = (
+            int(tcp.sport)
+            if isinstance(tcp.sport, int)
+            else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        )
+        dport = (
+            int(tcp.dport)
+            if isinstance(tcp.dport, int)
+            else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        )
         return f"{ip.src}:{sport}->{ip.dst}:{dport}"
 
     def _get_reverse_flow_key(self, packet: Packet) -> str:
@@ -363,8 +372,16 @@ class RTTAnalyzer:
             return ""
         tcp = packet[TCP]
         # Ensure ports are integers (they can sometimes be hex strings)
-        sport = int(tcp.sport) if isinstance(tcp.sport, int) else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
-        dport = int(tcp.dport) if isinstance(tcp.dport, int) else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        sport = (
+            int(tcp.sport)
+            if isinstance(tcp.sport, int)
+            else int(str(tcp.sport), 16) if isinstance(tcp.sport, str) else tcp.sport
+        )
+        dport = (
+            int(tcp.dport)
+            if isinstance(tcp.dport, int)
+            else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
+        )
         return f"{ip.dst}:{dport}->{ip.src}:{sport}"
 
     def _calculate_flow_statistics(self) -> None:
@@ -381,8 +398,8 @@ class RTTAnalyzer:
                 continue
 
             try:
-                parts = flow_key.split('->')
-                src_part, dst_part = parts[0].split(':'), parts[1].split(':')
+                parts = flow_key.split("->")
+                src_part, dst_part = parts[0].split(":"), parts[1].split(":")
 
                 rtt_spikes = sum(1 for rtt in rtts if rtt > self.rtt_warning)
 
@@ -411,7 +428,7 @@ class RTTAnalyzer:
                     mean_rtt=statistics.mean(rtts),
                     median_rtt=statistics.median(rtts),
                     stdev_rtt=statistics.stdev(rtts) if len(rtts) > 1 else None,
-                    rtt_spikes=rtt_spikes
+                    rtt_spikes=rtt_spikes,
                 )
 
                 self.flow_stats[flow_key] = stats
@@ -427,40 +444,33 @@ class RTTAnalyzer:
         global_stats = {}
         if all_rtts:
             global_stats = {
-                'min_rtt': min(all_rtts),
-                'max_rtt': max(all_rtts),
-                'mean_rtt': statistics.mean(all_rtts),
-                'median_rtt': statistics.median(all_rtts),
+                "min_rtt": min(all_rtts),
+                "max_rtt": max(all_rtts),
+                "mean_rtt": statistics.mean(all_rtts),
+                "median_rtt": statistics.median(all_rtts),
             }
 
             if len(all_rtts) > 1:
-                global_stats['stdev_rtt'] = statistics.stdev(all_rtts)
+                global_stats["stdev_rtt"] = statistics.stdev(all_rtts)
 
         # Identifie les flux avec RTT élevé
         flows_with_high_rtt = [
-            f for f in self.flow_stats.values()
-            if f.mean_rtt > self.rtt_warning or f.max_rtt > self.rtt_critical
+            f for f in self.flow_stats.values() if f.mean_rtt > self.rtt_warning or f.max_rtt > self.rtt_critical
         ]
 
         # Mesures avec RTT critique
-        critical_measurements = [
-            m for m in self.measurements
-            if m.rtt > self.rtt_critical
-        ]
+        critical_measurements = [m for m in self.measurements if m.rtt > self.rtt_critical]
 
         return {
-            'total_measurements': len(self.measurements),
-            'total_flows': len(self.flow_stats),
-            'global_statistics': global_stats,
-            'thresholds': {
-                'warning_seconds': self.rtt_warning,
-                'critical_seconds': self.rtt_critical
-            },
-            'flows_with_high_rtt': len(flows_with_high_rtt),
-            'critical_measurements': len(critical_measurements),
-            'flow_statistics': [asdict(f) for f in self.flow_stats.values()],
-            'measurements': [asdict(m) for m in self.measurements],
-            'critical_rtt_details': [asdict(m) for m in critical_measurements]
+            "total_measurements": len(self.measurements),
+            "total_flows": len(self.flow_stats),
+            "global_statistics": global_stats,
+            "thresholds": {"warning_seconds": self.rtt_warning, "critical_seconds": self.rtt_critical},
+            "flows_with_high_rtt": len(flows_with_high_rtt),
+            "critical_measurements": len(critical_measurements),
+            "flow_statistics": [asdict(f) for f in self.flow_stats.values()],
+            "measurements": [asdict(m) for m in self.measurements],
+            "critical_rtt_details": [asdict(m) for m in critical_measurements],
         }
 
     def get_summary(self) -> str:
@@ -473,8 +483,7 @@ class RTTAnalyzer:
         max_rtt = max(all_rtts)
 
         flows_with_issues = [
-            f for f in self.flow_stats.values()
-            if f.mean_rtt > self.rtt_warning or f.max_rtt > self.rtt_critical
+            f for f in self.flow_stats.values() if f.mean_rtt > self.rtt_warning or f.max_rtt > self.rtt_critical
         ]
 
         summary = f"📊 Analyse RTT:\n"

@@ -3,27 +3,28 @@
 Interface en ligne de commande pour l'analyseur PCAP
 """
 
-import click
-import sys
 import gc
+import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.table import Table
 from scapy.all import PcapReader
 from scapy.config import conf
-from scapy.layers.l2 import Ether
-from scapy.layers.inet import IP, TCP, UDP, ICMP
-from scapy.layers.inet6 import IPv6
 from scapy.layers.dns import DNS
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-from rich.panel import Panel
-from rich.table import Table
+from scapy.layers.inet import ICMP, IP, TCP, UDP
+from scapy.layers.inet6 import IPv6
+from scapy.layers.l2 import Ether
 
-from .config import get_config, Config
-from .ssh_capture import capture_from_config
 from .analyzer_factory import AnalyzerFactory
-from .report_generator import ReportGenerator
+from .config import Config, get_config
 from .parsers.fast_parser import FastPacketParser
+from .report_generator import ReportGenerator
+from .ssh_capture import capture_from_config
 
 console = Console()
 
@@ -32,12 +33,7 @@ MEMORY_CLEANUP_INTERVAL = 50_000  # packets - periodic memory cleanup interval
 PROGRESS_UPDATE_INTERVAL = 1_000  # packets - progress bar update frequency
 
 
-def _generate_reports(
-    results: Dict[str, Any],
-    pcap_file: str,
-    output: Optional[str],
-    cfg: Config
-) -> Dict[str, str]:
+def _generate_reports(results: Dict[str, Any], pcap_file: str, output: Optional[str], cfg: Config) -> Dict[str, str]:
     """
     Generate JSON and HTML reports.
 
@@ -51,7 +47,7 @@ def _generate_reports(
         Dictionary with paths to generated report files
     """
     console.print("\n[cyan]Génération des rapports...[/cyan]")
-    report_gen = ReportGenerator(output_dir=cfg.get('reports.output_dir', 'reports'))
+    report_gen = ReportGenerator(output_dir=cfg.get("reports.output_dir", "reports"))
     report_files = report_gen.generate_report(results, pcap_file, output)
 
     console.print(f"[green]✓ Rapport JSON: {report_files['json']}[/green]")
@@ -76,7 +72,7 @@ def analyze_pcap_hybrid(
     config: Config,
     latency_filter: Optional[float] = None,
     show_details: bool = False,
-    details_limit: int = 20
+    details_limit: int = 20,
 ) -> Dict[str, Any]:
     """
     PHASE 2 OPTIMIZATION: Hybrid analysis using dpkt + Scapy.
@@ -121,11 +117,7 @@ def analyze_pcap_hybrid(
     packet_count = 0
 
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[cyan]Processing..."),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console
+        SpinnerColumn(), TextColumn("[cyan]Processing..."), BarColumn(), TaskProgressColumn(), console=console
     ) as progress:
         task = progress.add_task("[cyan]Extracting metadata...", total=total_packets)
 
@@ -168,7 +160,7 @@ def analyze_pcap_hybrid(
         TextColumn("[cyan]Processing complex protocols..."),
         BarColumn(),
         TaskProgressColumn(),
-        console=console
+        console=console,
     ) as progress:
         task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
 
@@ -189,36 +181,32 @@ def analyze_pcap_hybrid(
 
     # Finalize all analyzers
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[cyan]Finalisation..."),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console
+        SpinnerColumn(), TextColumn("[cyan]Finalisation..."), BarColumn(), TaskProgressColumn(), console=console
     ) as progress:
         task = progress.add_task("[cyan]Computing statistics...", total=len(analyzers))
         for idx, analyzer in enumerate(analyzers):
-            if hasattr(analyzer, 'finalize'):
+            if hasattr(analyzer, "finalize"):
                 analyzer.finalize()
             progress.update(task, completed=idx + 1)
 
     # Collect results (growing list of dpkt-compatible analyzers)
-    results['timestamps'] = timestamp_analyzer._generate_report()
-    results['tcp_handshake'] = handshake_analyzer._generate_report()
-    results['retransmission'] = retrans_analyzer._generate_report()
-    results['rtt'] = rtt_analyzer._generate_report()
-    results['tcp_window'] = window_analyzer._generate_report()
-    results['tcp_reset'] = reset_analyzer._generate_report()
-    results['top_talkers'] = toptalkers_analyzer._generate_report()
-    results['throughput'] = throughput_analyzer._generate_report()
-    results['syn_retransmissions'] = syn_retrans_analyzer._generate_report()
-    results['tcp_timeout'] = tcp_timeout_analyzer.get_results()
-    results['burst'] = burst_analyzer._generate_report()
-    results['temporal'] = temporal_analyzer._generate_report()
-    results['dns'] = dns_analyzer._generate_report()
-    results['icmp'] = icmp_analyzer._generate_report()
+    results["timestamps"] = timestamp_analyzer._generate_report()
+    results["tcp_handshake"] = handshake_analyzer._generate_report()
+    results["retransmission"] = retrans_analyzer._generate_report()
+    results["rtt"] = rtt_analyzer._generate_report()
+    results["tcp_window"] = window_analyzer._generate_report()
+    results["tcp_reset"] = reset_analyzer._generate_report()
+    results["top_talkers"] = toptalkers_analyzer._generate_report()
+    results["throughput"] = throughput_analyzer._generate_report()
+    results["syn_retransmissions"] = syn_retrans_analyzer._generate_report()
+    results["tcp_timeout"] = tcp_timeout_analyzer.get_results()
+    results["burst"] = burst_analyzer._generate_report()
+    results["temporal"] = temporal_analyzer._generate_report()
+    results["dns"] = dns_analyzer._generate_report()
+    results["icmp"] = icmp_analyzer._generate_report()
 
     # Add empty results for other analyzers (they'll be implemented next)
-    for key in ['ip_fragmentation', 'asymmetric_traffic', 'sack']:
+    for key in ["ip_fragmentation", "asymmetric_traffic", "sack"]:
         if key not in results:
             results[key] = {}
 
@@ -250,13 +238,13 @@ def cli():
 
 
 @cli.command()
-@click.argument('pcap_file', type=click.Path(exists=True))
-@click.option('-l', '--latency', type=float, help='Seuil de latence en secondes pour le filtrage')
-@click.option('-c', '--config', type=click.Path(exists=True), help='Fichier de configuration personnalisé')
-@click.option('-o', '--output', help='Nom de base pour les rapports de sortie')
-@click.option('--no-report', is_flag=True, help='Ne pas générer de rapports HTML/JSON')
-@click.option('--no-details', is_flag=True, help='Ne pas afficher les détails des retransmissions')
-@click.option('--details-limit', type=int, default=20, help='Nombre max de retransmissions à afficher (défaut: 20)')
+@click.argument("pcap_file", type=click.Path(exists=True))
+@click.option("-l", "--latency", type=float, help="Seuil de latence en secondes pour le filtrage")
+@click.option("-c", "--config", type=click.Path(exists=True), help="Fichier de configuration personnalisé")
+@click.option("-o", "--output", help="Nom de base pour les rapports de sortie")
+@click.option("--no-report", is_flag=True, help="Ne pas générer de rapports HTML/JSON")
+@click.option("--no-details", is_flag=True, help="Ne pas afficher les détails des retransmissions")
+@click.option("--details-limit", type=int, default=20, help="Nombre max de retransmissions à afficher (défaut: 20)")
 def analyze(pcap_file, latency, config, output, no_report, no_details, details_limit):
     """
     Analyse un fichier PCAP local pour détecter les causes de latence
@@ -277,7 +265,7 @@ def analyze(pcap_file, latency, config, output, no_report, no_details, details_l
         if not pcap_path.is_file():
             raise click.BadParameter(f"Le chemin spécifié n'est pas un fichier: {pcap_file}")
         # Prevent reading sensitive system files
-        sensitive_dirs = ['/etc', '/root', '/sys', '/proc', '/dev']
+        sensitive_dirs = ["/etc", "/root", "/sys", "/proc", "/dev"]
         for sensitive_dir in sensitive_dirs:
             if str(pcap_path).startswith(sensitive_dir):
                 raise click.BadParameter(f"Accès refusé: impossible de lire des fichiers dans {sensitive_dir}")
@@ -296,7 +284,9 @@ def analyze(pcap_file, latency, config, output, no_report, no_details, details_l
     show_details = not no_details
 
     # Analyse avec le mode hybride optimisé (dpkt + Scapy)
-    results = analyze_pcap_hybrid(pcap_file, cfg, latency_filter=latency, show_details=show_details, details_limit=details_limit)
+    results = analyze_pcap_hybrid(
+        pcap_file, cfg, latency_filter=latency, show_details=show_details, details_limit=details_limit
+    )
 
     # Génération des rapports
     if not no_report:
@@ -304,12 +294,12 @@ def analyze(pcap_file, latency, config, output, no_report, no_details, details_l
 
 
 @cli.command()
-@click.option('-d', '--duration', type=int, default=60, help='Durée de capture en secondes (défaut: 60)')
-@click.option('-f', '--filter', help='Filtre BPF personnalisé (remplace celui de la config)')
-@click.option('-o', '--output', help='Nom du fichier PCAP local de sortie')
-@click.option('-c', '--config', type=click.Path(exists=True), help='Fichier de configuration personnalisé')
-@click.option('--analyze/--no-analyze', default=True, help='Analyser automatiquement après capture')
-@click.option('-l', '--latency', type=float, help='Seuil de latence pour l\'analyse')
+@click.option("-d", "--duration", type=int, default=60, help="Durée de capture en secondes (défaut: 60)")
+@click.option("-f", "--filter", help="Filtre BPF personnalisé (remplace celui de la config)")
+@click.option("-o", "--output", help="Nom du fichier PCAP local de sortie")
+@click.option("-c", "--config", type=click.Path(exists=True), help="Fichier de configuration personnalisé")
+@click.option("--analyze/--no-analyze", default=True, help="Analyser automatiquement après capture")
+@click.option("-l", "--latency", type=float, help="Seuil de latence pour l'analyse")
 def capture(duration, filter, output, config, analyze, latency):
     """
     Capture des paquets via SSH depuis un serveur distant
@@ -331,6 +321,7 @@ def capture(duration, filter, output, config, analyze, latency):
     # Nom du fichier de sortie
     if output is None:
         from datetime import datetime
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output = f"capture_{timestamp}.pcap"
 
@@ -339,11 +330,11 @@ def capture(duration, filter, output, config, analyze, latency):
         output_path = Path(output).resolve()
 
         # Prevent directory traversal
-        if '..' in output:
+        if ".." in output:
             raise click.BadParameter("Chemin non autorisé: '..' n'est pas permis dans le chemin de sortie")
 
         # Prevent writing to sensitive system directories
-        sensitive_dirs = ['/etc', '/root', '/sys', '/proc', '/dev', '/usr', '/bin', '/sbin', '/boot']
+        sensitive_dirs = ["/etc", "/root", "/sys", "/proc", "/dev", "/usr", "/bin", "/sbin", "/boot"]
         for sensitive_dir in sensitive_dirs:
             if str(output_path).startswith(sensitive_dir):
                 raise click.BadParameter(f"Accès refusé: impossible d'écrire dans {sensitive_dir}")
@@ -359,10 +350,7 @@ def capture(duration, filter, output, config, analyze, latency):
     try:
         # Lance la capture
         local_pcap = capture_from_config(
-            config=cfg.config,
-            local_path=output,
-            duration=duration,
-            filter_override=filter
+            config=cfg.config, local_path=output, duration=duration, filter_override=filter
         )
 
         console.print(f"\n[green]✓ Capture terminée: {local_pcap}[/green]")
@@ -381,7 +369,7 @@ def capture(duration, filter, output, config, analyze, latency):
 
 
 @cli.command()
-@click.option('-c', '--config', type=click.Path(exists=True), help='Fichier de configuration à afficher')
+@click.option("-c", "--config", type=click.Path(exists=True), help="Fichier de configuration à afficher")
 def show_config(config):
     """Affiche la configuration actuelle"""
     cfg = get_config(config)
@@ -400,16 +388,16 @@ def show_config(config):
     table.add_section()
     table.add_row("[bold]SSH[/bold]", "")
     ssh_config = cfg.ssh_config
-    table.add_row("  host", ssh_config.get('host', 'N/A'))
-    table.add_row("  username", ssh_config.get('username', 'N/A'))
-    table.add_row("  port", str(ssh_config.get('port', 22)))
+    table.add_row("  host", ssh_config.get("host", "N/A"))
+    table.add_row("  username", ssh_config.get("username", "N/A"))
+    table.add_row("  port", str(ssh_config.get("port", 22)))
 
     # Reports
     table.add_section()
     table.add_row("[bold]RAPPORTS[/bold]", "")
     report_config = cfg.report_config
-    table.add_row("  output_dir", report_config.get('output_dir', 'N/A'))
-    table.add_row("  formats", ', '.join(report_config.get('formats', [])))
+    table.add_row("  output_dir", report_config.get("output_dir", "N/A"))
+    table.add_row("  formats", ", ".join(report_config.get("formats", [])))
 
     console.print(table)
 
@@ -419,5 +407,5 @@ def main():
     cli()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

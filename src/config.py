@@ -2,10 +2,11 @@
 Module de gestion de la configuration
 """
 
-import yaml
 import os
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
+import yaml
 
 
 class Config:
@@ -35,7 +36,7 @@ class Config:
             )
 
         try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
         except yaml.YAMLError as e:
             raise ValueError(
@@ -43,9 +44,7 @@ class Config:
                 f"Vérifiez que le fichier est correctement formaté."
             )
         except Exception as e:
-            raise RuntimeError(
-                f"Erreur lors de la lecture de {self.config_path}: {e}"
-            )
+            raise RuntimeError(f"Erreur lors de la lecture de {self.config_path}: {e}")
 
         if config is None:
             raise ValueError(
@@ -73,7 +72,7 @@ class Config:
         """
         # Only thresholds and reports are required for local analysis
         # SSH is optional and only validated when needed (for capture command)
-        required_sections = ['thresholds', 'reports']
+        required_sections = ["thresholds", "reports"]
         missing_sections = [section for section in required_sections if section not in config]
 
         if missing_sections:
@@ -84,29 +83,29 @@ class Config:
             )
 
         # Validate thresholds section
-        if not isinstance(config['thresholds'], dict):
+        if not isinstance(config["thresholds"], dict):
             raise ValueError("La section 'thresholds' doit être un dictionnaire")
 
         required_thresholds = [
-            'packet_gap', 'syn_synack_delay', 'handshake_total',
-            'rtt_warning', 'rtt_critical',
-            'retransmission_low', 'retransmission_rate_low',
-            'dns_response_warning', 'dns_response_critical'
+            "packet_gap",
+            "syn_synack_delay",
+            "handshake_total",
+            "rtt_warning",
+            "rtt_critical",
+            "retransmission_low",
+            "retransmission_rate_low",
+            "dns_response_warning",
+            "dns_response_critical",
         ]
-        missing_thresholds = [
-            t for t in required_thresholds if t not in config['thresholds']
-        ]
+        missing_thresholds = [t for t in required_thresholds if t not in config["thresholds"]]
         if missing_thresholds:
-            raise ValueError(
-                f"Seuils manquants dans 'thresholds': {', '.join(missing_thresholds)}"
-            )
+            raise ValueError(f"Seuils manquants dans 'thresholds': {', '.join(missing_thresholds)}")
 
         # Validate thresholds types and values
-        for key, value in config['thresholds'].items():
+        for key, value in config["thresholds"].items():
             if not isinstance(value, (int, float)):
                 raise ValueError(
-                    f"Le seuil '{key}' doit être un nombre (int ou float), "
-                    f"reçu: {type(value).__name__} ({value})"
+                    f"Le seuil '{key}' doit être un nombre (int ou float), " f"reçu: {type(value).__name__} ({value})"
                 )
             if value < 0:
                 raise ValueError(
@@ -116,15 +115,15 @@ class Config:
 
         # SSH section is optional - only validate if present
         # It will be validated when needed by validate_ssh_config() method
-        if 'ssh' in config and config['ssh'] is not None:
-            if not isinstance(config['ssh'], dict):
+        if "ssh" in config and config["ssh"] is not None:
+            if not isinstance(config["ssh"], dict):
                 raise ValueError("La section 'ssh' doit être un dictionnaire")
 
         # Validate reports section
-        if not isinstance(config['reports'], dict):
+        if not isinstance(config["reports"], dict):
             raise ValueError("La section 'reports' doit être un dictionnaire")
 
-        if 'output_dir' not in config['reports']:
+        if "output_dir" not in config["reports"]:
             raise ValueError("Champ 'output_dir' manquant dans 'reports'")
 
     def _expand_paths(self, config: Dict[str, Any]) -> None:
@@ -134,12 +133,12 @@ class Config:
         Args:
             config: Configuration to modify in-place
         """
-        if 'ssh' in config and config['ssh'] is not None and 'key_file' in config['ssh']:
-            key_file = config['ssh']['key_file']
+        if "ssh" in config and config["ssh"] is not None and "key_file" in config["ssh"]:
+            key_file = config["ssh"]["key_file"]
             if key_file:
                 # Expand ~ and environment variables
                 expanded = os.path.expanduser(os.path.expandvars(key_file))
-                config['ssh']['key_file'] = expanded
+                config["ssh"]["key_file"] = expanded
 
     def validate_ssh_config(self) -> None:
         """
@@ -148,19 +147,19 @@ class Config:
         Raises:
             ValueError: If SSH configuration is missing or invalid
         """
-        if 'ssh' not in self.config or self.config['ssh'] is None:
+        if "ssh" not in self.config or self.config["ssh"] is None:
             raise ValueError(
                 "Configuration SSH manquante.\n"
                 "La section 'ssh' est requise pour la commande 'capture'.\n"
                 "Ajoutez une section 'ssh' dans votre fichier config.yaml avec les champs: host, port, username"
             )
 
-        ssh_config = self.config['ssh']
+        ssh_config = self.config["ssh"]
 
         if not isinstance(ssh_config, dict):
             raise ValueError("La section 'ssh' doit être un dictionnaire")
 
-        required_ssh_fields = ['host', 'port', 'username']
+        required_ssh_fields = ["host", "port", "username"]
         missing_ssh = [f for f in required_ssh_fields if f not in ssh_config]
 
         if missing_ssh:
@@ -180,7 +179,7 @@ class Config:
         Returns:
             Valeur de la configuration
         """
-        keys = key_path.split('.')
+        keys = key_path.split(".")
         value = self.config
 
         for key in keys:
@@ -194,17 +193,17 @@ class Config:
     @property
     def thresholds(self) -> Dict[str, float]:
         """Retourne tous les seuils configurés"""
-        return self.config.get('thresholds', {})
+        return self.config.get("thresholds", {})
 
     @property
     def ssh_config(self) -> Dict[str, Any]:
         """Retourne la configuration SSH"""
-        return self.config.get('ssh', {})
+        return self.config.get("ssh", {})
 
     @property
     def report_config(self) -> Dict[str, Any]:
         """Retourne la configuration des rapports"""
-        return self.config.get('reports', {})
+        return self.config.get("reports", {})
 
 
 def get_config(config_path: Optional[str] = None) -> Config:

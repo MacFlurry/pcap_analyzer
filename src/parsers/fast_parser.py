@@ -12,13 +12,14 @@ Usage:
         print(f"{metadata.src_ip}:{metadata.src_port} -> {metadata.dst_ip}:{metadata.dst_port}")
 """
 
-import dpkt
-import socket
 import logging
+import socket
 import struct
 from dataclasses import dataclass
-from typing import Iterator, Optional
 from pathlib import Path
+from typing import Iterator, Optional
+
+import dpkt
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class PacketMetadata:
     This is much smaller in memory than a full Scapy Packet object.
     Contains only the essential information needed by most analyzers.
     """
+
     # Packet identification
     packet_num: int
     timestamp: float
@@ -111,7 +113,7 @@ class FastPacketParser:
         """
         packet_num = 0
 
-        with open(self.pcap_file, 'rb') as f:
+        with open(self.pcap_file, "rb") as f:
             try:
                 pcap = dpkt.pcap.Reader(f)
                 logger.debug(f"Detected PCAP format for {self.pcap_file}")
@@ -140,7 +142,9 @@ class FastPacketParser:
                     packet_num += 1
                     continue
 
-    def _extract_metadata(self, buf: bytes, packet_num: int, timestamp: float, datalink: int) -> Optional[PacketMetadata]:
+    def _extract_metadata(
+        self, buf: bytes, packet_num: int, timestamp: float, datalink: int
+    ) -> Optional[PacketMetadata]:
         """
         Extract metadata from raw packet buffer.
 
@@ -209,14 +213,14 @@ class FastPacketParser:
                 ttl=ttl,
                 total_length=total_length,
                 packet_length=len(buf),  # Full packet size (including all headers)
-                protocol='Other'
+                protocol="Other",
             )
 
             # Extract transport layer info
             transport = ip_packet.data
 
             if isinstance(transport, dpkt.tcp.TCP):
-                metadata.protocol = 'TCP'
+                metadata.protocol = "TCP"
                 metadata.src_port = transport.sport
                 metadata.dst_port = transport.dport
                 metadata.tcp_seq = transport.seq
@@ -228,14 +232,14 @@ class FastPacketParser:
                 metadata.__post_init__()
 
             elif isinstance(transport, dpkt.udp.UDP):
-                metadata.protocol = 'UDP'
+                metadata.protocol = "UDP"
                 metadata.src_port = transport.sport
                 metadata.dst_port = transport.dport
                 metadata.udp_length = transport.ulen
                 metadata.tcp_payload_len = len(transport.data)  # For consistency
 
             elif isinstance(transport, dpkt.icmp.ICMP):
-                metadata.protocol = 'ICMP'
+                metadata.protocol = "ICMP"
                 metadata.icmp_type = transport.type
                 metadata.icmp_code = transport.code
 
@@ -267,6 +271,7 @@ def benchmark_comparison(pcap_file: str, num_packets: int = 10000):
         num_packets: Number of packets to parse for benchmark
     """
     import time
+
     from scapy.all import PcapReader
 
     # Benchmark dpkt
@@ -299,8 +304,9 @@ def benchmark_comparison(pcap_file: str, num_packets: int = 10000):
     print(f"  Speedup: {scapy_time/dpkt_time:.1f}x faster with dpkt")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1:
         benchmark_comparison(sys.argv[1])
     else:

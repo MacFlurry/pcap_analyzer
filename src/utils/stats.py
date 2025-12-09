@@ -5,8 +5,9 @@ This module provides functions for calculating common statistical measures
 used in network analysis and reporting.
 """
 
+from typing import Dict, List
+
 import numpy as np
-from typing import List, Dict
 
 
 def calculate_stats(values: List[float]) -> Dict[str, float]:
@@ -54,12 +55,12 @@ def calculate_stats(values: List[float]) -> Dict[str, float]:
     arr = np.array(values)
 
     return {
-        'min': float(np.min(arr)),
-        'max': float(np.max(arr)),
-        'mean': float(np.mean(arr)),
-        'median': float(np.median(arr)),
-        'p50': float(np.percentile(arr, 50)),
-        'p95': float(np.percentile(arr, 95)),
-        'p99': float(np.percentile(arr, 99)),
-        'stddev': float(np.std(arr, ddof=1))  # Sample standard deviation
+        "min": float(np.min(arr)),
+        "max": float(np.max(arr)),
+        "mean": float(np.mean(arr)),
+        "median": float(np.median(arr)),
+        "p50": float(np.percentile(arr, 50)),
+        "p95": float(np.percentile(arr, 95)),
+        "p99": float(np.percentile(arr, 99)),
+        "stddev": float(np.std(arr, ddof=1)),  # Sample standard deviation
     }
