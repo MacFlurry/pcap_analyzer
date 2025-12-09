@@ -51,3 +51,6 @@ OPTIMIZATION_SUMMARY.md
 PERFORMANCE_OPTIMIZATION_PROPOSAL.md
 ROADMAP_OPTIMIZATION.md
 profile*.stats
+
+# Hypothesis testing
+.hypothesis/

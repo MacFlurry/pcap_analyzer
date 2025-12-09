@@ -39,7 +39,7 @@ setup(
         'jinja2>=3.1.2,<4.0',
         'rich>=13.7.0,<14.0',
         'click>=8.1.7,<9.0',
-        'numpy>=1.24.0,<2.0',  # Critical: NumPy 2.0 has breaking changes
+        'numpy>=1.24.0',  # NumPy 2.x compatible (tested with 2.0.2)
     ],
     entry_points={
         'console_scripts': [

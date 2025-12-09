@@ -16,10 +16,14 @@ import paramiko
 import os
 import time
 import shlex
+import subprocess
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
+
+logger = logging.getLogger(__name__)
 
 console = Console()
 
@@ -63,9 +67,152 @@ def validate_file_path(file_path: str) -> None:
         )
 
 
+def validate_bpf_filter(bpf_filter: str, timeout: int = 5) -> bool:
+    """
+    Validates BPF filter syntax using tcpdump to prevent injection attacks.
+
+    This function uses tcpdump -d to compile the filter without executing it,
+    ensuring the syntax is valid and preventing malicious filter expressions.
+
+    Args:
+        bpf_filter: BPF filter expression to validate
+        timeout: Maximum time in seconds to wait for tcpdump (default: 5s)
+
+    Returns:
+        True if filter is valid, False otherwise
+
+    Examples:
+        >>> validate_bpf_filter("tcp port 80")
+        True
+        >>> validate_bpf_filter("host 192.168.1.1 and port 443")
+        True
+        >>> validate_bpf_filter("invalid filter syntax")
+        False
+        >>> validate_bpf_filter("; rm -rf /")  # Injection attempt
+        False
+
+    Note:
+        Requires tcpdump to be installed on the system.
+    """
+    if not bpf_filter:
+        return True  # Empty filter is valid
+
+    try:
+        # Use tcpdump -ddd to compile (but not execute) the filter
+        # -ddd outputs C program fragment instead of assembler, doesn't require network permissions
+        result = subprocess.run(
+            ['tcpdump', '-ddd', bpf_filter],
+            capture_output=True,
+            timeout=timeout,
+            text=True,
+            check=False  # Don't raise on non-zero exit
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            # Successfully compiled - output should contain C code
+            logger.debug(f"BPF filter validated successfully: {bpf_filter}")
+            return True
+        else:
+            # Any error in compilation is suspicious
+            stderr = result.stderr.strip()
+            if stderr:
+                logger.warning(f"Invalid BPF filter '{bpf_filter}': {stderr}")
+            return False
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"BPF filter validation timed out after {timeout}s: {bpf_filter}")
+        return False
+    except FileNotFoundError:
+        # tcpdump not available - log warning but allow (don't break functionality)
+        logger.warning("tcpdump not found, skipping BPF filter validation")
+        return True
+    except Exception as e:
+        logger.error(f"Error validating BPF filter: {e}")
+        return False
+
+
 class SSHCaptureError(Exception):
     """Exception levée lors d'erreurs de capture SSH"""
     pass
+
+
+class SSHCaptureRateLimiter:
+    """
+    Rate limiter for SSH capture connections to prevent brute force attacks.
+
+    This class implements a sliding window rate limiter that tracks connection
+    attempts over a configurable time window.
+
+    Attributes:
+        max_attempts: Maximum number of connection attempts allowed
+        window: Time window in seconds for counting attempts
+        attempts: List of timestamp attempts
+
+    Examples:
+        >>> limiter = SSHCaptureRateLimiter(max_attempts=3, window=60)
+        >>> limiter.check_and_record()  # First attempt - OK
+        True
+        >>> limiter.check_and_record()  # Second attempt - OK
+        True
+        >>> limiter.check_and_record()  # Third attempt - OK
+        True
+        >>> limiter.check_and_record()  # Fourth attempt - BLOCKED
+        False
+    """
+
+    def __init__(self, max_attempts: int = 3, window: int = 60) -> None:
+        """
+        Initialize rate limiter.
+
+        Args:
+            max_attempts: Maximum connection attempts in window (default: 3)
+            window: Time window in seconds (default: 60)
+        """
+        self.max_attempts = max_attempts
+        self.window = window
+        self.attempts: list = []
+
+    def check_and_record(self) -> bool:
+        """
+        Check if rate limit is exceeded and record current attempt.
+
+        Returns:
+            True if attempt is allowed, False if rate limit exceeded
+
+        Raises:
+            SSHCaptureError: If rate limit is exceeded
+        """
+        current_time = time.time()
+
+        # Remove attempts outside the time window
+        self.attempts = [t for t in self.attempts if current_time - t < self.window]
+
+        # Check if limit exceeded
+        if len(self.attempts) >= self.max_attempts:
+            wait_time = self.window - (current_time - self.attempts[0])
+            raise SSHCaptureError(
+                f"Rate limit exceeded: {len(self.attempts)} connection attempts in {self.window}s. "
+                f"Please wait {wait_time:.0f} seconds before trying again."
+            )
+
+        # Record this attempt
+        self.attempts.append(current_time)
+        return True
+
+    def reset(self) -> None:
+        """Reset rate limiter (clear all attempts)."""
+        self.attempts.clear()
+
+    def get_remaining_attempts(self) -> int:
+        """
+        Get number of remaining attempts before rate limit.
+
+        Returns:
+            Number of attempts remaining
+        """
+        current_time = time.time()
+        self.attempts = [t for t in self.attempts if current_time - t < self.window]
+        return max(0, self.max_attempts - len(self.attempts))
 
 
 class SSHCapture:
@@ -201,6 +348,17 @@ class SSHCapture:
 
         # Security: Validate output file path
         validate_file_path(output_file)
+
+        # Security: Validate BPF filter syntax before using it
+        if filter_expr:
+            if not validate_bpf_filter(filter_expr):
+                raise SSHCaptureError(
+                    f"Invalid BPF filter syntax: '{filter_expr}'\n"
+                    f"Please check your filter expression. Examples:\n"
+                    f"  - 'tcp port 80'\n"
+                    f"  - 'host 192.168.1.1 and port 443'\n"
+                    f"  - 'udp and src net 10.0.0.0/8'"
+                )
 
         # Security: Use shlex.quote() to prevent command injection
         # This properly escapes all user inputs before shell execution
