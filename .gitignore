@@ -19,6 +19,7 @@ __pycache__/
 *~
 *$py.class
 # Configuration locale
+config.yaml
 # IDE
 # Logs
 # OS

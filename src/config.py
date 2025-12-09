@@ -5,13 +5,13 @@ Module de gestion de la configuration
 import yaml
 import os
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 
 class Config:
     """Gestionnaire de configuration pour l'analyseur PCAP"""
 
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: Optional[str] = None) -> None:
         """
         Initialise la configuration
 
@@ -101,12 +101,17 @@ class Config:
                 f"Seuils manquants dans 'thresholds': {', '.join(missing_thresholds)}"
             )
 
-        # Validate thresholds types
+        # Validate thresholds types and values
         for key, value in config['thresholds'].items():
             if not isinstance(value, (int, float)):
                 raise ValueError(
                     f"Le seuil '{key}' doit être un nombre (int ou float), "
                     f"reçu: {type(value).__name__} ({value})"
+                )
+            if value < 0:
+                raise ValueError(
+                    f"Le seuil '{key}' ne peut pas être négatif: {value}\n"
+                    f"Les seuils doivent être des valeurs positives."
                 )
 
         # SSH section is optional - only validate if present
@@ -202,7 +207,7 @@ class Config:
         return self.config.get('reports', {})
 
 
-def get_config(config_path: str = None) -> Config:
+def get_config(config_path: Optional[str] = None) -> Config:
     """
     Crée et retourne une instance de configuration
 

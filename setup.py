@@ -4,6 +4,11 @@ Configuration d'installation pour PCAP Analyzer
 
 from setuptools import setup, find_packages
 from pathlib import Path
+import sys
+
+# Add src to path to import __version__
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+from __version__ import __version__
 
 # Lecture du README pour la description longue
 readme_file = Path(__file__).parent / "README.md"
@@ -13,7 +18,7 @@ if readme_file.exists():
 
 setup(
     name='pcap-analyzer',
-    version='3.0.0',
+    version=__version__,
     description='Analyseur automatisé des causes de latence réseau',
     long_description=long_description,
     long_description_content_type='text/markdown',

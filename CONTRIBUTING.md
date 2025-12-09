@@ -30,24 +30,40 @@ Merci de votre intérêt pour contribuer à PCAP Analyzer ! 🎉
    git checkout -b feature/ma-super-fonctionnalite
    ```
 
-3. **Faites vos modifications** :
-   - Suivez le style de code existant
-   - Ajoutez des tests si applicable
-   - Mettez à jour la documentation
-
-4. **Testez** vos modifications :
+3. **Installez les outils de développement** :
    ```bash
-   # Installez en mode développement
-   pip install -e .
+   # Installez en mode développement avec toutes les dépendances
+   pip install -e ".[dev]"
 
-   # Testez la connexion SSH
-   python3 test_ssh.py
+   # Installez pre-commit pour les hooks automatiques
+   pre-commit install
+   ```
+
+4. **Faites vos modifications** :
+   - Suivez le style de code existant (Black + isort)
+   - Ajoutez des tests (unitaires + property-based avec Hypothesis)
+   - Mettez à jour la documentation
+   - Les hooks pre-commit vérifient automatiquement le formatage
+
+5. **Testez** vos modifications :
+   ```bash
+   # Lancez les tests
+   pytest
+
+   # Avec couverture
+   pytest --cov=src --cov-report=html
+
+   # Lancez les tests property-based
+   pytest tests/test_property_based.py
+
+   # Vérifiez le formatage manuellement
+   pre-commit run --all-files
 
    # Testez l'analyse
    pcap_analyzer analyze test.pcap
    ```
 
-5. **Committez** vos changements :
+6. **Committez** vos changements :
    ```bash
    git commit -m "feat: ajout de ma super fonctionnalité
 
@@ -55,22 +71,26 @@ Merci de votre intérêt pour contribuer à PCAP Analyzer ! 🎉
 
    Fixes #123"
    ```
+   Note: Les hooks pre-commit formatent automatiquement votre code lors du commit.
 
-6. **Poussez** sur votre fork :
+7. **Poussez** sur votre fork :
    ```bash
    git push origin feature/ma-super-fonctionnalite
    ```
 
-7. **Créez une Pull Request** sur GitHub
+8. **Créez une Pull Request** sur GitHub
 
 ## Standards de code
 
 ### Style Python
 
 - Suivez [PEP 8](https://pep8.org/)
-- Utilisez des docstrings pour les fonctions et classes
-- Maximum 100 caractères par ligne (sauf exceptions)
-- Type hints recommandés pour les nouvelles fonctions
+- **Formatage automatique** avec Black (line-length=120)
+- **Tri des imports** avec isort (profile=black)
+- **Type hints requis** pour toutes les nouvelles fonctions publiques
+- **Docstrings** obligatoires pour classes et fonctions publiques
+- Maximum 120 caractères par ligne (configuré dans pyproject.toml)
+- Les hooks **pre-commit** vérifient automatiquement le style
 
 Exemple :
 
@@ -213,20 +233,55 @@ thresholds:
 
 ## Tests
 
-Actuellement, le projet n'a pas de suite de tests automatisés. C'est une excellente opportunité de contribution !
+Le projet utilise **pytest** pour les tests unitaires et d'intégration, et **Hypothesis** pour les tests property-based.
 
-Pour tester manuellement :
+### Lancer les tests
 
 ```bash
-# Test SSH
-python3 test_ssh.py
+# Tous les tests
+pytest
 
-# Test analyse
-pcap_analyzer analyze examples/test.pcap
+# Avec couverture
+pytest --cov=src --cov-report=html --cov-report=term-missing
 
-# Test capture
-pcap_analyzer capture -d 10
+# Tests spécifiques
+pytest tests/test_tcp_handshake.py -v
+
+# Tests property-based uniquement
+pytest tests/test_property_based.py -v
+
+# Tests en parallèle (plus rapide)
+pytest -n auto
 ```
+
+### Écrire des tests
+
+**Tests unitaires** (tests/test_*.py):
+```python
+import pytest
+from src.analyzers.tcp_handshake import TCPHandshakeAnalyzer
+
+def test_handshake_analyzer_init():
+    analyzer = TCPHandshakeAnalyzer()
+    assert analyzer.total_handshakes == 0
+```
+
+**Tests property-based** (tests/test_property_based.py):
+```python
+from hypothesis import given, strategies as st
+from src.config import Config
+
+@given(threshold=st.floats(min_value=0.0, max_value=10.0))
+def test_positive_threshold(threshold):
+    """All thresholds should be non-negative."""
+    assert threshold >= 0
+```
+
+### Coverage
+
+Objectif: **>80%** de couverture de code
+
+Voir le rapport: `open htmlcov/index.html` après `pytest --cov`
 
 ## Documentation
 
@@ -239,13 +294,18 @@ Mettez à jour la documentation pertinente pour vos modifications.
 
 ## Checklist avant PR
 
-- [ ] Le code suit les conventions de style
-- [ ] Les docstrings sont ajoutées/mises à jour
-- [ ] La documentation est à jour
-- [ ] Les tests manuels passent
-- [ ] Le commit message est descriptif
+- [ ] **Pre-commit hooks** passent (`pre-commit run --all-files`)
+- [ ] **Tests** passent (`pytest`)
+- [ ] **Couverture** maintenue ou améliorée (`pytest --cov=src`)
+- [ ] **Type hints** ajoutés pour toutes les nouvelles fonctions publiques
+- [ ] **Docstrings** ajoutées/mises à jour
+- [ ] **Documentation** mise à jour (README.md si applicable)
+- [ ] **Tests unitaires** ajoutés pour les nouvelles fonctionnalités
+- [ ] **Tests property-based** si applicable (Hypothesis)
+- [ ] Le **commit message** suit les conventions (feat/fix/docs/etc.)
 - [ ] Pas d'informations sensibles dans le code
 - [ ] `config.yaml` ne contient que des exemples génériques
+- [ ] Pas de fichiers inutiles committés (*.pyc, __pycache__, etc.)
 
 ## Questions ?
 

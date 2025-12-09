@@ -8,6 +8,9 @@ interface and proper error handling.
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from scapy.packet import Packet
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAnalyzer(ABC):
@@ -95,17 +98,20 @@ class BaseAnalyzer(ABC):
         """
         Handle errors during packet processing.
 
-        Default implementation silently continues. Override to customize
-        error handling behavior (e.g., logging, collecting errors, etc.).
+        Default implementation logs the error and continues. Override to customize
+        error handling behavior (e.g., collecting errors, raising, etc.).
 
         Args:
             packet: Packet that caused the error
             packet_num: Packet number
             error: Exception that was raised
         """
-        # Default: silently continue
-        # Subclasses can override to log or collect errors
-        pass
+        # Default: log error and continue
+        # Subclasses can override to customize error handling
+        logger.debug(
+            f"{self.__class__.__name__}: Error processing packet #{packet_num}: {error}",
+            exc_info=False
+        )
 
     def get_results(self) -> Dict[str, Any]:
         """
