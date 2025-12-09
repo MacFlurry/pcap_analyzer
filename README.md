@@ -97,14 +97,20 @@ pcap_analyzer analyze ma_capture.pcap
 pcap_analyzer capture --duration 600
 ```
 
-### Options de Performance
+### Options Avancées
 
 ```bash
-# Mode hybride (défaut) - Utilise dpkt pour l'extraction rapide + Scapy pour l'inspection approfondie
-pcap_analyzer analyze capture.pcap --mode hybrid
+# Filtrer par seuil de latence (ne montrer que les flux avec latence > seuil)
+pcap_analyzer analyze capture.pcap --latency 0.5
 
-# Mode legacy - Utilise uniquement Scapy (pour comparaison/validation)
-pcap_analyzer analyze capture.pcap --mode legacy
+# Spécifier un fichier de configuration personnalisé
+pcap_analyzer analyze capture.pcap --config my_config.yaml
+
+# Ne pas générer de rapports (affichage console uniquement)
+pcap_analyzer analyze capture.pcap --no-report
+
+# Limiter l'affichage des détails
+pcap_analyzer analyze capture.pcap --details-limit 10
 ```
 
 ## Performance
@@ -117,12 +123,14 @@ Le PCAP Analyzer utilise une **architecture hybride optimisée** qui combine:
 
 **Test:** Capture de 131,408 paquets (26 MB, 4 heures de trafic)
 
-| Mode | Temps | Analyseurs dpkt | Speedup |
-|------|-------|----------------|---------|
-| **Legacy** (Scapy seul) | 93.3 sec | 0/17 | 1.0x (baseline) |
-| **Hybrid** (dpkt + Scapy) | 55.2 sec | 12/17 | **1.7x** ⚡ |
+| Version | Temps | Analyseurs dpkt | Speedup |
+|---------|-------|----------------|---------|
+| **Ancienne** (Scapy seul) | 93.3 sec | 0/17 | 1.0x (baseline) |
+| **Actuelle** (Hybride dpkt + Scapy) | 55.2 sec | 12/17 | **1.7x** ⚡ |
 
 **Gain:** 38 secondes économisées (40% de réduction)
+
+> **Note:** Le mode hybride est activé par défaut et constitue la seule option d'analyse.
 
 ### Analyseurs Optimisés (12/17)
 
