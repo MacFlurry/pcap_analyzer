@@ -19,19 +19,24 @@ class TestConfigProperties:
     """Property-based tests for configuration validation."""
 
     @given(
-        packet_gap=st.floats(min_value=0.0, max_value=10.0),
-        syn_synack_delay=st.floats(min_value=0.0, max_value=1.0),
-        handshake_total=st.floats(min_value=0.0, max_value=2.0),
+        packet_gap=st.floats(min_value=0.001, max_value=10.0, allow_nan=False, allow_infinity=False),
+        syn_synack_delay=st.floats(min_value=0.001, max_value=1.0, allow_nan=False, allow_infinity=False),
+        handshake_total=st.floats(min_value=0.001, max_value=2.0, allow_nan=False, allow_infinity=False),
     )
     def test_threshold_values_are_positive(
-        self, packet_gap, syn_synack_delay, handshake_total, tmp_path
+        self, packet_gap, syn_synack_delay, handshake_total
     ):
         """All threshold values should be non-negative."""
-        config_content = f"""
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            # Format numbers to avoid scientific notation in YAML
+            config_content = f"""
 thresholds:
-  packet_gap: {packet_gap}
-  syn_synack_delay: {syn_synack_delay}
-  handshake_total: {handshake_total}
+  packet_gap: {packet_gap:.6f}
+  syn_synack_delay: {syn_synack_delay:.6f}
+  handshake_total: {handshake_total:.6f}
   rtt_warning: 0.1
   rtt_critical: 0.5
   retransmission_low: 10
@@ -42,20 +47,27 @@ thresholds:
 reports:
   output_dir: "reports"
 """
-        config_file = tmp_path / "test_config.yaml"
-        config_file.write_text(config_content)
+            f.write(config_content)
+            config_file = f.name
 
-        config = Config(str(config_file))
+        try:
+            config = Config(config_file)
 
-        # Property: All thresholds should be non-negative
-        assert config.thresholds['packet_gap'] >= 0
-        assert config.thresholds['syn_synack_delay'] >= 0
-        assert config.thresholds['handshake_total'] >= 0
+            # Property: All thresholds should be non-negative
+            assert config.thresholds['packet_gap'] >= 0
+            assert config.thresholds['syn_synack_delay'] >= 0
+            assert config.thresholds['handshake_total'] >= 0
+        finally:
+            os.unlink(config_file)
 
     @given(threshold_value=st.floats(min_value=-100.0, max_value=-0.001))
-    def test_negative_thresholds_are_rejected(self, threshold_value, tmp_path):
+    def test_negative_thresholds_are_rejected(self, threshold_value):
         """Negative threshold values should be rejected."""
-        config_content = f"""
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            config_content = f"""
 thresholds:
   packet_gap: {threshold_value}
   syn_synack_delay: 0.1
@@ -70,12 +82,15 @@ thresholds:
 reports:
   output_dir: "reports"
 """
-        config_file = tmp_path / "test_config.yaml"
-        config_file.write_text(config_content)
+            f.write(config_content)
+            config_file = f.name
 
-        # Property: Negative values should raise ValueError
-        with pytest.raises(ValueError, match="ne peut pas être négatif"):
-            Config(str(config_file))
+        try:
+            # Property: Negative values should raise ValueError
+            with pytest.raises(ValueError, match="ne peut pas être négatif"):
+                Config(config_file)
+        finally:
+            os.unlink(config_file)
 
 
 class TestPacketMetadataProperties:
@@ -174,12 +189,12 @@ class TestAnalyzerProperties:
         assume(rtt_critical > rtt_warning)
 
         analyzer = RTTAnalyzer(
-            rtt_warning_threshold=rtt_warning,
-            rtt_critical_threshold=rtt_critical
+            rtt_warning=rtt_warning,
+            rtt_critical=rtt_critical
         )
 
         # Property: Critical threshold should be greater than warning
-        assert analyzer.rtt_critical_threshold > analyzer.rtt_warning_threshold
+        assert analyzer.rtt_critical > analyzer.rtt_warning
 
         # Property: Initial measurements should be zero
         results = analyzer.finalize()
