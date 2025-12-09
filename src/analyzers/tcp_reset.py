@@ -145,11 +145,11 @@ class TCPResetAnalyzer:
 
             self.reset_packets.append(rst_info)
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalize analysis and return results"""
         return self.get_results()
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Generate report for hybrid mode compatibility"""
         return self.get_results()
 
@@ -182,7 +182,7 @@ class TCPResetAnalyzer:
 
         return summary
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Retourne les résultats de l'analyse"""
         if not self.reset_packets:
             return {

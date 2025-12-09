@@ -128,7 +128,7 @@ class ThroughputAnalyzer:
             flow["first_timestamp"] = timestamp
         flow["last_timestamp"] = timestamp
 
-    def _calculate_throughput(self, bytes_count: int, first_ts: float, last_ts: float) -> Dict[str, float]:
+    def _calculate_throughput(self, bytes_count: int, first_ts: float, last_ts: float) -> dict[str, float]:
         """
         Calcule le débit en différentes unités.
 
@@ -218,11 +218,11 @@ class ThroughputAnalyzer:
                 flow["first_timestamp"] = timestamp
             flow["last_timestamp"] = timestamp
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalize analysis and return results"""
         return self.get_results()
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Generate report for hybrid mode compatibility"""
         return self.get_results()
 
@@ -247,7 +247,7 @@ class ThroughputAnalyzer:
 
         return summary
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Retourne les résultats de l'analyse"""
 
         # Throughput global

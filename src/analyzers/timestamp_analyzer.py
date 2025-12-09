@@ -43,9 +43,9 @@ class TimestampAnalyzer:
             gap_threshold: Seuil de détection des gaps en secondes
         """
         self.gap_threshold = gap_threshold
-        self.gaps: List[TimestampGap] = []
+        self.gaps: list[TimestampGap] = []
         # Memory optimization: limit stored intervals using sliding window
-        self.packet_intervals: List[float] = []
+        self.packet_intervals: list[float] = []
         self._max_intervals = 100000  # Limit to prevent memory exhaustion
         self.total_packets = 0
         self.capture_duration = 0.0
@@ -53,7 +53,7 @@ class TimestampAnalyzer:
         self.last_timestamp = None
         self._packet_count = 0
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyse les timestamps des paquets
 
@@ -178,7 +178,7 @@ class TimestampAnalyzer:
 
         self._prev_time = current_time
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Met à jour total_packets avec le compteur streaming
         if self._packet_count > 0:
@@ -288,7 +288,7 @@ class TimestampAnalyzer:
             if deviation <= 0.20:
                 gap.is_abnormal = False
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse des timestamps"""
         stats = {}
 
@@ -395,7 +395,7 @@ class TimestampAnalyzer:
 
         return summary
 
-    def filter_by_latency(self, min_latency: float) -> List[Tuple[int, int, float]]:
+    def filter_by_latency(self, min_latency: float) -> list[tuple[int, int, float]]:
         """
         Filtre les gaps par latence minimale
 

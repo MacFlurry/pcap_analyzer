@@ -187,7 +187,7 @@ class IPFragmentationAnalyzer:
                 # Moyenne simple (pourrait être pondérée)
                 stats["avg_fragment_size"] = (stats["min_fragment_size"] + stats["max_fragment_size"]) / 2
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Retourne les résultats de l'analyse"""
         # Top flows avec fragmentation
         top_flows = []

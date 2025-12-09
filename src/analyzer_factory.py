@@ -23,7 +23,7 @@ from .analyzers import (
 
 class AnalyzerFactory:
     @staticmethod
-    def create_analyzers(config: Any, latency_filter: float = None) -> Tuple[Dict[str, Any], List[Any]]:
+    def create_analyzers(config: Any, latency_filter: float = None) -> tuple[dict[str, Any], list[Any]]:
         """
         Create all analyzers with configuration.
 

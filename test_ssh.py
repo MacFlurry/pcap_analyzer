@@ -3,17 +3,19 @@
 Script de test pour vérifier la connexion SSH
 """
 
-import sys
 import os
+import sys
 
 # Ajouter le répertoire src au path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
+from rich.console import Console
 
 from src.config import get_config
 from src.ssh_capture import SSHCapture
-from rich.console import Console
 
 console = Console()
+
 
 def test_ssh_connection():
     """Test de connexion SSH"""
@@ -30,7 +32,7 @@ def test_ssh_connection():
     console.print(f"  Key file: {ssh_config.get('key_file', 'N/A')}")
 
     # Expansion du tilde pour vérification
-    key_file = ssh_config.get('key_file')
+    key_file = ssh_config.get("key_file")
     if key_file:
         expanded_key = os.path.expanduser(key_file)
         console.print(f"  Key file (expansé): {expanded_key}")
@@ -41,11 +43,11 @@ def test_ssh_connection():
     try:
         # Créer l'instance SSH
         ssh = SSHCapture(
-            host=ssh_config.get('host'),
-            username=ssh_config.get('username'),
-            port=ssh_config.get('port', 22),
-            password=ssh_config.get('password'),
-            key_file=ssh_config.get('key_file')
+            host=ssh_config.get("host"),
+            username=ssh_config.get("username"),
+            port=ssh_config.get("port", 22),
+            password=ssh_config.get("password"),
+            key_file=ssh_config.get("key_file"),
         )
 
         # Tester la connexion
@@ -87,6 +89,7 @@ def test_ssh_connection():
         console.print(f"\n[bold red]✗ Erreur: {e}[/bold red]")
         return False
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     success = test_ssh_connection()
     sys.exit(0 if success else 1)

@@ -131,7 +131,7 @@
                             gap(s) temporel(s) anormal(aux) détecté(s)
                         {% endif %}
                     </h3>
-                    
+
                     <div class="info-box">
                         <p><strong>🔍 Comprendre les Gaps Temporels :</strong></p>
                         <ul>
@@ -146,7 +146,7 @@
                             <li><strong>Investigation :</strong> Notez les timestamps exacts et corrélez-les avec les logs de vos serveurs (fichiers de log, graphiques CPU/RAM) pour voir s'il y avait une activité intense ou une erreur à ce moment-là.</li>
                         </ul>
                     </div>
-                    
+
                     {% if timestamps.get('periodic_pattern_detected', false) %}
                     <div class="alert alert-info" style="margin-bottom: 15px;">
                         <strong>ℹ️ Pattern périodique détecté:</strong> {{ timestamps['gaps_detected'] - timestamps.get('non_periodic_gaps', 0) }} gaps réguliers ont été masqués.
@@ -346,7 +346,7 @@
         <div class="section danger">
             <h3>{{ syn_retransmissions.total_syn_retransmissions }} handshake(s) avec retransmissions SYN excessives</h3>
             <p><strong>Seuil de détection:</strong> {{ syn_retransmissions.threshold_seconds }}s</p>
-            
+
             {% if syn_retransmissions.delay_statistics %}
             <div class="summary-grid">
                 <div class="summary-card danger">
@@ -434,12 +434,12 @@
                             <span class="info-label">Premier SYN:</span>
                             <span class="info-value timestamp">{{ hs.first_syn_time_iso }}</span>
                         </div>
-                        
+
                         <div class="info-line">
                             <span class="info-label">Retransmissions SYN:</span>
                             <span class="info-value count">{{ hs.retransmission_count }}</span>
                         </div>
-                        
+
                         <div class="info-line">
                             <span class="info-label">Timeline des SYN:</span>
                         </div>
@@ -447,12 +447,12 @@
                             {% set first_time = hs.syn_attempts[0] if hs.syn_attempts else 0 %}
                             {% for t in hs.syn_attempts %}
                             <li>
-                                – Tentative <span class="attempt-num">#{{ loop.index }}</span>: 
+                                – Tentative <span class="attempt-num">#{{ loop.index }}</span>:
                                 <span class="time-offset">+{{ "%.3f"|format(t - first_time) }}s</span>
                             </li>
                             {% endfor %}
                         </ul>
-                        
+
                         {% if hs.synack_time_iso %}
                         <div class="info-line">
                             <span class="info-label">SYN/ACK reçu:</span>
@@ -467,7 +467,7 @@
                             <span class="error-indicator">❌ Aucune réponse SYN/ACK reçue</span>
                         </div>
                         {% endif %}
-                        
+
                         <div class="info-line">
                             <span class="info-label">Problème identifié:</span>
                             <span class="problem-badge">{{ hs.suspected_issue }}</span>
@@ -494,7 +494,7 @@
         <h2>🔴 Analyse des TCP Reset (RST)</h2>
         <div class="section danger">
             <h3>{{ tcp_reset.total_resets }} paquet(s) RST détecté(s)</h3>
-            
+
             <div class="summary-grid">
                 <div class="summary-card danger">
                     <h4>
@@ -569,7 +569,7 @@
 
                                             </div>
 
-                                            
+
 
                                             <div class="info-line">
 
@@ -587,7 +587,7 @@
 
                                             </div>
 
-                                            
+
 
                                             <div class="info-line">
 
@@ -605,35 +605,35 @@
 
                                             </ul>
 
-                                            
+
 
                                                                             <div class="filter-box">
 
-                                            
+
 
                                                                                 <span class="filter-label">🔍 Filtre tcpdump (RST uniquement):</span>
 
-                                            
+
 
                                                                                 <div class="filter-command">tcpdump -r file.pcap -tttt -nn '{% set flow_parts = flow.flow_key.split(' → ') %}{% set src_ip_port = flow_parts[0].split(':') %}{% set dst_ip_port = flow_parts[1].split(':') %}{% set tcpdump_filter_expr = 'host ' + src_ip_port[0] + ' and port ' + src_ip_port[1] + ' and host ' + dst_ip_port[0] + ' and port ' + dst_ip_port[1] %}{{ tcpdump_filter_expr }} and tcp[tcpflags] & tcp-rst != 0'</div>
 
-                                            
+
 
                                                                             </div>
 
-            
+
 
                                                                             <div class="filter-box">
 
-            
+
 
                                                                                 <span class="filter-label">🔍 Filtre Wireshark (flux complet):</span>
 
-            
+
 
                                                                                 <div class="filter-command">ip.addr == {{ src_ip_port[0] }} && tcp.port == {{ src_ip_port[1] }} && ip.addr == {{ dst_ip_port[0] }} && tcp.port == {{ dst_ip_port[1] }}</div>
 
-            
+
 
                                                                             </div>
 
@@ -669,7 +669,7 @@
         </h2>
         <div class="section warning">
             <h3>{{ ip_fragmentation.total_fragments }} fragment(s) IP détecté(s)</h3>
-            
+
             <div class="summary-grid">
                 <div class="summary-card info">
                     <h4>Groupes de fragments</h4>
@@ -743,17 +743,17 @@
                     <span class="info-label">Flux:</span>
                     <span class="info-value"><code>{{ frag.flow_key }}</code></span>
                 </div>
-                
+
                 <div class="info-line">
                     <span class="info-label">ID Datagramme:</span>
                     <span class="info-value count">{{ frag.ip_id }}</span>
                 </div>
-                
+
                 <div class="info-line">
                     <span class="info-label">Fragments reçus:</span>
                     <span class="info-value count">{{ frag.fragments_received }}</span>
                 </div>
-                
+
                 {% if frag.total_length %}
                 <div class="info-line">
                     <span class="info-label">Longueur totale attendue:</span>
@@ -764,12 +764,12 @@
                     <span class="error-indicator">⚠️ Longueur totale inconnue (dernier fragment non reçu)</span>
                 </div>
                 {% endif %}
-                
+
                 <div class="info-line">
                     <span class="info-label">Âge du fragment:</span>
                     <span class="info-value">{{ "%.1f"|format(frag.age) }}s</span>
                 </div>
-                
+
                 <div class="filter-box">
                     <span class="filter-label">🔍 Filtre tcpdump (fragments):</span>
                     <div class="filter-command">tcpdump -r file.pcap -tttt -nn 'ip[6:2] & 0x1fff != 0 and host {{ frag.src_ip }} and host {{ frag.dst_ip }}'</div>
@@ -983,7 +983,7 @@
         {% if top_talkers.top_ips %}
         <h2>📊 Top Talkers - Analyse du volume</h2>
         <div class="section info">
-            
+
             <div class="info-box">
                 <p><strong>🔍 Comprendre les Top Talkers :</strong></p>
                 <ul>
@@ -1083,7 +1083,7 @@
         {% if throughput.global_throughput %}
         <h2>📈 Analyse du débit (Throughput)</h2>
         <div class="section info">
-            
+
             <div class="info-box">
                 <p><strong>🔍 Comprendre le Débit (Throughput) :</strong></p>
                 <ul>
@@ -1187,7 +1187,7 @@
         {% if tcp_timeout and tcp_timeout.total_connections > 0 %}
         <h2>⏱️ Analyse des Timeouts TCP</h2>
         <div class="section {% if tcp_timeout.problematic_count > 10 %}danger{% elif tcp_timeout.problematic_count > 0 %}warning{% else %}success{% endif %}">
-            
+
             <div class="info-box">
                 <p><strong>🔍 Comprendre les Timeouts TCP :</strong></p>
                 <ul>
@@ -1344,7 +1344,7 @@
         {% if asymmetric_traffic and asymmetric_traffic.summary.total_flows > 0 %}
         <h2>⚖️ Analyse du Trafic Asymétrique</h2>
         <div class="section {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
-            
+
             <div class="info-box">
                 <p><strong>🔍 Comprendre le Trafic Asymétrique :</strong></p>
                 <ul>
@@ -1507,7 +1507,7 @@
         {% if burst and burst.summary.total_intervals > 0 %}
         <h2>💥 Analyse des Bursts de Paquets</h2>
         <div class="section {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
-            
+
             <div class="info-box">
                 <p><strong>🔍 Comprendre les Bursts :</strong></p>
                 <ul>
@@ -1694,7 +1694,7 @@
         {% if temporal and temporal.summary.total_slots > 0 %}
         <h2>📅 Analyse des Patterns Temporels</h2>
         <div class="section">
-            
+
             <div class="info-box">
                 <p><strong>🔍 Comprendre les Patterns Temporels :</strong></p>
                 <ul>
@@ -1912,7 +1912,7 @@
         <div class="section">
             <h2><span class="icon">🔄</span> SACK/D-SACK Analysis</h2>
             <p>Analyse des accusés de réception sélectifs (Selective Acknowledgment)</p>
-            
+
             <!-- Cartes de résumé -->
             <div class="summary-cards">
                 <div class="summary-card {% if sack.summary.sack_usage_percentage < 10 %}warning{% elif sack.summary.sack_usage_percentage == 0 %}info{% else %}success{% endif %}">
@@ -2198,7 +2198,7 @@
                             {% endif %}
 
                             {% if tcp_timeout and tcp_timeout.total_connections > 0 %}
-                            <li><strong>Connexions TCP :</strong> {{ tcp_timeout.total_connections }} connexions analysées, 
+                            <li><strong>Connexions TCP :</strong> {{ tcp_timeout.total_connections }} connexions analysées,
                                 {% if tcp_timeout.problematic_count == 0 %}aucune n'est problématique.{% else %}{{ tcp_timeout.problematic_count }} présentent des anomalies (timeouts, fermetures brutales).{% endif %}</li>
                             {% endif %}
 
@@ -2212,7 +2212,7 @@
                                         {% if flow.dst_ip.startswith('224.') or flow.dst_ip.startswith('239.') %}{% set multicast_found = true %}{% endif %}
                                     {% endif %}
                                 {% endfor %}
-                                
+
                                 {% if mdns_found or multicast_found %}
                                     <br>🔍 <em>Analyse :</em> Ce trafic correspond principalement à des protocoles de découverte réseau (<strong>{% if mdns_found %}mDNS{% endif %}{% if mdns_found and multicast_found %}/{% endif %}{% if multicast_found %}Multicast{% endif %}</strong>). C'est un comportement <strong>normal</strong> où les émetteurs envoient des annonces sans attendre de réponse directe dans le même flux. Ce n'est pas une anomalie.
                                 {% else %}
@@ -2224,7 +2224,7 @@
                             {% if dns and dns.error_transactions > 0 %}
                             <li><strong>Erreurs DNS :</strong> {{ dns.error_transactions }} résolutions ont échoué.
                                 {% if dns.top_problematic_domains %}
-                                <br>Domaines introuvables (NXDOMAIN) fréquents : <code>{{ dns.top_problematic_domains[0].domain }}</code>. 
+                                <br>Domaines introuvables (NXDOMAIN) fréquents : <code>{{ dns.top_problematic_domains[0].domain }}</code>.
                                 Cela peut être dû à des blocages (Private Relay, AdBlock) ou des domaines inexistants.
                                 {% endif %}
                             </li>

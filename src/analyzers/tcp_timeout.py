@@ -71,7 +71,7 @@ class TCPTimeoutAnalyzer:
         self.zombie_threshold = zombie_threshold
 
         # Suivi des connexions par clé normalisée
-        self.connections: Dict[str, TCPConnectionState] = {}
+        self.connections: dict[str, TCPConnectionState] = {}
 
         # Timestamp global
         self.first_packet_time: Optional[float] = None
@@ -247,7 +247,7 @@ class TCPTimeoutAnalyzer:
             conn.rst_seen = True
             self.total_rst_packets += 1  # Comptage global pour cohérence
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et classifie les connexions"""
         # Classifie toutes les connexions
         for flow_key, conn in self.connections.items():
@@ -304,7 +304,7 @@ class TCPTimeoutAnalyzer:
         # Cas par défaut
         conn.state = "unknown"
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Génère les résultats d'analyse"""
         # Catégoriser les connexions
         categories = {
@@ -368,7 +368,7 @@ class TCPTimeoutAnalyzer:
             },
         }
 
-    def _format_connections(self, connections: List[TCPConnectionState]) -> List[Dict[str, Any]]:
+    def _format_connections(self, connections: list[TCPConnectionState]) -> list[dict[str, Any]]:
         """Formate les connexions pour le rapport"""
         result = []
         for conn in connections:

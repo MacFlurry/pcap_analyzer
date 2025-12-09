@@ -143,18 +143,18 @@ class RTTAnalyzer:
         self.rtt_critical = rtt_critical
         self.latency_filter = latency_filter
 
-        self.measurements: List[RTTMeasurement] = []
-        self.flow_stats: Dict[str, FlowRTTStats] = {}
+        self.measurements: list[RTTMeasurement] = []
+        self.flow_stats: dict[str, FlowRTTStats] = {}
 
         # Tracking interne : {flow_key: {seq: (packet_num, timestamp, payload_len)}}
-        self._unacked_segments: Dict[str, Dict[int, Tuple[int, float, int]]] = defaultdict(dict)
+        self._unacked_segments: dict[str, dict[int, tuple[int, float, int]]] = defaultdict(dict)
 
         # Memory optimization: periodic cleanup
         self._packet_counter = 0
         self._cleanup_interval = 5000
         self._segment_timeout = 60.0  # Remove segments unacked for 60s
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyse le RTT des flux TCP
 
@@ -299,7 +299,7 @@ class RTTAnalyzer:
                     # Supprime le segment ACKé
                     del self._unacked_segments[reverse_flow][seq]
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Cleanup unacked segments older than 60s to prevent memory leaks
         self._cleanup_stale_segments()
@@ -386,7 +386,7 @@ class RTTAnalyzer:
 
     def _calculate_flow_statistics(self) -> None:
         """Calcule les statistiques RTT par flux"""
-        flow_measurements: Dict[str, List[float]] = defaultdict(list)
+        flow_measurements: dict[str, list[float]] = defaultdict(list)
 
         # Regroupe les mesures par flux
         for measurement in self.measurements:
@@ -437,7 +437,7 @@ class RTTAnalyzer:
                 print(f"Warning: Skipping malformed flow key '{flow_key}': {e}")
                 continue
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse RTT"""
         all_rtts = [m.rtt for m in self.measurements]
 
@@ -504,7 +504,7 @@ class RTTAnalyzer:
 
         return summary
 
-    def get_rtt_time_series(self, flow_key: Optional[str] = None) -> List[Tuple[float, float]]:
+    def get_rtt_time_series(self, flow_key: Optional[str] = None) -> list[tuple[float, float]]:
         """
         Retourne la série temporelle des RTT
 

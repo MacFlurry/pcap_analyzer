@@ -138,11 +138,11 @@ class TopTalkersAnalyzer:
         if dst_port:
             conv["dst_port"] = dst_port
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalize analysis and return results"""
         return self.get_results()
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Generate report for hybrid mode compatibility"""
         return self.get_results()
 
@@ -175,7 +175,7 @@ class TopTalkersAnalyzer:
 
         return summary
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Retourne les résultats de l'analyse"""
 
         # Top IPs by total volume (sent + received)

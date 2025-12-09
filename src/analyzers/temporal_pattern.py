@@ -82,10 +82,10 @@ class TemporalPatternAnalyzer:
         self.periodicity_tolerance = periodicity_tolerance
 
         # Stockage par créneau
-        self.time_slots: Dict[int, TimeSlot] = {}
+        self.time_slots: dict[int, TimeSlot] = {}
 
         # Pour détection de périodicité par source
-        self.packet_times_by_source: Dict[str, List[float]] = defaultdict(list)
+        self.packet_times_by_source: dict[str, list[float]] = defaultdict(list)
 
         # Stats globales
         self.total_packets = 0
@@ -226,7 +226,7 @@ class TemporalPatternAnalyzer:
         """Finalise l'analyse."""
         pass
 
-    def _detect_periodicity(self, timestamps: List[float], min_occurrences: int = 5) -> List[PeriodicPattern]:
+    def _detect_periodicity(self, timestamps: list[float], min_occurrences: int = 5) -> list[PeriodicPattern]:
         """
         Détecte des patterns périodiques dans une liste de timestamps.
         """
@@ -245,7 +245,7 @@ class TemporalPatternAnalyzer:
             return []
 
         # Grouper les intervalles similaires
-        interval_groups: Dict[float, int] = defaultdict(int)
+        interval_groups: dict[float, int] = defaultdict(int)
 
         for interval in intervals:
             # Arrondir à la seconde près pour grouper
@@ -293,9 +293,9 @@ class TemporalPatternAnalyzer:
             minutes = seconds / 60
             return f"{minutes:.1f} minutes"
 
-    def _get_hourly_distribution(self) -> Dict[int, Dict[str, Any]]:
+    def _get_hourly_distribution(self) -> dict[int, dict[str, Any]]:
         """Calcule la distribution par heure de la journée."""
-        hourly: Dict[int, Dict[str, int]] = defaultdict(lambda: {"packets": 0, "bytes": 0, "slots": 0})
+        hourly: dict[int, dict[str, int]] = defaultdict(lambda: {"packets": 0, "bytes": 0, "slots": 0})
 
         for slot_key, slot in self.time_slots.items():
             dt = datetime.fromtimestamp(slot.timestamp)
@@ -306,7 +306,7 @@ class TemporalPatternAnalyzer:
 
         return dict(hourly)
 
-    def _find_peaks_and_valleys(self) -> Tuple[List[Dict], List[Dict]]:
+    def _find_peaks_and_valleys(self) -> tuple[list[dict], list[dict]]:
         """Trouve les pics et creux de trafic."""
         if not self.time_slots:
             return [], []
@@ -350,7 +350,7 @@ class TemporalPatternAnalyzer:
 
         return peaks[:20], valleys[:10]
 
-    def _detect_global_periodicity(self) -> List[Dict[str, Any]]:
+    def _detect_global_periodicity(self) -> list[dict[str, Any]]:
         """Détecte les patterns périodiques globaux."""
         all_patterns = []
 
@@ -379,11 +379,11 @@ class TemporalPatternAnalyzer:
         all_patterns.sort(key=lambda x: x["occurrences"], reverse=True)
         return all_patterns[:15]
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Generate report for hybrid mode compatibility."""
         return self.get_results()
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Retourne les résultats complets de l'analyse."""
         if self.first_packet_time is None or self.last_packet_time is None:
             capture_duration = 0

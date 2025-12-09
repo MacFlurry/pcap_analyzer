@@ -53,8 +53,8 @@ class ReportGenerator:
         self.env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
 
     def generate_report(
-        self, analysis_results: Dict[str, Any], pcap_file: str, output_name: Optional[str] = None
-    ) -> Dict[str, str]:
+        self, analysis_results: dict[str, Any], pcap_file: str, output_name: Optional[str] = None
+    ) -> dict[str, str]:
         """
         Génère les rapports JSON et HTML
 
@@ -105,17 +105,17 @@ class ReportGenerator:
 
         return {"json": str(json_path), "html": str(html_path)}
 
-    def _generate_json(self, data: Dict[str, Any], output_path: Path) -> None:
+    def _generate_json(self, data: dict[str, Any], output_path: Path) -> None:
         """Génère le rapport JSON"""
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-    def _generate_html(self, data: Dict[str, Any], output_path: Path) -> None:
+    def _generate_html(self, data: dict[str, Any], output_path: Path) -> None:
         """Génère le rapport HTML"""
         # Load CSS file for embedding (self-contained HTML reports)
         css_path = Path(__file__).parent.parent / "templates" / "static" / "css" / "report.css"
         try:
-            with open(css_path, "r", encoding="utf-8") as f:
+            with open(css_path, encoding="utf-8") as f:
                 embedded_css = f.read()
         except FileNotFoundError:
             # Fallback: use minimal CSS if file not found

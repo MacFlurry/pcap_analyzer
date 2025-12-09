@@ -294,7 +294,7 @@ class SSHCapture:
             self.client.close()
             console.print("[cyan]Connexion SSH fermée[/cyan]")
 
-    def execute_command(self, command: str, sudo: bool = False, timeout: int = 30) -> Tuple[str, str, int]:
+    def execute_command(self, command: str, sudo: bool = False, timeout: int = 30) -> tuple[str, str, int]:
         """
         Exécute une commande sur le serveur distant
 
@@ -523,7 +523,7 @@ class SSHCapture:
 
 
 def capture_from_config(
-    config: Dict[str, Any], local_path: str, duration: int = 60, filter_override: str = None
+    config: dict[str, Any], local_path: str, duration: int = 60, filter_override: str = None
 ) -> str:
     """
     Effectue une capture en utilisant la configuration fournie

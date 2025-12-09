@@ -5,9 +5,11 @@ These tests verify that the rate limiter correctly prevents brute force attacks
 while allowing legitimate connection attempts.
 """
 
-import pytest
 import time
-from src.ssh_capture import SSHCaptureRateLimiter, SSHCaptureError
+
+import pytest
+
+from src.ssh_capture import SSHCaptureError, SSHCaptureRateLimiter
 
 
 class TestSSHCaptureRateLimiter:
@@ -128,5 +130,5 @@ class TestSSHCaptureRateLimiter:
             limiter.check_and_record()
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

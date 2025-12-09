@@ -8,20 +8,17 @@ Note: These tests require tcpdump to be available without requiring root permiss
 On macOS, you may need to run: sudo chmod +s /usr/sbin/tcpdump
 """
 
-import pytest
 import subprocess
+
+import pytest
+
 from src.ssh_capture import validate_bpf_filter
 
 
 def check_tcpdump_available():
     """Check if tcpdump is available and can compile filters."""
     try:
-        result = subprocess.run(
-            ['tcpdump', '-ddd', 'tcp port 80'],
-            capture_output=True,
-            timeout=2,
-            check=False
-        )
+        result = subprocess.run(["tcpdump", "-ddd", "tcp port 80"], capture_output=True, timeout=2, check=False)
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
@@ -29,8 +26,7 @@ def check_tcpdump_available():
 
 # Skip all tests if tcpdump is not available with proper permissions
 pytestmark = pytest.mark.skipif(
-    not check_tcpdump_available(),
-    reason="tcpdump not available or requires root permissions"
+    not check_tcpdump_available(), reason="tcpdump not available or requires root permissions"
 )
 
 
@@ -107,5 +103,5 @@ class TestBPFValidation:
             assert isinstance(result, bool)
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

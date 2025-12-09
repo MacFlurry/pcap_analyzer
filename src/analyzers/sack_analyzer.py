@@ -38,7 +38,7 @@ class SackEvent:
     dst_ip: str
     src_port: int
     dst_port: int
-    sack_blocks: List[SackBlock]
+    sack_blocks: list[SackBlock]
     is_dsack: bool = False
     dsack_sequence: Optional[int] = None
     total_sacked_bytes: int = 0
@@ -60,7 +60,7 @@ class FlowSackStats:
     sack_events: int = 0
     dsack_events: int = 0
     total_sacked_bytes: int = 0
-    unique_sack_blocks: Set[Tuple[int, int]] = field(default_factory=set)
+    unique_sack_blocks: set[tuple[int, int]] = field(default_factory=set)
     first_sack_time: Optional[float] = None
     last_sack_time: Optional[float] = None
 
@@ -84,10 +84,10 @@ class SackAnalyzer:
     def __init__(self):
         """Initialise l'analyseur."""
         # Stockage par flux
-        self.flows: Dict[str, FlowSackStats] = {}
+        self.flows: dict[str, FlowSackStats] = {}
 
         # Événements SACK
-        self.sack_events: List[SackEvent] = []
+        self.sack_events: list[SackEvent] = []
 
         # Stats globales
         self.total_packets = 0
@@ -96,7 +96,7 @@ class SackAnalyzer:
         self.dsack_packets = 0
 
         # Suivi des séquences pour détecter D-SACK
-        self.flow_sequences: Dict[str, Set[int]] = defaultdict(set)
+        self.flow_sequences: dict[str, set[int]] = defaultdict(set)
 
     def _get_flow_key(self, src_ip: str, dst_ip: str, src_port: int, dst_port: int) -> str:
         """Génère une clé de flux normalisée (bidirectionnelle)."""
@@ -105,7 +105,7 @@ class SackAnalyzer:
         else:
             return f"{dst_ip}:{dst_port}-{src_ip}:{src_port}"
 
-    def _parse_sack_option(self, tcp_packet: TCP) -> Optional[List[SackBlock]]:
+    def _parse_sack_option(self, tcp_packet: TCP) -> Optional[list[SackBlock]]:
         """
         Parse l'option SACK TCP (option 5).
 
@@ -143,7 +143,7 @@ class SackAnalyzer:
 
         return sack_blocks if sack_blocks else None
 
-    def _is_dsack(self, sack_blocks: List[SackBlock], ack_num: int) -> Tuple[bool, Optional[int]]:
+    def _is_dsack(self, sack_blocks: list[SackBlock], ack_num: int) -> tuple[bool, Optional[int]]:
         """
         Détecte si c'est un D-SACK (Duplicate SACK).
 
@@ -252,17 +252,17 @@ class SackAnalyzer:
         """Finalise l'analyse."""
         pass
 
-    def get_top_sack_flows(self, limit: int = 20) -> List[FlowSackStats]:
+    def get_top_sack_flows(self, limit: int = 20) -> list[FlowSackStats]:
         """Retourne les flux avec le plus d'événements SACK."""
         flows = list(self.flows.values())
         flows.sort(key=lambda f: f.sack_events, reverse=True)
         return flows[:limit]
 
-    def get_dsack_flows(self) -> List[FlowSackStats]:
+    def get_dsack_flows(self) -> list[FlowSackStats]:
         """Retourne les flux avec des D-SACK (problématiques)."""
         return [f for f in self.flows.values() if f.dsack_events > 0]
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Retourne les résultats complets de l'analyse."""
         # Stats globales
         sack_usage_pct = (self.sack_packets / self.tcp_packets * 100) if self.tcp_packets > 0 else 0

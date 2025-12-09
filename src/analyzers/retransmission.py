@@ -166,32 +166,32 @@ class RetransmissionAnalyzer:
         self.rto_threshold = rto_threshold_ms / 1000.0  # Convert to seconds
         self.fast_retrans_delay_max = fast_retrans_delay_max_ms / 1000.0  # Convert to seconds
 
-        self.retransmissions: List[TCPRetransmission] = []
-        self.anomalies: List[TCPAnomaly] = []
-        self.flow_stats: Dict[str, FlowStats] = {}
+        self.retransmissions: list[TCPRetransmission] = []
+        self.anomalies: list[TCPAnomaly] = []
+        self.flow_stats: dict[str, FlowStats] = {}
 
         # Tracking interne
         # Changement: on stocke maintenant une liste de (packet_num, timestamp) pour chaque (seq, len)
         # pour détecter les retransmissions multiples du même segment
-        self._seen_segments: Dict[str, Dict[Tuple[int, int], List[Tuple[int, float]]]] = defaultdict(
+        self._seen_segments: dict[str, dict[tuple[int, int], list[tuple[int, float]]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        self._flow_counters: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self._expected_ack: Dict[str, int] = {}
-        self._expected_seq: Dict[str, int] = {}
-        self._dup_ack_count: Dict[str, int] = defaultdict(int)  # Compteur de DUP ACK par flux
-        self._last_ack: Dict[str, int] = {}  # Dernier ACK vu par flux
+        self._flow_counters: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self._expected_ack: dict[str, int] = {}
+        self._expected_seq: dict[str, int] = {}
+        self._dup_ack_count: dict[str, int] = defaultdict(int)  # Compteur de DUP ACK par flux
+        self._last_ack: dict[str, int] = {}  # Dernier ACK vu par flux
         # Tracking du plus haut seq vu par flux (méthode Wireshark)
-        self._highest_seq: Dict[str, Tuple[int, int, float]] = {}  # flow_key -> (highest_seq, packet_num, timestamp)
+        self._highest_seq: dict[str, tuple[int, int, float]] = {}  # flow_key -> (highest_seq, packet_num, timestamp)
         # Tracking du plus haut ACK vu par flux (pour Spurious Retransmission)
-        self._max_ack_seen: Dict[str, int] = defaultdict(int)
+        self._max_ack_seen: dict[str, int] = defaultdict(int)
 
         # Memory optimization: periodic cleanup
         self._packet_counter = 0
         self._cleanup_interval = 10000
         self._max_segments_per_flow = 10000
 
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
+    def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
         Analyse les retransmissions et anomalies TCP
 
@@ -464,7 +464,7 @@ class RetransmissionAnalyzer:
             self.anomalies.append(anomaly)
             self._flow_counters[flow_key]["zero_windows"] += 1
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
         # Cleanup: Clear _seen_segments to free memory
         # No longer needed after analysis is complete
@@ -795,7 +795,7 @@ class RetransmissionAnalyzer:
             unique_segments.add(key)
         return len(unique_segments)
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse"""
         total_retrans = len(self.retransmissions)
         flows_with_issues = [f for f in self.flow_stats.values() if f.severity != "none"]
