@@ -287,6 +287,161 @@ code {
     font-size: 1.2em;
 }
 
+/* Health Score Section (Executive Summary) */
+.health-score-section {
+    margin: var(--spacing-xl) 0;
+}
+
+.health-score-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    box-shadow: var(--shadow-lg);
+    color: var(--text-white);
+}
+
+.health-score-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-xl);
+    flex-wrap: wrap;
+    gap: var(--spacing-lg);
+}
+
+.score-display {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-xs);
+}
+
+.score-value {
+    font-size: 5em;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.score-max {
+    font-size: 2em;
+    opacity: 0.8;
+}
+
+.severity-badge {
+    font-size: 3em;
+    margin-left: var(--spacing-sm);
+}
+
+.score-metadata {
+    text-align: right;
+}
+
+.severity-label,
+.qos-label {
+    font-size: 1.2em;
+    margin: var(--spacing-xs) 0;
+}
+
+.recommendations-box {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    margin: var(--spacing-lg) 0;
+}
+
+.recommendations-box h3 {
+    color: var(--text-white);
+    margin-bottom: var(--spacing-md);
+    font-size: 1.3em;
+}
+
+.recommendations-list {
+    margin-left: var(--spacing-lg);
+}
+
+.recommendations-list li {
+    margin: var(--spacing-sm) 0;
+    line-height: 1.6;
+}
+
+.metrics-breakdown {
+    background: var(--bg-container);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    margin-top: var(--spacing-lg);
+    color: var(--text-primary);
+}
+
+.metrics-breakdown h3 {
+    color: var(--color-secondary);
+    margin-bottom: var(--spacing-md);
+    font-size: 1.3em;
+}
+
+.metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--spacing-md);
+}
+
+.metrics-table thead {
+    background: var(--bg-section);
+}
+
+.metrics-table th {
+    padding: var(--spacing-sm);
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-light);
+}
+
+.metrics-table td {
+    padding: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.metrics-table tbody tr:hover {
+    background: var(--bg-section);
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 0.85em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.status-excellent {
+    background: #27ae60;
+    color: white;
+}
+
+.status-badge.status-good {
+    background: #2ecc71;
+    color: white;
+}
+
+.status-badge.status-acceptable {
+    background: #f39c12;
+    color: white;
+}
+
+.status-badge.status-poor {
+    background: #e67e22;
+    color: white;
+}
+
+.status-badge.status-critical {
+    background: #e74c3c;
+    color: white;
+}
+
+.status-badge.status-emergency {
+    background: #c0392b;
+    color: white;
+}
+
 /* Interpretation Details */
 .interpretation-details {
     margin-top: var(--spacing-lg);
@@ -822,6 +977,28 @@ tr:hover {
         border-left-color: #64b5f6;
         color: #e0e0e0;
     }
+
+    /* Health Score dark mode */
+    body:not(.light-theme):not(.dark-theme) .metrics-breakdown {
+        background: var(--bg-section);
+        color: var(--text-primary);
+    }
+
+    body:not(.light-theme):not(.dark-theme) .metrics-breakdown h3 {
+        color: #90caf9;
+    }
+
+    body:not(.light-theme):not(.dark-theme) .metrics-table thead {
+        background: #1e1e1e;
+    }
+
+    body:not(.light-theme):not(.dark-theme) .metrics-table th {
+        color: var(--text-primary);
+    }
+
+    body:not(.light-theme):not(.dark-theme) .metrics-table td {
+        color: var(--text-primary);
+    }
 }
 
 /* Manual dark mode via class */
@@ -1004,6 +1181,28 @@ body.dark-theme .badge.success {
 
 body.dark-theme .badge.danger {
     background: #ef5350;
+}
+
+/* Health Score dark mode */
+body.dark-theme .metrics-breakdown {
+    background: var(--bg-section);
+    color: var(--text-primary);
+}
+
+body.dark-theme .metrics-breakdown h3 {
+    color: #90caf9;
+}
+
+body.dark-theme .metrics-table thead {
+    background: #1e1e1e;
+}
+
+body.dark-theme .metrics-table th {
+    color: var(--text-primary);
+}
+
+body.dark-theme .metrics-table td {
+    color: var(--text-primary);
 }
 
 /* Table headers with better separation in dark mode */

@@ -64,6 +64,75 @@
             </div>
         </header>
 
+        <!-- Executive Summary: Health Score (RFC 2330 & ITU-T Y.1541 compliant) -->
+        {% if health_score and health_score.overall_score is defined %}
+        <section class="health-score-section">
+            <h2>🏥 Executive Summary: Network Health Score</h2>
+            <div class="health-score-card">
+                <div class="health-score-header">
+                    <div class="score-display">
+                        <span class="score-value">{{ "%.1f"|format(health_score.overall_score) }}</span>
+                        <span class="score-max">/100</span>
+                        <span class="severity-badge">{{ health_score.severity_badge }}</span>
+                    </div>
+                    <div class="score-metadata">
+                        <div class="severity-label">
+                            Severity: <strong>{{ health_score.severity|upper }}</strong>
+                        </div>
+                        <div class="qos-label">
+                            QoS Class: <strong>{{ health_score.qos_class }}</strong> (ITU-T Y.1541)
+                        </div>
+                    </div>
+                </div>
+
+                {% if health_score.recommendations %}
+                <div class="recommendations-box">
+                    <h3>📋 Top Recommendations</h3>
+                    <ol class="recommendations-list">
+                        {% for rec in health_score.recommendations[:3] %}
+                        <li>{{ rec }}</li>
+                        {% endfor %}
+                    </ol>
+                </div>
+                {% endif %}
+
+                {% if health_score.metric_scores %}
+                <div class="metrics-breakdown">
+                    <h3>Metric Breakdown</h3>
+                    <table class="metrics-table">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Value</th>
+                                <th>Status</th>
+                                <th>Penalty</th>
+                                <th>Weight</th>
+                                <th>RFC Reference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for metric in health_score.metric_scores %}
+                            <tr class="metric-row metric-{{ metric.threshold_status }}">
+                                <td>{{ metric.metric_name }}</td>
+                                <td>{{ "%.2f"|format(metric.raw_value) }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ metric.threshold_status }}">
+                                        {{ metric.threshold_status }}
+                                    </span>
+                                </td>
+                                <td>{{ "%.1f"|format(metric.penalty) }}</td>
+                                <td>{{ "%.0f"|format(metric.weight * 100) }}%</td>
+                                <td><code>{{ metric.rfc_reference }}</code></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+        {% endif %}
+
         <!-- Vue d'ensemble -->
         <h2>Vue d'ensemble</h2>
         <div class="summary-grid">
@@ -1341,9 +1410,9 @@
         {% endif %}
 
         <!-- Trafic Asymétrique -->
-        {% if asymmetric_traffic and asymmetric_traffic.summary.total_flows > 0 %}
+        {% if asymmetric_traffic and asymmetric_traffic.get('summary', {}).get('total_flows', 0) > 0 %}
         <h2>⚖️ Analyse du Trafic Asymétrique</h2>
-        <div class="section {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
+        <div class="section {% if asymmetric_traffic.get('summary', {}).get('asymmetric_flows', 0) > 50 %}danger{% elif asymmetric_traffic.get('summary', {}).get('asymmetric_flows', 0) > 10 %}warning{% else %}success{% endif %}">
 
             <div class="info-box">
                 <p><strong>🔍 Comprendre le Trafic Asymétrique :</strong></p>

@@ -155,6 +155,7 @@ class ReportGenerator:
         html_content = template.render(
             embedded_css=embedded_css,
             analysis_info=data.get("analysis_info", {}),
+            health_score=data.get("health_score", {}),
             timestamps=data.get("timestamps", {}),
             tcp_handshake=data.get("tcp_handshake", {}),
             retransmission=retrans_data,

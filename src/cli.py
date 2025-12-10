@@ -21,10 +21,17 @@ from scapy.layers.inet6 import IPv6
 from scapy.layers.l2 import Ether
 
 from .analyzer_factory import AnalyzerFactory
+from .analyzers.health_score import HealthScoreCalculator
+from .analyzers.jitter_analyzer import JitterAnalyzer
+from .analyzers.protocol_distribution import ProtocolDistributionAnalyzer
+from .analyzers.service_classifier import ServiceClassifier
 from .config import Config, get_config
+from .exporters.csv_export import CSVExporter
+from .exporters.html_report import HTMLReportGenerator
 from .parsers.fast_parser import FastPacketParser
 from .report_generator import ReportGenerator
 from .ssh_capture import capture_from_config
+from .utils.result_sanitizer import get_empty_analyzer_result, sanitize_results
 
 console = Console()
 
@@ -54,6 +61,73 @@ def _generate_reports(results: dict[str, Any], pcap_file: str, output: Optional[
     console.print(f"[green]✓ Rapport HTML: {report_files['html']}[/green]")
 
     return report_files
+
+
+def _handle_exports(
+    results: dict[str, Any],
+    pcap_file: str,
+    export_html: Optional[str],
+    export_csv: Optional[str],
+    export_dir: Optional[str],
+) -> None:
+    """
+    Handle Sprint 4 export formats (HTML report and CSV export).
+
+    Args:
+        results: Analysis results dictionary
+        pcap_file: Path to the PCAP file analyzed
+        export_html: Optional path for HTML report export
+        export_csv: Optional directory for CSV export
+        export_dir: Optional directory for all exports
+    """
+    if not (export_html or export_csv or export_dir):
+        return
+
+    console.print("\n[cyan]📤 Exporting analysis results...[/cyan]")
+
+    # Add metadata if not present
+    if "metadata" not in results:
+        results["metadata"] = {}
+    results["metadata"]["pcap_file"] = Path(pcap_file).name
+
+    # Extract total packets from protocol_distribution if available
+    if "protocol_distribution" in results:
+        results["metadata"]["total_packets"] = results["protocol_distribution"].get("total_packets", 0)
+
+    # Extract capture duration from timestamps if available
+    if "timestamps" in results:
+        results["metadata"]["capture_duration"] = results["timestamps"].get("capture_duration", 0)
+
+    # Export to directory (all formats)
+    if export_dir:
+        import os
+
+        os.makedirs(export_dir, exist_ok=True)
+
+        # Export HTML
+        html_path = os.path.join(export_dir, "report.html")
+        html_gen = HTMLReportGenerator()
+        html_gen.save(results, html_path)
+        console.print(f"[green]✓ HTML Report: {html_path}[/green]")
+
+        # Export CSV
+        csv_dir = os.path.join(export_dir, "csv")
+        csv_exporter = CSVExporter()
+        csv_exporter.export_all(results, csv_dir)
+        console.print(f"[green]✓ CSV Files: {csv_dir}/[/green]")
+
+    else:
+        # Export HTML to specific path
+        if export_html:
+            html_gen = HTMLReportGenerator()
+            html_gen.save(results, export_html)
+            console.print(f"[green]✓ HTML Report: {export_html}[/green]")
+
+        # Export CSV to directory
+        if export_csv:
+            csv_exporter = CSVExporter()
+            csv_exporter.export_all(results, export_csv)
+            console.print(f"[green]✓ CSV Files: {export_csv}/[/green]")
 
 
 # Performance optimization: Configure Scapy to only dissect necessary layers
@@ -154,6 +228,14 @@ def analyze_pcap_hybrid(
     dns_analyzer = analyzer_dict["dns"]
     icmp_analyzer = analyzer_dict["icmp"]
 
+    # Sprint 2 & 3: New analyzers for protocol, jitter, and service classification
+    protocol_analyzer = ProtocolDistributionAnalyzer()
+    jitter_analyzer = JitterAnalyzer()
+    service_classifier = ServiceClassifier()
+
+    # Collect packets for batch analysis
+    scapy_packets = []
+
     complex_packet_count = 0
     with Progress(
         SpinnerColumn(),
@@ -166,6 +248,9 @@ def analyze_pcap_hybrid(
 
         with PcapReader(pcap_file) as reader:
             for i, packet in enumerate(reader):
+                # Collect all packets for protocol/jitter analysis
+                scapy_packets.append(packet)
+
                 # Only process packets that need deep inspection
                 if packet.haslayer(DNS):
                     dns_analyzer.process_packet(packet, i)
@@ -176,6 +261,16 @@ def analyze_pcap_hybrid(
 
                 if i % PROGRESS_UPDATE_INTERVAL == 0:
                     progress.update(task, completed=i)
+
+    # Analyze protocol distribution and jitter
+    console.print("[cyan]Analyzing protocol distribution...[/cyan]")
+    protocol_results = protocol_analyzer.analyze(scapy_packets)
+
+    console.print("[cyan]Analyzing jitter (RFC 3393 IPDV)...[/cyan]")
+    jitter_results = jitter_analyzer.analyze(scapy_packets)
+
+    console.print("[cyan]Classifying traffic patterns (ML-like heuristics)...[/cyan]")
+    service_results = service_classifier.analyze(scapy_packets)
 
     console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
 
@@ -205,14 +300,64 @@ def analyze_pcap_hybrid(
     results["dns"] = dns_analyzer._generate_report()
     results["icmp"] = icmp_analyzer._generate_report()
 
-    # Add empty results for other analyzers (they'll be implemented next)
+    # Sprint 2 & 3: New analyzer results
+    results["protocol_distribution"] = protocol_results
+    results["jitter"] = jitter_results
+    results["service_classification"] = service_results
+
+    # Add empty results for unimplemented analyzers with proper structure
     for key in ["ip_fragmentation", "asymmetric_traffic", "sack"]:
         if key not in results:
-            results[key] = {}
+            results[key] = get_empty_analyzer_result(key)
+
+    # Sanitize all results to replace null values with sensible defaults
+    results = sanitize_results(results)
+
+    # Calculate Health Score (RFC-compliant overall assessment)
+    console.print("\n[cyan]Calcul du Health Score...[/cyan]")
+    health_calculator = HealthScoreCalculator()
+    health_result = health_calculator.calculate(results)
+    results["health_score"] = {
+        "overall_score": health_result.overall_score,
+        "qos_class": health_result.qos_class,
+        "severity": health_result.severity,
+        "severity_badge": health_result.severity_badge,
+        "metric_scores": [
+            {
+                "metric_name": m.metric_name,
+                "raw_value": m.raw_value,
+                "penalty": m.penalty,
+                "weight": m.weight,
+                "weighted_penalty": m.weighted_penalty,
+                "threshold_status": m.threshold_status,
+                "rfc_reference": m.rfc_reference,
+            }
+            for m in health_result.metric_scores
+        ],
+        "total_penalty": health_result.total_penalty,
+        "recommendations": health_result.recommendations,
+    }
 
     # Display summaries
     console.print("\n")
     console.print(Panel.fit("📊 Résultats de l'analyse (Hybrid Mode)", style="bold blue"))
+
+    # Display Health Score first (Executive Summary)
+    console.print("\n")
+    console.print(
+        Panel.fit(
+            f"🏥 Health Score: {health_result.overall_score:.1f}/100 {health_result.severity_badge}", style="bold cyan"
+        )
+    )
+    console.print(f"[bold]Severity:[/bold] {health_result.severity.upper()}")
+    console.print(f"[bold]QoS Class:[/bold] {health_result.qos_class} (ITU-T Y.1541)")
+
+    if health_result.recommendations:
+        console.print("\n[bold yellow]📋 Top Recommendations:[/bold yellow]")
+        for i, rec in enumerate(health_result.recommendations[:3], 1):
+            console.print(f"  {i}. {rec}")
+
+    console.print("")  # Separator
     console.print("\n" + timestamp_analyzer.get_gaps_summary())
     console.print("\n" + handshake_analyzer.get_summary())
     console.print("\n" + retrans_analyzer.get_summary())
@@ -227,6 +372,44 @@ def analyze_pcap_hybrid(
     console.print("\n" + icmp_analyzer.get_summary())
     console.print("\n" + dns_analyzer.get_summary())
     console.print("\n" + toptalkers_analyzer.get_summary())
+
+    # Sprint 2: Display protocol distribution summary
+    console.print("\n📊 Protocol Distribution:")
+    if protocol_results["total_packets"] > 0:
+        console.print(f"  Total Packets: {protocol_results['total_packets']}")
+        for proto, count in protocol_results.get("layer4_distribution", {}).items():
+            pct = protocol_results.get("layer4_percentages", {}).get(proto, 0)
+            console.print(f"  - {proto}: {count} ({pct:.1f}%)")
+        if protocol_results.get("top_tcp_ports"):
+            top_ports = protocol_results["top_tcp_ports"][:3]
+            ports_str = ", ".join(f"{p['port']} ({p['service']})" for p in top_ports)
+            console.print(f"  Top TCP Ports: {ports_str}")
+
+    # Sprint 2: Display jitter summary
+    console.print("\n📡 Jitter Analysis (RFC 3393):")
+    if jitter_results["total_flows"] > 0:
+        console.print(f"  Total Flows Analyzed: {jitter_results['total_flows']}")
+        if jitter_results.get("global_statistics"):
+            stats = jitter_results["global_statistics"]
+            console.print(f"  Mean Jitter: {stats.get('mean_jitter', 0)*1000:.2f}ms")
+            console.print(f"  Max Jitter: {stats.get('max_jitter', 0)*1000:.2f}ms")
+        if jitter_results.get("high_jitter_flows"):
+            console.print(f"  [yellow]High Jitter Flows: {len(jitter_results['high_jitter_flows'])}[/yellow]")
+
+    # Sprint 3: Display service classification summary
+    console.print("\n🧠 Intelligent Service Classification:")
+    if service_results["total_flows"] > 0:
+        summary = service_results["classification_summary"]
+        console.print(f"  Total Flows: {summary['total_flows']}")
+        console.print(f"  Classified: {summary['classified_count']} ({summary['classification_rate']:.1f}%)")
+
+        # Display service distribution
+        if service_results.get("service_classifications"):
+            console.print("  Service Distribution:")
+            for service, count in sorted(
+                service_results["service_classifications"].items(), key=lambda x: x[1], reverse=True
+            ):
+                console.print(f"    - {service}: {count} flows")
 
     return results
 
@@ -245,7 +428,12 @@ def cli():
 @click.option("--no-report", is_flag=True, help="Ne pas générer de rapports HTML/JSON")
 @click.option("--no-details", is_flag=True, help="Ne pas afficher les détails des retransmissions")
 @click.option("--details-limit", type=int, default=20, help="Nombre max de retransmissions à afficher (défaut: 20)")
-def analyze(pcap_file, latency, config, output, no_report, no_details, details_limit):
+@click.option("--export-html", type=click.Path(), help="Export HTML report to specific file")
+@click.option("--export-csv", type=click.Path(), help="Export CSV files to directory")
+@click.option("--export-dir", type=click.Path(), help="Export all formats (HTML + CSV) to directory")
+def analyze(
+    pcap_file, latency, config, output, no_report, no_details, details_limit, export_html, export_csv, export_dir
+):
     """
     Analyse un fichier PCAP local pour détecter les causes de latence
 
@@ -291,6 +479,9 @@ def analyze(pcap_file, latency, config, output, no_report, no_details, details_l
     # Génération des rapports
     if not no_report:
         _generate_reports(results, pcap_file, output, cfg)
+
+    # Sprint 4: Export formats
+    _handle_exports(results, pcap_file, export_html, export_csv, export_dir)
 
 
 @cli.command()
