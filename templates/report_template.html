@@ -1427,23 +1427,23 @@
             <div class="summary-grid">
                 <div class="summary-card info">
                     <h4>Flux analysés</h4>
-                    <div class="value">{{ asymmetric_traffic.summary.total_flows }}</div>
+                    <div class="value">{{ asymmetric_traffic.get('summary', {}).get('total_flows', 0) }}</div>
                 </div>
-                <div class="summary-card {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
+                <div class="summary-card {% if asymmetric_traffic.get('summary', {}).get('asymmetric_flows', 0) > 50 %}danger{% elif asymmetric_traffic.get('summary', {}).get('asymmetric_flows', 0) > 10 %}warning{% else %}success{% endif %}">
                     <h4>Flux asymétriques</h4>
-                    <div class="value">{{ asymmetric_traffic.summary.asymmetric_flows }} ({{ "%.1f"|format(asymmetric_traffic.summary.asymmetric_percentage) }}%)</div>
+                    <div class="value">{{ asymmetric_traffic.get('summary', {}).get('asymmetric_flows', 0) }} ({{ "%.1f"|format(asymmetric_traffic.get('summary', {}).get('asymmetric_percentage', 0)) }}%)</div>
                 </div>
                 <div class="summary-card danger">
                     <h4>Quasi-unidirectionnels</h4>
-                    <div class="value">{{ asymmetric_traffic.summary.unidirectional_flows }}</div>
+                    <div class="value">{{ asymmetric_traffic.get('summary', {}).get('unidirectional_flows', 0) }}</div>
                 </div>
                 <div class="summary-card success">
                     <h4>Flux symétriques</h4>
-                    <div class="value">{{ asymmetric_traffic.summary.symmetric_flows }}</div>
+                    <div class="value">{{ asymmetric_traffic.get('summary', {}).get('symmetric_flows', 0) }}</div>
                 </div>
             </div>
 
-            <p>Seuil d'asymétrie: <strong>ratio < {{ asymmetric_traffic.summary.asymmetry_threshold }}</strong> (une direction a moins de {{ "%.0f"|format(asymmetric_traffic.summary.asymmetry_threshold * 100) }}% de l'autre)</p>
+            <p>Seuil d'asymétrie: <strong>ratio < {{ asymmetric_traffic.get('summary', {}).get('asymmetry_threshold', 0) }}</strong> (une direction a moins de {{ "%.0f"|format(asymmetric_traffic.get('summary', {}).get('asymmetry_threshold', 0) * 100) }}% de l'autre)</p>
 
             <!-- Répartition par protocole -->
             {% if asymmetric_traffic.protocol_breakdown %}
@@ -1573,9 +1573,9 @@
         {% endif %}
 
         <!-- Bursts de Paquets -->
-        {% if burst and burst.summary.total_intervals > 0 %}
+        {% if burst and burst.get('summary', {}).get('total_intervals', 0) > 0 %}
         <h2>💥 Analyse des Bursts de Paquets</h2>
-        <div class="section {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
+        <div class="section {% if burst.get('summary', {}).get('bursts_detected', 0) > 10 %}danger{% elif burst.get('summary', {}).get('bursts_detected', 0) > 0 %}warning{% else %}success{% endif %}">
 
             <div class="info-box">
                 <p><strong>🔍 Comprendre les Bursts :</strong></p>
@@ -1590,17 +1590,17 @@
             <div class="summary-grid">
                 <div class="summary-card info">
                     <h4>Intervalles analysés</h4>
-                    <div class="value">{{ burst.summary.total_intervals }}</div>
-                    <small>{{ burst.summary.interval_ms }}ms par intervalle</small>
+                    <div class="value">{{ burst.get('summary', {}).get('total_intervals', 0) }}</div>
+                    <small>{{ burst.get('summary', {}).get('interval_ms', 0) }}ms par intervalle</small>
                 </div>
-                <div class="summary-card {% if burst.summary.bursts_detected > 10 %}danger{% elif burst.summary.bursts_detected > 0 %}warning{% else %}success{% endif %}">
+                <div class="summary-card {% if burst.get('summary', {}).get('bursts_detected', 0) > 10 %}danger{% elif burst.get('summary', {}).get('bursts_detected', 0) > 0 %}warning{% else %}success{% endif %}">
                     <h4>Bursts détectés</h4>
-                    <div class="value">{{ burst.summary.bursts_detected }}</div>
-                    <small>Seuil: {{ burst.summary.burst_threshold_multiplier }}x la moyenne</small>
+                    <div class="value">{{ burst.get('summary', {}).get('bursts_detected', 0) }}</div>
+                    <small>Seuil: {{ burst.get('summary', {}).get('burst_threshold_multiplier', 0) }}x la moyenne</small>
                 </div>
                 <div class="summary-card info">
                     <h4>Paquets dans bursts</h4>
-                    <div class="value">{{ burst.summary.packets_in_bursts }}</div>
+                    <div class="value">{{ burst.get('summary', {}).get('packets_in_bursts', 0) }}</div>
                 </div>
                 <div class="summary-card {% if burst.interval_stats.traffic_regularity == 'Très irrégulier' %}danger{% elif burst.interval_stats.traffic_regularity == 'Variable' %}warning{% else %}success{% endif %}">
                     <h4>Régularité du trafic</h4>
@@ -1625,7 +1625,7 @@
                             <div class="info-tooltip">
                                 <span class="info-icon">i</span>
                                 <span class="tooltip-text">
-                                    Nombre moyen de paquets observés dans chaque intervalle de {{ burst.summary.interval_ms }}ms. Représente le niveau de trafic de fond.
+                                    Nombre moyen de paquets observés dans chaque intervalle de {{ burst.get('summary', {}).get('interval_ms', 0) }}ms. Représente le niveau de trafic de fond.
                                 </span>
                             </div>
                         </td>
@@ -1637,7 +1637,7 @@
                             <div class="info-tooltip">
                                 <span class="info-icon">i</span>
                                 <span class="tooltip-text">
-                                    Nombre minimal de paquets observés dans un intervalle de {{ burst.summary.interval_ms }}ms. Peut indiquer des pauses ou des périodes creuses.
+                                    Nombre minimal de paquets observés dans un intervalle de {{ burst.get('summary', {}).get('interval_ms', 0) }}ms. Peut indiquer des pauses ou des périodes creuses.
                                 </span>
                             </div>
                         </td>
@@ -1649,7 +1649,7 @@
                             <div class="info-tooltip">
                                 <span class="info-icon">i</span>
                                 <span class="tooltip-text">
-                                    Nombre maximal de paquets observés dans un seul intervalle de {{ burst.summary.interval_ms }}ms. Indique le volume de trafic le plus élevé.
+                                    Nombre maximal de paquets observés dans un seul intervalle de {{ burst.get('summary', {}).get('interval_ms', 0) }}ms. Indique le volume de trafic le plus élevé.
                                 </span>
                             </div>
                         </td>
@@ -1760,7 +1760,7 @@
         {% endif %}
 
         <!-- Patterns Temporels -->
-        {% if temporal and temporal.summary.total_slots > 0 %}
+        {% if temporal and temporal.get('summary', {}).get('total_slots', 0) > 0 %}
         <h2>📅 Analyse des Patterns Temporels</h2>
         <div class="section">
 
@@ -1777,21 +1777,21 @@
             <div class="summary-grid">
                 <div class="summary-card info">
                     <h4>Période d'analyse</h4>
-                    <div class="value" style="font-size: 0.8em">{{ temporal.summary.capture_start }}</div>
-                    <small>→ {{ temporal.summary.capture_end }}</small>
+                    <div class="value" style="font-size: 0.8em">{{ temporal.get('summary', {}).get('capture_start', 0) }}</div>
+                    <small>→ {{ temporal.get('summary', {}).get('capture_end', 0) }}</small>
                 </div>
                 <div class="summary-card info">
                     <h4>Créneaux analysés</h4>
-                    <div class="value">{{ temporal.summary.total_slots }}</div>
-                    <small>{{ temporal.summary.slot_duration_seconds }}s par créneau</small>
+                    <div class="value">{{ temporal.get('summary', {}).get('total_slots', 0) }}</div>
+                    <small>{{ temporal.get('summary', {}).get('slot_duration_seconds', 0) }}s par créneau</small>
                 </div>
-                <div class="summary-card {% if temporal.summary.peaks_detected > 10 %}warning{% else %}success{% endif %}">
+                <div class="summary-card {% if temporal.get('summary', {}).get('peaks_detected', 0) > 10 %}warning{% else %}success{% endif %}">
                     <h4>Pics détectés</h4>
-                    <div class="value">{{ temporal.summary.peaks_detected }}</div>
+                    <div class="value">{{ temporal.get('summary', {}).get('peaks_detected', 0) }}</div>
                 </div>
-                <div class="summary-card {% if temporal.summary.periodic_patterns_detected > 0 %}warning{% else %}info{% endif %}">
+                <div class="summary-card {% if temporal.get('summary', {}).get('periodic_patterns_detected', 0) > 0 %}warning{% else %}info{% endif %}">
                     <h4>Patterns périodiques</h4>
-                    <div class="value">{{ temporal.summary.periodic_patterns_detected }}</div>
+                    <div class="value">{{ temporal.get('summary', {}).get('periodic_patterns_detected', 0) }}</div>
                 </div>
             </div>
 
@@ -1811,7 +1811,7 @@
                             <div class="info-tooltip">
                                 <span class="info-icon">i</span>
                                 <span class="tooltip-text">
-                                    Nombre moyen de paquets observés dans chaque créneau de {{ temporal.summary.slot_duration_seconds }}s. Représente le niveau de trafic moyen sur la période.
+                                    Nombre moyen de paquets observés dans chaque créneau de {{ temporal.get('summary', {}).get('slot_duration_seconds', 0) }}s. Représente le niveau de trafic moyen sur la période.
                                 </span>
                             </div>
                         </td>
@@ -1823,7 +1823,7 @@
                             <div class="info-tooltip">
                                 <span class="info-icon">i</span>
                                 <span class="tooltip-text">
-                                    Nombre minimal de paquets observés dans un créneau de {{ temporal.summary.slot_duration_seconds }}s. Peut identifier les périodes de faible activité.
+                                    Nombre minimal de paquets observés dans un créneau de {{ temporal.get('summary', {}).get('slot_duration_seconds', 0) }}s. Peut identifier les périodes de faible activité.
                                 </span>
                             </div>
                         </td>
@@ -1977,26 +1977,26 @@
         {% endif %}
 
         <!-- Section SACK/D-SACK (Priorité #10) -->
-        {% if sack and sack.summary.tcp_packets > 0 %}
+        {% if sack and sack.get('summary', {}).get('tcp_packets', 0) > 0 %}
         <div class="section">
             <h2><span class="icon">🔄</span> SACK/D-SACK Analysis</h2>
             <p>Analyse des accusés de réception sélectifs (Selective Acknowledgment)</p>
 
             <!-- Cartes de résumé -->
             <div class="summary-cards">
-                <div class="summary-card {% if sack.summary.sack_usage_percentage < 10 %}warning{% elif sack.summary.sack_usage_percentage == 0 %}info{% else %}success{% endif %}">
+                <div class="summary-card {% if sack.get('summary', {}).get('sack_usage_percentage', 0) < 10 %}warning{% elif sack.get('summary', {}).get('sack_usage_percentage', 0) == 0 %}info{% else %}success{% endif %}">
                     <div class="label">🎯 Utilisation SACK</div>
-                    <div class="value">{{ sack.summary.sack_usage_percentage }}%</div>
-                    <small>{{ sack.summary.sack_packets }} / {{ sack.summary.tcp_packets }} paquets TCP</small>
+                    <div class="value">{{ sack.get('summary', {}).get('sack_usage_percentage', 0) }}%</div>
+                    <small>{{ sack.get('summary', {}).get('sack_packets', 0) }} / {{ sack.get('summary', {}).get('tcp_packets', 0) }} paquets TCP</small>
                 </div>
-                <div class="summary-card {% if sack.summary.dsack_ratio_percentage > 5 %}danger{% else %}info{% endif %}">
+                <div class="summary-card {% if sack.get('summary', {}).get('dsack_ratio_percentage', 0) > 5 %}danger{% else %}info{% endif %}">
                     <div class="label">⚠️ Ratio D-SACK</div>
-                    <div class="value">{{ sack.summary.dsack_ratio_percentage }}%</div>
-                    <small>{{ sack.summary.dsack_packets }} doublons détectés</small>
+                    <div class="value">{{ sack.get('summary', {}).get('dsack_ratio_percentage', 0) }}%</div>
+                    <small>{{ sack.get('summary', {}).get('dsack_packets', 0) }} doublons détectés</small>
                 </div>
                 <div class="summary-card info">
                     <div class="label">🌐 Flux SACK</div>
-                    <div class="value">{{ sack.summary.flows_using_sack }}</div>
+                    <div class="value">{{ sack.get('summary', {}).get('flows_using_sack', 0) }}</div>
                     <small>connexions utilisant SACK</small>
                 </div>
                 <div class="summary-card success">
@@ -2029,14 +2029,14 @@
                     </tr>
                     <tr>
                         <td><strong>Total événements SACK</strong></td>
-                        <td><span class="badge info">{{ sack.summary.total_sack_events }}</span></td>
+                        <td><span class="badge info">{{ sack.get('summary', {}).get('total_sack_events', 0) }}</span></td>
                         <td>Nombre total d'accusés de réception sélectifs</td>
                     </tr>
                 </tbody>
             </table>
 
             <!-- Top flux SACK -->
-            {% if sack.top_sack_flows and sack.summary.sack_packets > 0 %}
+            {% if sack.top_sack_flows and sack.get('summary', {}).get('sack_packets', 0) > 0 %}
             <h3>🔝 Top flux utilisant SACK</h3>
             <table>
                 <thead>
@@ -2071,7 +2071,7 @@
             {% endif %}
 
             <!-- Flux problématiques avec D-SACK -->
-            {% if sack.dsack_analysis.problematic_flows and sack.summary.dsack_packets > 0 %}
+            {% if sack.dsack_analysis.problematic_flows and sack.get('summary', {}).get('dsack_packets', 0) > 0 %}
             <h3>⚠️ Flux avec D-SACK (problématiques)</h3>
             <p class="warning-note">D-SACK indique des doublons ou des retransmissions inutiles</p>
             <table>
@@ -2107,7 +2107,7 @@
             {% endif %}
 
             <!-- Événements SACK récents -->
-            {% if sack.recent_sack_events and sack.summary.sack_packets > 0 %}
+            {% if sack.recent_sack_events and sack.get('summary', {}).get('sack_packets', 0) > 0 %}
             <h3>🕒 Événements SACK récents</h3>
             <table>
                 <thead>
@@ -2148,17 +2148,17 @@
             <h3>💡 Recommandations</h3>
             <div class="detail-box">
                 <ul>
-                    {% if sack.summary.sack_usage_percentage == 0 %}
+                    {% if sack.get('summary', {}).get('sack_usage_percentage', 0) == 0 %}
                     <li><strong>Aucune utilisation SACK détectée</strong> - Les endpoints n'utilisent pas les retransmissions sélectives</li>
                     <li>SACK permet d'optimiser les retransmissions en acquittant sélectivement les segments reçus</li>
                     <li>Vérifiez la configuration TCP des endpoints pour activer SACK si nécessaire</li>
-                    {% elif sack.summary.sack_usage_percentage < 10 %}
-                    <li><strong>Faible utilisation SACK ({{ sack.summary.sack_usage_percentage }}%)</strong> - Vérifiez la configuration TCP des endpoints</li>
+                    {% elif sack.get('summary', {}).get('sack_usage_percentage', 0) < 10 %}
+                    <li><strong>Faible utilisation SACK ({{ sack.get('summary', {}).get('sack_usage_percentage', 0) }}%)</strong> - Vérifiez la configuration TCP des endpoints</li>
                     {% endif %}
                     {% if sack.efficiency.flows_with_dsack > 0 %}
                     <li><strong>{{ sack.efficiency.flows_with_dsack }} flux avec D-SACK</strong> - Investiguer les causes des retransmissions inutiles</li>
                     {% endif %}
-                    {% if sack.summary.sack_packets > 0 %}
+                    {% if sack.get('summary', {}).get('sack_packets', 0) > 0 %}
                     <li>SACK permet d'éviter environ {{ sack.efficiency.estimated_retransmission_savings_mb }} MB de retransmissions complètes</li>
                     <li>Surveillance recommandée des flux avec ratio D-SACK > 10%</li>
                     {% else %}
@@ -2271,8 +2271,8 @@
                                 {% if tcp_timeout.problematic_count == 0 %}aucune n'est problématique.{% else %}{{ tcp_timeout.problematic_count }} présentent des anomalies (timeouts, fermetures brutales).{% endif %}</li>
                             {% endif %}
 
-                            {% if asymmetric_traffic and asymmetric_traffic.summary.unidirectional_flows > 0 %}
-                            <li><strong>Trafic Unidirectionnel :</strong> {{ asymmetric_traffic.summary.unidirectional_flows }} flux unidirectionnels détectés.
+                            {% if asymmetric_traffic and asymmetric_traffic.get('summary', {}).get('unidirectional_flows', 0) > 0 %}
+                            <li><strong>Trafic Unidirectionnel :</strong> {{ asymmetric_traffic.get('summary', {}).get('unidirectional_flows', 0) }} flux unidirectionnels détectés.
                                 {% set mdns_found = false %}
                                 {% set multicast_found = false %}
                                 {% for flow in asymmetric_traffic.asymmetric_flows %}
