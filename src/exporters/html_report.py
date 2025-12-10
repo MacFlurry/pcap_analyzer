@@ -632,21 +632,53 @@ class HTMLReportGenerator:
 
         # Component scores
         if component_scores:
-            html += "<h3>Component Scores</h3>"
+            html += "<h3>📊 Component Scores Breakdown</h3>"
             html += '<div class="component-scores">'
 
             for component, data in component_scores.items():
                 comp_score = data.get("score", 0)
+                reasons = data.get("reasons", [])
+
+                # Determine color based on score
+                if comp_score >= 80:
+                    color = "#28a745"  # Green
+                elif comp_score >= 60:
+                    color = "#ffc107"  # Yellow
+                elif comp_score >= 40:
+                    color = "#fd7e14"  # Orange
+                else:
+                    color = "#dc3545"  # Red
+
                 html += f"""
                 <div class="component-score-card">
                     <div class="component-name">{component.replace('_', ' ').title()}</div>
                     <div class="progress-bar">
-                        <div class="progress-fill" style="width: {comp_score}%">{comp_score:.0f}%</div>
+                        <div class="progress-fill" style="width: {comp_score}%; background-color: {color};">{comp_score:.0f}%</div>
                     </div>
-                </div>
                 """
 
+                # Add reasons/details if available
+                if reasons:
+                    html += '<div style="margin-top: 8px; font-size: 0.85em; color: #666;">'
+                    html += "<ul style='margin: 0; padding-left: 20px;'>"
+                    for reason in reasons[:3]:  # Show top 3 reasons
+                        html += f"<li>{reason}</li>"
+                    html += "</ul>"
+                    html += "</div>"
+
+                html += "</div>"
+
             html += "</div>"
+        else:
+            # If no component scores available, provide guidance
+            html += """
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                <p style="margin: 0; font-size: 0.95em; color: #856404;">
+                    <strong>ℹ️ Component Score Details Not Available</strong><br>
+                    The health score is based on overall network metrics. Run analysis with more detailed options to see component breakdowns.
+                </p>
+            </div>
+            """
 
         return html
 
@@ -1162,39 +1194,48 @@ class HTMLReportGenerator:
 
             flow_stats = window_data.get("flow_statistics", [])
             if flow_stats:
-                html += "<h4>Flows with Window Issues</h4>"
-                html += '<table class="data-table">'
-                html += """
-                <thead>
-                    <tr>
-                        <th>Flow</th>
-                        <th>Suspected Bottleneck</th>
-                        <th>Zero Windows</th>
-                        <th>Zero Window Duration</th>
-                    </tr>
-                </thead>
-                <tbody>
-                """
+                # Filter to only show flows with actual zero windows
+                flows_with_zero_windows = [f for f in flow_stats if f.get("zero_window_count", 0) > 0]
 
-                for flow in flow_stats[:15]:
-                    bottleneck = flow.get("suspected_bottleneck", "none")
-                    # Show all flows with zero windows, color-code by bottleneck type
-                    if bottleneck == "application":
-                        badge_class = "badge-danger"
-                    elif bottleneck == "network":
-                        badge_class = "badge-warning"
-                    else:
-                        badge_class = "badge-info"
-                    html += f"""
-                    <tr>
-                        <td><code>{flow.get("flow_key", "N/A")}</code></td>
-                        <td><span class="badge {badge_class}">{bottleneck.upper()}</span></td>
-                        <td>{flow.get("zero_window_count", 0)}</td>
-                        <td>{flow.get("zero_window_total_duration", 0):.3f}s</td>
-                    </tr>
+                if flows_with_zero_windows:
+                    html += "<h4>Flows with Window Issues</h4>"
+                    html += '<table class="data-table">'
+                    html += """
+                    <thead>
+                        <tr>
+                            <th>Flow</th>
+                            <th>Suspected Bottleneck</th>
+                            <th>Zero Windows</th>
+                            <th>Zero Window Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                     """
 
-                html += "</tbody></table>"
+                    # Sort by zero window count (descending) to show worst first
+                    sorted_flows = sorted(
+                        flows_with_zero_windows, key=lambda f: f.get("zero_window_count", 0), reverse=True
+                    )
+
+                    for flow in sorted_flows[:15]:
+                        bottleneck = flow.get("suspected_bottleneck", "none")
+                        # Show all flows with zero windows, color-code by bottleneck type
+                        if bottleneck == "application":
+                            badge_class = "badge-danger"
+                        elif bottleneck == "network":
+                            badge_class = "badge-warning"
+                        else:
+                            badge_class = "badge-info"
+                        html += f"""
+                        <tr>
+                            <td><code>{flow.get("flow_key", "N/A")}</code></td>
+                            <td><span class="badge {badge_class}">{bottleneck.upper()}</span></td>
+                            <td>{flow.get("zero_window_count", 0)}</td>
+                            <td>{flow.get("zero_window_total_duration", 0):.3f}s</td>
+                        </tr>
+                        """
+
+                    html += "</tbody></table>"
 
         return html
 
@@ -1267,6 +1308,45 @@ class HTMLReportGenerator:
             </div>
             """
             html += "</div>"
+
+        # DNS Error Types Breakdown
+        error_types_breakdown = dns_data.get("error_types_breakdown", {})
+        if error_types_breakdown:
+            html += "<h3>🔍 DNS Error Types Breakdown</h3>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Error Type</th>
+                    <th>Count</th>
+                    <th>Percentage</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            total_errors = sum(error_types_breakdown.values())
+            for error_type, count in list(error_types_breakdown.items())[:10]:
+                percentage = (count / total_errors * 100) if total_errors > 0 else 0
+
+                # Color code based on error type severity
+                badge_class = "badge-danger"
+                if error_type == "Slow Response":
+                    badge_class = "badge-warning"
+                elif error_type == "Timeout":
+                    badge_class = "badge-critical"
+                elif error_type in ["NXDOMAIN", "SERVFAIL", "REFUSED"]:
+                    badge_class = "badge-danger"
+
+                html += f"""
+                <tr>
+                    <td><span class="badge {badge_class}">{error_type}</span></td>
+                    <td>{count:,}</td>
+                    <td>{percentage:.1f}%</td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
 
         # Problematic Domains
         top_problematic = dns_data.get("top_problematic_domains", [])

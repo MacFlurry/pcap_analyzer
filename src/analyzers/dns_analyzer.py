@@ -401,7 +401,15 @@ class DNSAnalyzer:
             if data["types"]:
                 main_error = max(data["types"].items(), key=lambda x: x[1])[0]
 
-            top_problematic.append({"domain": domain, "count": data["count"], "main_error": main_error})
+            top_problematic.append(
+                {"domain": domain, "count": data["count"], "main_error": main_error, "error_types": dict(data["types"])}
+            )
+
+        # Aggregate error types across all problematic domains
+        error_types_breakdown = defaultdict(int)
+        for domain, data in problematic_domains.items():
+            for error_type, count in data["types"].items():
+                error_types_breakdown[error_type] += count
 
         return {
             "total_queries": total_queries,
@@ -420,6 +428,7 @@ class DNSAnalyzer:
             },
             "problematic_domains": dict(problematic_domains),  # Note: defaultdict converti en dict simple
             "top_problematic_domains": top_problematic,
+            "error_types_breakdown": dict(sorted(error_types_breakdown.items(), key=lambda x: x[1], reverse=True)),
             "transactions": [self._transaction_to_dict(t) for t in self.transactions],
             "slow_transactions_details": [self._transaction_to_dict(t) for t in slow],
             "timeout_details": [self._transaction_to_dict(t) for t in timeouts],
