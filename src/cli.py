@@ -21,8 +21,10 @@ from scapy.layers.inet6 import IPv6
 from scapy.layers.l2 import Ether
 
 from .analyzer_factory import AnalyzerFactory
+from .analyzers.brute_force_detector import BruteForceDetector
 from .analyzers.health_score import HealthScoreCalculator
 from .analyzers.jitter_analyzer import JitterAnalyzer
+from .analyzers.port_scan_detector import PortScanDetector
 from .analyzers.protocol_distribution import ProtocolDistributionAnalyzer
 from .analyzers.service_classifier import ServiceClassifier
 from .config import Config, get_config
@@ -233,6 +235,10 @@ def analyze_pcap_hybrid(
     jitter_analyzer = JitterAnalyzer()
     service_classifier = ServiceClassifier()
 
+    # Sprint 5: Security analyzers
+    port_scan_detector = PortScanDetector()
+    brute_force_detector = BruteForceDetector()
+
     # Collect packets for batch analysis
     scapy_packets = []
 
@@ -272,6 +278,13 @@ def analyze_pcap_hybrid(
     console.print("[cyan]Classifying traffic patterns (ML-like heuristics)...[/cyan]")
     service_results = service_classifier.analyze(scapy_packets)
 
+    # Sprint 5: Security analysis
+    console.print("[cyan]Detecting port scans...[/cyan]")
+    port_scan_results = port_scan_detector.analyze(scapy_packets)
+
+    console.print("[cyan]Detecting brute-force attacks...[/cyan]")
+    brute_force_results = brute_force_detector.analyze(scapy_packets)
+
     console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
 
     # Finalize all analyzers
@@ -304,6 +317,10 @@ def analyze_pcap_hybrid(
     results["protocol_distribution"] = protocol_results
     results["jitter"] = jitter_results
     results["service_classification"] = service_results
+
+    # Sprint 5: Security analyzer results
+    results["port_scan_detection"] = port_scan_results
+    results["brute_force_detection"] = brute_force_results
 
     # Add empty results for unimplemented analyzers with proper structure
     for key in ["ip_fragmentation", "asymmetric_traffic", "sack"]:
@@ -410,6 +427,33 @@ def analyze_pcap_hybrid(
                 service_results["service_classifications"].items(), key=lambda x: x[1], reverse=True
             ):
                 console.print(f"    - {service}: {count} flows")
+
+    # Sprint 5: Display security analysis summary
+    console.print("\n🔒 Security Analysis:")
+
+    # Port scan detection
+    if port_scan_results.get("total_scans_detected", 0) > 0:
+        console.print(f"  🔴 Port Scans Detected: {port_scan_results['total_scans_detected']}")
+        severity = port_scan_results.get("severity_breakdown", {})
+        if severity:
+            console.print(f"     Critical: {severity.get('critical', 0)}, "
+                         f"High: {severity.get('high', 0)}, "
+                         f"Medium: {severity.get('medium', 0)}, "
+                         f"Low: {severity.get('low', 0)}")
+    else:
+        console.print("  ✓ No port scans detected")
+
+    # Brute-force detection
+    if brute_force_results.get("total_attacks_detected", 0) > 0:
+        console.print(f"  🔴 Brute-Force Attacks: {brute_force_results['total_attacks_detected']}")
+        severity = brute_force_results.get("severity_breakdown", {})
+        if severity:
+            console.print(f"     Critical: {severity.get('critical', 0)}, "
+                         f"High: {severity.get('high', 0)}, "
+                         f"Medium: {severity.get('medium', 0)}, "
+                         f"Low: {severity.get('low', 0)}")
+    else:
+        console.print("  ✓ No brute-force attacks detected")
 
     return results
 
