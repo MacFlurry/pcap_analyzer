@@ -33,16 +33,28 @@ class TimestampGap:
 
 
 class TimestampAnalyzer:
-    """Analyseur de timestamps pour détecter les délais anormaux"""
+    """Analyseur de timestamps pour détecter les délais anormaux avec détection intelligente"""
 
-    def __init__(self, gap_threshold: float = 1.0):
+    # Protocol-specific thresholds (RFC-compliant)
+    TCP_INTERACTIVE_THRESHOLD = 30.0  # SSH, Telnet - user interaction time
+    TCP_BULK_THRESHOLD = 2.5  # HTTP, FTP - TCP RTO detection (RFC 6298: min 1s)
+    DNS_THRESHOLD = 5.0  # RFC 1035 recommendation
+    ICMP_THRESHOLD = 2.0  # ICMP echo timeout
+    DEFAULT_THRESHOLD = 1.0  # Fallback
+
+    # Interactive TCP ports (SSH, Telnet)
+    INTERACTIVE_PORTS = {22, 23}
+
+    def __init__(self, gap_threshold: float = 1.0, intelligent_mode: bool = True):
         """
         Initialise l'analyseur de timestamps
 
         Args:
-            gap_threshold: Seuil de détection des gaps en secondes
+            gap_threshold: Seuil de détection des gaps en secondes (legacy mode)
+            intelligent_mode: Active la détection intelligente par protocole et flux
         """
         self.gap_threshold = gap_threshold
+        self.intelligent_mode = intelligent_mode
         self.gaps: list[TimestampGap] = []
         # Memory optimization: limit stored intervals using sliding window
         self.packet_intervals: list[float] = []
@@ -52,6 +64,9 @@ class TimestampAnalyzer:
         self.first_timestamp = None
         self.last_timestamp = None
         self._packet_count = 0
+
+        # Flow-aware tracking: {flow_key: last_timestamp}
+        self._flow_last_timestamp: Dict[str, float] = {}
 
     def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
@@ -140,6 +155,8 @@ class TimestampAnalyzer:
         - No expensive haslayer() calls
         - Direct attribute access
         - Smaller memory footprint
+
+        With intelligent mode: Flow-aware gap detection with protocol-specific thresholds
         """
         self._packet_count += 1
         current_time = metadata.timestamp
@@ -150,33 +167,147 @@ class TimestampAnalyzer:
 
         self.last_timestamp = current_time
 
-        # Calcul de l'intervalle avec le paquet précédent
-        if hasattr(self, "_prev_time") and self._prev_time is not None:
-            interval = current_time - self._prev_time
+        # Intelligent mode: Flow-aware gap detection
+        if self.intelligent_mode:
+            flow_key = self._get_flow_key(metadata)
 
-            # Memory optimization: use sliding window to limit memory usage
-            if len(self.packet_intervals) < self._max_intervals:
-                self.packet_intervals.append(interval)
+            # Check gap within this specific flow
+            if flow_key in self._flow_last_timestamp:
+                prev_time = self._flow_last_timestamp[flow_key]
+                interval = current_time - prev_time
+
+                # Memory optimization: use sliding window
+                if len(self.packet_intervals) < self._max_intervals:
+                    self.packet_intervals.append(interval)
+                else:
+                    self.packet_intervals = self.packet_intervals[-self._max_intervals + 1 :] + [interval]
+
+                # Use protocol-specific threshold
+                threshold = self._get_intelligent_threshold(metadata)
+
+                if interval > threshold:
+                    gap = TimestampGap(
+                        packet_num_before=packet_num - 1,
+                        packet_num_after=packet_num,
+                        timestamp_before=prev_time,
+                        timestamp_after=current_time,
+                        gap_duration=interval,
+                        src_ip=metadata.src_ip,
+                        dst_ip=metadata.dst_ip,
+                        protocol=metadata.protocol,
+                        is_abnormal=True,
+                    )
+                    self.gaps.append(gap)
+
+            # Update flow timestamp
+            self._flow_last_timestamp[flow_key] = current_time
+
+        # Legacy mode: Simple global gap detection
+        else:
+            if hasattr(self, "_prev_time") and self._prev_time is not None:
+                interval = current_time - self._prev_time
+
+                # Memory optimization: use sliding window
+                if len(self.packet_intervals) < self._max_intervals:
+                    self.packet_intervals.append(interval)
+                else:
+                    self.packet_intervals = self.packet_intervals[-self._max_intervals + 1 :] + [interval]
+
+                # Détection de gap anormal (simple threshold)
+                if interval > self.gap_threshold:
+                    gap = TimestampGap(
+                        packet_num_before=packet_num - 1,
+                        packet_num_after=packet_num,
+                        timestamp_before=self._prev_time,
+                        timestamp_after=current_time,
+                        gap_duration=interval,
+                        src_ip=metadata.src_ip,
+                        dst_ip=metadata.dst_ip,
+                        protocol=metadata.protocol,
+                        is_abnormal=True,
+                    )
+                    self.gaps.append(gap)
+
+            self._prev_time = current_time
+
+    def _get_flow_key(self, metadata: "PacketMetadata") -> str:
+        """
+        Generate flow key for flow-aware gap detection.
+
+        Strategy varies by protocol:
+        - TCP: Strict 5-tuple (per-connection tracking)
+        - DNS/UDP: src_ip only (detect user experiencing DNS timeouts across queries)
+        - ICMP: src_ip only (detect host experiencing ICMP timeouts)
+
+        Returns:
+            Flow key string
+        """
+        protocol = metadata.protocol
+
+        # TCP: Strict per-connection tracking (5-tuple)
+        if protocol == "TCP":
+            src_port = getattr(metadata, "src_port", 0) or 0
+            dst_port = getattr(metadata, "dst_port", 0) or 0
+            return f"TCP:{metadata.src_ip}:{src_port}:{metadata.dst_ip}:{dst_port}"
+
+        # DNS: Track per source IP (detect user having DNS issues)
+        elif protocol == "UDP":
+            src_port = getattr(metadata, "src_port", 0) or 0
+            dst_port = getattr(metadata, "dst_port", 0) or 0
+
+            if src_port == 53 or dst_port == 53:
+                # DNS: Group by src_ip only (all DNS queries from this host)
+                return f"DNS:{metadata.src_ip}"
             else:
-                # Keep only the most recent intervals (sliding window)
-                self.packet_intervals = self.packet_intervals[-self._max_intervals + 1 :] + [interval]
+                # Other UDP: Use 5-tuple
+                return f"UDP:{metadata.src_ip}:{src_port}:{metadata.dst_ip}:{dst_port}"
 
-            # Détection de gap anormal
-            if interval > self.gap_threshold:
-                gap = TimestampGap(
-                    packet_num_before=packet_num - 1,
-                    packet_num_after=packet_num,
-                    timestamp_before=self._prev_time,
-                    timestamp_after=current_time,
-                    gap_duration=interval,
-                    src_ip=metadata.src_ip,
-                    dst_ip=metadata.dst_ip,
-                    protocol=metadata.protocol,
-                    is_abnormal=True,
-                )
-                self.gaps.append(gap)
+        # ICMP: Track per source IP (detect host having ICMP issues)
+        elif protocol == "ICMP":
+            return f"ICMP:{metadata.src_ip}"
 
-        self._prev_time = current_time
+        # Default: protocol + src_ip
+        return f"{protocol}:{metadata.src_ip}"
+
+    def _get_intelligent_threshold(self, metadata: "PacketMetadata") -> float:
+        """
+        Determine protocol and port-specific gap threshold (RFC-compliant).
+
+        Args:
+            metadata: Packet metadata
+
+        Returns:
+            Threshold in seconds
+        """
+        protocol = metadata.protocol
+
+        # TCP: Check if interactive (SSH, Telnet)
+        if protocol == "TCP":
+            src_port = getattr(metadata, "src_port", 0) or 0
+            dst_port = getattr(metadata, "dst_port", 0) or 0
+
+            if src_port in self.INTERACTIVE_PORTS or dst_port in self.INTERACTIVE_PORTS:
+                return self.TCP_INTERACTIVE_THRESHOLD
+            else:
+                return self.TCP_BULK_THRESHOLD
+
+        # DNS: RFC 1035 (5 seconds)
+        elif protocol == "UDP":
+            src_port = getattr(metadata, "src_port", 0) or 0
+            dst_port = getattr(metadata, "dst_port", 0) or 0
+
+            if src_port == 53 or dst_port == 53:
+                return self.DNS_THRESHOLD
+            else:
+                # Other UDP (streaming, etc.) - use default
+                return self.DEFAULT_THRESHOLD
+
+        # ICMP: 2 seconds
+        elif protocol == "ICMP":
+            return self.ICMP_THRESHOLD
+
+        # Default
+        return self.DEFAULT_THRESHOLD
 
     def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""

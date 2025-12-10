@@ -20,27 +20,54 @@ from src.parsers.fast_parser import PacketMetadata
 def create_tcp_packet(timestamp, src_ip, dst_ip, src_port=54001, dst_port=80, seq=1000, ack=2000, flags=0x10):
     """Helper to create TCP test packet with minimal required fields"""
     return PacketMetadata(
-        packet_num=0, timestamp=timestamp, src_ip=src_ip, dst_ip=dst_ip,
-        ip_version=4, ttl=64, total_length=60, packet_length=74, protocol="TCP",
-        src_port=src_port, dst_port=dst_port, tcp_seq=seq, tcp_ack=ack, tcp_flags=flags
+        packet_num=0,
+        timestamp=timestamp,
+        src_ip=src_ip,
+        dst_ip=dst_ip,
+        ip_version=4,
+        ttl=64,
+        total_length=60,
+        packet_length=74,
+        protocol="TCP",
+        src_port=src_port,
+        dst_port=dst_port,
+        tcp_seq=seq,
+        tcp_ack=ack,
+        tcp_flags=flags,
     )
 
 
 def create_udp_packet(timestamp, src_ip, dst_ip, src_port=54001, dst_port=80):
     """Helper to create UDP test packet with minimal required fields"""
     return PacketMetadata(
-        packet_num=0, timestamp=timestamp, src_ip=src_ip, dst_ip=dst_ip,
-        ip_version=4, ttl=64, total_length=60, packet_length=74, protocol="UDP",
-        src_port=src_port, dst_port=dst_port
+        packet_num=0,
+        timestamp=timestamp,
+        src_ip=src_ip,
+        dst_ip=dst_ip,
+        ip_version=4,
+        ttl=64,
+        total_length=60,
+        packet_length=74,
+        protocol="UDP",
+        src_port=src_port,
+        dst_port=dst_port,
     )
 
 
 def create_icmp_packet(timestamp, src_ip, dst_ip, icmp_type=8, icmp_code=0):
     """Helper to create ICMP test packet with minimal required fields"""
     return PacketMetadata(
-        packet_num=0, timestamp=timestamp, src_ip=src_ip, dst_ip=dst_ip,
-        ip_version=4, ttl=64, total_length=60, packet_length=74, protocol="ICMP",
-        icmp_type=icmp_type, icmp_code=icmp_code
+        packet_num=0,
+        timestamp=timestamp,
+        src_ip=src_ip,
+        dst_ip=dst_ip,
+        ip_version=4,
+        ttl=64,
+        total_length=60,
+        packet_length=74,
+        protocol="ICMP",
+        icmp_type=icmp_type,
+        icmp_code=icmp_code,
     )
 
 
@@ -61,12 +88,36 @@ class TestIntelligentGapDetection:
 
         # Simulate TCP SSH session with normal user interaction gaps
         packets = [
-            create_tcp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="10.0.0.50",
-                             src_port=52341, dst_port=22, seq=1000, ack=2000, flags=0x10),  # ACK
-            create_tcp_packet(timestamp=1.5, src_ip="10.0.0.50", dst_ip="192.168.1.100",
-                             src_port=22, dst_port=52341, seq=2000, ack=1001, flags=0x18),  # PSH,ACK
-            create_tcp_packet(timestamp=2.8, src_ip="192.168.1.100", dst_ip="10.0.0.50",  # 1.3s gap (user typing)
-                             src_port=52341, dst_port=22, seq=1001, ack=2010, flags=0x18),  # PSH,ACK
+            create_tcp_packet(
+                timestamp=1.0,
+                src_ip="192.168.1.100",
+                dst_ip="10.0.0.50",
+                src_port=52341,
+                dst_port=22,
+                seq=1000,
+                ack=2000,
+                flags=0x10,
+            ),  # ACK
+            create_tcp_packet(
+                timestamp=1.5,
+                src_ip="10.0.0.50",
+                dst_ip="192.168.1.100",
+                src_port=22,
+                dst_port=52341,
+                seq=2000,
+                ack=1001,
+                flags=0x18,
+            ),  # PSH,ACK
+            create_tcp_packet(
+                timestamp=2.8,
+                src_ip="192.168.1.100",
+                dst_ip="10.0.0.50",  # 1.3s gap (user typing)
+                src_port=52341,
+                dst_port=22,
+                seq=1001,
+                ack=2010,
+                flags=0x18,
+            ),  # PSH,ACK
         ]
 
         for i, pkt in enumerate(packets):
@@ -89,10 +140,14 @@ class TestIntelligentGapDetection:
         analyzer = TimestampAnalyzer()
 
         packets = [
-            create_udp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="8.8.8.8",
-                             src_port=54321, dst_port=53),
-            create_udp_packet(timestamp=7.1, src_ip="192.168.1.100", dst_ip="8.8.8.8",  # 6.1s gap - timeout!
-                             src_port=54322, dst_port=53),
+            create_udp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="8.8.8.8", src_port=54321, dst_port=53),
+            create_udp_packet(
+                timestamp=7.1,
+                src_ip="192.168.1.100",
+                dst_ip="8.8.8.8",  # 6.1s gap - timeout!
+                src_port=54322,
+                dst_port=53,
+            ),
         ]
 
         for i, pkt in enumerate(packets):
@@ -117,8 +172,16 @@ class TestIntelligentGapDetection:
 
         # Simulate FTP data transfer - packets every 5ms
         packets = [
-            create_tcp_packet(timestamp=1.000 + i * 0.005, src_ip="10.0.0.50", dst_ip="192.168.1.100",
-                             src_port=20, dst_port=54123, seq=1000+i*1460, ack=2000, flags=0x18)  # PSH,ACK
+            create_tcp_packet(
+                timestamp=1.000 + i * 0.005,
+                src_ip="10.0.0.50",
+                dst_ip="192.168.1.100",
+                src_port=20,
+                dst_port=54123,
+                seq=1000 + i * 1460,
+                ack=2000,
+                flags=0x18,
+            )  # PSH,ACK
             for i in range(20)
         ]
 
@@ -140,10 +203,12 @@ class TestIntelligentGapDetection:
         analyzer = TimestampAnalyzer()
 
         packets = [
-            create_icmp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="8.8.8.8",
-                              icmp_type=8, icmp_code=0),  # Echo request
-            create_icmp_packet(timestamp=3.5, src_ip="192.168.1.100", dst_ip="8.8.4.4",  # 2.5s gap - timeout
-                              icmp_type=8, icmp_code=0),
+            create_icmp_packet(
+                timestamp=1.0, src_ip="192.168.1.100", dst_ip="8.8.8.8", icmp_type=8, icmp_code=0
+            ),  # Echo request
+            create_icmp_packet(
+                timestamp=3.5, src_ip="192.168.1.100", dst_ip="8.8.4.4", icmp_type=8, icmp_code=0  # 2.5s gap - timeout
+            ),
         ]
 
         for i, pkt in enumerate(packets):
@@ -172,8 +237,10 @@ class TestIntelligentGapDetection:
         packets = [
             create_udp_packet(
                 timestamp=1.000 + i * base_interval + ((-1) ** i) * 0.005,  # ±5ms jitter
-                src_ip="10.0.0.50", dst_ip="192.168.1.100",
-                src_port=8000, dst_port=8000
+                src_ip="10.0.0.50",
+                dst_ip="192.168.1.100",
+                src_port=8000,
+                dst_port=8000,
             )
             for i in range(50)
         ]
@@ -200,8 +267,10 @@ class TestIntelligentGapDetection:
         packets = [
             create_udp_packet(
                 timestamp=1.0 + i * 60.0,  # Every 60 seconds
-                src_ip="192.168.1.100", dst_ip="10.0.0.50",
-                src_port=54321, dst_port=161  # SNMP
+                src_ip="192.168.1.100",
+                dst_ip="10.0.0.50",
+                src_port=54321,
+                dst_port=161,  # SNMP
             )
             for i in range(10)
         ]
@@ -230,17 +299,49 @@ class TestIntelligentGapDetection:
         # Flow 2: SSH session (interactive with pauses)
         packets = [
             # Flow 1: HTTP
-            create_tcp_packet(timestamp=1.0, src_ip="10.0.0.50", dst_ip="192.168.1.100",
-                             src_port=80, dst_port=54001, seq=1000, ack=2000, flags=0x18),  # PSH,ACK
+            create_tcp_packet(
+                timestamp=1.0,
+                src_ip="10.0.0.50",
+                dst_ip="192.168.1.100",
+                src_port=80,
+                dst_port=54001,
+                seq=1000,
+                ack=2000,
+                flags=0x18,
+            ),  # PSH,ACK
             # Flow 2: SSH (different flow)
-            create_tcp_packet(timestamp=1.1, src_ip="10.0.0.60", dst_ip="192.168.1.100",
-                             src_port=22, dst_port=54002, seq=3000, ack=4000, flags=0x18),  # PSH,ACK
+            create_tcp_packet(
+                timestamp=1.1,
+                src_ip="10.0.0.60",
+                dst_ip="192.168.1.100",
+                src_port=22,
+                dst_port=54002,
+                seq=3000,
+                ack=4000,
+                flags=0x18,
+            ),  # PSH,ACK
             # Flow 1: HTTP continues
-            create_tcp_packet(timestamp=1.2, src_ip="10.0.0.50", dst_ip="192.168.1.100",
-                             src_port=80, dst_port=54001, seq=1001, ack=2000, flags=0x18),  # PSH,ACK
+            create_tcp_packet(
+                timestamp=1.2,
+                src_ip="10.0.0.50",
+                dst_ip="192.168.1.100",
+                src_port=80,
+                dst_port=54001,
+                seq=1001,
+                ack=2000,
+                flags=0x18,
+            ),  # PSH,ACK
             # Flow 2: SSH user pauses for 2 seconds (normal)
-            create_tcp_packet(timestamp=3.2, src_ip="10.0.0.60", dst_ip="192.168.1.100",
-                             src_port=22, dst_port=54002, seq=3001, ack=4000, flags=0x18),  # PSH,ACK
+            create_tcp_packet(
+                timestamp=3.2,
+                src_ip="10.0.0.60",
+                dst_ip="192.168.1.100",
+                src_port=22,
+                dst_port=54002,
+                seq=3001,
+                ack=4000,
+                flags=0x18,
+            ),  # PSH,ACK
         ]
 
         for i, pkt in enumerate(packets):
@@ -264,11 +365,27 @@ class TestIntelligentGapDetection:
         analyzer = TimestampAnalyzer()
 
         packets = [
-            create_tcp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="10.0.0.50",
-                             src_port=54001, dst_port=80, seq=1000, ack=2000, flags=0x18),  # PSH,ACK
+            create_tcp_packet(
+                timestamp=1.0,
+                src_ip="192.168.1.100",
+                dst_ip="10.0.0.50",
+                src_port=54001,
+                dst_port=80,
+                seq=1000,
+                ack=2000,
+                flags=0x18,
+            ),  # PSH,ACK
             # No ACK received, client retransmits after 3 seconds
-            create_tcp_packet(timestamp=4.0, src_ip="192.168.1.100", dst_ip="10.0.0.50",
-                             src_port=54001, dst_port=80, seq=1000, ack=2000, flags=0x18),  # PSH,ACK (Same seq = retrans)
+            create_tcp_packet(
+                timestamp=4.0,
+                src_ip="192.168.1.100",
+                dst_ip="10.0.0.50",
+                src_port=54001,
+                dst_port=80,
+                seq=1000,
+                ack=2000,
+                flags=0x18,
+            ),  # PSH,ACK (Same seq = retrans)
         ]
 
         for i, pkt in enumerate(packets):
@@ -285,19 +402,48 @@ class TestIntelligentGapDetection:
         """
         Test Case 9: Verify protocol classification is accurate
 
-        Given: Mixed protocol traffic
+        Given: Mixed protocol traffic with gaps within each flow
         When: Gaps are detected
         Then: Each gap has correct protocol classification
         """
         analyzer = TimestampAnalyzer()
 
         packets = [
-            create_udp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="8.8.8.8",
-                             src_port=54321, dst_port=53),
-            create_tcp_packet(timestamp=7.0, src_ip="192.168.1.100", dst_ip="10.0.0.50",
-                             src_port=54001, dst_port=80, seq=1000, ack=0, flags=0x02),  # SYN
-            create_icmp_packet(timestamp=14.0, src_ip="192.168.1.100", dst_ip="8.8.4.4",
-                              icmp_type=8, icmp_code=0),
+            # DNS flow - gap within DNS traffic from same host
+            create_udp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="8.8.8.8", src_port=54321, dst_port=53),
+            create_udp_packet(
+                timestamp=8.0,
+                src_ip="192.168.1.100",
+                dst_ip="8.8.8.8",  # 7s gap - DNS timeout
+                src_port=54322,
+                dst_port=53,
+            ),
+            # TCP flow - gap within same TCP connection
+            create_tcp_packet(
+                timestamp=10.0,
+                src_ip="192.168.1.100",
+                dst_ip="10.0.0.50",
+                src_port=54001,
+                dst_port=80,
+                seq=1000,
+                ack=0,
+                flags=0x02,
+            ),  # SYN
+            create_tcp_packet(
+                timestamp=15.0,
+                src_ip="192.168.1.100",
+                dst_ip="10.0.0.50",  # 5s gap
+                src_port=54001,
+                dst_port=80,
+                seq=1001,
+                ack=2000,
+                flags=0x18,
+            ),  # PSH,ACK
+            # ICMP flow - gap within ICMP from same host
+            create_icmp_packet(timestamp=20.0, src_ip="192.168.1.100", dst_ip="8.8.4.4", icmp_type=8, icmp_code=0),
+            create_icmp_packet(
+                timestamp=24.0, src_ip="192.168.1.100", dst_ip="8.8.8.8", icmp_type=8, icmp_code=0  # 4s gap
+            ),
         ]
 
         for i, pkt in enumerate(packets):
@@ -306,8 +452,9 @@ class TestIntelligentGapDetection:
         result = analyzer.finalize()
 
         # Verify protocol classification
-        assert len(result["gaps"]) >= 2
+        assert len(result["gaps"]) >= 2, f"Expected at least 2 gaps, got {len(result['gaps'])}"
         protocols_in_gaps = [g["protocol"] for g in result["gaps"]]
+        # Should have gaps from DNS, TCP, and ICMP
         assert "UDP" in protocols_in_gaps or "TCP" in protocols_in_gaps or "ICMP" in protocols_in_gaps
 
     def test_baseline_statistics_calculation(self):
@@ -324,8 +471,16 @@ class TestIntelligentGapDetection:
 
         # Normal traffic establishing a baseline
         packets = [
-            create_tcp_packet(timestamp=1.000 + i * 0.050, src_ip="192.168.1.100", dst_ip="10.0.0.50",
-                             src_port=54001, dst_port=80, seq=1000+i, ack=2000, flags=0x10)  # ACK
+            create_tcp_packet(
+                timestamp=1.000 + i * 0.050,
+                src_ip="192.168.1.100",
+                dst_ip="10.0.0.50",
+                src_port=54001,
+                dst_port=80,
+                seq=1000 + i,
+                ack=2000,
+                flags=0x10,
+            )  # ACK
             for i in range(20)
         ]
 
@@ -350,10 +505,14 @@ class TestIntelligentGapDetection:
         analyzer = TimestampAnalyzer()
 
         packets = [
-            create_udp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="8.8.8.8",
-                             src_port=54321, dst_port=53),
-            create_udp_packet(timestamp=8.0, src_ip="192.168.1.100", dst_ip="8.8.8.8",  # 7s gap - DNS timeout
-                             src_port=54321, dst_port=53),
+            create_udp_packet(timestamp=1.0, src_ip="192.168.1.100", dst_ip="8.8.8.8", src_port=54321, dst_port=53),
+            create_udp_packet(
+                timestamp=8.0,
+                src_ip="192.168.1.100",
+                dst_ip="8.8.8.8",  # 7s gap - DNS timeout
+                src_port=54321,
+                dst_port=53,
+            ),
         ]
 
         for i, pkt in enumerate(packets):
