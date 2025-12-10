@@ -22,6 +22,8 @@ from scapy.layers.l2 import Ether
 
 from .analyzer_factory import AnalyzerFactory
 from .analyzers.brute_force_detector import BruteForceDetector
+from .analyzers.ddos_detector import DDoSDetector
+from .analyzers.dns_tunneling_detector import DNSTunnelingDetector
 from .analyzers.health_score import HealthScoreCalculator
 from .analyzers.jitter_analyzer import JitterAnalyzer
 from .analyzers.port_scan_detector import PortScanDetector
@@ -236,9 +238,11 @@ def analyze_pcap_hybrid(
     jitter_analyzer = JitterAnalyzer()
     service_classifier = ServiceClassifier()
 
-    # Sprint 5: Security analyzers
+    # Sprint 5-7: Security analyzers
     port_scan_detector = PortScanDetector(include_localhost=include_localhost)
     brute_force_detector = BruteForceDetector(include_localhost=include_localhost)
+    ddos_detector = DDoSDetector(include_localhost=include_localhost)
+    dns_tunneling_detector = DNSTunnelingDetector(include_localhost=include_localhost)
 
     # Collect packets for batch analysis
     scapy_packets = []
@@ -279,12 +283,18 @@ def analyze_pcap_hybrid(
     console.print("[cyan]Classifying traffic patterns (ML-like heuristics)...[/cyan]")
     service_results = service_classifier.analyze(scapy_packets)
 
-    # Sprint 5: Security analysis
+    # Sprint 5-7: Security analysis
     console.print("[cyan]Detecting port scans...[/cyan]")
     port_scan_results = port_scan_detector.analyze(scapy_packets)
 
     console.print("[cyan]Detecting brute-force attacks...[/cyan]")
     brute_force_results = brute_force_detector.analyze(scapy_packets)
+
+    console.print("[cyan]Detecting DDoS attacks...[/cyan]")
+    ddos_results = ddos_detector.analyze(scapy_packets)
+
+    console.print("[cyan]Detecting DNS tunneling...[/cyan]")
+    dns_tunneling_results = dns_tunneling_detector.analyze(scapy_packets)
 
     console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
 
@@ -319,9 +329,11 @@ def analyze_pcap_hybrid(
     results["jitter"] = jitter_results
     results["service_classification"] = service_results
 
-    # Sprint 5: Security analyzer results
+    # Sprint 5-7: Security analyzer results
     results["port_scan_detection"] = port_scan_results
     results["brute_force_detection"] = brute_force_results
+    results["ddos_detection"] = ddos_results
+    results["dns_tunneling_detection"] = dns_tunneling_results
 
     # Add empty results for unimplemented analyzers with proper structure
     for key in ["ip_fragmentation", "asymmetric_traffic", "sack"]:
@@ -455,6 +467,34 @@ def analyze_pcap_hybrid(
                          f"Low: {severity.get('low', 0)}")
     else:
         console.print("  ✓ No brute-force attacks detected")
+
+    # DDoS detection
+    if ddos_results.get("total_attacks_detected", 0) > 0:
+        console.print(f"  🔴 DDoS Attacks: {ddos_results['total_attacks_detected']}")
+        severity = ddos_results.get("severity_breakdown", {})
+        attack_types = ddos_results.get("attack_type_breakdown", {})
+        if severity:
+            console.print(f"     Critical: {severity.get('critical', 0)}, "
+                         f"High: {severity.get('high', 0)}, "
+                         f"Medium: {severity.get('medium', 0)}, "
+                         f"Low: {severity.get('low', 0)}")
+        if attack_types:
+            types_str = ", ".join([f"{count} {atype}" for atype, count in attack_types.items()])
+            console.print(f"     Types: {types_str}")
+    else:
+        console.print("  ✓ No DDoS attacks detected")
+
+    # DNS tunneling detection
+    if dns_tunneling_results.get("total_tunneling_detected", 0) > 0:
+        console.print(f"  🔴 DNS Tunneling: {dns_tunneling_results['total_tunneling_detected']}")
+        severity = dns_tunneling_results.get("severity_breakdown", {})
+        if severity:
+            console.print(f"     Critical: {severity.get('critical', 0)}, "
+                         f"High: {severity.get('high', 0)}, "
+                         f"Medium: {severity.get('medium', 0)}, "
+                         f"Low: {severity.get('low', 0)}")
+    else:
+        console.print("  ✓ No DNS tunneling detected")
 
     return results
 

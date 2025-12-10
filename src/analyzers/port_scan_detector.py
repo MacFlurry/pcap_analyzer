@@ -43,14 +43,14 @@ class PortScanDetector(BaseAnalyzer):
 
     Detection criteria:
     - Horizontal scan: 10+ ports on same target in 60s
-    - Vertical scan: 5+ targets on same port in 60s
+    - Vertical scan: 3+ targets on same port in 60s (lowered from 5)
     - High failure rate (>70% failed connections)
     - High scan rate (>5 attempts/second)
     """
 
     def __init__(self,
                  horizontal_threshold: int = 10,
-                 vertical_threshold: int = 5,
+                 vertical_threshold: int = 3,
                  time_window: float = 60.0,
                  failure_rate_threshold: float = 0.7,
                  scan_rate_threshold: float = 5.0,

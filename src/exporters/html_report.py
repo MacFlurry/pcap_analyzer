@@ -713,15 +713,19 @@ class HTMLReportGenerator:
         # Check if we have any security data
         port_scan_data = results.get("port_scan_detection", {})
         brute_force_data = results.get("brute_force_detection", {})
+        ddos_data = results.get("ddos_detection", {})
+        dns_tunneling_data = results.get("dns_tunneling_detection", {})
 
         has_port_scans = port_scan_data.get("total_scans_detected", 0) > 0
         has_brute_force = brute_force_data.get("total_attacks_detected", 0) > 0
+        has_ddos = ddos_data.get("total_attacks_detected", 0) > 0
+        has_dns_tunneling = dns_tunneling_data.get("total_tunneling_detected", 0) > 0
 
         # If no security issues detected
-        if not has_port_scans and not has_brute_force:
+        if not has_port_scans and not has_brute_force and not has_ddos and not has_dns_tunneling:
             html += """
             <div class="no-issues">
-                ✓ No security issues detected. The network traffic appears clean with no signs of port scanning or brute-force attacks.
+                ✓ No security issues detected. The network traffic appears clean with no signs of port scanning, brute-force attacks, DDoS, or DNS tunneling.
             </div>
             """
             return html
@@ -733,6 +737,14 @@ class HTMLReportGenerator:
         # Brute-Force Detection Section
         if "brute_force_detection" in results:
             html += self._generate_brute_force_subsection(brute_force_data)
+
+        # DDoS Detection Section
+        if "ddos_detection" in results:
+            html += self._generate_ddos_subsection(ddos_data)
+
+        # DNS Tunneling Detection Section
+        if "dns_tunneling_detection" in results:
+            html += self._generate_dns_tunneling_subsection(dns_tunneling_data)
 
         return html
 
@@ -996,5 +1008,238 @@ class HTMLReportGenerator:
                 """
 
             html += "</tbody></table>"
+
+        return html
+
+    def _generate_ddos_subsection(self, ddos_data: Dict[str, Any]) -> str:
+        """Generate DDoS detection subsection."""
+        total_attacks = ddos_data.get("total_attacks_detected", 0)
+
+        if total_attacks == 0:
+            return """
+            <h3>DDoS Detection</h3>
+            <div class="no-issues">
+                ✓ No DDoS attacks detected.
+            </div>
+            """
+
+        html = "<h3>⚠️ DDoS Detection</h3>"
+
+        # Severity breakdown and summary metrics
+        severity_breakdown = ddos_data.get("severity_breakdown", {})
+        attack_type_breakdown = ddos_data.get("attack_type_breakdown", {})
+
+        html += '<div class="summary-grid">'
+
+        # Total attacks
+        html += f"""
+        <div class="metric-card" style="border-left-color: #dc3545;">
+            <div class="metric-label">Total DDoS Attacks</div>
+            <div class="metric-value" style="color: #dc3545;">{total_attacks}</div>
+        </div>
+        """
+
+        # Severity counts
+        critical = severity_breakdown.get("critical", 0)
+        high = severity_breakdown.get("high", 0)
+        medium = severity_breakdown.get("medium", 0)
+        low = severity_breakdown.get("low", 0)
+
+        html += f"""
+        <div class="metric-card" style="border-left-color: #6c757d;">
+            <div class="metric-label">Severity Breakdown</div>
+            <div class="metric-value" style="font-size: 1.2em;">
+                {f'<span class="badge badge-critical">{critical} Critical</span> ' if critical > 0 else ''}
+                {f'<span class="badge badge-high">{high} High</span> ' if high > 0 else ''}
+                {f'<span class="badge badge-medium">{medium} Medium</span> ' if medium > 0 else ''}
+                {f'<span class="badge badge-low">{low} Low</span>' if low > 0 else ''}
+            </div>
+        </div>
+        """
+
+        # Attack types
+        if attack_type_breakdown:
+            attack_types_html = " | ".join([f"{at.replace('_', ' ').title()}: {cnt}" for at, cnt in attack_type_breakdown.items()])
+            html += f"""
+            <div class="metric-card" style="border-left-color: #17a2b8;">
+                <div class="metric-label">Attack Types</div>
+                <div class="metric-value" style="font-size: 1em; color: #555;">{attack_types_html}</div>
+            </div>
+            """
+
+        html += "</div>"
+
+        # Detailed attack events
+        ddos_events = ddos_data.get("ddos_events", [])
+        if ddos_events:
+            html += "<h4>DDoS Attack Events (Top 10)</h4>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Target IP</th>
+                    <th>Attack Type</th>
+                    <th>Sources</th>
+                    <th>Packets</th>
+                    <th>Rate (pkt/s)</th>
+                    <th>Volume</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for event in ddos_events[:10]:
+                severity = event.get("severity", "low")
+                badge_class = f"badge-{severity}"
+                pps = event.get("packets_per_second", 0)
+                bytes_total = event.get("bytes_total", 0)
+
+                # Format bytes
+                if bytes_total > 1024 * 1024:
+                    volume_str = f"{bytes_total / (1024 * 1024):.2f} MB"
+                elif bytes_total > 1024:
+                    volume_str = f"{bytes_total / 1024:.2f} KB"
+                else:
+                    volume_str = f"{bytes_total} B"
+
+                attack_type = event.get("attack_type", "unknown").replace("_", " ").title()
+
+                html += f"""
+                <tr>
+                    <td><strong>{event.get("target_ip", "N/A")}</strong></td>
+                    <td>{attack_type}</td>
+                    <td>{event.get("source_count", 0)}</td>
+                    <td>{event.get("packet_count", 0):,}</td>
+                    <td>{pps:,.1f}</td>
+                    <td>{volume_str}</td>
+                    <td><span class="badge {badge_class}">{severity.upper()}</span></td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
+
+            # Top attacking sources
+            if ddos_events[0].get("top_sources"):
+                html += "<h4>Top Attacking Sources</h4>"
+                html += "<div style='margin: 10px 0;'>"
+                top_sources = ddos_events[0].get("top_sources", [])[:10]
+                for src in top_sources:
+                    html += f"<span class='badge badge-low' style='margin: 3px;'>{src}</span>"
+                html += "</div>"
+
+        return html
+
+    def _generate_dns_tunneling_subsection(self, dns_tunneling_data: Dict[str, Any]) -> str:
+        """Generate DNS tunneling detection subsection."""
+        total_tunneling = dns_tunneling_data.get("total_tunneling_detected", 0)
+
+        if total_tunneling == 0:
+            return """
+            <h3>DNS Tunneling Detection</h3>
+            <div class="no-issues">
+                ✓ No DNS tunneling detected.
+            </div>
+            """
+
+        html = "<h3>⚠️ DNS Tunneling Detection</h3>"
+
+        # Severity breakdown and summary metrics
+        severity_breakdown = dns_tunneling_data.get("severity_breakdown", {})
+
+        html += '<div class="summary-grid">'
+
+        # Total tunneling
+        html += f"""
+        <div class="metric-card" style="border-left-color: #dc3545;">
+            <div class="metric-label">Total Tunneling Detected</div>
+            <div class="metric-value" style="color: #dc3545;">{total_tunneling}</div>
+        </div>
+        """
+
+        # Severity counts
+        critical = severity_breakdown.get("critical", 0)
+        high = severity_breakdown.get("high", 0)
+        medium = severity_breakdown.get("medium", 0)
+        low = severity_breakdown.get("low", 0)
+
+        html += f"""
+        <div class="metric-card" style="border-left-color: #6c757d;">
+            <div class="metric-label">Severity Breakdown</div>
+            <div class="metric-value" style="font-size: 1.2em;">
+                {f'<span class="badge badge-critical">{critical} Critical</span> ' if critical > 0 else ''}
+                {f'<span class="badge badge-high">{high} High</span> ' if high > 0 else ''}
+                {f'<span class="badge badge-medium">{medium} Medium</span> ' if medium > 0 else ''}
+                {f'<span class="badge badge-low">{low} Low</span>' if low > 0 else ''}
+            </div>
+        </div>
+        """
+
+        html += "</div>"
+
+        # Detailed tunneling events
+        tunneling_events = dns_tunneling_data.get("tunneling_events", [])
+        if tunneling_events:
+            html += "<h4>DNS Tunneling Events (Top 10)</h4>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Source IP</th>
+                    <th>Domain</th>
+                    <th>Queries</th>
+                    <th>Avg Length</th>
+                    <th>Entropy</th>
+                    <th>Indicators</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for event in tunneling_events[:10]:
+                severity = event.get("severity", "low")
+                badge_class = f"badge-{severity}"
+                avg_length = event.get("avg_query_length", 0)
+                entropy = event.get("avg_entropy", 0)
+                indicators = event.get("suspicious_patterns", [])
+
+                # Truncate domain if too long
+                domain = event.get("domain", "N/A")
+                if len(domain) > 30:
+                    domain = domain[:27] + "..."
+
+                # Format indicators
+                if len(indicators) > 2:
+                    indicators_str = ", ".join(indicators[:2]) + f" +{len(indicators)-2} more"
+                else:
+                    indicators_str = ", ".join(indicators) if indicators else "Various"
+
+                html += f"""
+                <tr>
+                    <td><strong>{event.get("source_ip", "N/A")}</strong></td>
+                    <td style="font-family: monospace; font-size: 0.85em;">{domain}</td>
+                    <td>{event.get("query_count", 0)}</td>
+                    <td>{avg_length:.0f} chars</td>
+                    <td>{entropy:.2f} bits</td>
+                    <td style="font-size: 0.85em;">{indicators_str}</td>
+                    <td><span class="badge {badge_class}">{severity.upper()}</span></td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
+
+            # Explanation box
+            html += """
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                <p style="margin: 0 0 8px 0;"><strong>ℹ️ About DNS Tunneling</strong></p>
+                <p style="margin: 0; font-size: 0.9em; color: #555;">
+                    DNS tunneling is a technique used to encode data of other programs or protocols in DNS queries and responses.
+                    It's commonly used for <strong>command & control (C2) communication</strong>, <strong>data exfiltration</strong>,
+                    and <strong>bypassing firewalls</strong>. Indicators include unusually long queries, high entropy subdomains
+                    (base64/hex encoding), and excessive query rates to suspicious domains.
+                </p>
+            </div>
+            """
 
         return html
