@@ -149,6 +149,7 @@ def analyze_pcap_hybrid(
     latency_filter: Optional[float] = None,
     show_details: bool = False,
     details_limit: int = 20,
+    include_localhost: bool = False,
 ) -> dict[str, Any]:
     """
     PHASE 2 OPTIMIZATION: Hybrid analysis using dpkt + Scapy.
@@ -236,8 +237,8 @@ def analyze_pcap_hybrid(
     service_classifier = ServiceClassifier()
 
     # Sprint 5: Security analyzers
-    port_scan_detector = PortScanDetector()
-    brute_force_detector = BruteForceDetector()
+    port_scan_detector = PortScanDetector(include_localhost=include_localhost)
+    brute_force_detector = BruteForceDetector(include_localhost=include_localhost)
 
     # Collect packets for batch analysis
     scapy_packets = []
@@ -475,8 +476,9 @@ def cli():
 @click.option("--export-html", type=click.Path(), help="Export HTML report to specific file")
 @click.option("--export-csv", type=click.Path(), help="Export CSV files to directory")
 @click.option("--export-dir", type=click.Path(), help="Export all formats (HTML + CSV) to directory")
+@click.option("--include-localhost", is_flag=True, help="Include localhost traffic in security analysis (default: excluded)")
 def analyze(
-    pcap_file, latency, config, output, no_report, no_details, details_limit, export_html, export_csv, export_dir
+    pcap_file, latency, config, output, no_report, no_details, details_limit, export_html, export_csv, export_dir, include_localhost
 ):
     """
     Analyse un fichier PCAP local pour détecter les causes de latence
@@ -517,7 +519,8 @@ def analyze(
 
     # Analyse avec le mode hybride optimisé (dpkt + Scapy)
     results = analyze_pcap_hybrid(
-        pcap_file, cfg, latency_filter=latency, show_details=show_details, details_limit=details_limit
+        pcap_file, cfg, latency_filter=latency, show_details=show_details, details_limit=details_limit,
+        include_localhost=include_localhost
     )
 
     # Génération des rapports
@@ -593,7 +596,7 @@ def capture(duration, filter, output, config, analyze, latency):
         # Analyse automatique si demandé
         if analyze:
             console.print("\n[cyan]Lancement de l'analyse automatique...[/cyan]")
-            results = analyze_pcap_hybrid(local_pcap, cfg, latency_filter=latency, show_details=True)
+            results = analyze_pcap_hybrid(local_pcap, cfg, latency_filter=latency, show_details=True, include_localhost=False)
 
             # Génération des rapports
             _generate_reports(results, local_pcap, None, cfg)

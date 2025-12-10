@@ -53,7 +53,8 @@ class PortScanDetector(BaseAnalyzer):
                  vertical_threshold: int = 5,
                  time_window: float = 60.0,
                  failure_rate_threshold: float = 0.7,
-                 scan_rate_threshold: float = 5.0):
+                 scan_rate_threshold: float = 5.0,
+                 include_localhost: bool = False):
         """
         Initialize port scan detector.
 
@@ -63,6 +64,7 @@ class PortScanDetector(BaseAnalyzer):
             time_window: Time window in seconds to group scan attempts
             failure_rate_threshold: Min failure rate to flag suspicious activity
             scan_rate_threshold: Min attempts/sec to flag aggressive scanning
+            include_localhost: Include localhost traffic in analysis (default: False)
         """
         super().__init__()
         self.horizontal_threshold = horizontal_threshold
@@ -70,6 +72,7 @@ class PortScanDetector(BaseAnalyzer):
         self.time_window = time_window
         self.failure_rate_threshold = failure_rate_threshold
         self.scan_rate_threshold = scan_rate_threshold
+        self.include_localhost = include_localhost
 
         # Track connection attempts by source IP
         # {src_ip: [(timestamp, dst_ip, dst_port, flags, responded)]}
@@ -85,6 +88,27 @@ class PortScanDetector(BaseAnalyzer):
 
         # Detected scan events
         self.scan_events: List[ScanEvent] = []
+
+    @staticmethod
+    def _is_localhost(ip: str) -> bool:
+        """
+        Check if an IP address is localhost.
+
+        Args:
+            ip: IP address string (IPv4 or IPv6)
+
+        Returns:
+            True if localhost, False otherwise
+        """
+        # IPv6 localhost
+        if ip in ["::1", "::ffff:127.0.0.1"]:
+            return True
+
+        # IPv4 localhost (127.0.0.0/8)
+        if ip.startswith("127."):
+            return True
+
+        return False
 
     def process_packet(self, packet: Packet, packet_num: int) -> None:
         """Process a single packet for port scan detection."""
@@ -103,6 +127,11 @@ class PortScanDetector(BaseAnalyzer):
             dst_ip = packet[IPv6].dst
         else:
             return
+
+        # Filter localhost traffic unless explicitly included
+        if not self.include_localhost:
+            if self._is_localhost(src_ip) or self._is_localhost(dst_ip):
+                return
 
         src_port = tcp.sport
         dst_port = tcp.dport

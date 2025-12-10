@@ -73,7 +73,8 @@ class BruteForceDetector(BaseAnalyzer):
                  attempt_threshold: int = 10,
                  time_window: float = 60.0,
                  failure_rate_threshold: float = 0.7,
-                 attempt_rate_threshold: float = 0.5):
+                 attempt_rate_threshold: float = 0.5,
+                 include_localhost: bool = False):
         """
         Initialize brute-force detector.
 
@@ -82,12 +83,14 @@ class BruteForceDetector(BaseAnalyzer):
             time_window: Time window in seconds to group attempts
             failure_rate_threshold: Min failure rate to flag attack
             attempt_rate_threshold: Min attempts/sec to flag aggressive attack
+            include_localhost: Include localhost traffic in analysis (default: False)
         """
         super().__init__()
         self.attempt_threshold = attempt_threshold
         self.time_window = time_window
         self.failure_rate_threshold = failure_rate_threshold
         self.attempt_rate_threshold = attempt_rate_threshold
+        self.include_localhost = include_localhost
 
         # Track connection attempts to authentication services
         # {(src_ip, dst_ip, dst_port): [(timestamp, flags, responded, established)]}
@@ -102,6 +105,27 @@ class BruteForceDetector(BaseAnalyzer):
 
         # Detected brute-force events
         self.brute_force_events: List[BruteForceEvent] = []
+
+    @staticmethod
+    def _is_localhost(ip: str) -> bool:
+        """
+        Check if an IP address is localhost.
+
+        Args:
+            ip: IP address string (IPv4 or IPv6)
+
+        Returns:
+            True if localhost, False otherwise
+        """
+        # IPv6 localhost
+        if ip in ["::1", "::ffff:127.0.0.1"]:
+            return True
+
+        # IPv4 localhost (127.0.0.0/8)
+        if ip.startswith("127."):
+            return True
+
+        return False
 
     def process_packet(self, packet: Packet, packet_num: int) -> None:
         """Process a single packet for brute-force detection."""
@@ -120,6 +144,11 @@ class BruteForceDetector(BaseAnalyzer):
             dst_ip = packet[IPv6].dst
         else:
             return
+
+        # Filter localhost traffic unless explicitly included
+        if not self.include_localhost:
+            if self._is_localhost(src_ip) or self._is_localhost(dst_ip):
+                return
 
         src_port = tcp.sport
         dst_port = tcp.dport
