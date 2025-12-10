@@ -24,6 +24,7 @@ from .analyzer_factory import AnalyzerFactory
 from .analyzers.health_score import HealthScoreCalculator
 from .analyzers.jitter_analyzer import JitterAnalyzer
 from .analyzers.protocol_distribution import ProtocolDistributionAnalyzer
+from .analyzers.service_classifier import ServiceClassifier
 from .config import Config, get_config
 from .parsers.fast_parser import FastPacketParser
 from .report_generator import ReportGenerator
@@ -158,9 +159,10 @@ def analyze_pcap_hybrid(
     dns_analyzer = analyzer_dict["dns"]
     icmp_analyzer = analyzer_dict["icmp"]
 
-    # Sprint 2: New analyzers for protocol distribution and jitter
+    # Sprint 2 & 3: New analyzers for protocol, jitter, and service classification
     protocol_analyzer = ProtocolDistributionAnalyzer()
     jitter_analyzer = JitterAnalyzer()
+    service_classifier = ServiceClassifier()
 
     # Collect packets for batch analysis
     scapy_packets = []
@@ -198,6 +200,9 @@ def analyze_pcap_hybrid(
     console.print("[cyan]Analyzing jitter (RFC 3393 IPDV)...[/cyan]")
     jitter_results = jitter_analyzer.analyze(scapy_packets)
 
+    console.print("[cyan]Classifying traffic patterns (ML-like heuristics)...[/cyan]")
+    service_results = service_classifier.analyze(scapy_packets)
+
     console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
 
     # Finalize all analyzers
@@ -226,9 +231,10 @@ def analyze_pcap_hybrid(
     results["dns"] = dns_analyzer._generate_report()
     results["icmp"] = icmp_analyzer._generate_report()
 
-    # Sprint 2: New analyzer results
+    # Sprint 2 & 3: New analyzer results
     results["protocol_distribution"] = protocol_results
     results["jitter"] = jitter_results
+    results["service_classification"] = service_results
 
     # Add empty results for unimplemented analyzers with proper structure
     for key in ["ip_fragmentation", "asymmetric_traffic", "sack"]:
@@ -321,6 +327,21 @@ def analyze_pcap_hybrid(
             console.print(f"  Max Jitter: {stats.get('max_jitter', 0)*1000:.2f}ms")
         if jitter_results.get("high_jitter_flows"):
             console.print(f"  [yellow]High Jitter Flows: {len(jitter_results['high_jitter_flows'])}[/yellow]")
+
+    # Sprint 3: Display service classification summary
+    console.print("\n🧠 Intelligent Service Classification:")
+    if service_results["total_flows"] > 0:
+        summary = service_results["classification_summary"]
+        console.print(f"  Total Flows: {summary['total_flows']}")
+        console.print(f"  Classified: {summary['classified_count']} ({summary['classification_rate']:.1f}%)")
+
+        # Display service distribution
+        if service_results.get("service_classifications"):
+            console.print("  Service Distribution:")
+            for service, count in sorted(
+                service_results["service_classifications"].items(), key=lambda x: x[1], reverse=True
+            ):
+                console.print(f"    - {service}: {count} flows")
 
     return results
 
