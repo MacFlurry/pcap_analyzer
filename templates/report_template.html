@@ -1410,9 +1410,9 @@
         {% endif %}
 
         <!-- Trafic Asymétrique -->
-        {% if asymmetric_traffic and asymmetric_traffic.summary.total_flows > 0 %}
+        {% if asymmetric_traffic and asymmetric_traffic.get('summary', {}).get('total_flows', 0) > 0 %}
         <h2>⚖️ Analyse du Trafic Asymétrique</h2>
-        <div class="section {% if asymmetric_traffic.summary.asymmetric_flows > 50 %}danger{% elif asymmetric_traffic.summary.asymmetric_flows > 10 %}warning{% else %}success{% endif %}">
+        <div class="section {% if asymmetric_traffic.get('summary', {}).get('asymmetric_flows', 0) > 50 %}danger{% elif asymmetric_traffic.get('summary', {}).get('asymmetric_flows', 0) > 10 %}warning{% else %}success{% endif %}">
 
             <div class="info-box">
                 <p><strong>🔍 Comprendre le Trafic Asymétrique :</strong></p>

@@ -327,9 +327,7 @@ def analyze_pcap_hybrid(
             for m in health_result.metric_scores
         ],
         "total_penalty": health_result.total_penalty,
-        "top_issues": health_result.top_issues,
         "recommendations": health_result.recommendations,
-        "analysis_timestamp": health_result.analysis_timestamp,
     }
 
     # Display summaries
@@ -376,7 +374,8 @@ def analyze_pcap_hybrid(
             console.print(f"  - {proto}: {count} ({pct:.1f}%)")
         if protocol_results.get("top_tcp_ports"):
             top_ports = protocol_results["top_tcp_ports"][:3]
-            console.print(f"  Top TCP Ports: {', '.join(f'{p['port']} ({p['service']})' for p in top_ports)}")
+            ports_str = ", ".join(f"{p['port']} ({p['service']})" for p in top_ports)
+            console.print(f"  Top TCP Ports: {ports_str}")
 
     # Sprint 2: Display jitter summary
     console.print("\n📡 Jitter Analysis (RFC 3393):")
