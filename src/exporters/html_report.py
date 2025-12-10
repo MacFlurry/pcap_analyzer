@@ -559,6 +559,34 @@ class HTMLReportGenerator:
 
         html = "<h2>🧠 Service Classification</h2>"
 
+        # Add explanation box
+        html += """
+        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">
+            <p style="margin: 0 0 10px 0;"><strong>ℹ️ What is Service Classification?</strong></p>
+            <p style="margin: 0 0 12px 0; font-size: 0.95em;">
+                Intelligent traffic classification based on <strong>behavioral patterns</strong>, not just port numbers.
+                Identifies application types by analyzing packet sizes, timing, and flow characteristics.
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.9em;">
+                <div>
+                    <strong>📞 VoIP:</strong> Small packets (100-300B), constant rate (10-40ms intervals)
+                </div>
+                <div>
+                    <strong>📹 Streaming:</strong> Large packets (>1000B), sustained throughput (>1Mbps)
+                </div>
+                <div>
+                    <strong>💬 Interactive:</strong> Variable sizes, request/response pattern (web, SSH)
+                </div>
+                <div>
+                    <strong>📦 Bulk:</strong> Large persistent flows (>1200B, >5s, file transfers)
+                </div>
+                <div>
+                    <strong>🎛️ Control:</strong> Small sporadic packets (<512B, DNS, mDNS, NTP)
+                </div>
+            </div>
+        </div>
+        """
+
         # Classification summary
         summary = service_data.get("classification_summary", {})
         if summary:
@@ -604,5 +632,35 @@ class HTMLReportGenerator:
                 """
 
             html += "</div></div>"
+
+            # Add contextual note if one service type dominates
+            max_service = max(service_types.items(), key=lambda x: x[1])
+            max_percentage = (max_service[1] / total * 100) if total > 0 else 0
+
+            if max_percentage > 90:
+                service_name = max_service[0]
+                context_messages = {
+                    "Control": "This indicates primarily <strong>network management traffic</strong> (DNS, mDNS, NTP, DHCP). "
+                              "Common in passive monitoring or captures with minimal user activity.",
+                    "Streaming": "This indicates heavy <strong>multimedia usage</strong> (video/audio streaming). "
+                                "May require bandwidth optimization or QoS prioritization.",
+                    "Interactive": "This indicates primarily <strong>web browsing and interactive applications</strong> (HTTP, SSH). "
+                                  "Typical of normal user activity with request/response patterns.",
+                    "Bulk": "This indicates significant <strong>file transfer activity</strong> (FTP, large downloads). "
+                           "May impact available bandwidth for real-time applications.",
+                    "VoIP": "This indicates heavy <strong>voice/video conferencing usage</strong>. "
+                           "Requires consistent low latency and jitter for quality calls."
+                }
+
+                message = context_messages.get(service_name, "")
+                if message:
+                    html += f"""
+            <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                <p style="margin: 0 0 8px 0;"><strong>💡 Traffic Pattern Analysis</strong></p>
+                <p style="margin: 0; font-size: 0.95em; color: #555;">
+                    <strong>{service_name}</strong> dominates with {max_percentage:.1f}% of flows. {message}
+                </p>
+            </div>
+            """
 
         return html
