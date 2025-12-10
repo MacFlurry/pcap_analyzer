@@ -22,7 +22,7 @@ class HTMLReportGenerator:
 
     def generate(self, results: Dict[str, Any]) -> str:
         """
-        Generate HTML report from analysis results.
+        Generate HTML report from analysis results with tabbed navigation.
 
         Args:
             results: Dictionary containing analysis results
@@ -42,28 +42,60 @@ class HTMLReportGenerator:
         # Title
         html_parts.append(self._generate_title(results))
 
-        # Executive Summary
-        html_parts.append(self._generate_summary(results))
+        # Tabbed Navigation
+        html_parts.append('<div class="tabs-container">')
+        html_parts.append('  <div class="tabs-nav">')
+        html_parts.append('    <button class="tab-button active" onclick="switchTab(\'tab-overview\')">📊 Overview</button>')
+        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-qos\')">🏥 QoS Analysis</button>')
+        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-security\')">🔒 Security</button>')
+        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-network\')">📡 Network</button>')
+        html_parts.append('  </div>')
 
-        # Health Score Section
+        # Tab 1: Overview (Executive Summary + Health Score)
+        html_parts.append('  <div id="tab-overview" class="tab-content active">')
+        html_parts.append(self._generate_summary(results))
         if "health_score" in results:
             html_parts.append(self._generate_health_score_section(results))
+        html_parts.append('  </div>')
 
-        # Protocol Distribution Section
-        if "protocol_distribution" in results:
-            html_parts.append(self._generate_protocol_section(results))
-
-        # Jitter Analysis Section
+        # Tab 2: QoS Analysis (Jitter, RTT, etc.)
+        html_parts.append('  <div id="tab-qos" class="tab-content">')
         if "jitter" in results:
             html_parts.append(self._generate_jitter_section(results))
+        else:
+            html_parts.append('    <div class="info-box">')
+            html_parts.append('      <p>No QoS metrics available in this capture.</p>')
+            html_parts.append('    </div>')
+        html_parts.append('  </div>')
 
-        # Service Classification Section
+        # Tab 3: Security (Port Scans, Brute Force, DDoS, DNS Tunneling)
+        html_parts.append('  <div id="tab-security" class="tab-content">')
+        has_security = ("port_scan_detection" in results or
+                        "brute_force_detection" in results or
+                        "ddos_detection" in results or
+                        "dns_tunneling_detection" in results)
+        if has_security:
+            html_parts.append(self._generate_security_section(results))
+        else:
+            html_parts.append('    <div class="info-box">')
+            html_parts.append('      <p>✅ No security threats detected in this capture.</p>')
+            html_parts.append('    </div>')
+        html_parts.append('  </div>')
+
+        # Tab 4: Network (Protocol Distribution + Service Classification)
+        html_parts.append('  <div id="tab-network" class="tab-content">')
+        if "protocol_distribution" in results:
+            html_parts.append(self._generate_protocol_section(results))
         if "service_classification" in results:
             html_parts.append(self._generate_service_section(results))
+        if "protocol_distribution" not in results and "service_classification" not in results:
+            html_parts.append('    <div class="info-box">')
+            html_parts.append('      <p>No network analysis data available.</p>')
+            html_parts.append('    </div>')
+        html_parts.append('  </div>')
 
-        # Security Analysis Section
-        if "port_scan_detection" in results or "brute_force_detection" in results:
-            html_parts.append(self._generate_security_section(results))
+        # Close tabs container
+        html_parts.append('</div>')
 
         # Footer
         html_parts.append("</div>")
@@ -370,7 +402,96 @@ class HTMLReportGenerator:
                 font-size: 3em;
             }
         }
+
+        /* Tabbed Navigation Styles */
+        .tabs-container {
+            margin: 30px 0;
+        }
+
+        .tabs-nav {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 0;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .tab-button {
+            padding: 12px 24px;
+            background: #f5f5f5;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s ease;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .tab-button:hover {
+            background: #e8e8e8;
+            color: #333;
+        }
+
+        .tab-button.active {
+            background: white;
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .tab-icon {
+            margin-right: 6px;
+        }
     </style>
+    <script>
+        function switchTab(tabId) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Deactivate all tab buttons
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+
+            // Show selected tab content
+            const selectedTab = document.getElementById(tabId);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+            }
+
+            // Activate selected tab button
+            const selectedButton = document.querySelector(`[onclick="switchTab('${tabId}')"]`);
+            if (selectedButton) {
+                selectedButton.classList.add('active');
+            }
+
+            // Save tab preference to localStorage
+            localStorage.setItem('activeTab', tabId);
+        }
+
+        // Restore last active tab on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTab = localStorage.getItem('activeTab') || 'tab-overview';
+            switchTab(savedTab);
+        });
+    </script>
 </head>"""
 
     def _generate_title(self, results: Dict[str, Any]) -> str:
