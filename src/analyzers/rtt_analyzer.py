@@ -399,7 +399,8 @@ class RTTAnalyzer:
 
             try:
                 parts = flow_key.split("->")
-                src_part, dst_part = parts[0].split(":"), parts[1].split(":")
+                # Use rsplit to handle IPv6 addresses (e.g., ::1:46650 -> ['::1', '46650'])
+                src_part, dst_part = parts[0].rsplit(":", 1), parts[1].rsplit(":", 1)
 
                 rtt_spikes = sum(1 for rtt in rtts if rtt > self.rtt_warning)
 

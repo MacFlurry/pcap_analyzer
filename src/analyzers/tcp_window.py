@@ -383,7 +383,8 @@ class TCPWindowAnalyzer:
         for flow_key, stats in self._flow_aggregates.items():
             try:
                 parts = flow_key.split("->")
-                src_part, dst_part = parts[0].split(":"), parts[1].split(":")
+                # Use rsplit to handle IPv6 addresses (e.g., ::1:46650 -> ['::1', '46650'])
+                src_part, dst_part = parts[0].rsplit(":", 1), parts[1].rsplit(":", 1)
 
                 zero_duration = stats["zero_duration"]
                 zero_count = stats["zero_window_count"]

@@ -722,7 +722,8 @@ class RetransmissionAnalyzer:
         for flow_key, counters in self._flow_counters.items():
             try:
                 parts = flow_key.split("->")
-                src_part, dst_part = parts[0].split(":"), parts[1].split(":")
+                # Use rsplit to handle IPv6 addresses (e.g., ::1:46650 -> ['::1', '46650'])
+                src_part, dst_part = parts[0].rsplit(":", 1), parts[1].rsplit(":", 1)
 
                 retrans_count = counters["retransmissions"]
                 total_packets = counters["total"]
