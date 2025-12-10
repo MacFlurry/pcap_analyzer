@@ -255,19 +255,25 @@ class HTMLReportGenerator:
             height: 30px;
             background: #e0e0e0;
             border-radius: 4px;
-            overflow: hidden;
+            overflow: visible;
             position: relative;
+            display: flex;
+            align-items: center;
         }
 
         .bar-fill {
             height: 100%;
             background: linear-gradient(90deg, #3498db 0%, #2980b9 100%);
-            display: flex;
-            align-items: center;
-            padding-left: 10px;
-            color: white;
+            border-radius: 4px;
+            min-width: 2px;
+        }
+
+        .bar-value {
+            margin-left: 8px;
+            color: #2c3e50;
             font-size: 0.9em;
             font-weight: 500;
+            white-space: nowrap;
         }
 
         .data-table {
@@ -445,7 +451,8 @@ class HTMLReportGenerator:
                 <div class="bar-chart-row">
                     <div class="bar-label">{proto}</div>
                     <div class="bar-container">
-                        <div class="bar-fill" style="width: {percentage}%">{count:,} ({percentage:.1f}%)</div>
+                        <div class="bar-fill" style="width: {percentage}%"></div>
+                        <div class="bar-value">{count:,} ({percentage:.1f}%)</div>
                     </div>
                 </div>
                 """
@@ -466,7 +473,8 @@ class HTMLReportGenerator:
                 <div class="bar-chart-row">
                     <div class="bar-label">{service}</div>
                     <div class="bar-container">
-                        <div class="bar-fill" style="width: {percentage}%">{count:,} ({percentage:.1f}%)</div>
+                        <div class="bar-fill" style="width: {percentage}%"></div>
+                        <div class="bar-value">{count:,} ({percentage:.1f}%)</div>
                     </div>
                 </div>
                 """
@@ -559,7 +567,8 @@ class HTMLReportGenerator:
                 <div class="bar-chart-row">
                     <div class="bar-label">{service}</div>
                     <div class="bar-container">
-                        <div class="bar-fill" style="width: {percentage}%">{count} flows ({percentage:.1f}%)</div>
+                        <div class="bar-fill" style="width: {percentage}%"></div>
+                        <div class="bar-value">{count} flows ({percentage:.1f}%)</div>
                     </div>
                 </div>
                 """
