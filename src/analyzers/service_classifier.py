@@ -405,11 +405,29 @@ class ServiceClassifier:
         classified_count = sum(1 for c in self.flow_classifications.values() if c["service_type"] != "Unknown")
         unclassified_count = total_flows - classified_count
 
+        # Extract unknown flows with port information for analysis
+        unknown_flows = []
+        for flow_key, classification in self.flow_classifications.items():
+            if classification["service_type"] == "Unknown":
+                # flow_key format: (src_ip, src_port, dst_ip, dst_port, proto)
+                unknown_flows.append(
+                    {
+                        "src_ip": flow_key[0],
+                        "src_port": flow_key[1],
+                        "dst_ip": flow_key[2],
+                        "dst_port": flow_key[3],
+                        "proto": flow_key[4],
+                        "packet_count": classification["stats"]["packet_count"],
+                        "avg_packet_size": classification["stats"]["avg_packet_size"],
+                    }
+                )
+
         return {
             "total_flows": total_flows,
             "classified_flows": classified_flows,
             "service_classifications": dict(service_counts),
             "flow_statistics": flow_statistics,
+            "unknown_flows": unknown_flows,
             "classification_summary": {
                 "total_flows": total_flows,
                 "classified_count": classified_count,

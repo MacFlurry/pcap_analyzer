@@ -42,6 +42,7 @@ class TunnelingEvent:
     suspicious_patterns: list[str]
     record_types: dict[str, int]
     severity: str
+    example_queries: list[str]  # Example query names for validation
 
 
 class DNSTunnelingDetector(BaseAnalyzer):
@@ -362,6 +363,9 @@ class DNSTunnelingDetector(BaseAnalyzer):
                 avg_length, avg_entropy, query_rate, query_count, len(suspicious_patterns)
             )
 
+            # Extract example query names (up to 5 for validation)
+            example_queries = [q["query_name"] for q in queries[:5]]
+
             event = TunnelingEvent(
                 source_ip=src_ip,
                 domain=domain,
@@ -374,6 +378,7 @@ class DNSTunnelingDetector(BaseAnalyzer):
                 suspicious_patterns=reasons,
                 record_types=dict(record_types),
                 severity=severity,
+                example_queries=example_queries,
             )
             self.tunneling_events.append(event)
 
@@ -475,6 +480,7 @@ class DNSTunnelingDetector(BaseAnalyzer):
                     "avg_entropy": event.avg_entropy,
                     "suspicious_patterns": event.suspicious_patterns,
                     "record_types": event.record_types,
+                    "example_queries": event.example_queries,
                 }
             )
 

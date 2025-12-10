@@ -448,7 +448,9 @@ class TCPWindowAnalyzer:
 
     def _generate_report(self) -> dict[str, Any]:
         """Génère le rapport d'analyse des fenêtres TCP"""
-        flows_with_issues = [f for f in self.flow_stats.values() if f.suspected_bottleneck != "none"]
+        # Fix for Issue #7: Count all flows with zero windows, not just those with bottleneck detected
+        # This aligns the count with what's displayed in the HTML report
+        flows_with_issues = [f for f in self.flow_stats.values() if f.zero_window_count > 0]
 
         zero_window_events = [
             e
@@ -478,7 +480,8 @@ class TCPWindowAnalyzer:
 
     def get_summary(self) -> str:
         """Retourne un résumé textuel de l'analyse des fenêtres TCP"""
-        flows_with_issues = [f for f in self.flow_stats.values() if f.suspected_bottleneck != "none"]
+        # Fix for Issue #7: Count all flows with zero windows for consistency
+        flows_with_issues = [f for f in self.flow_stats.values() if f.zero_window_count > 0]
 
         zero_windows = sum(f.zero_window_count for f in self.flow_stats.values())
 
