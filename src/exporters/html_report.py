@@ -314,25 +314,53 @@ class HTMLReportGenerator:
 
         .data-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             margin: 20px 0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .data-table th {
-            background: #34495e;
-            color: white;
-            padding: 12px;
+            background: #f8f9fa;
+            color: #2c3e50;
+            padding: 16px 20px;
             text-align: left;
             font-weight: 600;
+            font-size: 0.95em;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #3498db;
         }
 
         .data-table td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #e0e0e0;
+            padding: 14px 20px;
+            border-bottom: 1px solid #e8e8e8;
+            vertical-align: middle;
+            font-size: 0.92em;
         }
 
-        .data-table tr:hover {
-            background: #f8f9fa;
+        .data-table td code {
+            background: #f5f7fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9em;
+            color: #2d3748;
+        }
+
+        .data-table tbody tr {
+            transition: all 0.2s ease;
+        }
+
+        .data-table tbody tr:hover {
+            background: #f8fafc;
+            transform: scale(1.01);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: none;
         }
 
         .badge {
@@ -1400,27 +1428,23 @@ class HTMLReportGenerator:
         severity_breakdown = data_exfiltration_data.get("severity_breakdown", {})
         type_breakdown = data_exfiltration_data.get("type_breakdown", {})
 
+        critical = severity_breakdown.get("critical", 0)
+        high = severity_breakdown.get("high", 0)
+        medium = severity_breakdown.get("medium", 0)
+        low = severity_breakdown.get("low", 0)
+
         html += f"""
             <div class="alert alert-warning">
                 <strong>⚠️  {total_exfiltration} potential data exfiltration event(s) detected</strong>
             </div>
 
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('critical', 0)}</div>
-                    <div class="stat-label">Critical</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('high', 0)}</div>
-                    <div class="stat-label">High</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('medium', 0)}</div>
-                    <div class="stat-label">Medium</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('low', 0)}</div>
-                    <div class="stat-label">Low</div>
+            <div class="metric-card" style="border-left-color: #6c757d;">
+                <div class="metric-label">Severity Breakdown</div>
+                <div class="metric-value" style="font-size: 1.2em;">
+                    {f'<span class="badge badge-critical">{critical} Critical</span> ' if critical > 0 else ''}
+                    {f'<span class="badge badge-high">{high} High</span> ' if high > 0 else ''}
+                    {f'<span class="badge badge-medium">{medium} Medium</span> ' if medium > 0 else ''}
+                    {f'<span class="badge badge-low">{low} Low</span>' if low > 0 else ''}
                 </div>
             </div>
         """
@@ -1430,13 +1454,16 @@ class HTMLReportGenerator:
         if events:
             html += """
             <h4>Detected Exfiltration Events:</h4>
-            <table class="detail-table">
-                <tr>
-                    <th>Type</th>
-                    <th>Source IP</th>
-                    <th>Details</th>
-                    <th>Severity</th>
-                </tr>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Source IP</th>
+                        <th>Details</th>
+                        <th>Severity</th>
+                    </tr>
+                </thead>
+                <tbody>
             """
 
             for event in events[:20]:  # Limit to 20 events
@@ -1467,7 +1494,7 @@ class HTMLReportGenerator:
                 </tr>
                 """
 
-            html += "</table>"
+            html += "</tbody></table>"
 
         # Educational info
         html += """
@@ -1500,27 +1527,23 @@ class HTMLReportGenerator:
         # Summary
         severity_breakdown = c2_beaconing_data.get("severity_breakdown", {})
 
+        critical = severity_breakdown.get("critical", 0)
+        high = severity_breakdown.get("high", 0)
+        medium = severity_breakdown.get("medium", 0)
+        low = severity_breakdown.get("low", 0)
+
         html += f"""
             <div class="alert alert-danger">
                 <strong>🚨 {total_beaconing} potential C2 beaconing pattern(s) detected</strong>
             </div>
 
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('critical', 0)}</div>
-                    <div class="stat-label">Critical</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('high', 0)}</div>
-                    <div class="stat-label">High</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('medium', 0)}</div>
-                    <div class="stat-label">Medium</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('low', 0)}</div>
-                    <div class="stat-label">Low</div>
+            <div class="metric-card" style="border-left-color: #6c757d;">
+                <div class="metric-label">Severity Breakdown</div>
+                <div class="metric-value" style="font-size: 1.2em;">
+                    {f'<span class="badge badge-critical">{critical} Critical</span> ' if critical > 0 else ''}
+                    {f'<span class="badge badge-high">{high} High</span> ' if high > 0 else ''}
+                    {f'<span class="badge badge-medium">{medium} Medium</span> ' if medium > 0 else ''}
+                    {f'<span class="badge badge-low">{low} Low</span>' if low > 0 else ''}
                 </div>
             </div>
         """
@@ -1530,14 +1553,17 @@ class HTMLReportGenerator:
         if events:
             html += """
             <h4>Detected Beaconing Patterns:</h4>
-            <table class="detail-table">
-                <tr>
-                    <th>Source IP</th>
-                    <th>Destination</th>
-                    <th>Beacon Count</th>
-                    <th>Interval</th>
-                    <th>Severity</th>
-                </tr>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Source IP</th>
+                        <th>Destination</th>
+                        <th>Beacon Count</th>
+                        <th>Interval</th>
+                        <th>Severity</th>
+                    </tr>
+                </thead>
+                <tbody>
             """
 
             for event in events[:20]:  # Limit to 20 events
@@ -1559,7 +1585,7 @@ class HTMLReportGenerator:
                 </tr>
                 """
 
-            html += "</table>"
+            html += "</tbody></table>"
 
         # Educational info
         html += """
@@ -1593,27 +1619,23 @@ class HTMLReportGenerator:
         severity_breakdown = lateral_movement_data.get("severity_breakdown", {})
         type_breakdown = lateral_movement_data.get("type_breakdown", {})
 
+        critical = severity_breakdown.get("critical", 0)
+        high = severity_breakdown.get("high", 0)
+        medium = severity_breakdown.get("medium", 0)
+        low = severity_breakdown.get("low", 0)
+
         html += f"""
             <div class="alert alert-danger">
                 <strong>🚨 {total_lateral_movement} potential lateral movement event(s) detected</strong>
             </div>
 
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('critical', 0)}</div>
-                    <div class="stat-label">Critical</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('high', 0)}</div>
-                    <div class="stat-label">High</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('medium', 0)}</div>
-                    <div class="stat-label">Medium</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{severity_breakdown.get('low', 0)}</div>
-                    <div class="stat-label">Low</div>
+            <div class="metric-card" style="border-left-color: #6c757d;">
+                <div class="metric-label">Severity Breakdown</div>
+                <div class="metric-value" style="font-size: 1.2em;">
+                    {f'<span class="badge badge-critical">{critical} Critical</span> ' if critical > 0 else ''}
+                    {f'<span class="badge badge-high">{high} High</span> ' if high > 0 else ''}
+                    {f'<span class="badge badge-medium">{medium} Medium</span> ' if medium > 0 else ''}
+                    {f'<span class="badge badge-low">{low} Low</span>' if low > 0 else ''}
                 </div>
             </div>
         """
@@ -1623,14 +1645,17 @@ class HTMLReportGenerator:
         if events:
             html += """
             <h4>Detected Lateral Movement:</h4>
-            <table class="detail-table">
-                <tr>
-                    <th>Type</th>
-                    <th>Source IP</th>
-                    <th>Targets</th>
-                    <th>Protocols</th>
-                    <th>Severity</th>
-                </tr>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Source IP</th>
+                        <th>Targets</th>
+                        <th>Protocols</th>
+                        <th>Severity</th>
+                    </tr>
+                </thead>
+                <tbody>
             """
 
             for event in events[:20]:  # Limit to 20 events
@@ -1658,7 +1683,7 @@ class HTMLReportGenerator:
                 </tr>
                 """
 
-            html += "</table>"
+            html += "</tbody></table>"
 
         # Educational info
         html += """

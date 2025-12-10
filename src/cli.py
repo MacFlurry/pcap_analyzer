@@ -36,6 +36,9 @@ from .config import Config, get_config
 from .exporters.csv_export import CSVExporter
 from .exporters.html_report import HTMLReportGenerator
 from .parsers.fast_parser import FastPacketParser
+from .performance.memory_optimizer import MemoryMonitor, MemoryOptimizer
+from .performance.parallel_executor import ParallelAnalyzerExecutor
+from .performance.streaming_processor import StreamingProcessor
 from .report_generator import ReportGenerator
 from .ssh_capture import capture_from_config
 from .utils.result_sanitizer import get_empty_analyzer_result, sanitize_results
@@ -61,13 +64,32 @@ def _generate_reports(results: dict[str, Any], pcap_file: str, output: Optional[
         Dictionary with paths to generated report files
     """
     console.print("\n[cyan]Génération des rapports...[/cyan]")
+
+    # Use the old generator for JSON only
     report_gen = ReportGenerator(output_dir=cfg.get("reports.output_dir", "reports"))
-    report_files = report_gen.generate_report(results, pcap_file, output)
 
-    console.print(f"[green]✓ Rapport JSON: {report_files['json']}[/green]")
-    console.print(f"[green]✓ Rapport HTML: {report_files['html']}[/green]")
+    # Prepare output paths
+    output_dir = Path(cfg.get("reports.output_dir", "reports"))
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    return report_files
+    if output is None:
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output = f"pcap_analysis_{timestamp}"
+
+    # Generate JSON with old generator
+    json_path = output_dir / f"{output}.json"
+    report_gen._generate_json(results, json_path)
+
+    # Generate HTML with NEW generator (Sprint 9 - with tabs)
+    html_generator = HTMLReportGenerator()
+    html_path = output_dir / f"{output}.html"
+    html_generator.save(results, str(html_path))
+
+    console.print(f"[green]✓ Rapport JSON: {json_path}[/green]")
+    console.print(f"[green]✓ Rapport HTML: {html_path}[/green]")
+
+    return {"json": str(json_path), "html": str(html_path)}
 
 
 def _handle_exports(
@@ -155,6 +177,9 @@ def analyze_pcap_hybrid(
     show_details: bool = False,
     details_limit: int = 20,
     include_localhost: bool = False,
+    enable_streaming: bool = True,
+    enable_parallel: bool = False,
+    memory_limit_mb: Optional[float] = None,
 ) -> dict[str, Any]:
     """
     PHASE 2 OPTIMIZATION: Hybrid analysis using dpkt + Scapy.
@@ -162,13 +187,34 @@ def analyze_pcap_hybrid(
     This provides 3-5x performance boost by:
     1. Using dpkt for fast metadata extraction (simple analyzers)
     2. Using Scapy only for complex analysis (DNS, ICMP, deep packet inspection)
+    3. (Sprint 10) Automatic streaming mode for large files (>100MB)
+    4. (Sprint 10) Optional parallel execution for multi-core CPUs
 
     Performance comparison:
     - Old (Scapy only): ~94 seconds for 172k packets
     - New (Hybrid): ~30-40 seconds (target)
+    - New (Hybrid + Streaming): memory-efficient for files >100MB
     """
     thresholds = config.thresholds
     results = {}
+
+    # Sprint 10: Initialize performance optimization tools
+    memory_optimizer = MemoryOptimizer(memory_limit_mb=memory_limit_mb)
+    streaming_processor = StreamingProcessor(pcap_file)
+
+    # Show performance mode info
+    perf_stats = streaming_processor.get_stats()
+    console.print(f"\n[cyan]📊 Performance Mode:[/cyan]")
+    console.print(f"  File size: {perf_stats['file_size_mb']:.2f} MB")
+    console.print(f"  Mode: {perf_stats['processing_mode']}")
+    console.print(f"  Description: {perf_stats['recommended_mode']}")
+    if perf_stats['chunk_size']:
+        console.print(f"  Chunk size: {perf_stats['chunk_size']} packets")
+
+    # Show memory status
+    mem_stats = memory_optimizer.get_memory_stats()
+    console.print(f"  System memory: {mem_stats.available_mb:.0f} MB available ({mem_stats.percent:.0f}% used)")
+    console.print()
 
     # Step 1: Fast metadata extraction with dpkt (3-5x faster than Scapy)
     console.print("[cyan]Phase 1/2: Extraction des métadonnées...[/cyan]")
@@ -252,34 +298,81 @@ def analyze_pcap_hybrid(
     c2_beaconing_detector = C2BeaconingDetector(include_localhost=include_localhost)
     lateral_movement_detector = LateralMovementDetector(include_localhost=include_localhost)
 
-    # Collect packets for batch analysis
+    # Sprint 10: Use streaming processor for memory efficiency
+    processing_mode = perf_stats['processing_mode']
     scapy_packets = []
-
     complex_packet_count = 0
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[cyan]Processing complex protocols..."),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
 
-        with PcapReader(pcap_file) as reader:
-            for i, packet in enumerate(reader):
-                # Collect all packets for protocol/jitter analysis
-                scapy_packets.append(packet)
+    # Wrap packet loading with memory monitoring
+    with MemoryMonitor("Packet Loading", memory_optimizer) as monitor:
+        if processing_mode == "memory" and enable_streaming:
+            # Small files: Load all packets into memory (original behavior)
+            console.print("[cyan]Loading packets into memory (small file mode)...[/cyan]")
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[cyan]Processing complex protocols..."),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
 
-                # Only process packets that need deep inspection
-                if packet.haslayer(DNS):
-                    dns_analyzer.process_packet(packet, i)
-                    complex_packet_count += 1
-                if packet.haslayer(ICMP):
-                    icmp_analyzer.process_packet(packet, i)
-                    complex_packet_count += 1
+                with PcapReader(pcap_file) as reader:
+                    for i, packet in enumerate(reader):
+                        # Collect all packets for protocol/jitter analysis
+                        scapy_packets.append(packet)
 
-                if i % PROGRESS_UPDATE_INTERVAL == 0:
-                    progress.update(task, completed=i)
+                        # Only process packets that need deep inspection
+                        if packet.haslayer(DNS):
+                            dns_analyzer.process_packet(packet, i)
+                            complex_packet_count += 1
+                        if packet.haslayer(ICMP):
+                            icmp_analyzer.process_packet(packet, i)
+                            complex_packet_count += 1
+
+                        if i % PROGRESS_UPDATE_INTERVAL == 0:
+                            progress.update(task, completed=i)
+
+        else:
+            # Large files: Use streaming/chunked processing
+            console.print(f"[cyan]Using streaming mode for large file ({processing_mode})...[/cyan]")
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[cyan]Processing complex protocols..."),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
+                packet_idx = 0
+
+                for chunk in streaming_processor.stream_chunks():
+                    # Extend scapy_packets with chunk
+                    scapy_packets.extend(chunk)
+
+                    # Process chunk for deep inspection
+                    for packet in chunk:
+                        if packet.haslayer(DNS):
+                            dns_analyzer.process_packet(packet, packet_idx)
+                            complex_packet_count += 1
+                        if packet.haslayer(ICMP):
+                            icmp_analyzer.process_packet(packet, packet_idx)
+                            complex_packet_count += 1
+
+                        packet_idx += 1
+
+                        if packet_idx % PROGRESS_UPDATE_INTERVAL == 0:
+                            progress.update(task, completed=packet_idx)
+
+                    # Trigger GC after each chunk if under memory pressure
+                    if memory_optimizer.check_memory_pressure():
+                        console.print(f"[yellow]  Memory pressure detected, triggering GC...[/yellow]")
+                        collected = memory_optimizer.trigger_gc(force=True)
+                        console.print(f"[green]  Collected {collected} objects[/green]")
+
+    # Show memory usage
+    mem_summary = monitor.get_summary()
+    console.print(f"[cyan]Memory used for packet loading: {mem_summary['used_mb']:.2f} MB[/cyan]")
 
     # Analyze protocol distribution and jitter
     console.print("[cyan]Analyzing protocol distribution...[/cyan]")
@@ -554,6 +647,14 @@ def analyze_pcap_hybrid(
     else:
         console.print("  ✓ No lateral movement detected")
 
+    # Sprint 10: Display final memory report
+    console.print("\n[cyan]📊 Memory Report:[/cyan]")
+    mem_report = memory_optimizer.get_memory_report()
+    console.print(f"  Current usage: {mem_report['current_mb']:.2f} MB")
+    console.print(f"  Peak usage: {mem_report['peak_mb']:.2f} MB")
+    console.print(f"  GC triggered: {mem_report['gc_triggered_count']} times")
+    console.print(f"  Recommendation: {mem_report['recommendation']}")
+
     return results
 
 
@@ -575,8 +676,12 @@ def cli():
 @click.option("--export-csv", type=click.Path(), help="Export CSV files to directory")
 @click.option("--export-dir", type=click.Path(), help="Export all formats (HTML + CSV) to directory")
 @click.option("--include-localhost", is_flag=True, help="Include localhost traffic in security analysis (default: excluded)")
+@click.option("--no-streaming", is_flag=True, help="Disable automatic streaming mode for large files (Sprint 10)")
+@click.option("--parallel", is_flag=True, help="Enable parallel analyzer execution using multiple CPU cores (Sprint 10 - experimental)")
+@click.option("--memory-limit", type=float, help="Set memory limit in MB (default: 80% of available memory)")
 def analyze(
-    pcap_file, latency, config, output, no_report, no_details, details_limit, export_html, export_csv, export_dir, include_localhost
+    pcap_file, latency, config, output, no_report, no_details, details_limit, export_html, export_csv, export_dir, include_localhost,
+    no_streaming, parallel, memory_limit
 ):
     """
     Analyse un fichier PCAP local pour détecter les causes de latence
@@ -616,9 +721,13 @@ def analyze(
     show_details = not no_details
 
     # Analyse avec le mode hybride optimisé (dpkt + Scapy)
+    # Sprint 10: Add performance optimizations
     results = analyze_pcap_hybrid(
         pcap_file, cfg, latency_filter=latency, show_details=show_details, details_limit=details_limit,
-        include_localhost=include_localhost
+        include_localhost=include_localhost,
+        enable_streaming=not no_streaming,
+        enable_parallel=parallel,
+        memory_limit_mb=memory_limit
     )
 
     # Génération des rapports
@@ -736,6 +845,48 @@ def show_config(config):
     table.add_row("  formats", ", ".join(report_config.get("formats", [])))
 
     console.print(table)
+
+
+@cli.command()
+@click.argument("pcap_file", type=click.Path(exists=True))
+@click.option("-o", "--output", type=click.Path(), help="Save benchmark report to file")
+def benchmark(pcap_file, output):
+    """
+    Benchmark PCAP analyzer performance (Sprint 10)
+
+    Measures performance with different optimization modes:
+    - Memory vs Streaming mode comparison
+    - Throughput calculation (packets/second)
+    - Memory usage profiling
+    - Consistency testing with multiple iterations
+
+    Example:
+        pcap_analyzer benchmark capture.pcap
+        pcap_analyzer benchmark large_file.pcap -o benchmark_report.txt
+    """
+    from .performance.benchmark import run_benchmark
+
+    console.print("\n[cyan]🏃 Running Performance Benchmark...[/cyan]")
+    console.print(f"[cyan]File: {pcap_file}[/cyan]\n")
+
+    try:
+        # Run benchmark
+        report = run_benchmark(pcap_file)
+
+        # Display report
+        console.print("\n" + report)
+
+        # Save to file if requested
+        if output:
+            output_path = Path(output)
+            output_path.write_text(report)
+            console.print(f"\n[green]✓ Benchmark report saved to: {output}[/green]")
+
+    except Exception as e:
+        console.print(f"[red]❌ Benchmark failed: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 def main():

@@ -41,6 +41,7 @@ setup(
         "rich>=13.7.0,<14.0",
         "click>=8.1.7,<9.0",
         "numpy>=1.24.0",  # NumPy 2.x compatible (tested with 2.0.2)
+        "psutil>=5.9.0,<6.0",  # Sprint 10: Memory monitoring and system resource tracking
     ],
     entry_points={
         "console_scripts": [
