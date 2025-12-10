@@ -377,15 +377,26 @@ def analyze_pcap_hybrid(
                         if packet_idx % PROGRESS_UPDATE_INTERVAL == 0:
                             progress.update(task, completed=packet_idx)
 
-                    # Trigger GC after each chunk if under memory pressure
+                    # Trigger GC after each chunk if under memory pressure (Fix for Issue #4)
                     if memory_optimizer.check_memory_pressure():
-                        console.print(f"[yellow]  Memory pressure detected, triggering GC...[/yellow]")
-                        collected = memory_optimizer.trigger_gc(force=True)
-                        console.print(f"[green]  Collected {collected} objects[/green]")
+                        collected = memory_optimizer.trigger_gc(force=False)  # Use cooldown logic
+                        # Rate-limit logging to reduce spam
+                        if collected > 0:
+                            console.print(f"[green]  GC collected {collected} objects[/green]")
+                        elif memory_optimizer.consecutive_empty_gcs == 1:
+                            # Only log once when GC starts being ineffective
+                            console.print(f"[dim]  GC triggered but collected 0 objects (will reduce frequency)[/dim]")
+
+                    # Explicit cleanup after chunk processing
+                    memory_optimizer.release_chunk_memory(chunk)
 
     # Show memory usage
     mem_summary = monitor.get_summary()
     console.print(f"[cyan]Memory used for packet loading: {mem_summary['used_mb']:.2f} MB[/cyan]")
+
+    # Reset GC tracking before Phase 2 (Fix for Issue #4)
+    # This allows GC to retry if needed during analysis phase
+    memory_optimizer.reset_gc_tracking()
 
     # Analyze protocol distribution and jitter
     console.print("[cyan]Analyzing protocol distribution...[/cyan]")

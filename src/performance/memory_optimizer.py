@@ -41,17 +41,25 @@ class MemoryOptimizer:
     - Object size analysis
     """
 
-    def __init__(self, memory_limit_mb: Optional[float] = None):
+    def __init__(self, memory_limit_mb: Optional[float] = None, low_memory_mode: bool = False):
         """
         Initialize memory optimizer.
 
         Args:
             memory_limit_mb: Optional memory limit in MB (default: 80% of available)
+            low_memory_mode: Enable aggressive memory management (default: False)
         """
         self.process = psutil.Process(os.getpid())
         self.memory_limit_mb = memory_limit_mb or (psutil.virtual_memory().available / (1024 * 1024) * 0.8)
         self.peak_memory_mb = 0.0
         self.gc_count = 0
+        self.low_memory_mode = low_memory_mode
+
+        # Cooldown tracking (Fix for Issue #4)
+        self.last_gc_time = 0.0
+        self.gc_cooldown_seconds = 5.0  # Wait 5s between GC attempts
+        self.consecutive_empty_gcs = 0
+        self.max_consecutive_empty_gcs = 3  # Stop after 3 empty GCs
 
     def get_memory_stats(self) -> MemoryStats:
         """
@@ -77,27 +85,65 @@ class MemoryOptimizer:
 
     def check_memory_pressure(self) -> bool:
         """
-        Check if system is under memory pressure.
+        Check if process is under memory pressure.
 
         Returns:
             True if memory usage is high
+
+        Note:
+            Fix for Issue #4 - Now uses process memory instead of system memory.
+            This prevents false positives when other processes use system RAM.
         """
         stats = self.get_memory_stats()
-        return stats.process_mb > self.memory_limit_mb or stats.percent > 85
+
+        # In low memory mode, use stricter thresholds
+        if self.low_memory_mode:
+            # Trigger at 70% of limit
+            return stats.process_mb > (self.memory_limit_mb * 0.7)
+
+        # Normal mode: Only check process memory, ignore system memory
+        # Use 90% of process limit (increased from implicit 100%)
+        return stats.process_mb > (self.memory_limit_mb * 0.9)
 
     def trigger_gc(self, force: bool = False) -> int:
         """
-        Trigger garbage collection if needed.
+        Trigger garbage collection if needed with cooldown protection.
 
         Args:
             force: Force GC even if not under pressure
 
         Returns:
             Number of objects collected
+
+        Note:
+            Fix for Issue #4 - Added cooldown mechanism and consecutive empty GC tracking.
+            Prevents excessive GC calls when collection yields no results.
         """
+        import time
+
+        current_time = time.time()
+
+        # Skip if in cooldown period (unless forced)
+        if not force and (current_time - self.last_gc_time) < self.gc_cooldown_seconds:
+            return 0
+
+        # Skip if too many consecutive empty GCs
+        if self.consecutive_empty_gcs >= self.max_consecutive_empty_gcs:
+            return 0
+
+        # Check if GC is needed
         if force or self.check_memory_pressure():
             collected = gc.collect()
             self.gc_count += 1
+            self.last_gc_time = current_time
+
+            # Track consecutive empty GCs
+            if collected == 0:
+                self.consecutive_empty_gcs += 1
+            else:
+                # Reset counter on successful collection
+                self.consecutive_empty_gcs = 0
+
             return collected
         return 0
 
@@ -140,6 +186,31 @@ class MemoryOptimizer:
         import re
         re.purge()
 
+    def reset_gc_tracking(self):
+        """
+        Reset GC tracking counters.
+
+        Useful when entering a new processing phase where GC behavior might change.
+        """
+        self.consecutive_empty_gcs = 0
+        self.last_gc_time = 0.0
+
+    def release_chunk_memory(self, chunk_data: Any):
+        """
+        Explicitly release memory for chunk data.
+
+        Args:
+            chunk_data: Chunk data to release (list, dict, etc.)
+
+        Note:
+            Fix for Issue #4 - Explicitly clear references to help GC.
+        """
+        if isinstance(chunk_data, list):
+            chunk_data.clear()
+        elif isinstance(chunk_data, dict):
+            chunk_data.clear()
+        del chunk_data
+
     def get_peak_memory(self) -> float:
         """
         Get peak memory usage since start.
@@ -167,6 +238,8 @@ class MemoryOptimizer:
             'limit_mb': self.memory_limit_mb,
             'under_pressure': self.check_memory_pressure(),
             'gc_triggered_count': self.gc_count,
+            'consecutive_empty_gcs': self.consecutive_empty_gcs,
+            'low_memory_mode': self.low_memory_mode,
             'recommendation': self._get_recommendation(stats)
         }
 
