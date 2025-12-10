@@ -41,55 +41,90 @@ class JitterAnalyzer:
     - Global jitter across all flows
     - High jitter flow identification
     - Jitter percentiles (p50, p95, p99)
+
+    Fix for Issue #5:
+    - Session-aware segmentation (TCP SYN detection)
+    - Configurable gap threshold for session breaks
+    - Dual reporting (raw + filtered statistics)
     """
 
-    def __init__(self):
+    def __init__(self, session_gap_threshold: float = 60.0, enable_session_detection: bool = True):
+        """
+        Initialize jitter analyzer.
+
+        Args:
+            session_gap_threshold: Max gap (seconds) before treating as new session (default: 60s)
+            enable_session_detection: Enable TCP session boundary detection (default: True)
+        """
+        self.session_gap_threshold = session_gap_threshold
+        self.enable_session_detection = enable_session_detection
         self.reset()
 
     def reset(self):
         """Reset all counters and state."""
-        self.flow_packets = defaultdict(list)  # Flow -> list of (timestamp, packet_num)
+        self.flow_packets = defaultdict(list)  # Flow -> list of (timestamp, packet_num, is_syn)
         self.flow_jitters = defaultdict(list)  # Flow -> list of jitter values
-        self.all_jitters = []  # Global jitter values
+        self.flow_jitters_filtered = defaultdict(list)  # Jitter without large gaps
+        self.all_jitters = []  # Global jitter values (raw)
+        self.all_jitters_filtered = []  # Global jitter values (filtered)
+        self.sessions_detected = 0  # Count of session boundaries detected
+        self.large_gaps_filtered = 0  # Count of large gaps filtered out
 
     def analyze(self, packets: List) -> Dict[str, Any]:
         """
-        Analyze jitter across all flows.
+        Analyze jitter across all flows with session-aware segmentation.
 
         Args:
             packets: List of scapy packets with timestamps
 
         Returns:
-            Dictionary with jitter statistics
+            Dictionary with jitter statistics (raw + filtered)
         """
         self.reset()
 
-        # Group packets by flow and sort by timestamp
+        # Group packets by flow and detect TCP SYN packets
         for idx, packet in enumerate(packets):
             flow_key = self._get_flow_key(packet)
             if flow_key:
                 timestamp = self._get_timestamp(packet)
-                self.flow_packets[flow_key].append((timestamp, idx))
+                is_syn = self._is_tcp_syn(packet) if self.enable_session_detection else False
+                self.flow_packets[flow_key].append((timestamp, idx, is_syn))
 
-        # Calculate jitter for each flow
-        for flow_key, timestamps in self.flow_packets.items():
+        # Calculate jitter for each flow with session segmentation
+        for flow_key, packet_info in self.flow_packets.items():
             # Sort by timestamp (handle out-of-order packets)
-            timestamps.sort(key=lambda x: x[0])
+            packet_info.sort(key=lambda x: x[0])
 
-            # Calculate inter-packet delays
-            delays = []
-            for i in range(1, len(timestamps)):
-                delay = timestamps[i][0] - timestamps[i - 1][0]
-                delays.append(delay)
+            # Segment sessions based on SYN flags and large gaps
+            sessions = self._segment_sessions(packet_info)
+            self.sessions_detected += len(sessions) - 1  # Count session boundaries
 
-            # Calculate jitter (IPDV) = |delay[i] - delay[i-1]|
-            jitters = []
-            for i in range(1, len(delays)):
-                jitter = abs(delays[i] - delays[i - 1])
-                jitters.append(jitter)
-                self.all_jitters.append(jitter)
+            # Calculate jitter for each session separately
+            for session in sessions:
+                if len(session) < 3:  # Need at least 3 packets for jitter
+                    continue
 
-            self.flow_jitters[flow_key] = jitters
+                # Calculate inter-packet delays
+                delays = []
+                for i in range(1, len(session)):
+                    delay = session[i][0] - session[i - 1][0]
+                    delays.append((delay, i))
+
+                # Calculate jitter (IPDV) = |delay[i] - delay[i-1]|
+                for i in range(1, len(delays)):
+                    jitter = abs(delays[i][0] - delays[i - 1][0])
+                    delay_current = delays[i][0]
+
+                    # Raw jitter (all data)
+                    self.flow_jitters[flow_key].append(jitter)
+                    self.all_jitters.append(jitter)
+
+                    # Filtered jitter (exclude large gaps)
+                    if delay_current < self.session_gap_threshold:
+                        self.flow_jitters_filtered[flow_key].append(jitter)
+                        self.all_jitters_filtered.append(jitter)
+                    else:
+                        self.large_gaps_filtered += 1
 
         return self.get_results()
 
@@ -124,6 +159,62 @@ class JitterAnalyzer:
         """Get timestamp from packet."""
         return float(packet.time) if hasattr(packet, "time") else 0.0
 
+    def _is_tcp_syn(self, packet) -> bool:
+        """
+        Check if packet is a TCP SYN (session start).
+
+        Args:
+            packet: Scapy packet
+
+        Returns:
+            True if TCP SYN flag is set (without ACK)
+        """
+        if TCP in packet:
+            tcp_layer = packet[TCP]
+            flags = tcp_layer.flags
+            # SYN without ACK indicates new connection
+            return bool(flags & 0x02) and not bool(flags & 0x10)
+        return False
+
+    def _segment_sessions(self, packet_info: List[Tuple]) -> List[List[Tuple]]:
+        """
+        Segment packets into sessions based on TCP SYN and large time gaps.
+
+        Args:
+            packet_info: List of (timestamp, packet_num, is_syn) tuples
+
+        Returns:
+            List of sessions, where each session is a list of packet_info tuples
+        """
+        if len(packet_info) == 0:
+            return []
+
+        sessions = []
+        current_session = [packet_info[0]]
+
+        for i in range(1, len(packet_info)):
+            timestamp, pkt_num, is_syn = packet_info[i]
+            prev_timestamp = packet_info[i - 1][0]
+
+            # Start new session if:
+            # 1. TCP SYN detected (new connection)
+            # 2. Large time gap detected (> session_gap_threshold)
+            time_gap = timestamp - prev_timestamp
+
+            if (self.enable_session_detection and is_syn) or time_gap > self.session_gap_threshold:
+                # Save current session and start new one
+                sessions.append(current_session)
+                current_session = [packet_info[i]]
+            else:
+                # Continue current session
+                current_session.append(packet_info[i])
+
+        # Add last session
+        if current_session:
+            sessions.append(current_session)
+
+        return sessions
+
     def _format_flow_key(self, flow_key: Tuple) -> str:
         """Format flow key as readable string."""
         src_ip, src_port, dst_ip, dst_port, proto = flow_key
@@ -131,87 +222,134 @@ class JitterAnalyzer:
 
     def get_results(self) -> Dict[str, Any]:
         """
-        Get jitter analysis results.
+        Get jitter analysis results with dual reporting (raw + filtered).
 
         Returns:
-            Dictionary with jitter statistics
+            Dictionary with jitter statistics including both raw and filtered metrics
         """
         flows_with_jitter = {}
+        flows_with_jitter_filtered = {}
         high_jitter_flows = []
 
-        # Calculate per-flow statistics
-        for flow_key, jitters in self.flow_jitters.items():
+        # Calculate per-flow statistics (raw and filtered)
+        for flow_key in self.flow_jitters.keys():
+            jitters = self.flow_jitters[flow_key]
+            jitters_filtered = self.flow_jitters_filtered.get(flow_key, [])
+
             if len(jitters) == 0:
-                continue  # Need at least 3 packets for jitter calculation
+                continue
 
-            # Calculate statistics
-            mean_jitter = statistics.mean(jitters)
-            median_jitter = statistics.median(jitters)
-            max_jitter = max(jitters)
-            min_jitter = min(jitters)
-
-            # Standard deviation (if enough samples)
-            if len(jitters) > 1:
-                stdev_jitter = statistics.stdev(jitters)
-            else:
-                stdev_jitter = 0.0
-
-            # Percentiles
-            sorted_jitters = sorted(jitters)
-            p95_jitter = sorted_jitters[int(len(sorted_jitters) * 0.95)] if len(sorted_jitters) > 1 else max_jitter
-            p99_jitter = sorted_jitters[int(len(sorted_jitters) * 0.99)] if len(sorted_jitters) > 1 else max_jitter
-
-            flow_stats = {
-                "packet_count": len(self.flow_packets[flow_key]),
-                "jitter_samples": len(jitters),
-                "mean_jitter": mean_jitter,
-                "median_jitter": median_jitter,
-                "p50_jitter": median_jitter,
-                "p95_jitter": p95_jitter,
-                "p99_jitter": p99_jitter,
-                "min_jitter": min_jitter,
-                "max_jitter": max_jitter,
-                "stdev_jitter": stdev_jitter,
-            }
-
+            # Raw statistics
+            flow_stats_raw = self._calculate_flow_stats(flow_key, jitters)
             flow_key_str = self._format_flow_key(flow_key)
-            flows_with_jitter[flow_key_str] = flow_stats
+            flows_with_jitter[flow_key_str] = flow_stats_raw
 
-            # Identify high jitter flows
+            # Filtered statistics (without large gaps)
+            if len(jitters_filtered) > 0:
+                flow_stats_filtered = self._calculate_flow_stats(flow_key, jitters_filtered)
+                flows_with_jitter_filtered[flow_key_str] = flow_stats_filtered
+
+            # Identify high jitter flows (use filtered stats if available)
+            stats_to_check = flow_stats_filtered if len(jitters_filtered) > 0 else flow_stats_raw
+            mean_jitter = stats_to_check["mean_jitter"]
+            p95_jitter = stats_to_check["p95_jitter"]
+
             if mean_jitter > JITTER_THRESHOLD_HIGH or p95_jitter > JITTER_THRESHOLD_HIGH:
-                high_jitter_flows.append(
-                    {
-                        "flow": flow_key_str,
-                        "mean_jitter": mean_jitter,
-                        "max_jitter": max_jitter,
-                        "p95_jitter": p95_jitter,
-                        "severity": self._classify_jitter_severity(mean_jitter),
-                    }
-                )
+                high_jitter_flows.append({
+                    "flow": flow_key_str,
+                    "mean_jitter": mean_jitter,
+                    "max_jitter": stats_to_check["max_jitter"],
+                    "p95_jitter": p95_jitter,
+                    "severity": self._classify_jitter_severity(mean_jitter),
+                })
 
-        # Global statistics
-        global_stats = {}
-        if len(self.all_jitters) > 0:
-            global_stats = {
-                "total_jitter_measurements": len(self.all_jitters),
-                "mean_jitter": statistics.mean(self.all_jitters),
-                "median_jitter": statistics.median(self.all_jitters),
-                "max_jitter": max(self.all_jitters),
-                "min_jitter": min(self.all_jitters),
-            }
+        # Global statistics (raw)
+        global_stats_raw = self._calculate_global_stats(self.all_jitters)
 
-            if len(self.all_jitters) > 1:
-                global_stats["stdev_jitter"] = statistics.stdev(self.all_jitters)
-                sorted_all = sorted(self.all_jitters)
-                global_stats["p95_jitter"] = sorted_all[int(len(sorted_all) * 0.95)]
-                global_stats["p99_jitter"] = sorted_all[int(len(sorted_all) * 0.99)]
+        # Global statistics (filtered)
+        global_stats_filtered = self._calculate_global_stats(self.all_jitters_filtered)
 
         return {
             "total_flows": len(self.flow_packets),
             "flows_with_jitter": flows_with_jitter,
+            "flows_with_jitter_filtered": flows_with_jitter_filtered,
             "high_jitter_flows": high_jitter_flows,
-            "global_statistics": global_stats,
+            "global_statistics": global_stats_raw,
+            "global_statistics_filtered": global_stats_filtered,
+            "session_detection_enabled": self.enable_session_detection,
+            "session_gap_threshold": self.session_gap_threshold,
+            "sessions_detected": self.sessions_detected,
+            "large_gaps_filtered": self.large_gaps_filtered,
         }
+
+    def _calculate_flow_stats(self, flow_key: Tuple, jitters: List[float]) -> Dict[str, Any]:
+        """
+        Calculate statistics for a flow's jitter values.
+
+        Args:
+            flow_key: Flow identifier tuple
+            jitters: List of jitter values
+
+        Returns:
+            Dictionary with flow statistics
+        """
+        if len(jitters) == 0:
+            return {}
+
+        mean_jitter = statistics.mean(jitters)
+        median_jitter = statistics.median(jitters)
+        max_jitter = max(jitters)
+        min_jitter = min(jitters)
+
+        # Standard deviation (if enough samples)
+        stdev_jitter = statistics.stdev(jitters) if len(jitters) > 1 else 0.0
+
+        # Percentiles
+        sorted_jitters = sorted(jitters)
+        p95_jitter = sorted_jitters[int(len(sorted_jitters) * 0.95)] if len(sorted_jitters) > 1 else max_jitter
+        p99_jitter = sorted_jitters[int(len(sorted_jitters) * 0.99)] if len(sorted_jitters) > 1 else max_jitter
+
+        return {
+            "packet_count": len(self.flow_packets[flow_key]),
+            "jitter_samples": len(jitters),
+            "mean_jitter": mean_jitter,
+            "median_jitter": median_jitter,
+            "p50_jitter": median_jitter,
+            "p95_jitter": p95_jitter,
+            "p99_jitter": p99_jitter,
+            "min_jitter": min_jitter,
+            "max_jitter": max_jitter,
+            "stdev_jitter": stdev_jitter,
+        }
+
+    def _calculate_global_stats(self, jitters: List[float]) -> Dict[str, Any]:
+        """
+        Calculate global statistics for all jitter values.
+
+        Args:
+            jitters: List of all jitter values
+
+        Returns:
+            Dictionary with global statistics
+        """
+        if len(jitters) == 0:
+            return {}
+
+        stats = {
+            "total_jitter_measurements": len(jitters),
+            "mean_jitter": statistics.mean(jitters),
+            "median_jitter": statistics.median(jitters),
+            "max_jitter": max(jitters),
+            "min_jitter": min(jitters),
+        }
+
+        if len(jitters) > 1:
+            stats["stdev_jitter"] = statistics.stdev(jitters)
+            sorted_all = sorted(jitters)
+            stats["p95_jitter"] = sorted_all[int(len(sorted_all) * 0.95)]
+            stats["p99_jitter"] = sorted_all[int(len(sorted_all) * 0.99)]
+
+        return stats
 
     def _classify_jitter_severity(self, mean_jitter: float) -> str:
         """Classify jitter severity based on RFC 3393 thresholds."""
