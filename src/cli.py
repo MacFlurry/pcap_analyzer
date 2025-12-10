@@ -22,9 +22,12 @@ from scapy.layers.l2 import Ether
 
 from .analyzer_factory import AnalyzerFactory
 from .analyzers.brute_force_detector import BruteForceDetector
+from .analyzers.c2_beaconing_detector import C2BeaconingDetector
+from .analyzers.data_exfiltration_detector import DataExfiltrationDetector
 from .analyzers.ddos_detector import DDoSDetector
 from .analyzers.dns_tunneling_detector import DNSTunnelingDetector
 from .analyzers.health_score import HealthScoreCalculator
+from .analyzers.lateral_movement_detector import LateralMovementDetector
 from .analyzers.jitter_analyzer import JitterAnalyzer
 from .analyzers.port_scan_detector import PortScanDetector
 from .analyzers.protocol_distribution import ProtocolDistributionAnalyzer
@@ -244,6 +247,11 @@ def analyze_pcap_hybrid(
     ddos_detector = DDoSDetector(include_localhost=include_localhost)
     dns_tunneling_detector = DNSTunnelingDetector(include_localhost=include_localhost)
 
+    # Sprint 11: Advanced Threat Detection
+    data_exfiltration_detector = DataExfiltrationDetector(include_localhost=include_localhost)
+    c2_beaconing_detector = C2BeaconingDetector(include_localhost=include_localhost)
+    lateral_movement_detector = LateralMovementDetector(include_localhost=include_localhost)
+
     # Collect packets for batch analysis
     scapy_packets = []
 
@@ -296,6 +304,15 @@ def analyze_pcap_hybrid(
     console.print("[cyan]Detecting DNS tunneling...[/cyan]")
     dns_tunneling_results = dns_tunneling_detector.analyze(scapy_packets)
 
+    console.print("[cyan]Detecting data exfiltration...[/cyan]")
+    data_exfiltration_results = data_exfiltration_detector.analyze(scapy_packets)
+
+    console.print("[cyan]Detecting C2 beaconing...[/cyan]")
+    c2_beaconing_results = c2_beaconing_detector.analyze(scapy_packets)
+
+    console.print("[cyan]Detecting lateral movement...[/cyan]")
+    lateral_movement_results = lateral_movement_detector.analyze(scapy_packets)
+
     console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
 
     # Finalize all analyzers
@@ -334,6 +351,11 @@ def analyze_pcap_hybrid(
     results["brute_force_detection"] = brute_force_results
     results["ddos_detection"] = ddos_results
     results["dns_tunneling_detection"] = dns_tunneling_results
+
+    # Sprint 11: Advanced Threat Detection results
+    results["data_exfiltration_detection"] = data_exfiltration_results
+    results["c2_beaconing_detection"] = c2_beaconing_results
+    results["lateral_movement_detection"] = lateral_movement_results
 
     # Add empty results for unimplemented analyzers with proper structure
     for key in ["ip_fragmentation", "asymmetric_traffic", "sack"]:
@@ -495,6 +517,42 @@ def analyze_pcap_hybrid(
                          f"Low: {severity.get('low', 0)}")
     else:
         console.print("  ✓ No DNS tunneling detected")
+
+    # Data exfiltration detection
+    if data_exfiltration_results.get("total_exfiltration_detected", 0) > 0:
+        console.print(f"  🔴 Data Exfiltration: {data_exfiltration_results['total_exfiltration_detected']}")
+        severity = data_exfiltration_results.get("severity_breakdown", {})
+        if severity:
+            console.print(f"     Critical: {severity.get('critical', 0)}, "
+                         f"High: {severity.get('high', 0)}, "
+                         f"Medium: {severity.get('medium', 0)}, "
+                         f"Low: {severity.get('low', 0)}")
+    else:
+        console.print("  ✓ No data exfiltration detected")
+
+    # C2 beaconing detection
+    if c2_beaconing_results.get("total_beaconing_detected", 0) > 0:
+        console.print(f"  🔴 C2 Beaconing: {c2_beaconing_results['total_beaconing_detected']}")
+        severity = c2_beaconing_results.get("severity_breakdown", {})
+        if severity:
+            console.print(f"     Critical: {severity.get('critical', 0)}, "
+                         f"High: {severity.get('high', 0)}, "
+                         f"Medium: {severity.get('medium', 0)}, "
+                         f"Low: {severity.get('low', 0)}")
+    else:
+        console.print("  ✓ No C2 beaconing detected")
+
+    # Lateral movement detection
+    if lateral_movement_results.get("total_lateral_movement_detected", 0) > 0:
+        console.print(f"  🔴 Lateral Movement: {lateral_movement_results['total_lateral_movement_detected']}")
+        severity = lateral_movement_results.get("severity_breakdown", {})
+        if severity:
+            console.print(f"     Critical: {severity.get('critical', 0)}, "
+                         f"High: {severity.get('high', 0)}, "
+                         f"Medium: {severity.get('medium', 0)}, "
+                         f"Low: {severity.get('low', 0)}")
+    else:
+        console.print("  ✓ No lateral movement detected")
 
     return results
 

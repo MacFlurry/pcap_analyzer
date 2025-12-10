@@ -836,14 +836,21 @@ class HTMLReportGenerator:
         brute_force_data = results.get("brute_force_detection", {})
         ddos_data = results.get("ddos_detection", {})
         dns_tunneling_data = results.get("dns_tunneling_detection", {})
+        data_exfiltration_data = results.get("data_exfiltration_detection", {})
+        c2_beaconing_data = results.get("c2_beaconing_detection", {})
+        lateral_movement_data = results.get("lateral_movement_detection", {})
 
         has_port_scans = port_scan_data.get("total_scans_detected", 0) > 0
         has_brute_force = brute_force_data.get("total_attacks_detected", 0) > 0
         has_ddos = ddos_data.get("total_attacks_detected", 0) > 0
         has_dns_tunneling = dns_tunneling_data.get("total_tunneling_detected", 0) > 0
+        has_data_exfiltration = data_exfiltration_data.get("total_exfiltration_detected", 0) > 0
+        has_c2_beaconing = c2_beaconing_data.get("total_beaconing_detected", 0) > 0
+        has_lateral_movement = lateral_movement_data.get("total_lateral_movement_detected", 0) > 0
 
         # If no security issues detected
-        if not has_port_scans and not has_brute_force and not has_ddos and not has_dns_tunneling:
+        if not any([has_port_scans, has_brute_force, has_ddos, has_dns_tunneling,
+                    has_data_exfiltration, has_c2_beaconing, has_lateral_movement]):
             html += """
             <div class="no-issues">
                 ✓ No security issues detected. The network traffic appears clean with no signs of port scanning, brute-force attacks, DDoS, or DNS tunneling.
@@ -866,6 +873,18 @@ class HTMLReportGenerator:
         # DNS Tunneling Detection Section
         if "dns_tunneling_detection" in results:
             html += self._generate_dns_tunneling_subsection(dns_tunneling_data)
+
+        # Data Exfiltration Detection Section
+        if "data_exfiltration_detection" in results:
+            html += self._generate_data_exfiltration_subsection(data_exfiltration_data)
+
+        # C2 Beaconing Detection Section
+        if "c2_beaconing_detection" in results:
+            html += self._generate_c2_beaconing_subsection(c2_beaconing_data)
+
+        # Lateral Movement Detection Section
+        if "lateral_movement_detection" in results:
+            html += self._generate_lateral_movement_subsection(lateral_movement_data)
 
         return html
 
@@ -1364,3 +1383,300 @@ class HTMLReportGenerator:
             """
 
         return html
+
+    def _generate_data_exfiltration_subsection(self, data_exfiltration_data: Dict[str, Any]) -> str:
+        """Generate data exfiltration detection subsection."""
+        total_exfiltration = data_exfiltration_data.get("total_exfiltration_detected", 0)
+
+        if total_exfiltration == 0:
+            return ""  # Don't show section if no detections
+
+        html = """
+        <div class="security-subsection">
+            <h3>📤 Data Exfiltration Detection</h3>
+        """
+
+        # Summary
+        severity_breakdown = data_exfiltration_data.get("severity_breakdown", {})
+        type_breakdown = data_exfiltration_data.get("type_breakdown", {})
+
+        html += f"""
+            <div class="alert alert-warning">
+                <strong>⚠️  {total_exfiltration} potential data exfiltration event(s) detected</strong>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('critical', 0)}</div>
+                    <div class="stat-label">Critical</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('high', 0)}</div>
+                    <div class="stat-label">High</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('medium', 0)}</div>
+                    <div class="stat-label">Medium</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('low', 0)}</div>
+                    <div class="stat-label">Low</div>
+                </div>
+            </div>
+        """
+
+        # Events table
+        events = data_exfiltration_data.get("exfiltration_events", [])
+        if events:
+            html += """
+            <h4>Detected Exfiltration Events:</h4>
+            <table class="detail-table">
+                <tr>
+                    <th>Type</th>
+                    <th>Source IP</th>
+                    <th>Details</th>
+                    <th>Severity</th>
+                </tr>
+            """
+
+            for event in events[:20]:  # Limit to 20 events
+                event_type = event.get('type', 'unknown')
+                source_ip = event.get('source_ip', 'N/A')
+                severity = event.get('severity', 'low')
+                badge = self._get_severity_badge(severity)
+
+                # Format details based on type
+                if event_type == 'large_upload':
+                    upload_mb = event.get('upload_volume_mb', 0)
+                    details = f"{upload_mb:.2f} MB uploaded"
+                elif event_type == 'suspicious_ratio':
+                    ratio = event.get('ratio', 0)
+                    details = f"Upload/Download ratio: {ratio}:1"
+                elif event_type == 'unusual_protocol':
+                    ports = event.get('suspicious_ports', [])
+                    details = f"Suspicious ports: {', '.join(map(str, ports))}"
+                else:
+                    details = event.get('description', 'N/A')
+
+                html += f"""
+                <tr>
+                    <td>{event_type}</td>
+                    <td><code>{source_ip}</code></td>
+                    <td>{details}</td>
+                    <td>{badge}</td>
+                </tr>
+                """
+
+            html += "</table>"
+
+        # Educational info
+        html += """
+            <div class="info-box">
+                <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Data Exfiltration</strong></p>
+                <p style="margin: 0; font-size: 0.9em; color: #555;">
+                    Data exfiltration is the unauthorized transfer of data from a system.
+                    Indicators include <strong>large upload volumes</strong>, <strong>suspicious upload/download ratios</strong>,
+                    and <strong>data transfers over unusual protocols</strong>. Attackers may use non-standard ports or
+                    encoding techniques to evade detection.
+                </p>
+            </div>
+            """
+
+        html += "</div>"
+        return html
+
+    def _generate_c2_beaconing_subsection(self, c2_beaconing_data: Dict[str, Any]) -> str:
+        """Generate C2 beaconing detection subsection."""
+        total_beaconing = c2_beaconing_data.get("total_beaconing_detected", 0)
+
+        if total_beaconing == 0:
+            return ""  # Don't show section if no detections
+
+        html = """
+        <div class="security-subsection">
+            <h3>📡 C2 Beaconing Detection</h3>
+        """
+
+        # Summary
+        severity_breakdown = c2_beaconing_data.get("severity_breakdown", {})
+
+        html += f"""
+            <div class="alert alert-danger">
+                <strong>🚨 {total_beaconing} potential C2 beaconing pattern(s) detected</strong>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('critical', 0)}</div>
+                    <div class="stat-label">Critical</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('high', 0)}</div>
+                    <div class="stat-label">High</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('medium', 0)}</div>
+                    <div class="stat-label">Medium</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('low', 0)}</div>
+                    <div class="stat-label">Low</div>
+                </div>
+            </div>
+        """
+
+        # Events table
+        events = c2_beaconing_data.get("beaconing_events", [])
+        if events:
+            html += """
+            <h4>Detected Beaconing Patterns:</h4>
+            <table class="detail-table">
+                <tr>
+                    <th>Source IP</th>
+                    <th>Destination</th>
+                    <th>Beacon Count</th>
+                    <th>Interval</th>
+                    <th>Severity</th>
+                </tr>
+            """
+
+            for event in events[:20]:  # Limit to 20 events
+                source_ip = event.get('source_ip', 'N/A')
+                dest_ip = event.get('destination_ip', 'N/A')
+                dest_port = event.get('destination_port', 0)
+                beacon_count = event.get('beacon_count', 0)
+                mean_interval = event.get('mean_interval_seconds', 0)
+                severity = event.get('severity', 'low')
+                badge = self._get_severity_badge(severity)
+
+                html += f"""
+                <tr>
+                    <td><code>{source_ip}</code></td>
+                    <td><code>{dest_ip}:{dest_port}</code></td>
+                    <td>{beacon_count} beacons</td>
+                    <td>Every {mean_interval:.1f}s</td>
+                    <td>{badge}</td>
+                </tr>
+                """
+
+            html += "</table>"
+
+        # Educational info
+        html += """
+            <div class="info-box">
+                <p style="margin: 0 0 8px 0;"><strong>ℹ️ About C2 Beaconing</strong></p>
+                <p style="margin: 0; font-size: 0.9em; color: #555;">
+                    Command & Control (C2) beaconing is periodic communication between compromised hosts and attacker servers.
+                    Characteristics include <strong>regular time intervals</strong>, <strong>consistent payload sizes</strong>,
+                    and <strong>persistent connections</strong>. Beacons are used for remote control, data staging,
+                    and maintaining persistent access.
+                </p>
+            </div>
+            """
+
+        html += "</div>"
+        return html
+
+    def _generate_lateral_movement_subsection(self, lateral_movement_data: Dict[str, Any]) -> str:
+        """Generate lateral movement detection subsection."""
+        total_lateral_movement = lateral_movement_data.get("total_lateral_movement_detected", 0)
+
+        if total_lateral_movement == 0:
+            return ""  # Don't show section if no detections
+
+        html = """
+        <div class="security-subsection">
+            <h3>🔀 Lateral Movement Detection</h3>
+        """
+
+        # Summary
+        severity_breakdown = lateral_movement_data.get("severity_breakdown", {})
+        type_breakdown = lateral_movement_data.get("type_breakdown", {})
+
+        html += f"""
+            <div class="alert alert-danger">
+                <strong>🚨 {total_lateral_movement} potential lateral movement event(s) detected</strong>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('critical', 0)}</div>
+                    <div class="stat-label">Critical</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('high', 0)}</div>
+                    <div class="stat-label">High</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('medium', 0)}</div>
+                    <div class="stat-label">Medium</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{severity_breakdown.get('low', 0)}</div>
+                    <div class="stat-label">Low</div>
+                </div>
+            </div>
+        """
+
+        # Events table
+        events = lateral_movement_data.get("lateral_movement_events", [])
+        if events:
+            html += """
+            <h4>Detected Lateral Movement:</h4>
+            <table class="detail-table">
+                <tr>
+                    <th>Type</th>
+                    <th>Source IP</th>
+                    <th>Targets</th>
+                    <th>Protocols</th>
+                    <th>Severity</th>
+                </tr>
+            """
+
+            for event in events[:20]:  # Limit to 20 events
+                event_type = event.get('type', 'unknown')
+                source_ip = event.get('source_ip', 'N/A')
+                target_count = event.get('target_count', 0)
+                targets = event.get('targets', [])
+                protocols = event.get('protocols_used', [])
+                severity = event.get('severity', 'low')
+                badge = self._get_severity_badge(severity)
+
+                targets_str = ', '.join(targets[:3])
+                if len(targets) > 3:
+                    targets_str += f", ... (+{len(targets) - 3} more)"
+
+                protocols_str = ', '.join(protocols) if protocols else 'N/A'
+
+                html += f"""
+                <tr>
+                    <td>{event_type}</td>
+                    <td><code>{source_ip}</code></td>
+                    <td>{target_count} hosts<br><small>{targets_str}</small></td>
+                    <td>{protocols_str}</td>
+                    <td>{badge}</td>
+                </tr>
+                """
+
+            html += "</table>"
+
+        # Educational info
+        html += """
+            <div class="info-box">
+                <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Lateral Movement</strong></p>
+                <p style="margin: 0; font-size: 0.9em; color: #555;">
+                    Lateral movement is the technique attackers use to progressively move through a network,
+                    searching for key assets and data. Common protocols include <strong>SMB/CIFS (ports 445, 139)</strong>,
+                    <strong>RDP (port 3389)</strong>, <strong>WinRM (ports 5985, 5986)</strong>, and <strong>RPC (port 135)</strong>.
+                    Multiple internal connections using administrative protocols are strong indicators.
+                </p>
+            </div>
+            """
+
+        html += "</div>"
+        return html
+
+    def _get_severity_badge(self, severity: str) -> str:
+        """Generate HTML badge for severity level."""
+        badge_class = f"badge-{severity}"
+        return f'<span class="badge {badge_class}">{severity.upper()}</span>'
