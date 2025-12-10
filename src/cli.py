@@ -26,6 +26,8 @@ from .analyzers.jitter_analyzer import JitterAnalyzer
 from .analyzers.protocol_distribution import ProtocolDistributionAnalyzer
 from .analyzers.service_classifier import ServiceClassifier
 from .config import Config, get_config
+from .exporters.csv_export import CSVExporter
+from .exporters.html_report import HTMLReportGenerator
 from .parsers.fast_parser import FastPacketParser
 from .report_generator import ReportGenerator
 from .ssh_capture import capture_from_config
@@ -59,6 +61,65 @@ def _generate_reports(results: dict[str, Any], pcap_file: str, output: Optional[
     console.print(f"[green]✓ Rapport HTML: {report_files['html']}[/green]")
 
     return report_files
+
+
+def _handle_exports(
+    results: dict[str, Any],
+    pcap_file: str,
+    export_html: Optional[str],
+    export_csv: Optional[str],
+    export_dir: Optional[str],
+) -> None:
+    """
+    Handle Sprint 4 export formats (HTML report and CSV export).
+
+    Args:
+        results: Analysis results dictionary
+        pcap_file: Path to the PCAP file analyzed
+        export_html: Optional path for HTML report export
+        export_csv: Optional directory for CSV export
+        export_dir: Optional directory for all exports
+    """
+    if not (export_html or export_csv or export_dir):
+        return
+
+    console.print("\n[cyan]📤 Exporting analysis results...[/cyan]")
+
+    # Add metadata if not present
+    if "metadata" not in results:
+        results["metadata"] = {}
+    results["metadata"]["pcap_file"] = Path(pcap_file).name
+
+    # Export to directory (all formats)
+    if export_dir:
+        import os
+
+        os.makedirs(export_dir, exist_ok=True)
+
+        # Export HTML
+        html_path = os.path.join(export_dir, "report.html")
+        html_gen = HTMLReportGenerator()
+        html_gen.save(results, html_path)
+        console.print(f"[green]✓ HTML Report: {html_path}[/green]")
+
+        # Export CSV
+        csv_dir = os.path.join(export_dir, "csv")
+        csv_exporter = CSVExporter()
+        csv_exporter.export_all(results, csv_dir)
+        console.print(f"[green]✓ CSV Files: {csv_dir}/[/green]")
+
+    else:
+        # Export HTML to specific path
+        if export_html:
+            html_gen = HTMLReportGenerator()
+            html_gen.save(results, export_html)
+            console.print(f"[green]✓ HTML Report: {export_html}[/green]")
+
+        # Export CSV to directory
+        if export_csv:
+            csv_exporter = CSVExporter()
+            csv_exporter.export_all(results, export_csv)
+            console.print(f"[green]✓ CSV Files: {export_csv}/[/green]")
 
 
 # Performance optimization: Configure Scapy to only dissect necessary layers
@@ -360,7 +421,12 @@ def cli():
 @click.option("--no-report", is_flag=True, help="Ne pas générer de rapports HTML/JSON")
 @click.option("--no-details", is_flag=True, help="Ne pas afficher les détails des retransmissions")
 @click.option("--details-limit", type=int, default=20, help="Nombre max de retransmissions à afficher (défaut: 20)")
-def analyze(pcap_file, latency, config, output, no_report, no_details, details_limit):
+@click.option("--export-html", type=click.Path(), help="Export HTML report to specific file")
+@click.option("--export-csv", type=click.Path(), help="Export CSV files to directory")
+@click.option("--export-dir", type=click.Path(), help="Export all formats (HTML + CSV) to directory")
+def analyze(
+    pcap_file, latency, config, output, no_report, no_details, details_limit, export_html, export_csv, export_dir
+):
     """
     Analyse un fichier PCAP local pour détecter les causes de latence
 
@@ -406,6 +472,9 @@ def analyze(pcap_file, latency, config, output, no_report, no_details, details_l
     # Génération des rapports
     if not no_report:
         _generate_reports(results, pcap_file, output, cfg)
+
+    # Sprint 4: Export formats
+    _handle_exports(results, pcap_file, export_html, export_csv, export_dir)
 
 
 @cli.command()
