@@ -74,7 +74,9 @@ class BruteForceDetector(BaseAnalyzer):
                  time_window: float = 60.0,
                  failure_rate_threshold: float = 0.7,
                  attempt_rate_threshold: float = 0.5,
-                 include_localhost: bool = False):
+                 include_localhost: bool = False,
+                 include_private_ips: bool = False,
+                 high_success_threshold: float = 0.9):
         """
         Initialize brute-force detector.
 
@@ -84,6 +86,8 @@ class BruteForceDetector(BaseAnalyzer):
             failure_rate_threshold: Min failure rate to flag attack
             attempt_rate_threshold: Min attempts/sec to flag aggressive attack
             include_localhost: Include localhost traffic in analysis (default: False)
+            include_private_ips: Include private IP traffic in analysis (default: False)
+            high_success_threshold: Ignore connections with success rate above this (default: 0.9)
         """
         super().__init__()
         self.attempt_threshold = attempt_threshold
@@ -91,6 +95,8 @@ class BruteForceDetector(BaseAnalyzer):
         self.failure_rate_threshold = failure_rate_threshold
         self.attempt_rate_threshold = attempt_rate_threshold
         self.include_localhost = include_localhost
+        self.include_private_ips = include_private_ips
+        self.high_success_threshold = high_success_threshold
 
         # Track connection attempts to authentication services
         # {(src_ip, dst_ip, dst_port): [(timestamp, flags, responded, established)]}
@@ -127,6 +133,47 @@ class BruteForceDetector(BaseAnalyzer):
 
         return False
 
+    @staticmethod
+    def _is_private_ip(ip: str) -> bool:
+        """
+        Check if an IP address is in a private range (RFC 1918).
+
+        Args:
+            ip: IP address string (IPv4 or IPv6)
+
+        Returns:
+            True if private IP, False otherwise
+        """
+        # IPv6 private ranges
+        if ip.startswith("fd") or ip.startswith("fc"):  # Unique Local Address (ULA)
+            return True
+        if ip.startswith("fe80:"):  # Link-local
+            return True
+
+        # IPv4 private ranges (RFC 1918)
+        # 10.0.0.0/8
+        if ip.startswith("10."):
+            return True
+
+        # 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
+        if ip.startswith("172."):
+            try:
+                second_octet = int(ip.split(".")[1])
+                if 16 <= second_octet <= 31:
+                    return True
+            except (ValueError, IndexError):
+                pass
+
+        # 192.168.0.0/16
+        if ip.startswith("192.168."):
+            return True
+
+        # Localhost (127.0.0.0/8)
+        if ip.startswith("127."):
+            return True
+
+        return False
+
     def process_packet(self, packet: Packet, packet_num: int) -> None:
         """Process a single packet for brute-force detection."""
         if not packet.haslayer(TCP):
@@ -148,6 +195,11 @@ class BruteForceDetector(BaseAnalyzer):
         # Filter localhost traffic unless explicitly included
         if not self.include_localhost:
             if self._is_localhost(src_ip) or self._is_localhost(dst_ip):
+                return
+
+        # Filter private IP traffic unless explicitly included (for Kubernetes/internal networks)
+        if not self.include_private_ips:
+            if self._is_private_ip(src_ip) and self._is_private_ip(dst_ip):
                 return
 
         src_port = tcp.sport
@@ -287,8 +339,16 @@ class BruteForceDetector(BaseAnalyzer):
             elif severity == "low":
                 severity = "medium"
 
-        # Only flag if suspicious (high failure rate or high attempt count)
-        if failure_rate > self.failure_rate_threshold or total_attempts >= self.attempt_threshold:
+        success_rate = established_count / total_attempts if total_attempts > 0 else 0
+
+        # Ignore legitimate traffic with high success rates (>90%)
+        # This prevents false positives from Kubernetes health checks, monitoring, etc.
+        if success_rate > self.high_success_threshold:
+            return
+
+        # Only flag if suspicious: high failure rate AND sufficient attempts
+        # Changed from OR to AND to reduce false positives
+        if failure_rate > self.failure_rate_threshold and total_attempts >= self.attempt_threshold:
             event = BruteForceEvent(
                 source_ip=src_ip,
                 target_ip=dst_ip,
@@ -298,7 +358,7 @@ class BruteForceDetector(BaseAnalyzer):
                 end_time=end_time,
                 total_attempts=total_attempts,
                 failed_attempts=failed_count,
-                success_rate=established_count / total_attempts,
+                success_rate=success_rate,
                 attempt_rate=attempt_rate,
                 severity=severity
             )
@@ -355,7 +415,10 @@ class BruteForceDetector(BaseAnalyzer):
                 "attempt_threshold": self.attempt_threshold,
                 "time_window": self.time_window,
                 "failure_rate_threshold": self.failure_rate_threshold,
-                "attempt_rate_threshold": self.attempt_rate_threshold
+                "attempt_rate_threshold": self.attempt_rate_threshold,
+                "high_success_threshold": self.high_success_threshold,
+                "include_private_ips": self.include_private_ips,
+                "include_localhost": self.include_localhost
             }
         }
 

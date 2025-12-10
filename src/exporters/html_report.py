@@ -47,6 +47,8 @@ class HTMLReportGenerator:
         html_parts.append('  <div class="tabs-nav">')
         html_parts.append('    <button class="tab-button active" onclick="switchTab(\'tab-overview\')">📊 Overview</button>')
         html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-qos\')">🏥 QoS Analysis</button>')
+        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-tcp\')">🔌 TCP Analysis</button>')
+        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-dns\')">🌐 DNS Analysis</button>')
         html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-security\')">🔒 Security</button>')
         html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-network\')">📡 Network</button>')
         html_parts.append('  </div>')
@@ -68,7 +70,29 @@ class HTMLReportGenerator:
             html_parts.append('    </div>')
         html_parts.append('  </div>')
 
-        # Tab 3: Security (Port Scans, Brute Force, DDoS, DNS Tunneling)
+        # Tab 3: TCP Analysis (Retransmissions, RTT, Window, Handshakes)
+        html_parts.append('  <div id="tab-tcp" class="tab-content">')
+        has_tcp = ("retransmission" in results or "rtt" in results or
+                   "tcp_window" in results or "tcp_handshake" in results)
+        if has_tcp:
+            html_parts.append(self._generate_tcp_section(results))
+        else:
+            html_parts.append('    <div class="info-box">')
+            html_parts.append('      <p>No TCP analysis data available in this capture.</p>')
+            html_parts.append('    </div>')
+        html_parts.append('  </div>')
+
+        # Tab 4: DNS Analysis (Queries, Timeouts, Problematic Domains)
+        html_parts.append('  <div id="tab-dns" class="tab-content">')
+        if "dns" in results:
+            html_parts.append(self._generate_dns_section(results))
+        else:
+            html_parts.append('    <div class="info-box">')
+            html_parts.append('      <p>No DNS analysis data available in this capture.</p>')
+            html_parts.append('    </div>')
+        html_parts.append('  </div>')
+
+        # Tab 5: Security (Port Scans, Brute Force, DDoS, DNS Tunneling)
         html_parts.append('  <div id="tab-security" class="tab-content">')
         has_security = ("port_scan_detection" in results or
                         "brute_force_detection" in results or
@@ -82,7 +106,7 @@ class HTMLReportGenerator:
             html_parts.append('    </div>')
         html_parts.append('  </div>')
 
-        # Tab 4: Network (Protocol Distribution + Service Classification)
+        # Tab 6: Network (Protocol Distribution + Service Classification)
         html_parts.append('  <div id="tab-network" class="tab-content">')
         if "protocol_distribution" in results:
             html_parts.append(self._generate_protocol_section(results))
@@ -852,6 +876,373 @@ class HTMLReportGenerator:
                 </p>
             </div>
             """
+
+        return html
+
+    def _generate_tcp_section(self, results: Dict[str, Any]) -> str:
+        """Generate TCP analysis section."""
+        html = "<h2>🔌 TCP Analysis</h2>"
+
+        # TCP Retransmissions
+        retrans_data = results.get("retransmission", {})
+        if retrans_data and retrans_data.get("total_retransmissions", 0) > 0:
+            html += "<h3>📦 TCP Retransmissions</h3>"
+
+            total_retrans = retrans_data.get("total_retransmissions", 0)
+            rto_count = retrans_data.get("rto_count", 0)
+            fast_retrans = retrans_data.get("fast_retrans_count", 0)
+
+            html += '<div class="summary-grid">'
+            html += f"""
+            <div class="metric-card" style="border-left-color: #dc3545;">
+                <div class="metric-label">Total Retransmissions</div>
+                <div class="metric-value">{total_retrans:,}</div>
+            </div>
+            <div class="metric-card" style="border-left-color: #fd7e14;">
+                <div class="metric-label">RTO (Timeout)</div>
+                <div class="metric-value">{rto_count:,}</div>
+            </div>
+            <div class="metric-card" style="border-left-color: #ffc107;">
+                <div class="metric-label">Fast Retransmissions</div>
+                <div class="metric-value">{fast_retrans:,}</div>
+            </div>
+            """
+            html += "</div>"
+
+            # Top flows with retransmissions
+            retrans_list = retrans_data.get("retransmissions", [])
+            if retrans_list:
+                # Group by flow
+                flows = {}
+                for r in retrans_list[:100]:  # Limit to first 100
+                    flow_key = f"{r.get('src_ip')}:{r.get('src_port')} → {r.get('dst_ip')}:{r.get('dst_port')}"
+                    if flow_key not in flows:
+                        flows[flow_key] = []
+                    flows[flow_key].append(r)
+
+                html += "<h4>Top Flows with Retransmissions</h4>"
+                html += '<table class="data-table">'
+                html += """
+                <thead>
+                    <tr>
+                        <th>Flow</th>
+                        <th>Retransmissions</th>
+                        <th>RTO Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                """
+
+                # Sort flows by retransmission count
+                sorted_flows = sorted(flows.items(), key=lambda x: len(x[1]), reverse=True)[:10]
+                for flow_key, retrans in sorted_flows:
+                    rto_in_flow = sum(1 for r in retrans if r.get('retrans_type') == 'RTO')
+                    html += f"""
+                    <tr>
+                        <td><code>{flow_key}</code></td>
+                        <td>{len(retrans)}</td>
+                        <td>{rto_in_flow}</td>
+                    </tr>
+                    """
+
+                html += "</tbody></table>"
+
+        # TCP Handshakes
+        handshake_data = results.get("tcp_handshake", {})
+        if handshake_data:
+            html += "<h3>🤝 TCP Handshakes</h3>"
+
+            total_handshakes = handshake_data.get("total_handshakes", 0)
+            slow_handshakes = handshake_data.get("slow_handshakes", 0)
+
+            if total_handshakes > 0:
+                html += '<div class="summary-grid">'
+                html += f"""
+                <div class="metric-card">
+                    <div class="metric-label">Total Handshakes</div>
+                    <div class="metric-value">{total_handshakes:,}</div>
+                </div>
+                <div class="metric-card" style="border-left-color: {'#ffc107' if slow_handshakes > 0 else '#28a745'};">
+                    <div class="metric-label">Slow Handshakes</div>
+                    <div class="metric-value">{slow_handshakes:,}</div>
+                </div>
+                """
+                html += "</div>"
+
+        # RTT Analysis
+        rtt_data = results.get("rtt", {})
+        if rtt_data and rtt_data.get("flows_with_high_rtt", 0) > 0:
+            html += "<h3>⏲️ RTT (Round Trip Time) Analysis</h3>"
+
+            global_stats = rtt_data.get("global_statistics", {})
+            mean_rtt = global_stats.get("mean_rtt", 0) * 1000  # Convert to ms
+            max_rtt = global_stats.get("max_rtt", 0) * 1000
+
+            html += '<div class="summary-grid">'
+            html += f"""
+            <div class="metric-card">
+                <div class="metric-label">Mean RTT</div>
+                <div class="metric-value">{mean_rtt:.2f} ms</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Max RTT</div>
+                <div class="metric-value">{max_rtt:.2f} ms</div>
+            </div>
+            <div class="metric-card" style="border-left-color: #ffc107;">
+                <div class="metric-label">Flows with High RTT</div>
+                <div class="metric-value">{rtt_data.get("flows_with_high_rtt", 0)}</div>
+            </div>
+            """
+            html += "</div>"
+
+            # Top flows with high RTT
+            flow_stats = rtt_data.get("flow_statistics", [])
+            if flow_stats:
+                html += "<h4>Flows with High RTT</h4>"
+                html += '<table class="data-table">'
+                html += """
+                <thead>
+                    <tr>
+                        <th>Flow</th>
+                        <th>Mean RTT</th>
+                        <th>Max RTT</th>
+                        <th>Measurements</th>
+                    </tr>
+                </thead>
+                <tbody>
+                """
+
+                for flow in flow_stats[:15]:
+                    flow_mean = flow.get("mean_rtt", 0) * 1000
+                    flow_max = flow.get("max_rtt", 0) * 1000
+                    html += f"""
+                    <tr>
+                        <td><code>{flow.get("flow_key", "N/A")}</code></td>
+                        <td>{flow_mean:.2f} ms</td>
+                        <td>{flow_max:.2f} ms</td>
+                        <td>{flow.get("measurements_count", 0)}</td>
+                    </tr>
+                    """
+
+                html += "</tbody></table>"
+
+        # TCP Window Analysis
+        window_data = results.get("tcp_window", {})
+        if window_data and window_data.get("flows_with_issues", 0) > 0:
+            html += "<h3>🪟 TCP Window Analysis</h3>"
+
+            html += '<div class="summary-grid">'
+            html += f"""
+            <div class="metric-card" style="border-left-color: #ffc107;">
+                <div class="metric-label">Flows with Window Issues</div>
+                <div class="metric-value">{window_data.get("flows_with_issues", 0)}</div>
+            </div>
+            """
+            html += "</div>"
+
+            flow_stats = window_data.get("flow_statistics", [])
+            if flow_stats:
+                html += "<h4>Flows with Window Issues</h4>"
+                html += '<table class="data-table">'
+                html += """
+                <thead>
+                    <tr>
+                        <th>Flow</th>
+                        <th>Suspected Bottleneck</th>
+                        <th>Zero Windows</th>
+                        <th>Zero Window Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                """
+
+                for flow in flow_stats[:15]:
+                    if flow.get("suspected_bottleneck") != "none":
+                        bottleneck = flow.get("suspected_bottleneck", "unknown")
+                        badge_class = "badge-danger" if bottleneck == "application" else "badge-warning"
+                        html += f"""
+                        <tr>
+                            <td><code>{flow.get("flow_key", "N/A")}</code></td>
+                            <td><span class="badge {badge_class}">{bottleneck.upper()}</span></td>
+                            <td>{flow.get("zero_window_count", 0)}</td>
+                            <td>{flow.get("zero_window_total_duration", 0):.3f}s</td>
+                        </tr>
+                        """
+
+                html += "</tbody></table>"
+
+        return html
+
+    def _generate_dns_section(self, results: Dict[str, Any]) -> str:
+        """Generate DNS analysis section."""
+        html = "<h2>🌐 DNS Analysis</h2>"
+
+        dns_data = results.get("dns", {})
+        if not dns_data:
+            html += '<div class="info-box"><p>No DNS data available.</p></div>'
+            return html
+
+        # DNS Overview
+        html += "<h3>📊 DNS Overview</h3>"
+
+        total_queries = dns_data.get("total_queries", 0)
+        total_transactions = dns_data.get("total_transactions", 0)
+        successful = dns_data.get("successful_transactions", 0)
+        timeouts = dns_data.get("timeout_transactions", 0)
+        errors = dns_data.get("error_transactions", 0)
+        slow = dns_data.get("slow_transactions", 0)
+
+        html += '<div class="summary-grid">'
+        html += f"""
+        <div class="metric-card">
+            <div class="metric-label">Total Queries</div>
+            <div class="metric-value">{total_queries:,}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Successful</div>
+            <div class="metric-value">{successful:,}</div>
+        </div>
+        <div class="metric-card" style="border-left-color: {'#ffc107' if slow > 0 else '#28a745'};">
+            <div class="metric-label">Slow Responses</div>
+            <div class="metric-value">{slow:,}</div>
+        </div>
+        <div class="metric-card" style="border-left-color: {'#dc3545' if timeouts > 0 else '#28a745'};">
+            <div class="metric-label">Timeouts</div>
+            <div class="metric-value">{timeouts:,}</div>
+        </div>
+        <div class="metric-card" style="border-left-color: {'#dc3545' if errors > 0 else '#28a745'};">
+            <div class="metric-label">Errors</div>
+            <div class="metric-value">{errors:,}</div>
+        </div>
+        """
+        html += "</div>"
+
+        # Response Time Statistics
+        response_stats = dns_data.get("response_time_statistics", {})
+        if response_stats:
+            html += "<h3>⏱️ Response Time Statistics</h3>"
+
+            mean_time = response_stats.get("mean_response_time", 0) * 1000
+            min_time = response_stats.get("min_response_time", 0) * 1000
+            max_time = response_stats.get("max_response_time", 0) * 1000
+
+            html += '<div class="summary-grid">'
+            html += f"""
+            <div class="metric-card">
+                <div class="metric-label">Mean Response Time</div>
+                <div class="metric-value">{mean_time:.2f} ms</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Min Response Time</div>
+                <div class="metric-value">{min_time:.2f} ms</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Max Response Time</div>
+                <div class="metric-value">{max_time:.2f} ms</div>
+            </div>
+            """
+            html += "</div>"
+
+        # Problematic Domains
+        top_problematic = dns_data.get("top_problematic_domains", [])
+        if top_problematic:
+            html += "<h3>⚠️ Problematic Domains</h3>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Issue Count</th>
+                    <th>Main Error Type</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for domain_info in top_problematic[:20]:
+                domain = domain_info.get("domain", "N/A")
+                count = domain_info.get("count", 0)
+                main_error = domain_info.get("main_error", "Unknown")
+
+                # Color code based on error type
+                badge_class = "badge-danger"
+                if main_error == "Slow Response":
+                    badge_class = "badge-warning"
+                elif main_error == "Timeout":
+                    badge_class = "badge-critical"
+
+                html += f"""
+                <tr>
+                    <td style="font-family: monospace; font-size: 0.9em;">{domain}</td>
+                    <td>{count}</td>
+                    <td><span class="badge {badge_class}">{main_error}</span></td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
+
+        # Slow Transactions Details
+        slow_details = dns_data.get("slow_transactions_details", [])
+        if slow_details:
+            html += "<h3>🐌 Slow DNS Transactions</h3>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Query Type</th>
+                    <th>Response Time</th>
+                    <th>Server</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for trans in slow_details[:15]:
+                query = trans.get("query", {})
+                response_time = trans.get("response_time", 0) * 1000
+
+                html += f"""
+                <tr>
+                    <td style="font-family: monospace; font-size: 0.9em;">{query.get("query_name", "N/A")}</td>
+                    <td>{query.get("query_type", "N/A")}</td>
+                    <td><strong>{response_time:.2f} ms</strong></td>
+                    <td>{query.get("dst_ip", "N/A")}</td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
+
+        # Timeout Details
+        timeout_details = dns_data.get("timeout_details", [])
+        if timeout_details:
+            html += "<h3>⏰ DNS Timeouts</h3>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Query Type</th>
+                    <th>Client IP</th>
+                    <th>Server IP</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for trans in timeout_details[:15]:
+                query = trans.get("query", {})
+
+                html += f"""
+                <tr>
+                    <td style="font-family: monospace; font-size: 0.9em;">{query.get("query_name", "N/A")}</td>
+                    <td>{query.get("query_type", "N/A")}</td>
+                    <td>{query.get("src_ip", "N/A")}</td>
+                    <td>{query.get("dst_ip", "N/A")}</td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
 
         return html
 

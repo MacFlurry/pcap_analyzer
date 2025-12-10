@@ -74,6 +74,7 @@ class DNSAnalyzer:
         response_critical: float = 1.0,
         timeout: float = 5.0,
         latency_filter: Optional[float] = None,
+        ignore_k8s_domains: bool = True,
     ):
         """
         Initialise l'analyseur DNS
@@ -83,11 +84,13 @@ class DNSAnalyzer:
             response_critical: Seuil critique temps de réponse (secondes)
             timeout: Délai de timeout pour considérer une requête perdue (secondes)
             latency_filter: Si défini, ne garde que les transactions avec temps >= ce seuil
+            ignore_k8s_domains: Ignore Kubernetes internal domains (*.cluster.local) for error reporting
         """
         self.response_warning = response_warning
         self.response_critical = response_critical
         self.timeout = timeout
         self.latency_filter = latency_filter
+        self.ignore_k8s_domains = ignore_k8s_domains
 
         self.queries: list[DNSQuery] = []
         self.responses: list[DNSResponse] = []
@@ -100,6 +103,35 @@ class DNSAnalyzer:
         self._recent_queries: dict[tuple, float] = {}
 
         self.last_packet_time: Optional[float] = None  # NEW: Track last packet time for timeouts
+
+    def _is_k8s_domain(self, domain: str) -> bool:
+        """
+        Check if a domain is a Kubernetes internal domain.
+
+        Args:
+            domain: Domain name to check
+
+        Returns:
+            True if Kubernetes domain, False otherwise
+        """
+        if not domain:
+            return False
+
+        domain_lower = domain.lower().rstrip(".")
+
+        # Kubernetes cluster domains
+        if domain_lower.endswith(".cluster.local"):
+            return True
+        if domain_lower.endswith(".svc.cluster.local"):
+            return True
+        if domain_lower == "cluster.local":
+            return True
+
+        # Common Kubernetes service discovery patterns
+        if domain_lower.endswith(".pod.cluster.local"):
+            return True
+
+        return False
 
     def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
@@ -338,6 +370,13 @@ class DNSAnalyzer:
         for t in self.transactions:
             if t.status in ["slow", "error", "timeout"]:
                 domain = t.query.query_name
+
+                # Skip Kubernetes domains if configured (NXDOMAIN for *.cluster.local is expected)
+                if self.ignore_k8s_domains and self._is_k8s_domain(domain):
+                    # Only skip if it's an NXDOMAIN error (expected in K8s DNS resolution chain)
+                    if t.response and t.response.response_code == 3:  # NXDOMAIN
+                        continue
+
                 problematic_domains[domain]["count"] += 1
 
                 # Détermine le type d'erreur
