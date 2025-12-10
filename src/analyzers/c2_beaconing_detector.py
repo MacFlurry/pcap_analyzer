@@ -32,11 +32,41 @@ class C2BeaconingDetector(BaseAnalyzer):
     and connection characteristics.
     """
 
+    # Known legitimate heartbeat intervals (in seconds)
+    # Used to whitelist application monitoring and health checks
+    KNOWN_HEARTBEAT_INTERVALS = {
+        1.0,   # High-frequency monitoring
+        2.0,   # Common monitoring interval
+        3.0,   # Kafka default heartbeat
+        5.0,   # Kubernetes liveness/readiness probes
+        10.0,  # Kubernetes default probe interval
+        15.0,  # Standard monitoring
+        30.0,  # Common health check interval
+        60.0,  # Minute-based monitoring
+    }
+
+    # Known monitoring/health check ports to whitelist
+    MONITORING_PORTS = {
+        9090,   # Prometheus
+        9091,   # Prometheus Pushgateway
+        10250,  # Kubelet
+        10255,  # Kubelet read-only
+        8080,   # Common health check
+        8081,   # Common health check
+        8443,   # HTTPS health check
+        9200,   # Elasticsearch
+        9300,   # Elasticsearch cluster
+        5601,   # Kibana
+    }
+
     def __init__(self,
                  min_beacons: int = 10,
                  interval_tolerance: float = 0.3,
                  payload_size_tolerance: float = 0.2,
-                 include_localhost: bool = False):
+                 include_localhost: bool = False,
+                 include_private_ips: bool = False,
+                 min_interval_threshold: float = 2.0,
+                 ignore_known_heartbeats: bool = True):
         """
         Initialize C2 Beaconing Detector.
 
@@ -45,12 +75,18 @@ class C2BeaconingDetector(BaseAnalyzer):
             interval_tolerance: Tolerance for interval regularity (0.3 = 30% variance)
             payload_size_tolerance: Tolerance for payload size consistency (0.2 = 20%)
             include_localhost: Include localhost traffic in analysis (default: False)
+            include_private_ips: Include private IP to private IP traffic (default: False)
+            min_interval_threshold: Minimum interval in seconds to consider (default: 2.0)
+            ignore_known_heartbeats: Ignore known heartbeat intervals (default: True)
         """
         super().__init__()
         self.min_beacons = min_beacons
         self.interval_tolerance = interval_tolerance
         self.payload_size_tolerance = payload_size_tolerance
         self.include_localhost = include_localhost
+        self.include_private_ips = include_private_ips
+        self.min_interval_threshold = min_interval_threshold
+        self.ignore_known_heartbeats = ignore_known_heartbeats
 
         # Track connections: (src_ip, dst_ip, dst_port) -> list of (timestamp, size)
         self.connections: Dict[Tuple[str, str, int], List[Tuple[float, int]]] = defaultdict(list)
@@ -94,6 +130,11 @@ class C2BeaconingDetector(BaseAnalyzer):
             # Skip localhost if configured
             if not self.include_localhost:
                 if self._is_localhost(src_ip) or self._is_localhost(dst_ip):
+                    continue
+
+            # Skip private-to-private traffic unless explicitly included
+            if not self.include_private_ips:
+                if self._is_private_ip(src_ip) and self._is_private_ip(dst_ip):
                     continue
 
             # Track TCP and UDP connections
@@ -145,8 +186,19 @@ class C2BeaconingDetector(BaseAnalyzer):
         # Check for regular intervals (beaconing characteristic)
         mean_interval = statistics.mean(intervals)
 
-        # Skip very short intervals (< 1 second) - likely bulk traffic
-        if mean_interval < 1.0:
+        # Skip very short intervals - likely bulk traffic or high-frequency legitimate traffic
+        if mean_interval < self.min_interval_threshold:
+            return
+
+        # Skip known heartbeat intervals (Kafka, K8s probes, monitoring)
+        if self.ignore_known_heartbeats:
+            for known_interval in self.KNOWN_HEARTBEAT_INTERVALS:
+                # Check if mean_interval is close to a known heartbeat (within 20% tolerance)
+                if abs(mean_interval - known_interval) / known_interval < 0.2:
+                    return
+
+        # Skip known monitoring ports
+        if dst_port in self.MONITORING_PORTS:
             return
 
         # Calculate coefficient of variation (CV = std_dev / mean)
@@ -271,6 +323,47 @@ class C2BeaconingDetector(BaseAnalyzer):
     def _is_localhost(self, ip: str) -> bool:
         """Check if IP is localhost."""
         return ip == '127.0.0.1' or ip == '::1' or ip.startswith('127.')
+
+    @staticmethod
+    def _is_private_ip(ip: str) -> bool:
+        """
+        Check if an IP address is in a private range (RFC 1918).
+
+        Args:
+            ip: IP address string (IPv4 or IPv6)
+
+        Returns:
+            True if private IP, False otherwise
+        """
+        # IPv6 private ranges
+        if ip.startswith("fd") or ip.startswith("fc"):  # Unique Local Address (ULA)
+            return True
+        if ip.startswith("fe80:"):  # Link-local
+            return True
+
+        # IPv4 private ranges (RFC 1918)
+        # 10.0.0.0/8
+        if ip.startswith("10."):
+            return True
+
+        # 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
+        if ip.startswith("172."):
+            try:
+                second_octet = int(ip.split(".")[1])
+                if 16 <= second_octet <= 31:
+                    return True
+            except (ValueError, IndexError):
+                pass
+
+        # 192.168.0.0/16
+        if ip.startswith("192.168."):
+            return True
+
+        # Localhost (127.0.0.0/8)
+        if ip.startswith("127."):
+            return True
+
+        return False
 
     def _generate_results(self) -> Dict[str, Any]:
         """Generate analysis results dictionary."""

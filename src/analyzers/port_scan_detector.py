@@ -43,28 +43,30 @@ class PortScanDetector(BaseAnalyzer):
 
     Detection criteria:
     - Horizontal scan: 10+ ports on same target in 60s
-    - Vertical scan: 3+ targets on same port in 60s (lowered from 5)
+    - Vertical scan: 10+ targets on same port in 60s (increased from 3 to reduce load balancer false positives)
     - High failure rate (>70% failed connections)
     - High scan rate (>5 attempts/second)
     """
 
     def __init__(self,
                  horizontal_threshold: int = 10,
-                 vertical_threshold: int = 3,
+                 vertical_threshold: int = 10,
                  time_window: float = 60.0,
                  failure_rate_threshold: float = 0.7,
                  scan_rate_threshold: float = 5.0,
-                 include_localhost: bool = False):
+                 include_localhost: bool = False,
+                 include_private_ips: bool = False):
         """
         Initialize port scan detector.
 
         Args:
             horizontal_threshold: Min ports to flag horizontal scan
-            vertical_threshold: Min targets to flag vertical scan
+            vertical_threshold: Min targets to flag vertical scan (default: 10, increased for K8s)
             time_window: Time window in seconds to group scan attempts
             failure_rate_threshold: Min failure rate to flag suspicious activity
             scan_rate_threshold: Min attempts/sec to flag aggressive scanning
             include_localhost: Include localhost traffic in analysis (default: False)
+            include_private_ips: Include private-to-private traffic (default: False for K8s)
         """
         super().__init__()
         self.horizontal_threshold = horizontal_threshold
@@ -73,6 +75,7 @@ class PortScanDetector(BaseAnalyzer):
         self.failure_rate_threshold = failure_rate_threshold
         self.scan_rate_threshold = scan_rate_threshold
         self.include_localhost = include_localhost
+        self.include_private_ips = include_private_ips
 
         # Track connection attempts by source IP
         # {src_ip: [(timestamp, dst_ip, dst_port, flags, responded)]}
@@ -110,6 +113,47 @@ class PortScanDetector(BaseAnalyzer):
 
         return False
 
+    @staticmethod
+    def _is_private_ip(ip: str) -> bool:
+        """
+        Check if an IP address is in a private range (RFC 1918).
+
+        Args:
+            ip: IP address string (IPv4 or IPv6)
+
+        Returns:
+            True if private IP, False otherwise
+        """
+        # IPv6 private ranges
+        if ip.startswith("fd") or ip.startswith("fc"):  # Unique Local Address (ULA)
+            return True
+        if ip.startswith("fe80:"):  # Link-local
+            return True
+
+        # IPv4 private ranges (RFC 1918)
+        # 10.0.0.0/8
+        if ip.startswith("10."):
+            return True
+
+        # 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
+        if ip.startswith("172."):
+            try:
+                second_octet = int(ip.split(".")[1])
+                if 16 <= second_octet <= 31:
+                    return True
+            except (ValueError, IndexError):
+                pass
+
+        # 192.168.0.0/16
+        if ip.startswith("192.168."):
+            return True
+
+        # Localhost (127.0.0.0/8)
+        if ip.startswith("127."):
+            return True
+
+        return False
+
     def process_packet(self, packet: Packet, packet_num: int) -> None:
         """Process a single packet for port scan detection."""
         if not packet.haslayer(TCP):
@@ -131,6 +175,11 @@ class PortScanDetector(BaseAnalyzer):
         # Filter localhost traffic unless explicitly included
         if not self.include_localhost:
             if self._is_localhost(src_ip) or self._is_localhost(dst_ip):
+                return
+
+        # Filter private-to-private traffic unless explicitly included (K8s load balancers)
+        if not self.include_private_ips:
+            if self._is_private_ip(src_ip) and self._is_private_ip(dst_ip):
                 return
 
         src_port = tcp.sport

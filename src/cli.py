@@ -77,6 +77,19 @@ def _generate_reports(results: dict[str, Any], pcap_file: str, output: Optional[
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output = f"pcap_analysis_{timestamp}"
 
+    # Add metadata if not present (fix for Issue #3 - Total Packets = 0)
+    if "metadata" not in results:
+        results["metadata"] = {}
+    results["metadata"]["pcap_file"] = Path(pcap_file).name
+
+    # Extract total packets from protocol_distribution if available
+    if "protocol_distribution" in results:
+        results["metadata"]["total_packets"] = results["protocol_distribution"].get("total_packets", 0)
+
+    # Extract capture duration from timestamps if available
+    if "timestamps" in results:
+        results["metadata"]["capture_duration"] = results["timestamps"].get("capture_duration", 0)
+
     # Generate JSON with old generator
     json_path = output_dir / f"{output}.json"
     report_gen._generate_json(results, json_path)

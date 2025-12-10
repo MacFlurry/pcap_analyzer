@@ -64,7 +64,9 @@ class DNSTunnelingDetector(BaseAnalyzer):
         "facebook.com", "fbcdn.net",
         "akamai.net", "cloudflare.com",
         "ubuntu.com", "debian.org", "fedoraproject.org",
-        "mozilla.org", "firefox.com"
+        "mozilla.org", "firefox.com",
+        # Kubernetes internal domains
+        "cluster.local", "svc.cluster.local", "pod.cluster.local"
     }
 
     def __init__(self,
