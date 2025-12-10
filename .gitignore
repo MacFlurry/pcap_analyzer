@@ -54,3 +54,10 @@ profile*.stats
 
 # Hypothesis testing
 .hypothesis/
+
+# Analysis and planning documents (temporary)
+ANALYSIS_*.md
+ANALYSIS_*.txt
+NULL_EMPTY_*.md
+RESULT_WRAPPER_*.md
+DELIVERABLES.md
