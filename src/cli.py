@@ -90,6 +90,14 @@ def _handle_exports(
         results["metadata"] = {}
     results["metadata"]["pcap_file"] = Path(pcap_file).name
 
+    # Extract total packets from protocol_distribution if available
+    if "protocol_distribution" in results:
+        results["metadata"]["total_packets"] = results["protocol_distribution"].get("total_packets", 0)
+
+    # Extract capture duration from timestamps if available
+    if "timestamps" in results:
+        results["metadata"]["capture_duration"] = results["timestamps"].get("capture_duration", 0)
+
     # Export to directory (all formats)
     if export_dir:
         import os
