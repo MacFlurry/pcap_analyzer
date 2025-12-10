@@ -489,6 +489,22 @@ class HTMLReportGenerator:
 
         html = "<h2>📡 Jitter Analysis</h2>"
 
+        # Add explanation box
+        html += """
+        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">
+            <p style="margin: 0 0 10px 0;"><strong>ℹ️ What is Jitter (RFC 3393 IPDV)?</strong></p>
+            <p style="margin: 0 0 8px 0; font-size: 0.95em;">
+                Jitter measures the <strong>variation in packet delay</strong>. High jitter causes choppy audio/video in real-time applications.
+            </p>
+            <p style="margin: 0; font-size: 0.9em; color: #555;">
+                <strong>Typical thresholds:</strong>
+                VoIP: &lt;30ms (good), &lt;50ms (acceptable) |
+                Video: &lt;100ms |
+                Web/Data: &lt;200ms
+            </p>
+        </div>
+        """
+
         # Global statistics
         global_stats = jitter_data.get("global_statistics", {})
         if global_stats:
@@ -520,6 +536,20 @@ class HTMLReportGenerator:
             """
 
             html += "</div>"
+
+            # Add warning if jitter is extremely high
+            mean_jitter_ms = global_stats.get("mean_jitter", 0) * 1000
+            if mean_jitter_ms > 1000:  # > 1 second
+                html += """
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                    <p style="margin: 0 0 8px 0;"><strong>⚠️ High Jitter Detected</strong></p>
+                    <p style="margin: 0; font-size: 0.95em; color: #856404;">
+                        The extremely high jitter values (> 1 second) typically indicate a <strong>long-duration capture with significant gaps</strong>
+                        between packets, rather than continuous real-time traffic. This is normal for passive monitoring or captures
+                        spanning hours/days. For real-time application analysis, use shorter capture windows (5-10 minutes).
+                    </p>
+                </div>
+                """
 
         return html
 
