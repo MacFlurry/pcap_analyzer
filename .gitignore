@@ -43,7 +43,7 @@ Thumbs.db
 var/
 venv/
 wheels/
-scripts/
+# scripts/ - Now included for simulation tools
 capture**.stats
 
 # Documentation d'optimisation (interne)
