@@ -26,6 +26,7 @@ from .config import Config, get_config
 from .parsers.fast_parser import FastPacketParser
 from .report_generator import ReportGenerator
 from .ssh_capture import capture_from_config
+from .utils.result_sanitizer import get_empty_analyzer_result, sanitize_results
 
 console = Console()
 
@@ -206,10 +207,13 @@ def analyze_pcap_hybrid(
     results["dns"] = dns_analyzer._generate_report()
     results["icmp"] = icmp_analyzer._generate_report()
 
-    # Add empty results for other analyzers (they'll be implemented next)
+    # Add empty results for unimplemented analyzers with proper structure
     for key in ["ip_fragmentation", "asymmetric_traffic", "sack"]:
         if key not in results:
-            results[key] = {}
+            results[key] = get_empty_analyzer_result(key)
+
+    # Sanitize all results to replace null values with sensible defaults
+    results = sanitize_results(results)
 
     # Calculate Health Score (RFC-compliant overall assessment)
     console.print("\n[cyan]Calcul du Health Score...[/cyan]")
