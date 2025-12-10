@@ -686,7 +686,11 @@ class HTMLReportGenerator:
             html += '<div class="bar-chart">'
 
             total = sum(service_dist.values())
-            for service, count in sorted(service_dist.items(), key=lambda x: x[1], reverse=True)[:10]:
+            sorted_services = sorted(service_dist.items(), key=lambda x: x[1], reverse=True)
+            top_services = sorted_services[:10]
+
+            # Display top 10 services
+            for service, count in top_services:
                 percentage = (count / total * 100) if total > 0 else 0
                 html += f"""
                 <div class="bar-chart-row">
@@ -694,6 +698,20 @@ class HTMLReportGenerator:
                     <div class="bar-container">
                         <div class="bar-fill" style="width: {percentage}%"></div>
                         <div class="bar-value">{count:,} ({percentage:.1f}%)</div>
+                    </div>
+                </div>
+                """
+
+            # Add "Other" category if there are more services
+            if len(sorted_services) > 10:
+                other_count = sum(count for _, count in sorted_services[10:])
+                other_percentage = (other_count / total * 100) if total > 0 else 0
+                html += f"""
+                <div class="bar-chart-row">
+                    <div class="bar-label">Other ({len(sorted_services) - 10} services)</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: {other_percentage}%; background-color: #95a5a6;"></div>
+                        <div class="bar-value">{other_count:,} ({other_percentage:.1f}%)</div>
                     </div>
                 </div>
                 """
@@ -769,6 +787,43 @@ class HTMLReportGenerator:
                     </p>
                 </div>
                 """
+
+        # High jitter flows table
+        high_jitter_flows = jitter_data.get("high_jitter_flows", [])
+        if high_jitter_flows:
+            html += "<h3>⚠️ Flows with High Jitter</h3>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Flow</th>
+                    <th>Mean Jitter</th>
+                    <th>Max Jitter</th>
+                    <th>P95 Jitter</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for flow in high_jitter_flows[:15]:
+                severity = flow.get("severity", "low")
+                badge_class = f"badge-{severity}"
+                mean_jitter = flow.get("mean_jitter", 0) * 1000
+                max_jitter = flow.get("max_jitter", 0) * 1000
+                p95_jitter = flow.get("p95_jitter", 0) * 1000
+
+                html += f"""
+                <tr>
+                    <td><code>{flow.get("flow", "N/A")}</code></td>
+                    <td>{mean_jitter:.2f} ms</td>
+                    <td>{max_jitter:.2f} ms</td>
+                    <td>{p95_jitter:.2f} ms</td>
+                    <td><span class="badge {badge_class}">{severity.upper()}</span></td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
 
         return html
 
@@ -882,6 +937,60 @@ class HTMLReportGenerator:
             </div>
             """
 
+        # Unknown services breakdown
+        unknown_flows = service_data.get("unknown_flows", [])
+        if unknown_flows:
+            unknown_count = len(unknown_flows)
+            total_flows = summary.get("total_flows", 0)
+            unknown_percentage = (unknown_count / total_flows * 100) if total_flows > 0 else 0
+
+            html += f"<h3>❓ Unknown Service Classification ({unknown_count} flows, {unknown_percentage:.1f}%)</h3>"
+
+            # Analyze port distribution in unknown flows
+            port_distribution = {}
+            for flow in unknown_flows:
+                dst_port = flow.get("dst_port", 0)
+                port_distribution[dst_port] = port_distribution.get(dst_port, 0) + 1
+
+            if port_distribution:
+                html += "<h4>Most Common Ports in Unknown Traffic</h4>"
+                html += '<table class="data-table">'
+                html += """
+                <thead>
+                    <tr>
+                        <th>Port</th>
+                        <th>Flow Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                """
+
+                sorted_ports = sorted(port_distribution.items(), key=lambda x: x[1], reverse=True)[:10]
+                for port, count in sorted_ports:
+                    port_percentage = (count / unknown_count * 100) if unknown_count > 0 else 0
+                    html += f"""
+                    <tr>
+                        <td><strong>{port}</strong></td>
+                        <td>{count}</td>
+                        <td>{port_percentage:.1f}%</td>
+                    </tr>
+                    """
+
+                html += "</tbody></table>"
+
+                # Add note about unknown services
+                html += """
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                    <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Unknown Classification</strong></p>
+                    <p style="margin: 0; font-size: 0.95em; color: #856404;">
+                        Flows are classified as "Unknown" when they don't match known behavioral patterns.
+                        This typically includes: custom applications, encrypted protocols, or non-standard port usage.
+                        Review the port distribution above to identify potential application-specific traffic.
+                    </p>
+                </div>
+                """
+
         return html
 
     def _generate_tcp_section(self, results: dict[str, Any]) -> str:
@@ -897,11 +1006,17 @@ class HTMLReportGenerator:
             rto_count = retrans_data.get("rto_count", 0)
             fast_retrans = retrans_data.get("fast_retrans_count", 0)
 
+            # Calculate retransmission rate
+            metadata = results.get("metadata", {})
+            total_packets = metadata.get("total_packets", 0)
+            retrans_rate = (total_retrans / total_packets * 100) if total_packets > 0 else 0
+
             html += '<div class="summary-grid">'
             html += f"""
             <div class="metric-card" style="border-left-color: #dc3545;">
                 <div class="metric-label">Total Retransmissions</div>
                 <div class="metric-value">{total_retrans:,}</div>
+                <div class="metric-label" style="font-size: 0.8em; margin-top: 5px;">{retrans_rate:.2f}% of total packets</div>
             </div>
             <div class="metric-card" style="border-left-color: #fd7e14;">
                 <div class="metric-label">RTO (Timeout)</div>
@@ -1062,17 +1177,22 @@ class HTMLReportGenerator:
                 """
 
                 for flow in flow_stats[:15]:
-                    if flow.get("suspected_bottleneck") != "none":
-                        bottleneck = flow.get("suspected_bottleneck", "unknown")
-                        badge_class = "badge-danger" if bottleneck == "application" else "badge-warning"
-                        html += f"""
-                        <tr>
-                            <td><code>{flow.get("flow_key", "N/A")}</code></td>
-                            <td><span class="badge {badge_class}">{bottleneck.upper()}</span></td>
-                            <td>{flow.get("zero_window_count", 0)}</td>
-                            <td>{flow.get("zero_window_total_duration", 0):.3f}s</td>
-                        </tr>
-                        """
+                    bottleneck = flow.get("suspected_bottleneck", "none")
+                    # Show all flows with zero windows, color-code by bottleneck type
+                    if bottleneck == "application":
+                        badge_class = "badge-danger"
+                    elif bottleneck == "network":
+                        badge_class = "badge-warning"
+                    else:
+                        badge_class = "badge-info"
+                    html += f"""
+                    <tr>
+                        <td><code>{flow.get("flow_key", "N/A")}</code></td>
+                        <td><span class="badge {badge_class}">{bottleneck.upper()}</span></td>
+                        <td>{flow.get("zero_window_count", 0)}</td>
+                        <td>{flow.get("zero_window_total_duration", 0):.3f}s</td>
+                    </tr>
+                    """
 
                 html += "</tbody></table>"
 
@@ -1765,6 +1885,7 @@ class HTMLReportGenerator:
                     <th>Queries</th>
                     <th>Avg Length</th>
                     <th>Entropy</th>
+                    <th>Example Queries</th>
                     <th>Indicators</th>
                     <th>Severity</th>
                 </tr>
@@ -1784,9 +1905,23 @@ class HTMLReportGenerator:
                 if len(domain) > 30:
                     domain = domain[:27] + "..."
 
+                # Format example queries
+                example_queries = event.get("example_queries", [])
+                if example_queries:
+                    # Show first 2 examples, truncate if too long
+                    examples_list = []
+                    for query in example_queries[:2]:
+                        if len(query) > 35:
+                            examples_list.append(query[:32] + "...")
+                        else:
+                            examples_list.append(query)
+                    examples_str = "<br>".join(examples_list)
+                else:
+                    examples_str = "N/A"
+
                 # Format indicators
                 if len(indicators) > 2:
-                    indicators_str = ", ".join(indicators[:2]) + f" +{len(indicators)-2} more"
+                    indicators_str = ", ".join(indicators[:2]) + f" +{len(indicators)-2}"
                 else:
                     indicators_str = ", ".join(indicators) if indicators else "Various"
 
@@ -1797,6 +1932,7 @@ class HTMLReportGenerator:
                     <td>{event.get("query_count", 0)}</td>
                     <td>{avg_length:.0f} chars</td>
                     <td>{entropy:.2f} bits</td>
+                    <td style="font-family: monospace; font-size: 0.75em; max-width: 200px;">{examples_str}</td>
                     <td style="font-size: 0.85em;">{indicators_str}</td>
                     <td><span class="badge {badge_class}">{severity.upper()}</span></td>
                 </tr>
