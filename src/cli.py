@@ -27,8 +27,8 @@ from .analyzers.data_exfiltration_detector import DataExfiltrationDetector
 from .analyzers.ddos_detector import DDoSDetector
 from .analyzers.dns_tunneling_detector import DNSTunnelingDetector
 from .analyzers.health_score import HealthScoreCalculator
-from .analyzers.lateral_movement_detector import LateralMovementDetector
 from .analyzers.jitter_analyzer import JitterAnalyzer
+from .analyzers.lateral_movement_detector import LateralMovementDetector
 from .analyzers.port_scan_detector import PortScanDetector
 from .analyzers.protocol_distribution import ProtocolDistributionAnalyzer
 from .analyzers.service_classifier import ServiceClassifier
@@ -74,6 +74,7 @@ def _generate_reports(results: dict[str, Any], pcap_file: str, output: Optional[
 
     if output is None:
         from datetime import datetime
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output = f"pcap_analysis_{timestamp}"
 
@@ -221,7 +222,7 @@ def analyze_pcap_hybrid(
     console.print(f"  File size: {perf_stats['file_size_mb']:.2f} MB")
     console.print(f"  Mode: {perf_stats['processing_mode']}")
     console.print(f"  Description: {perf_stats['recommended_mode']}")
-    if perf_stats['chunk_size']:
+    if perf_stats["chunk_size"]:
         console.print(f"  Chunk size: {perf_stats['chunk_size']} packets")
 
     # Show memory status
@@ -312,7 +313,7 @@ def analyze_pcap_hybrid(
     lateral_movement_detector = LateralMovementDetector(include_localhost=include_localhost)
 
     # Sprint 10: Use streaming processor for memory efficiency
-    processing_mode = perf_stats['processing_mode']
+    processing_mode = perf_stats["processing_mode"]
     scapy_packets = []
     complex_packet_count = 0
 
@@ -588,10 +589,12 @@ def analyze_pcap_hybrid(
         console.print(f"  🔴 Port Scans Detected: {port_scan_results['total_scans_detected']}")
         severity = port_scan_results.get("severity_breakdown", {})
         if severity:
-            console.print(f"     Critical: {severity.get('critical', 0)}, "
-                         f"High: {severity.get('high', 0)}, "
-                         f"Medium: {severity.get('medium', 0)}, "
-                         f"Low: {severity.get('low', 0)}")
+            console.print(
+                f"     Critical: {severity.get('critical', 0)}, "
+                f"High: {severity.get('high', 0)}, "
+                f"Medium: {severity.get('medium', 0)}, "
+                f"Low: {severity.get('low', 0)}"
+            )
     else:
         console.print("  ✓ No port scans detected")
 
@@ -600,10 +603,12 @@ def analyze_pcap_hybrid(
         console.print(f"  🔴 Brute-Force Attacks: {brute_force_results['total_attacks_detected']}")
         severity = brute_force_results.get("severity_breakdown", {})
         if severity:
-            console.print(f"     Critical: {severity.get('critical', 0)}, "
-                         f"High: {severity.get('high', 0)}, "
-                         f"Medium: {severity.get('medium', 0)}, "
-                         f"Low: {severity.get('low', 0)}")
+            console.print(
+                f"     Critical: {severity.get('critical', 0)}, "
+                f"High: {severity.get('high', 0)}, "
+                f"Medium: {severity.get('medium', 0)}, "
+                f"Low: {severity.get('low', 0)}"
+            )
     else:
         console.print("  ✓ No brute-force attacks detected")
 
@@ -613,10 +618,12 @@ def analyze_pcap_hybrid(
         severity = ddos_results.get("severity_breakdown", {})
         attack_types = ddos_results.get("attack_type_breakdown", {})
         if severity:
-            console.print(f"     Critical: {severity.get('critical', 0)}, "
-                         f"High: {severity.get('high', 0)}, "
-                         f"Medium: {severity.get('medium', 0)}, "
-                         f"Low: {severity.get('low', 0)}")
+            console.print(
+                f"     Critical: {severity.get('critical', 0)}, "
+                f"High: {severity.get('high', 0)}, "
+                f"Medium: {severity.get('medium', 0)}, "
+                f"Low: {severity.get('low', 0)}"
+            )
         if attack_types:
             types_str = ", ".join([f"{count} {atype}" for atype, count in attack_types.items()])
             console.print(f"     Types: {types_str}")
@@ -628,10 +635,12 @@ def analyze_pcap_hybrid(
         console.print(f"  🔴 DNS Tunneling: {dns_tunneling_results['total_tunneling_detected']}")
         severity = dns_tunneling_results.get("severity_breakdown", {})
         if severity:
-            console.print(f"     Critical: {severity.get('critical', 0)}, "
-                         f"High: {severity.get('high', 0)}, "
-                         f"Medium: {severity.get('medium', 0)}, "
-                         f"Low: {severity.get('low', 0)}")
+            console.print(
+                f"     Critical: {severity.get('critical', 0)}, "
+                f"High: {severity.get('high', 0)}, "
+                f"Medium: {severity.get('medium', 0)}, "
+                f"Low: {severity.get('low', 0)}"
+            )
     else:
         console.print("  ✓ No DNS tunneling detected")
 
@@ -640,10 +649,12 @@ def analyze_pcap_hybrid(
         console.print(f"  🔴 Data Exfiltration: {data_exfiltration_results['total_exfiltration_detected']}")
         severity = data_exfiltration_results.get("severity_breakdown", {})
         if severity:
-            console.print(f"     Critical: {severity.get('critical', 0)}, "
-                         f"High: {severity.get('high', 0)}, "
-                         f"Medium: {severity.get('medium', 0)}, "
-                         f"Low: {severity.get('low', 0)}")
+            console.print(
+                f"     Critical: {severity.get('critical', 0)}, "
+                f"High: {severity.get('high', 0)}, "
+                f"Medium: {severity.get('medium', 0)}, "
+                f"Low: {severity.get('low', 0)}"
+            )
     else:
         console.print("  ✓ No data exfiltration detected")
 
@@ -652,10 +663,12 @@ def analyze_pcap_hybrid(
         console.print(f"  🔴 C2 Beaconing: {c2_beaconing_results['total_beaconing_detected']}")
         severity = c2_beaconing_results.get("severity_breakdown", {})
         if severity:
-            console.print(f"     Critical: {severity.get('critical', 0)}, "
-                         f"High: {severity.get('high', 0)}, "
-                         f"Medium: {severity.get('medium', 0)}, "
-                         f"Low: {severity.get('low', 0)}")
+            console.print(
+                f"     Critical: {severity.get('critical', 0)}, "
+                f"High: {severity.get('high', 0)}, "
+                f"Medium: {severity.get('medium', 0)}, "
+                f"Low: {severity.get('low', 0)}"
+            )
     else:
         console.print("  ✓ No C2 beaconing detected")
 
@@ -664,10 +677,12 @@ def analyze_pcap_hybrid(
         console.print(f"  🔴 Lateral Movement: {lateral_movement_results['total_lateral_movement_detected']}")
         severity = lateral_movement_results.get("severity_breakdown", {})
         if severity:
-            console.print(f"     Critical: {severity.get('critical', 0)}, "
-                         f"High: {severity.get('high', 0)}, "
-                         f"Medium: {severity.get('medium', 0)}, "
-                         f"Low: {severity.get('low', 0)}")
+            console.print(
+                f"     Critical: {severity.get('critical', 0)}, "
+                f"High: {severity.get('high', 0)}, "
+                f"Medium: {severity.get('medium', 0)}, "
+                f"Low: {severity.get('low', 0)}"
+            )
     else:
         console.print("  ✓ No lateral movement detected")
 
@@ -699,13 +714,31 @@ def cli():
 @click.option("--export-html", type=click.Path(), help="Export HTML report to specific file")
 @click.option("--export-csv", type=click.Path(), help="Export CSV files to directory")
 @click.option("--export-dir", type=click.Path(), help="Export all formats (HTML + CSV) to directory")
-@click.option("--include-localhost", is_flag=True, help="Include localhost traffic in security analysis (default: excluded)")
+@click.option(
+    "--include-localhost", is_flag=True, help="Include localhost traffic in security analysis (default: excluded)"
+)
 @click.option("--no-streaming", is_flag=True, help="Disable automatic streaming mode for large files (Sprint 10)")
-@click.option("--parallel", is_flag=True, help="Enable parallel analyzer execution using multiple CPU cores (Sprint 10 - experimental)")
+@click.option(
+    "--parallel",
+    is_flag=True,
+    help="Enable parallel analyzer execution using multiple CPU cores (Sprint 10 - experimental)",
+)
 @click.option("--memory-limit", type=float, help="Set memory limit in MB (default: 80% of available memory)")
 def analyze(
-    pcap_file, latency, config, output, no_report, no_details, details_limit, export_html, export_csv, export_dir, include_localhost,
-    no_streaming, parallel, memory_limit
+    pcap_file,
+    latency,
+    config,
+    output,
+    no_report,
+    no_details,
+    details_limit,
+    export_html,
+    export_csv,
+    export_dir,
+    include_localhost,
+    no_streaming,
+    parallel,
+    memory_limit,
 ):
     """
     Analyse un fichier PCAP local pour détecter les causes de latence
@@ -747,11 +780,15 @@ def analyze(
     # Analyse avec le mode hybride optimisé (dpkt + Scapy)
     # Sprint 10: Add performance optimizations
     results = analyze_pcap_hybrid(
-        pcap_file, cfg, latency_filter=latency, show_details=show_details, details_limit=details_limit,
+        pcap_file,
+        cfg,
+        latency_filter=latency,
+        show_details=show_details,
+        details_limit=details_limit,
         include_localhost=include_localhost,
         enable_streaming=not no_streaming,
         enable_parallel=parallel,
-        memory_limit_mb=memory_limit
+        memory_limit_mb=memory_limit,
     )
 
     # Génération des rapports
@@ -827,7 +864,9 @@ def capture(duration, filter, output, config, analyze, latency):
         # Analyse automatique si demandé
         if analyze:
             console.print("\n[cyan]Lancement de l'analyse automatique...[/cyan]")
-            results = analyze_pcap_hybrid(local_pcap, cfg, latency_filter=latency, show_details=True, include_localhost=False)
+            results = analyze_pcap_hybrid(
+                local_pcap, cfg, latency_filter=latency, show_details=True, include_localhost=False
+            )
 
             # Génération des rapports
             _generate_reports(results, local_pcap, None, cfg)
@@ -909,6 +948,7 @@ def benchmark(pcap_file, output):
     except Exception as e:
         console.print(f"[red]❌ Benchmark failed: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

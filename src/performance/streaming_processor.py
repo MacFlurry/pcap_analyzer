@@ -14,7 +14,9 @@ Sprint: 10 (Performance Optimization)
 
 import gc
 import os
-from typing import Iterator, List, Any, Optional
+from collections.abc import Iterator
+from typing import Any, List, Optional
+
 from scapy.all import PcapReader
 from scapy.packet import Packet
 
@@ -31,14 +33,14 @@ class StreamingProcessor:
     """
 
     # File size thresholds for different strategies
-    SMALL_FILE_THRESHOLD = 100 * 1024 * 1024   # 100MB - load all in memory
+    SMALL_FILE_THRESHOLD = 100 * 1024 * 1024  # 100MB - load all in memory
     MEDIUM_FILE_THRESHOLD = 500 * 1024 * 1024  # 500MB - chunk processing
     LARGE_FILE_THRESHOLD = 2 * 1024 * 1024 * 1024  # 2GB - aggressive chunking
 
     # Chunk sizes for different file sizes
-    SMALL_CHUNK_SIZE = 50000   # packets
+    SMALL_CHUNK_SIZE = 50000  # packets
     MEDIUM_CHUNK_SIZE = 20000  # packets
-    LARGE_CHUNK_SIZE = 10000   # packets
+    LARGE_CHUNK_SIZE = 10000  # packets
 
     def __init__(self, pcap_file: str):
         """
@@ -66,7 +68,7 @@ class StreamingProcessor:
     def _determine_chunk_size(self) -> int:
         """Determine optimal chunk size based on file size."""
         if self.file_size < self.SMALL_FILE_THRESHOLD:
-            return float('inf')  # No chunking
+            return float("inf")  # No chunking
         elif self.file_size < self.MEDIUM_FILE_THRESHOLD:
             return self.SMALL_CHUNK_SIZE
         elif self.file_size < self.LARGE_FILE_THRESHOLD:
@@ -90,7 +92,7 @@ class StreamingProcessor:
                     callback(packet, i)
                 yield packet
 
-    def stream_chunks(self, callback: Optional[callable] = None) -> Iterator[List[Packet]]:
+    def stream_chunks(self, callback: Optional[callable] = None) -> Iterator[list[Packet]]:
         """
         Stream packets in chunks for memory-efficient processing.
 
@@ -127,7 +129,7 @@ class StreamingProcessor:
                     callback(chunk_idx, len(chunk))
                 yield chunk
 
-    def get_all_packets(self) -> List[Packet]:
+    def get_all_packets(self) -> list[Packet]:
         """
         Load all packets in memory (for small files only).
 
@@ -171,22 +173,22 @@ class StreamingProcessor:
             Dictionary with processor stats
         """
         return {
-            'file_path': self.pcap_file,
-            'file_size_mb': self.file_size / (1024 * 1024),
-            'processing_mode': self.processing_mode,
-            'chunk_size': self.chunk_size if self.chunk_size != float('inf') else None,
-            'recommended_mode': self._get_mode_description()
+            "file_path": self.pcap_file,
+            "file_size_mb": self.file_size / (1024 * 1024),
+            "processing_mode": self.processing_mode,
+            "chunk_size": self.chunk_size if self.chunk_size != float("inf") else None,
+            "recommended_mode": self._get_mode_description(),
         }
 
     def _get_mode_description(self) -> str:
         """Get human-readable processing mode description."""
         descriptions = {
-            'memory': 'Full memory load (file < 100MB)',
-            'chunked': 'Chunked processing (100MB-500MB)',
-            'streaming': 'Streaming mode (500MB-2GB)',
-            'aggressive_streaming': 'Aggressive streaming (>2GB)'
+            "memory": "Full memory load (file < 100MB)",
+            "chunked": "Chunked processing (100MB-500MB)",
+            "streaming": "Streaming mode (500MB-2GB)",
+            "aggressive_streaming": "Aggressive streaming (>2GB)",
         }
-        return descriptions.get(self.processing_mode, 'Unknown')
+        return descriptions.get(self.processing_mode, "Unknown")
 
 
 class ChunkedAnalyzerRunner:
@@ -195,7 +197,7 @@ class ChunkedAnalyzerRunner:
     Accumulates results across chunks.
     """
 
-    def __init__(self, analyzers: List[Any], processor: StreamingProcessor):
+    def __init__(self, analyzers: list[Any], processor: StreamingProcessor):
         """
         Initialize chunked analyzer runner.
 
@@ -206,7 +208,7 @@ class ChunkedAnalyzerRunner:
         self.analyzers = analyzers
         self.processor = processor
 
-    def run(self, progress_callback: Optional[callable] = None) -> List[Any]:
+    def run(self, progress_callback: Optional[callable] = None) -> list[Any]:
         """
         Run all analyzers on chunked data.
 
@@ -225,7 +227,7 @@ class ChunkedAnalyzerRunner:
 
             # Run each analyzer on this chunk
             for analyzer in self.analyzers:
-                if hasattr(analyzer, 'analyze'):
+                if hasattr(analyzer, "analyze"):
                     analyzer.analyze(chunk)
 
             if progress_callback:
@@ -239,9 +241,9 @@ class ChunkedAnalyzerRunner:
 
         # Finalize analyzers and collect results
         for analyzer in self.analyzers:
-            if hasattr(analyzer, 'finalize'):
+            if hasattr(analyzer, "finalize"):
                 analyzer.finalize()
-            if hasattr(analyzer, 'get_results'):
+            if hasattr(analyzer, "get_results"):
                 results.append(analyzer.get_results())
 
         return results

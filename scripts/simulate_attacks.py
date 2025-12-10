@@ -11,16 +11,16 @@ WARNING: Use only on authorized systems for testing purposes!
 """
 
 import socket
-import time
 import sys
+import time
 from datetime import datetime
 
 
 def print_header(msg):
     """Print formatted header"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"  {msg}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 def port_scan_horizontal(target_ip, ports, delay=0.1):
@@ -188,10 +188,10 @@ def service_enumeration(target_ip, services, delay=0.2):
 
 
 if __name__ == "__main__":
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  NETWORK ATTACK SIMULATION TOOL")
     print("  For Testing Security Detectors Only")
-    print("="*60)
+    print("=" * 60)
 
     if len(sys.argv) < 2:
         print("\nUsage:")
@@ -215,16 +215,16 @@ if __name__ == "__main__":
 
     # Scenario 1: Horizontal port scan (common ports)
     common_ports = [
-        21,    # FTP
-        22,    # SSH
-        23,    # Telnet
-        25,    # SMTP
-        53,    # DNS
-        80,    # HTTP
-        110,   # POP3
-        143,   # IMAP
-        443,   # HTTPS
-        445,   # SMB
+        21,  # FTP
+        22,  # SSH
+        23,  # Telnet
+        25,  # SMTP
+        53,  # DNS
+        80,  # HTTP
+        110,  # POP3
+        143,  # IMAP
+        443,  # HTTPS
+        445,  # SMB
         3306,  # MySQL
         3389,  # RDP
         5432,  # PostgreSQL
@@ -232,7 +232,7 @@ if __name__ == "__main__":
         6379,  # Redis
         8080,  # HTTP-Alt
         8443,  # HTTPS-Alt
-        27017, # MongoDB
+        27017,  # MongoDB
     ]
 
     port_scan_horizontal(target, common_ports, delay=0.05)
@@ -258,7 +258,7 @@ if __name__ == "__main__":
         5432: "PostgreSQL",
         5900: "VNC",
         6379: "Redis",
-        27017: "MongoDB"
+        27017: "MongoDB",
     }
 
     service_enumeration(target, auth_services, delay=0.1)

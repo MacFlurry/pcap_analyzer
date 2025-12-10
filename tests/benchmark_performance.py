@@ -69,9 +69,9 @@ class PerformanceBenchmark:
 
     def __init__(self, pcap_path: Path):
         self.pcap_path = pcap_path
-        self.results: Dict[str, any] = {}
+        self.results: dict[str, any] = {}
 
-    def measure_file_stats(self) -> Dict[str, any]:
+    def measure_file_stats(self) -> dict[str, any]:
         """Measure PCAP file statistics."""
         file_size = self.pcap_path.stat().st_size
 
@@ -97,7 +97,7 @@ class PerformanceBenchmark:
                 "error": str(e),
             }
 
-    def measure_execution_time(self) -> Tuple[float, Dict]:
+    def measure_execution_time(self) -> tuple[float, dict]:
         """Measure total execution time of analysis pipeline."""
         from src.cli import analyze_pcap_hybrid
 
@@ -113,7 +113,7 @@ class PerformanceBenchmark:
             end_time = time.perf_counter()
             return (end_time - start_time, {"error": str(e)})
 
-    def measure_memory_usage(self) -> Dict[str, any]:
+    def measure_memory_usage(self) -> dict[str, any]:
         """Measure peak memory usage during analysis."""
         try:
             import tracemalloc
@@ -140,7 +140,7 @@ class PerformanceBenchmark:
         except Exception as e:
             return {"error": str(e)}
 
-    def profile_analyzers(self) -> Dict[str, float]:
+    def profile_analyzers(self) -> dict[str, float]:
         """Profile individual analyzer execution times."""
         import cProfile
         import io
@@ -169,7 +169,7 @@ class PerformanceBenchmark:
 
         return analyzer_times
 
-    def run_benchmark(self, with_memory: bool = False, with_profile: bool = False) -> Dict:
+    def run_benchmark(self, with_memory: bool = False, with_profile: bool = False) -> dict:
         """Run full benchmark suite."""
         print("=" * 60)
         print("PCAP Analyzer - Performance Benchmark")

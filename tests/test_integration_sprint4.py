@@ -104,7 +104,7 @@ class TestHTMLReportIntegration:
             assert os.path.exists(output_path)
 
             # Should be valid HTML
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 content = f.read()
                 assert "<!DOCTYPE html>" in content
                 assert "test.pcap" in content
@@ -184,7 +184,7 @@ class TestCSVExportIntegration:
             csv_file = os.path.join(tmpdir, "protocol_distribution.csv")
             assert os.path.exists(csv_file)
 
-            with open(csv_file, "r") as f:
+            with open(csv_file) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
                 assert len(rows) == 2
@@ -297,7 +297,7 @@ class TestExportWithAllSprints:
             assert os.path.exists(csv_dir)
 
             # Verify HTML contains all data
-            with open(html_path, "r") as f:
+            with open(html_path) as f:
                 html_content = f.read()
                 assert "complete_test.pcap" in html_content
                 assert health_score.severity in html_content

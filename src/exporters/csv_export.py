@@ -21,7 +21,7 @@ class CSVExporter:
     def __init__(self):
         pass
 
-    def export_protocol_distribution(self, results: Dict[str, Any], output_path: str):
+    def export_protocol_distribution(self, results: dict[str, Any], output_path: str):
         """
         Export protocol distribution to CSV.
 
@@ -55,7 +55,7 @@ class CSVExporter:
                 writer = csv.DictWriter(f, fieldnames=["Protocol", "Count", "Percentage"])
                 writer.writeheader()
 
-    def export_service_classification(self, results: Dict[str, Any], output_path: str):
+    def export_service_classification(self, results: dict[str, Any], output_path: str):
         """
         Export service classification to CSV.
 
@@ -88,7 +88,7 @@ class CSVExporter:
                 writer = csv.DictWriter(f, fieldnames=["Service Type", "Flow Count", "Percentage"])
                 writer.writeheader()
 
-    def export_jitter_statistics(self, results: Dict[str, Any], output_path: str):
+    def export_jitter_statistics(self, results: dict[str, Any], output_path: str):
         """
         Export jitter statistics to CSV.
 
@@ -124,7 +124,7 @@ class CSVExporter:
                 writer = csv.DictWriter(f, fieldnames=["Flow", "Mean Jitter (ms)", "Max Jitter (ms)", "Packet Count"])
                 writer.writeheader()
 
-    def export_classified_flows(self, results: Dict[str, Any], output_path: str):
+    def export_classified_flows(self, results: dict[str, Any], output_path: str):
         """
         Export classified flows to CSV.
 
@@ -166,7 +166,7 @@ class CSVExporter:
                 )
                 writer.writeheader()
 
-    def export_summary(self, results: Dict[str, Any], output_path: str):
+    def export_summary(self, results: dict[str, Any], output_path: str):
         """
         Export executive summary to CSV.
 
@@ -230,7 +230,7 @@ class CSVExporter:
             writer.writeheader()
             writer.writerows(rows)
 
-    def export_all(self, results: Dict[str, Any], output_dir: str):
+    def export_all(self, results: dict[str, Any], output_dir: str):
         """
         Export all data to multiple CSV files in a directory.
 

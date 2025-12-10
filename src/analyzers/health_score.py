@@ -121,8 +121,8 @@ class HealthScoreResult:
     severity: str
     severity_badge: str
     total_penalty: float
-    metric_scores: List[MetricScore]
-    recommendations: List[str]
+    metric_scores: list[MetricScore]
+    recommendations: list[str]
 
 
 class HealthScoreCalculator:
@@ -151,7 +151,7 @@ class HealthScoreCalculator:
         """Initialize the health score calculator."""
         pass
 
-    def calculate(self, analysis_results: Dict[str, Any]) -> HealthScoreResult:
+    def calculate(self, analysis_results: dict[str, Any]) -> HealthScoreResult:
         """
         Calculate comprehensive network health score.
 
@@ -229,7 +229,7 @@ class HealthScoreCalculator:
         )
 
     def _calculate_tcp_retransmission_penalty(
-        self, analysis_results: Dict[str, Any], total_packets: int
+        self, analysis_results: dict[str, Any], total_packets: int
     ) -> MetricScore:
         """
         Calculate penalty for TCP retransmissions per RFC 7680.
@@ -295,7 +295,7 @@ class HealthScoreCalculator:
             rfc_reference="RFC 7680",
         )
 
-    def _calculate_packet_loss_penalty(self, analysis_results: Dict[str, Any], total_packets: int) -> MetricScore:
+    def _calculate_packet_loss_penalty(self, analysis_results: dict[str, Any], total_packets: int) -> MetricScore:
         """
         Calculate penalty for packet loss per RFC 2680.
 
@@ -362,7 +362,7 @@ class HealthScoreCalculator:
             rfc_reference="RFC 2680",
         )
 
-    def _calculate_rtt_penalty(self, analysis_results: Dict[str, Any]) -> MetricScore:
+    def _calculate_rtt_penalty(self, analysis_results: dict[str, Any]) -> MetricScore:
         """
         Calculate penalty for RTT (latency) per ITU-T G.114.
 
@@ -425,7 +425,7 @@ class HealthScoreCalculator:
             rfc_reference="ITU-T G.114",
         )
 
-    def _calculate_dns_penalty(self, analysis_results: Dict[str, Any]) -> MetricScore:
+    def _calculate_dns_penalty(self, analysis_results: dict[str, Any]) -> MetricScore:
         """
         Calculate penalty for DNS errors.
 
@@ -493,7 +493,7 @@ class HealthScoreCalculator:
             rfc_reference="RFC 1035",
         )
 
-    def _calculate_jitter_penalty(self, analysis_results: Dict[str, Any]) -> MetricScore:
+    def _calculate_jitter_penalty(self, analysis_results: dict[str, Any]) -> MetricScore:
         """
         Calculate penalty for jitter (IPDV) per RFC 3393.
 
@@ -568,7 +568,7 @@ class HealthScoreCalculator:
             rfc_reference="RFC 3393",
         )
 
-    def _calculate_anomaly_penalty(self, analysis_results: Dict[str, Any], total_packets: int) -> MetricScore:
+    def _calculate_anomaly_penalty(self, analysis_results: dict[str, Any], total_packets: int) -> MetricScore:
         """
         Calculate penalty for protocol anomalies.
 
@@ -693,8 +693,8 @@ class HealthScoreCalculator:
         return severity_map.get(qos_class, ("unknown", "❓"))
 
     def _generate_recommendations(
-        self, metric_scores: List[MetricScore], analysis_results: Dict[str, Any]
-    ) -> List[str]:
+        self, metric_scores: list[MetricScore], analysis_results: dict[str, Any]
+    ) -> list[str]:
         """
         Generate actionable recommendations based on metric scores.
 
@@ -766,7 +766,7 @@ class HealthScoreCalculator:
 
         return recommendations
 
-    def _safe_get(self, data: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
+    def _safe_get(self, data: dict[str, Any], keys: list[str], default: Any = None) -> Any:
         """
         Safely navigate nested dictionary with default fallback.
 

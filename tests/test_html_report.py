@@ -83,7 +83,7 @@ class TestHTMLReportBasics:
             assert os.path.exists(output_path)
 
             # Should be readable HTML
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 content = f.read()
                 assert "<!DOCTYPE html>" in content
         finally:

@@ -43,7 +43,7 @@ def sanitize_value(value: Any, default_type: type = dict) -> Any:
     return value
 
 
-def sanitize_results(results: Dict[str, Any], recursive: bool = True) -> Dict[str, Any]:
+def sanitize_results(results: dict[str, Any], recursive: bool = True) -> dict[str, Any]:
     """
     Recursively sanitize analyzer results by replacing None values.
 
@@ -109,7 +109,7 @@ def sanitize_results(results: Dict[str, Any], recursive: bool = True) -> Dict[st
     return sanitized
 
 
-def get_empty_analyzer_result(analyzer_type: str) -> Dict[str, Any]:
+def get_empty_analyzer_result(analyzer_type: str) -> dict[str, Any]:
     """
     Get standard empty result structure for a given analyzer type.
 

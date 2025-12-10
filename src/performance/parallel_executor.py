@@ -10,9 +10,9 @@ Sprint: 10 (Performance Optimization)
 """
 
 import multiprocessing as mp
-from typing import List, Dict, Any, Tuple
-from concurrent.futures import ProcessPoolExecutor, as_completed
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Any, Dict, List, Tuple
 
 
 class ParallelAnalyzerExecutor:
@@ -36,11 +36,7 @@ class ParallelAnalyzerExecutor:
         self.cpu_count = mp.cpu_count()
         self.max_workers = max_workers or max(1, self.cpu_count - 1)
 
-    def run_analyzers_parallel(
-        self,
-        analyzers: List[Tuple[str, Any]],
-        packets: List[Any]
-    ) -> Dict[str, Any]:
+    def run_analyzers_parallel(self, analyzers: list[tuple[str, Any]], packets: list[Any]) -> dict[str, Any]:
         """
         Run multiple analyzers in parallel.
 
@@ -56,21 +52,20 @@ class ParallelAnalyzerExecutor:
         # Group analyzers by dependency
         # Analyzers that can run in parallel
         parallel_analyzers = [
-            ('protocol_distribution', None),
-            ('jitter', None),
-            ('service_classification', None),
-            ('port_scan_detection', None),
-            ('brute_force_detection', None),
-            ('ddos_detection', None),
-            ('dns_tunneling_detection', None),
-            ('data_exfiltration_detection', None),
-            ('c2_beaconing_detection', None),
-            ('lateral_movement_detection', None),
+            ("protocol_distribution", None),
+            ("jitter", None),
+            ("service_classification", None),
+            ("port_scan_detection", None),
+            ("brute_force_detection", None),
+            ("ddos_detection", None),
+            ("dns_tunneling_detection", None),
+            ("data_exfiltration_detection", None),
+            ("c2_beaconing_detection", None),
+            ("lateral_movement_detection", None),
         ]
 
         # Filter to only include provided analyzers
-        tasks = [(name, analyzer) for name, analyzer in analyzers
-                 if name in [n for n, _ in parallel_analyzers]]
+        tasks = [(name, analyzer) for name, analyzer in analyzers if name in [n for n, _ in parallel_analyzers]]
 
         if not tasks:
             # No parallelizable analyzers, run sequentially
@@ -82,8 +77,7 @@ class ParallelAnalyzerExecutor:
         with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all analyzer tasks
             future_to_name = {
-                executor.submit(self._run_analyzer_process, analyzer, packets): name
-                for name, analyzer in tasks
+                executor.submit(self._run_analyzer_process, analyzer, packets): name for name, analyzer in tasks
             }
 
             # Collect results as they complete
@@ -101,7 +95,7 @@ class ParallelAnalyzerExecutor:
         return results
 
     @staticmethod
-    def _run_analyzer_process(analyzer: Any, packets: List[Any]) -> Any:
+    def _run_analyzer_process(analyzer: Any, packets: list[Any]) -> Any:
         """
         Run analyzer in subprocess (for multiprocessing).
 
@@ -115,7 +109,7 @@ class ParallelAnalyzerExecutor:
         return analyzer.analyze(packets)
 
     @staticmethod
-    def _run_single_analyzer(analyzer: Any, packets: List[Any]) -> Any:
+    def _run_single_analyzer(analyzer: Any, packets: list[Any]) -> Any:
         """
         Run single analyzer (sequential fallback).
 
@@ -141,7 +135,7 @@ class ParallelAnalyzerExecutor:
         # Don't create more workers than analyzers
         return min(self.max_workers, num_analyzers)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get executor statistics.
 
@@ -149,17 +143,14 @@ class ParallelAnalyzerExecutor:
             Dictionary with executor stats
         """
         return {
-            'cpu_count': self.cpu_count,
-            'max_workers': self.max_workers,
-            'parallel_capable': self.max_workers > 1,
-            'recommended_for_files': '> 100MB or > 50k packets'
+            "cpu_count": self.cpu_count,
+            "max_workers": self.max_workers,
+            "parallel_capable": self.max_workers > 1,
+            "recommended_for_files": "> 100MB or > 50k packets",
         }
 
 
-def benchmark_parallel_vs_sequential(
-    analyzers: List[Tuple[str, Any]],
-    packets: List[Any]
-) -> Dict[str, float]:
+def benchmark_parallel_vs_sequential(analyzers: list[tuple[str, Any]], packets: list[Any]) -> dict[str, float]:
     """
     Benchmark parallel vs sequential execution.
 
@@ -185,8 +176,8 @@ def benchmark_parallel_vs_sequential(
     speedup = sequential_time / parallel_time if parallel_time > 0 else 0
 
     return {
-        'sequential_time': sequential_time,
-        'parallel_time': parallel_time,
-        'speedup': speedup,
-        'improvement_percent': (1 - parallel_time / sequential_time) * 100 if sequential_time > 0 else 0
+        "sequential_time": sequential_time,
+        "parallel_time": parallel_time,
+        "speedup": speedup,
+        "improvement_percent": (1 - parallel_time / sequential_time) * 100 if sequential_time > 0 else 0,
     }

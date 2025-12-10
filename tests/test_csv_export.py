@@ -41,7 +41,7 @@ class TestCSVExportBasics:
             assert os.path.exists(output_path)
 
             # Read and verify CSV
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
                 assert len(rows) == 2
@@ -75,7 +75,7 @@ class TestCSVExportBasics:
             assert os.path.exists(output_path)
 
             # Read and verify CSV
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
                 assert len(rows) == 3
@@ -111,7 +111,7 @@ class TestCSVExportBasics:
             assert os.path.exists(output_path)
 
             # Read and verify CSV
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
                 assert len(rows) == 1
@@ -151,7 +151,7 @@ class TestCSVExportFlows:
             assert os.path.exists(output_path)
 
             # Read and verify CSV
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
                 assert len(rows) == 1
@@ -190,7 +190,7 @@ class TestCSVExportSummary:
             assert os.path.exists(output_path)
 
             # Read and verify CSV
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
                 assert len(rows) > 0
@@ -250,7 +250,7 @@ class TestCSVFormatting:
         try:
             exporter.export_protocol_distribution(results, output_path)
 
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 reader = csv.DictReader(f)
                 assert reader.fieldnames is not None
                 assert len(reader.fieldnames) > 0
@@ -282,7 +282,7 @@ class TestCSVFormatting:
             exporter.export_classified_flows(results, output_path)
 
             # Should be valid CSV
-            with open(output_path, "r") as f:
+            with open(output_path) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
                 assert len(rows) > 0

@@ -22,7 +22,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple
 
-from scapy.all import DNS, DNSQR, DNSRR, IP, IPv6, Packet, UDP
+from scapy.all import DNS, DNSQR, DNSRR, IP, UDP, IPv6, Packet
 
 from .base_analyzer import BaseAnalyzer
 
@@ -30,6 +30,7 @@ from .base_analyzer import BaseAnalyzer
 @dataclass
 class TunnelingEvent:
     """Represents a detected DNS tunneling activity"""
+
     source_ip: str
     domain: str
     start_time: float
@@ -38,8 +39,8 @@ class TunnelingEvent:
     avg_query_length: float
     max_query_length: int
     avg_entropy: float
-    suspicious_patterns: List[str]
-    record_types: Dict[str, int]
+    suspicious_patterns: list[str]
+    record_types: dict[str, int]
     severity: str
 
 
@@ -57,24 +58,40 @@ class DNSTunnelingDetector(BaseAnalyzer):
 
     # Common legitimate domains to whitelist
     WHITELIST_DOMAINS = {
-        "google.com", "googleapis.com", "gstatic.com",
-        "microsoft.com", "windows.com", "office.com",
-        "apple.com", "icloud.com",
-        "amazon.com", "amazonaws.com", "cloudfront.net",
-        "facebook.com", "fbcdn.net",
-        "akamai.net", "cloudflare.com",
-        "ubuntu.com", "debian.org", "fedoraproject.org",
-        "mozilla.org", "firefox.com",
+        "google.com",
+        "googleapis.com",
+        "gstatic.com",
+        "microsoft.com",
+        "windows.com",
+        "office.com",
+        "apple.com",
+        "icloud.com",
+        "amazon.com",
+        "amazonaws.com",
+        "cloudfront.net",
+        "facebook.com",
+        "fbcdn.net",
+        "akamai.net",
+        "cloudflare.com",
+        "ubuntu.com",
+        "debian.org",
+        "fedoraproject.org",
+        "mozilla.org",
+        "firefox.com",
         # Kubernetes internal domains
-        "cluster.local", "svc.cluster.local", "pod.cluster.local"
+        "cluster.local",
+        "svc.cluster.local",
+        "pod.cluster.local",
     }
 
-    def __init__(self,
-                 query_length_threshold: int = 50,
-                 entropy_threshold: float = 3.5,
-                 query_rate_threshold: float = 10.0,  # queries per minute
-                 time_window: float = 60.0,  # 1 minute
-                 include_localhost: bool = False):
+    def __init__(
+        self,
+        query_length_threshold: int = 50,
+        entropy_threshold: float = 3.5,
+        query_rate_threshold: float = 10.0,  # queries per minute
+        time_window: float = 60.0,  # 1 minute
+        include_localhost: bool = False,
+    ):
         """
         Initialize DNS tunneling detector.
 
@@ -94,10 +111,10 @@ class DNSTunnelingDetector(BaseAnalyzer):
 
         # Track DNS queries by source IP and domain
         # {(src_ip, domain): [query_details]}
-        self.dns_queries: DefaultDict[Tuple, List[Dict]] = defaultdict(list)
+        self.dns_queries: DefaultDict[tuple, list[dict]] = defaultdict(list)
 
         # Detected tunneling events
-        self.tunneling_events: List[TunnelingEvent] = []
+        self.tunneling_events: list[TunnelingEvent] = []
 
     @staticmethod
     def _is_localhost(ip: str) -> bool:
@@ -143,7 +160,7 @@ class DNSTunnelingDetector(BaseAnalyzer):
         return parts[0] if parts else ""
 
     @staticmethod
-    def _is_whitelisted(domain: str, whitelist: Set[str]) -> bool:
+    def _is_whitelisted(domain: str, whitelist: set[str]) -> bool:
         """Check if domain matches whitelist."""
         domain = domain.lower().rstrip(".")
 
@@ -159,24 +176,24 @@ class DNSTunnelingDetector(BaseAnalyzer):
         return False
 
     @staticmethod
-    def _detect_encoding_pattern(subdomain: str) -> List[str]:
+    def _detect_encoding_pattern(subdomain: str) -> list[str]:
         """Detect encoding patterns in subdomain."""
         patterns = []
 
         # Base64 pattern (alphanumeric + / and =)
-        if re.match(r'^[A-Za-z0-9+/=]{8,}$', subdomain):
+        if re.match(r"^[A-Za-z0-9+/=]{8,}$", subdomain):
             patterns.append("base64")
 
         # Hex encoding pattern
-        if re.match(r'^[0-9a-fA-F]{16,}$', subdomain):
+        if re.match(r"^[0-9a-fA-F]{16,}$", subdomain):
             patterns.append("hex")
 
         # UUID pattern (used in some C2)
-        if re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', subdomain):
+        if re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", subdomain):
             patterns.append("uuid")
 
         # Long random alphanumeric
-        if len(subdomain) > 20 and re.match(r'^[a-z0-9]+$', subdomain):
+        if len(subdomain) > 20 and re.match(r"^[a-z0-9]+$", subdomain):
             # Check if it looks random (few repeated chars)
             char_freq = Counter(subdomain)
             if len(char_freq) > len(subdomain) * 0.5:  # High diversity
@@ -215,9 +232,9 @@ class DNSTunnelingDetector(BaseAnalyzer):
             for i in range(dns.qdcount):
                 query = dns.qd if not isinstance(dns.qd, list) else dns.qd[i] if i < len(dns.qd) else dns.qd
 
-                if query and hasattr(query, 'qname'):
+                if query and hasattr(query, "qname"):
                     query_name = query.qname.decode() if isinstance(query.qname, bytes) else str(query.qname)
-                    query_type = query.qtype if hasattr(query, 'qtype') else 1
+                    query_type = query.qtype if hasattr(query, "qtype") else 1
 
                     # Extract base domain (e.g., "example.com" from "sub.example.com")
                     parts = query_name.rstrip(".").split(".")
@@ -238,17 +255,19 @@ class DNSTunnelingDetector(BaseAnalyzer):
 
                     # Store query details
                     key = (src_ip, base_domain)
-                    self.dns_queries[key].append({
-                        "timestamp": timestamp,
-                        "query_name": query_name,
-                        "subdomain": subdomain,
-                        "query_length": query_length,
-                        "entropy": entropy,
-                        "patterns": patterns,
-                        "record_type": query_type
-                    })
+                    self.dns_queries[key].append(
+                        {
+                            "timestamp": timestamp,
+                            "query_name": query_name,
+                            "subdomain": subdomain,
+                            "query_length": query_length,
+                            "entropy": entropy,
+                            "patterns": patterns,
+                            "record_type": query_type,
+                        }
+                    )
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """
         Analyze DNS query patterns and detect tunneling.
 
@@ -265,8 +284,7 @@ class DNSTunnelingDetector(BaseAnalyzer):
 
         return self.get_results()
 
-    def _analyze_tunneling_pattern(self, src_ip: str, domain: str,
-                                   queries: List[Dict]) -> None:
+    def _analyze_tunneling_pattern(self, src_ip: str, domain: str, queries: list[dict]) -> None:
         """Analyze queries for tunneling indicators."""
         if len(queries) < 3:
             return
@@ -341,11 +359,7 @@ class DNSTunnelingDetector(BaseAnalyzer):
         if is_suspicious:
             # Calculate severity
             severity = self._calculate_severity(
-                avg_length,
-                avg_entropy,
-                query_rate,
-                query_count,
-                len(suspicious_patterns)
+                avg_length, avg_entropy, query_rate, query_count, len(suspicious_patterns)
             )
 
             event = TunnelingEvent(
@@ -359,7 +373,7 @@ class DNSTunnelingDetector(BaseAnalyzer):
                 avg_entropy=avg_entropy,
                 suspicious_patterns=reasons,
                 record_types=dict(record_types),
-                severity=severity
+                severity=severity,
             )
             self.tunneling_events.append(event)
 
@@ -377,13 +391,13 @@ class DNSTunnelingDetector(BaseAnalyzer):
             16: "TXT",
             28: "AAAA",
             33: "SRV",
-            255: "ANY"
+            255: "ANY",
         }
         return type_map.get(qtype, f"TYPE{qtype}")
 
-    def _calculate_severity(self, avg_length: float, avg_entropy: float,
-                           query_rate: float, query_count: int,
-                           pattern_count: int) -> str:
+    def _calculate_severity(
+        self, avg_length: float, avg_entropy: float, query_rate: float, query_count: int, pattern_count: int
+    ) -> str:
         """Calculate severity based on multiple indicators."""
         severity = "low"
         score = 0
@@ -431,14 +445,11 @@ class DNSTunnelingDetector(BaseAnalyzer):
 
         return severity
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Get detection results."""
         # Sort by severity and query count
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_events = sorted(
-            self.tunneling_events,
-            key=lambda e: (severity_order[e.severity], -e.query_count)
-        )
+        sorted_events = sorted(self.tunneling_events, key=lambda e: (severity_order[e.severity], -e.query_count))
 
         # Count by severity and domain
         severity_counts = defaultdict(int)
@@ -451,35 +462,33 @@ class DNSTunnelingDetector(BaseAnalyzer):
         # Format events for output
         formatted_events = []
         for event in sorted_events[:20]:  # Top 20
-            formatted_events.append({
-                "source_ip": event.source_ip,
-                "domain": event.domain,
-                "severity": event.severity,
-                "start_time": event.start_time,
-                "duration": event.end_time - event.start_time,
-                "query_count": event.query_count,
-                "avg_query_length": event.avg_query_length,
-                "max_query_length": event.max_query_length,
-                "avg_entropy": event.avg_entropy,
-                "suspicious_patterns": event.suspicious_patterns,
-                "record_types": event.record_types
-            })
+            formatted_events.append(
+                {
+                    "source_ip": event.source_ip,
+                    "domain": event.domain,
+                    "severity": event.severity,
+                    "start_time": event.start_time,
+                    "duration": event.end_time - event.start_time,
+                    "query_count": event.query_count,
+                    "avg_query_length": event.avg_query_length,
+                    "max_query_length": event.max_query_length,
+                    "avg_entropy": event.avg_entropy,
+                    "suspicious_patterns": event.suspicious_patterns,
+                    "record_types": event.record_types,
+                }
+            )
 
         return {
             "total_tunneling_detected": len(self.tunneling_events),
             "severity_breakdown": dict(severity_counts),
-            "domain_breakdown": dict(sorted(
-                domain_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:10]),
+            "domain_breakdown": dict(sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[:10]),
             "tunneling_events": formatted_events,
             "detection_thresholds": {
                 "query_length_threshold": self.query_length_threshold,
                 "entropy_threshold": self.entropy_threshold,
                 "query_rate_threshold": self.query_rate_threshold,
-                "time_window": self.time_window
-            }
+                "time_window": self.time_window,
+            },
         }
 
     def get_summary(self) -> str:

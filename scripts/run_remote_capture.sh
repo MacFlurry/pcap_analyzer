@@ -22,23 +22,23 @@ echo "🌊 [Local] Lancement du générateur de trafic (Web, DNS, Erreurs)..."
         # --- Trafic Web Normal ---
         curl -s -I https://www.google.com >/dev/null 2>&1
         curl -s -I https://www.github.com >/dev/null 2>&1
-        
+
         # --- Trafic DNS (UDP) ---
         # Valide
         nslookup github.com 8.8.8.8 >/dev/null 2>&1
         # Invalide (NXDOMAIN pour tester la section DNS Errors)
         nslookup domaine.inexistant.test 8.8.8.8 >/dev/null 2>&1
-        
+
         # --- Trafic Anomalique (Tests de détection) ---
         # Connexion vers un port fermé local (Doit générer un TCP RST - Connection Refused)
         curl -m 1 http://127.0.0.1:65432 >/dev/null 2>&1
-        
+
         # Connexion vers une IP improbable (Doit générer un Timeout ou Host Unreachable)
         curl -m 1 http://10.255.255.1 >/dev/null 2>&1
-        
+
         # --- ICMP ---
         ping -c 1 1.1.1.1 >/dev/null 2>&1
-        
+
         # Pause courte
         sleep 0.5
     done

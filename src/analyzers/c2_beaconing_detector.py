@@ -19,11 +19,13 @@ Author: PCAP Analyzer Team
 Sprint: 11 (Advanced Threat Detection)
 """
 
-from typing import Dict, Any, List, Tuple
-from collections import defaultdict
-from scapy.all import IP, TCP, UDP
-from .base_analyzer import BaseAnalyzer
 import statistics
+from collections import defaultdict
+from typing import Any, Dict, List, Tuple
+
+from scapy.all import IP, TCP, UDP
+
+from .base_analyzer import BaseAnalyzer
 
 
 class C2BeaconingDetector(BaseAnalyzer):
@@ -35,10 +37,10 @@ class C2BeaconingDetector(BaseAnalyzer):
     # Known legitimate heartbeat intervals (in seconds)
     # Used to whitelist application monitoring and health checks
     KNOWN_HEARTBEAT_INTERVALS = {
-        1.0,   # High-frequency monitoring
-        2.0,   # Common monitoring interval
-        3.0,   # Kafka default heartbeat
-        5.0,   # Kubernetes liveness/readiness probes
+        1.0,  # High-frequency monitoring
+        2.0,  # Common monitoring interval
+        3.0,  # Kafka default heartbeat
+        5.0,  # Kubernetes liveness/readiness probes
         10.0,  # Kubernetes default probe interval
         15.0,  # Standard monitoring
         30.0,  # Common health check interval
@@ -47,26 +49,28 @@ class C2BeaconingDetector(BaseAnalyzer):
 
     # Known monitoring/health check ports to whitelist
     MONITORING_PORTS = {
-        9090,   # Prometheus
-        9091,   # Prometheus Pushgateway
+        9090,  # Prometheus
+        9091,  # Prometheus Pushgateway
         10250,  # Kubelet
         10255,  # Kubelet read-only
-        8080,   # Common health check
-        8081,   # Common health check
-        8443,   # HTTPS health check
-        9200,   # Elasticsearch
-        9300,   # Elasticsearch cluster
-        5601,   # Kibana
+        8080,  # Common health check
+        8081,  # Common health check
+        8443,  # HTTPS health check
+        9200,  # Elasticsearch
+        9300,  # Elasticsearch cluster
+        5601,  # Kibana
     }
 
-    def __init__(self,
-                 min_beacons: int = 10,
-                 interval_tolerance: float = 0.3,
-                 payload_size_tolerance: float = 0.2,
-                 include_localhost: bool = False,
-                 include_private_ips: bool = False,
-                 min_interval_threshold: float = 2.0,
-                 ignore_known_heartbeats: bool = True):
+    def __init__(
+        self,
+        min_beacons: int = 10,
+        interval_tolerance: float = 0.3,
+        payload_size_tolerance: float = 0.2,
+        include_localhost: bool = False,
+        include_private_ips: bool = False,
+        min_interval_threshold: float = 2.0,
+        ignore_known_heartbeats: bool = True,
+    ):
         """
         Initialize C2 Beaconing Detector.
 
@@ -89,10 +93,10 @@ class C2BeaconingDetector(BaseAnalyzer):
         self.ignore_known_heartbeats = ignore_known_heartbeats
 
         # Track connections: (src_ip, dst_ip, dst_port) -> list of (timestamp, size)
-        self.connections: Dict[Tuple[str, str, int], List[Tuple[float, int]]] = defaultdict(list)
+        self.connections: dict[tuple[str, str, int], list[tuple[float, int]]] = defaultdict(list)
 
         # Detected beaconing patterns
-        self.beaconing_events: List[Dict[str, Any]] = []
+        self.beaconing_events: list[dict[str, Any]] = []
 
     def process_packet(self, packet: Any, packet_num: int) -> None:
         """
@@ -104,7 +108,7 @@ class C2BeaconingDetector(BaseAnalyzer):
         """
         pass  # Batch processing in analyze() method
 
-    def analyze(self, packets: list) -> Dict[str, Any]:
+    def analyze(self, packets: list) -> dict[str, Any]:
         """
         Analyze packets for C2 beaconing patterns.
 
@@ -157,11 +161,7 @@ class C2BeaconingDetector(BaseAnalyzer):
 
         return self._generate_results()
 
-    def _analyze_connection_for_beaconing(
-        self,
-        conn_key: Tuple[str, str, int],
-        packets_data: List[Tuple[float, int]]
-    ):
+    def _analyze_connection_for_beaconing(self, conn_key: tuple[str, str, int], packets_data: list[tuple[float, int]]):
         """
         Analyze a single connection for beaconing characteristics.
 
@@ -177,7 +177,7 @@ class C2BeaconingDetector(BaseAnalyzer):
         # Calculate intervals between packets
         intervals = []
         for i in range(1, len(packets_data)):
-            interval = packets_data[i][0] - packets_data[i-1][0]
+            interval = packets_data[i][0] - packets_data[i - 1][0]
             intervals.append(interval)
 
         if not intervals:
@@ -204,7 +204,7 @@ class C2BeaconingDetector(BaseAnalyzer):
         # Calculate coefficient of variation (CV = std_dev / mean)
         if len(intervals) >= 2:
             std_dev = statistics.stdev(intervals)
-            cv = std_dev / mean_interval if mean_interval > 0 else float('inf')
+            cv = std_dev / mean_interval if mean_interval > 0 else float("inf")
         else:
             cv = 0.0
 
@@ -217,7 +217,7 @@ class C2BeaconingDetector(BaseAnalyzer):
 
         if len(payload_sizes) >= 2:
             size_std_dev = statistics.stdev(payload_sizes)
-            size_cv = size_std_dev / mean_size if mean_size > 0 else float('inf')
+            size_cv = size_std_dev / mean_size if mean_size > 0 else float("inf")
         else:
             size_cv = 0.0
 
@@ -251,37 +251,28 @@ class C2BeaconingDetector(BaseAnalyzer):
         # If score is high enough, consider it beaconing
         if beacon_score >= 60:
             # Determine severity based on characteristics
-            severity = self._calculate_severity(
-                beacon_score,
-                mean_interval,
-                len(packets_data),
-                dst_ip
+            severity = self._calculate_severity(beacon_score, mean_interval, len(packets_data), dst_ip)
+
+            self.beaconing_events.append(
+                {
+                    "type": "c2_beaconing",
+                    "source_ip": src_ip,
+                    "destination_ip": dst_ip,
+                    "destination_port": dst_port,
+                    "beacon_count": len(packets_data),
+                    "mean_interval_seconds": round(mean_interval, 2),
+                    "interval_regularity_cv": round(cv, 3),
+                    "mean_payload_size": int(mean_size),
+                    "payload_consistency_cv": round(size_cv, 3),
+                    "beacon_score": beacon_score,
+                    "indicators": indicators,
+                    "severity": severity,
+                    "description": f"Potential C2 beaconing detected: {len(packets_data)} beacons every {mean_interval:.1f}s to {dst_ip}:{dst_port}",
+                    "duration_seconds": packets_data[-1][0] - packets_data[0][0],
+                }
             )
 
-            self.beaconing_events.append({
-                'type': 'c2_beaconing',
-                'source_ip': src_ip,
-                'destination_ip': dst_ip,
-                'destination_port': dst_port,
-                'beacon_count': len(packets_data),
-                'mean_interval_seconds': round(mean_interval, 2),
-                'interval_regularity_cv': round(cv, 3),
-                'mean_payload_size': int(mean_size),
-                'payload_consistency_cv': round(size_cv, 3),
-                'beacon_score': beacon_score,
-                'indicators': indicators,
-                'severity': severity,
-                'description': f"Potential C2 beaconing detected: {len(packets_data)} beacons every {mean_interval:.1f}s to {dst_ip}:{dst_port}",
-                'duration_seconds': packets_data[-1][0] - packets_data[0][0]
-            })
-
-    def _calculate_severity(
-        self,
-        beacon_score: int,
-        interval: float,
-        count: int,
-        dst_ip: str
-    ) -> str:
+    def _calculate_severity(self, beacon_score: int, interval: float, count: int, dst_ip: str) -> str:
         """
         Calculate severity based on beaconing characteristics.
 
@@ -296,23 +287,23 @@ class C2BeaconingDetector(BaseAnalyzer):
         """
         # Higher score = higher severity
         if beacon_score >= 90:
-            return 'critical'
+            return "critical"
         elif beacon_score >= 80:
-            return 'high'
+            return "high"
         elif beacon_score >= 70:
-            return 'medium'
+            return "medium"
         else:
-            return 'low'
+            return "low"
 
     def _is_internal(self, ip: str) -> bool:
         """Check if IP is from internal network."""
-        if ip.startswith('192.168.') or ip.startswith('10.'):
+        if ip.startswith("192.168.") or ip.startswith("10."):
             return True
 
         # 172.16.0.0 to 172.31.255.255
-        if ip.startswith('172.'):
+        if ip.startswith("172."):
             try:
-                second_octet = int(ip.split('.')[1])
+                second_octet = int(ip.split(".")[1])
                 if 16 <= second_octet <= 31:
                     return True
             except (IndexError, ValueError):
@@ -322,7 +313,7 @@ class C2BeaconingDetector(BaseAnalyzer):
 
     def _is_localhost(self, ip: str) -> bool:
         """Check if IP is localhost."""
-        return ip == '127.0.0.1' or ip == '::1' or ip.startswith('127.')
+        return ip == "127.0.0.1" or ip == "::1" or ip.startswith("127.")
 
     @staticmethod
     def _is_private_ip(ip: str) -> bool:
@@ -365,22 +356,22 @@ class C2BeaconingDetector(BaseAnalyzer):
 
         return False
 
-    def _generate_results(self) -> Dict[str, Any]:
+    def _generate_results(self) -> dict[str, Any]:
         """Generate analysis results dictionary."""
         # Count by severity
-        severity_count = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+        severity_count = {"critical": 0, "high": 0, "medium": 0, "low": 0}
         for event in self.beaconing_events:
-            severity = event.get('severity', 'low')
+            severity = event.get("severity", "low")
             severity_count[severity] += 1
 
         return {
-            'total_beaconing_detected': len(self.beaconing_events),
-            'severity_breakdown': severity_count,
-            'beaconing_events': sorted(
+            "total_beaconing_detected": len(self.beaconing_events),
+            "severity_breakdown": severity_count,
+            "beaconing_events": sorted(
                 self.beaconing_events,
-                key=lambda x: {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}[x.get('severity', 'low')]
+                key=lambda x: {"critical": 0, "high": 1, "medium": 2, "low": 3}[x.get("severity", "low")],
             ),
-            'total_connections_analyzed': len(self.connections),
+            "total_connections_analyzed": len(self.connections),
         }
 
     def finalize(self):

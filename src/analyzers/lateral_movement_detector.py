@@ -20,9 +20,11 @@ Author: PCAP Analyzer Team
 Sprint: 11 (Advanced Threat Detection)
 """
 
-from typing import Dict, Any, List, Set, Tuple
 from collections import defaultdict
+from typing import Any, Dict, List, Set, Tuple
+
 from scapy.all import IP, TCP
+
 from .base_analyzer import BaseAnalyzer
 
 
@@ -34,20 +36,17 @@ class LateralMovementDetector(BaseAnalyzer):
 
     # Administrative ports commonly used for lateral movement
     LATERAL_MOVEMENT_PORTS = {
-        135: 'RPC',
-        139: 'NetBIOS/SMB',
-        445: 'SMB/CIFS',
-        593: 'RPC over HTTP',
-        3389: 'RDP',
-        5985: 'WinRM HTTP',
-        5986: 'WinRM HTTPS',
-        22: 'SSH',
+        135: "RPC",
+        139: "NetBIOS/SMB",
+        445: "SMB/CIFS",
+        593: "RPC over HTTP",
+        3389: "RDP",
+        5985: "WinRM HTTP",
+        5986: "WinRM HTTPS",
+        22: "SSH",
     }
 
-    def __init__(self,
-                 target_threshold: int = 3,
-                 time_window: float = 300.0,
-                 include_localhost: bool = False):
+    def __init__(self, target_threshold: int = 3, time_window: float = 300.0, include_localhost: bool = False):
         """
         Initialize Lateral Movement Detector.
 
@@ -62,15 +61,15 @@ class LateralMovementDetector(BaseAnalyzer):
         self.include_localhost = include_localhost
 
         # Track connections: src_ip -> {dst_ip: {ports, timestamps}}
-        self.internal_connections: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(
-            lambda: defaultdict(lambda: {'ports': set(), 'timestamps': [], 'protocols': set()})
+        self.internal_connections: dict[str, dict[str, dict[str, Any]]] = defaultdict(
+            lambda: defaultdict(lambda: {"ports": set(), "timestamps": [], "protocols": set()})
         )
 
         # Track administrative protocol usage
-        self.admin_protocol_usage: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self.admin_protocol_usage: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
         # Detected lateral movement events
-        self.lateral_movement_events: List[Dict[str, Any]] = []
+        self.lateral_movement_events: list[dict[str, Any]] = []
 
     def process_packet(self, packet: Any, packet_num: int) -> None:
         """
@@ -82,7 +81,7 @@ class LateralMovementDetector(BaseAnalyzer):
         """
         pass  # Batch processing in analyze() method
 
-    def analyze(self, packets: list) -> Dict[str, Any]:
+    def analyze(self, packets: list) -> dict[str, Any]:
         """
         Analyze packets for lateral movement patterns.
 
@@ -123,20 +122,17 @@ class LateralMovementDetector(BaseAnalyzer):
 
             # Track connection
             conn_data = self.internal_connections[src_ip][dst_ip]
-            conn_data['ports'].add(dst_port)
-            conn_data['timestamps'].append(timestamp)
+            conn_data["ports"].add(dst_port)
+            conn_data["timestamps"].append(timestamp)
 
             # Track protocol if it's an administrative port
             if dst_port in self.LATERAL_MOVEMENT_PORTS:
                 protocol = self.LATERAL_MOVEMENT_PORTS[dst_port]
-                conn_data['protocols'].add(protocol)
+                conn_data["protocols"].add(protocol)
 
-                self.admin_protocol_usage[src_ip].append({
-                    'destination': dst_ip,
-                    'port': dst_port,
-                    'protocol': protocol,
-                    'timestamp': timestamp
-                })
+                self.admin_protocol_usage[src_ip].append(
+                    {"destination": dst_ip, "port": dst_port, "protocol": protocol, "timestamp": timestamp}
+                )
 
         # Analyze for lateral movement patterns
         self._detect_multi_target_connections()
@@ -161,26 +157,25 @@ class LateralMovementDetector(BaseAnalyzer):
 
                 for dst_ip, conn_data in targets.items():
                     # Check if any administrative protocols were used
-                    if conn_data['protocols']:
+                    if conn_data["protocols"]:
                         admin_targets.append(dst_ip)
-                        admin_protocols.update(conn_data['protocols'])
+                        admin_protocols.update(conn_data["protocols"])
 
                 # If administrative protocols were used, this is more suspicious
                 if admin_targets:
-                    severity = self._calculate_severity_multi_target(
-                        len(admin_targets),
-                        admin_protocols
-                    )
+                    severity = self._calculate_severity_multi_target(len(admin_targets), admin_protocols)
 
-                    self.lateral_movement_events.append({
-                        'type': 'multi_target_admin',
-                        'source_ip': src_ip,
-                        'target_count': len(admin_targets),
-                        'targets': admin_targets[:10],  # Limit to 10 for readability
-                        'protocols_used': sorted(list(admin_protocols)),
-                        'severity': severity,
-                        'description': f"Internal host connected to {len(admin_targets)} targets using administrative protocols: {', '.join(admin_protocols)}"
-                    })
+                    self.lateral_movement_events.append(
+                        {
+                            "type": "multi_target_admin",
+                            "source_ip": src_ip,
+                            "target_count": len(admin_targets),
+                            "targets": admin_targets[:10],  # Limit to 10 for readability
+                            "protocols_used": sorted(admin_protocols),
+                            "severity": severity,
+                            "description": f"Internal host connected to {len(admin_targets)} targets using administrative protocols: {', '.join(admin_protocols)}",
+                        }
+                    )
 
     def _detect_admin_protocol_spread(self):
         """
@@ -191,27 +186,26 @@ class LateralMovementDetector(BaseAnalyzer):
                 continue
 
             # Group by protocol
-            protocol_targets: Dict[str, Set[str]] = defaultdict(set)
+            protocol_targets: dict[str, set[str]] = defaultdict(set)
             for usage in admin_usage:
-                protocol_targets[usage['protocol']].add(usage['destination'])
+                protocol_targets[usage["protocol"]].add(usage["destination"])
 
             # Check each protocol
             for protocol, targets in protocol_targets.items():
                 if len(targets) >= self.target_threshold:
-                    severity = self._calculate_severity_protocol_spread(
-                        protocol,
-                        len(targets)
-                    )
+                    severity = self._calculate_severity_protocol_spread(protocol, len(targets))
 
-                    self.lateral_movement_events.append({
-                        'type': 'admin_protocol_spread',
-                        'source_ip': src_ip,
-                        'protocol': protocol,
-                        'target_count': len(targets),
-                        'targets': list(targets)[:10],
-                        'severity': severity,
-                        'description': f"Administrative protocol {protocol} used to connect to {len(targets)} internal hosts"
-                    })
+                    self.lateral_movement_events.append(
+                        {
+                            "type": "admin_protocol_spread",
+                            "source_ip": src_ip,
+                            "protocol": protocol,
+                            "target_count": len(targets),
+                            "targets": list(targets)[:10],
+                            "severity": severity,
+                            "description": f"Administrative protocol {protocol} used to connect to {len(targets)} internal hosts",
+                        }
+                    )
 
     def _detect_rapid_movement(self):
         """
@@ -220,12 +214,12 @@ class LateralMovementDetector(BaseAnalyzer):
         """
         for src_ip, targets in self.internal_connections.items():
             # Collect all timestamps with administrative protocols
-            admin_timestamps: List[Tuple[float, str, str]] = []
+            admin_timestamps: list[tuple[float, str, str]] = []
 
             for dst_ip, conn_data in targets.items():
-                if conn_data['protocols']:
-                    for ts in conn_data['timestamps']:
-                        for protocol in conn_data['protocols']:
+                if conn_data["protocols"]:
+                    for ts in conn_data["timestamps"]:
+                        for protocol in conn_data["protocols"]:
                             admin_timestamps.append((ts, dst_ip, protocol))
 
             if len(admin_timestamps) < self.target_threshold:
@@ -252,67 +246,61 @@ class LateralMovementDetector(BaseAnalyzer):
 
                 # If many targets hit rapidly, it's suspicious
                 if len(targets_in_window) >= self.target_threshold:
-                    self.lateral_movement_events.append({
-                        'type': 'rapid_movement',
-                        'source_ip': src_ip,
-                        'target_count': len(targets_in_window),
-                        'targets': list(targets_in_window),
-                        'protocols_used': list(protocols_in_window),
-                        'time_window_seconds': self.time_window,
-                        'severity': 'high',
-                        'description': f"Rapid lateral movement: {len(targets_in_window)} targets in {self.time_window}s"
-                    })
+                    self.lateral_movement_events.append(
+                        {
+                            "type": "rapid_movement",
+                            "source_ip": src_ip,
+                            "target_count": len(targets_in_window),
+                            "targets": list(targets_in_window),
+                            "protocols_used": list(protocols_in_window),
+                            "time_window_seconds": self.time_window,
+                            "severity": "high",
+                            "description": f"Rapid lateral movement: {len(targets_in_window)} targets in {self.time_window}s",
+                        }
+                    )
                     break  # Only report once per source
 
-    def _calculate_severity_multi_target(
-        self,
-        target_count: int,
-        protocols: Set[str]
-    ) -> str:
+    def _calculate_severity_multi_target(self, target_count: int, protocols: set[str]) -> str:
         """Calculate severity for multi-target connections."""
         # More targets = higher severity
         # Certain protocols = higher severity
-        high_risk_protocols = {'RDP', 'WinRM HTTP', 'WinRM HTTPS'}
+        high_risk_protocols = {"RDP", "WinRM HTTP", "WinRM HTTPS"}
 
         if target_count >= 10:
-            return 'critical'
+            return "critical"
         elif target_count >= 7:
-            return 'high'
+            return "high"
         elif target_count >= 5:
-            return 'medium'
+            return "medium"
         elif any(p in high_risk_protocols for p in protocols):
-            return 'high'
+            return "high"
         else:
-            return 'medium'
+            return "medium"
 
-    def _calculate_severity_protocol_spread(
-        self,
-        protocol: str,
-        target_count: int
-    ) -> str:
+    def _calculate_severity_protocol_spread(self, protocol: str, target_count: int) -> str:
         """Calculate severity for protocol spread."""
-        high_risk_protocols = {'RDP', 'WinRM HTTP', 'WinRM HTTPS'}
+        high_risk_protocols = {"RDP", "WinRM HTTP", "WinRM HTTPS"}
 
         if protocol in high_risk_protocols:
             if target_count >= 5:
-                return 'critical'
+                return "critical"
             else:
-                return 'high'
+                return "high"
         else:
             if target_count >= 10:
-                return 'high'
+                return "high"
             else:
-                return 'medium'
+                return "medium"
 
     def _is_internal(self, ip: str) -> bool:
         """Check if IP is from internal network."""
-        if ip.startswith('192.168.') or ip.startswith('10.'):
+        if ip.startswith("192.168.") or ip.startswith("10."):
             return True
 
         # 172.16.0.0 to 172.31.255.255
-        if ip.startswith('172.'):
+        if ip.startswith("172."):
             try:
-                second_octet = int(ip.split('.')[1])
+                second_octet = int(ip.split(".")[1])
                 if 16 <= second_octet <= 31:
                     return True
             except (IndexError, ValueError):
@@ -322,30 +310,30 @@ class LateralMovementDetector(BaseAnalyzer):
 
     def _is_localhost(self, ip: str) -> bool:
         """Check if IP is localhost."""
-        return ip == '127.0.0.1' or ip == '::1' or ip.startswith('127.')
+        return ip == "127.0.0.1" or ip == "::1" or ip.startswith("127.")
 
-    def _generate_results(self) -> Dict[str, Any]:
+    def _generate_results(self) -> dict[str, Any]:
         """Generate analysis results dictionary."""
         # Count by severity
-        severity_count = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+        severity_count = {"critical": 0, "high": 0, "medium": 0, "low": 0}
         for event in self.lateral_movement_events:
-            severity = event.get('severity', 'low')
+            severity = event.get("severity", "low")
             severity_count[severity] += 1
 
         # Count by type
         type_count = defaultdict(int)
         for event in self.lateral_movement_events:
-            type_count[event['type']] += 1
+            type_count[event["type"]] += 1
 
         return {
-            'total_lateral_movement_detected': len(self.lateral_movement_events),
-            'severity_breakdown': severity_count,
-            'type_breakdown': dict(type_count),
-            'lateral_movement_events': sorted(
+            "total_lateral_movement_detected": len(self.lateral_movement_events),
+            "severity_breakdown": severity_count,
+            "type_breakdown": dict(type_count),
+            "lateral_movement_events": sorted(
                 self.lateral_movement_events,
-                key=lambda x: {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}[x.get('severity', 'low')]
+                key=lambda x: {"critical": 0, "high": 1, "medium": 2, "low": 3}[x.get("severity", "low")],
             ),
-            'total_sources_analyzed': len(self.internal_connections),
+            "total_sources_analyzed": len(self.internal_connections),
         }
 
     def finalize(self):

@@ -20,7 +20,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple
 
-from scapy.all import ICMP, IP, IPv6, Packet, TCP, UDP
+from scapy.all import ICMP, IP, TCP, UDP, IPv6, Packet
 
 from .base_analyzer import BaseAnalyzer
 
@@ -28,6 +28,7 @@ from .base_analyzer import BaseAnalyzer
 @dataclass
 class DDoSEvent:
     """Represents a detected DDoS attack"""
+
     attack_type: str  # "syn_flood", "udp_flood", "icmp_flood", "amplification"
     target_ip: str
     target_port: Optional[int]
@@ -38,7 +39,7 @@ class DDoSEvent:
     bytes_total: int
     packets_per_second: float
     severity: str  # "low", "medium", "high", "critical"
-    top_sources: List[str]  # Top attacking IPs
+    top_sources: list[str]  # Top attacking IPs
 
 
 class DDoSDetector(BaseAnalyzer):
@@ -52,13 +53,15 @@ class DDoSDetector(BaseAnalyzer):
     - Amplification: Small request, large response (ratio >10:1)
     """
 
-    def __init__(self,
-                 syn_flood_threshold: int = 100,  # SYN packets/sec
-                 udp_flood_threshold: int = 500,  # UDP packets/sec
-                 icmp_flood_threshold: int = 100,  # ICMP packets/sec
-                 time_window: float = 10.0,  # Analysis window in seconds
-                 syn_ack_ratio_threshold: float = 0.1,  # Max SYN-ACK ratio for SYN flood
-                 include_localhost: bool = False):
+    def __init__(
+        self,
+        syn_flood_threshold: int = 100,  # SYN packets/sec
+        udp_flood_threshold: int = 500,  # UDP packets/sec
+        icmp_flood_threshold: int = 100,  # ICMP packets/sec
+        time_window: float = 10.0,  # Analysis window in seconds
+        syn_ack_ratio_threshold: float = 0.1,  # Max SYN-ACK ratio for SYN flood
+        include_localhost: bool = False,
+    ):
         """
         Initialize DDoS detector.
 
@@ -80,26 +83,26 @@ class DDoSDetector(BaseAnalyzer):
 
         # Track packets by target IP and time windows
         # {(target_ip, time_slot): {packet_type: count, sources: set()}}
-        self.traffic_windows: DefaultDict[Tuple, Dict] = defaultdict(lambda: {
-            "syn": 0,
-            "syn_ack": 0,
-            "udp": 0,
-            "icmp": 0,
-            "bytes": 0,
-            "sources": set(),
-            "start_time": 0,
-            "packets": []
-        })
+        self.traffic_windows: DefaultDict[tuple, dict] = defaultdict(
+            lambda: {
+                "syn": 0,
+                "syn_ack": 0,
+                "udp": 0,
+                "icmp": 0,
+                "bytes": 0,
+                "sources": set(),
+                "start_time": 0,
+                "packets": [],
+            }
+        )
 
         # Track SYN/SYN-ACK for specific flows
-        self.syn_tracker: DefaultDict[Tuple, Dict] = defaultdict(lambda: {
-            "syn_count": 0,
-            "syn_ack_count": 0,
-            "sources": set()
-        })
+        self.syn_tracker: DefaultDict[tuple, dict] = defaultdict(
+            lambda: {"syn_count": 0, "syn_ack_count": 0, "sources": set()}
+        )
 
         # Detected DDoS events
-        self.ddos_events: List[DDoSEvent] = []
+        self.ddos_events: list[DDoSEvent] = []
 
     @staticmethod
     def _is_localhost(ip: str) -> bool:
@@ -189,7 +192,7 @@ class DDoSDetector(BaseAnalyzer):
             if self.traffic_windows[window_key]["start_time"] == 0:
                 self.traffic_windows[window_key]["start_time"] = timestamp
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """
         Analyze traffic patterns and detect DDoS attacks.
 
@@ -241,12 +244,7 @@ class DDoSDetector(BaseAnalyzer):
 
             if packets_per_sec >= self.syn_flood_threshold and syn_ack_ratio <= self.syn_ack_ratio_threshold:
                 # Determine severity
-                severity = self._calculate_severity(
-                    packets_per_sec,
-                    len(sources),
-                    syn_count,
-                    attack_type="syn_flood"
-                )
+                severity = self._calculate_severity(packets_per_sec, len(sources), syn_count, attack_type="syn_flood")
 
                 event = DDoSEvent(
                     attack_type="syn_flood",
@@ -259,20 +257,16 @@ class DDoSDetector(BaseAnalyzer):
                     bytes_total=total_bytes,
                     packets_per_second=packets_per_sec,
                     severity=severity,
-                    top_sources=sorted(sources, key=lambda x: x)[:10]
+                    top_sources=sorted(sources, key=lambda x: x)[:10],
                 )
                 self.ddos_events.append(event)
 
     def _detect_udp_flood(self) -> None:
         """Detect UDP flood attacks."""
         # Group by target IP
-        target_stats = defaultdict(lambda: {
-            "udp_count": 0,
-            "sources": set(),
-            "bytes": 0,
-            "start_time": None,
-            "end_time": None
-        })
+        target_stats = defaultdict(
+            lambda: {"udp_count": 0, "sources": set(), "bytes": 0, "start_time": None, "end_time": None}
+        )
 
         for window_key, window_data in self.traffic_windows.items():
             target_ip, time_slot = window_key
@@ -288,8 +282,7 @@ class DDoSDetector(BaseAnalyzer):
                     target_stats[target_ip]["start_time"] = start
 
                 target_stats[target_ip]["end_time"] = max(
-                    target_stats[target_ip]["end_time"] or 0,
-                    start + self.time_window
+                    target_stats[target_ip]["end_time"] or 0, start + self.time_window
                 )
 
         # Check for UDP floods
@@ -309,10 +302,7 @@ class DDoSDetector(BaseAnalyzer):
 
             if packets_per_sec >= self.udp_flood_threshold:
                 severity = self._calculate_severity(
-                    packets_per_sec,
-                    len(stats["sources"]),
-                    udp_count,
-                    attack_type="udp_flood"
+                    packets_per_sec, len(stats["sources"]), udp_count, attack_type="udp_flood"
                 )
 
                 event = DDoSEvent(
@@ -326,20 +316,16 @@ class DDoSDetector(BaseAnalyzer):
                     bytes_total=stats["bytes"],
                     packets_per_second=packets_per_sec,
                     severity=severity,
-                    top_sources=sorted(stats["sources"], key=lambda x: x)[:10]
+                    top_sources=sorted(stats["sources"], key=lambda x: x)[:10],
                 )
                 self.ddos_events.append(event)
 
     def _detect_icmp_flood(self) -> None:
         """Detect ICMP flood attacks (ping flood)."""
         # Group by target IP
-        target_stats = defaultdict(lambda: {
-            "icmp_count": 0,
-            "sources": set(),
-            "bytes": 0,
-            "start_time": None,
-            "end_time": None
-        })
+        target_stats = defaultdict(
+            lambda: {"icmp_count": 0, "sources": set(), "bytes": 0, "start_time": None, "end_time": None}
+        )
 
         for window_key, window_data in self.traffic_windows.items():
             target_ip, time_slot = window_key
@@ -355,8 +341,7 @@ class DDoSDetector(BaseAnalyzer):
                     target_stats[target_ip]["start_time"] = start
 
                 target_stats[target_ip]["end_time"] = max(
-                    target_stats[target_ip]["end_time"] or 0,
-                    start + self.time_window
+                    target_stats[target_ip]["end_time"] or 0, start + self.time_window
                 )
 
         # Check for ICMP floods
@@ -376,10 +361,7 @@ class DDoSDetector(BaseAnalyzer):
 
             if packets_per_sec >= self.icmp_flood_threshold:
                 severity = self._calculate_severity(
-                    packets_per_sec,
-                    len(stats["sources"]),
-                    icmp_count,
-                    attack_type="icmp_flood"
+                    packets_per_sec, len(stats["sources"]), icmp_count, attack_type="icmp_flood"
                 )
 
                 event = DDoSEvent(
@@ -393,12 +375,13 @@ class DDoSDetector(BaseAnalyzer):
                     bytes_total=stats["bytes"],
                     packets_per_second=packets_per_sec,
                     severity=severity,
-                    top_sources=sorted(stats["sources"], key=lambda x: x)[:10]
+                    top_sources=sorted(stats["sources"], key=lambda x: x)[:10],
                 )
                 self.ddos_events.append(event)
 
-    def _calculate_severity(self, packets_per_sec: float, source_count: int,
-                           total_packets: int, attack_type: str) -> str:
+    def _calculate_severity(
+        self, packets_per_sec: float, source_count: int, total_packets: int, attack_type: str
+    ) -> str:
         """Calculate attack severity based on multiple factors."""
         severity = "low"
 
@@ -441,14 +424,11 @@ class DDoSDetector(BaseAnalyzer):
 
         return severity
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Get detection results."""
         # Sort by severity and timestamp
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_events = sorted(
-            self.ddos_events,
-            key=lambda e: (severity_order[e.severity], e.start_time)
-        )
+        sorted_events = sorted(self.ddos_events, key=lambda e: (severity_order[e.severity], e.start_time))
 
         # Count by severity and attack type
         severity_counts = defaultdict(int)
@@ -463,37 +443,35 @@ class DDoSDetector(BaseAnalyzer):
         # Format events for output
         formatted_events = []
         for event in sorted_events[:20]:  # Top 20
-            formatted_events.append({
-                "attack_type": event.attack_type,
-                "target_ip": event.target_ip,
-                "target_port": event.target_port,
-                "severity": event.severity,
-                "start_time": event.start_time,
-                "duration": event.end_time - event.start_time,
-                "source_count": event.source_count,
-                "packet_count": event.packet_count,
-                "bytes_total": event.bytes_total,
-                "packets_per_second": event.packets_per_second,
-                "top_sources": event.top_sources[:5]
-            })
+            formatted_events.append(
+                {
+                    "attack_type": event.attack_type,
+                    "target_ip": event.target_ip,
+                    "target_port": event.target_port,
+                    "severity": event.severity,
+                    "start_time": event.start_time,
+                    "duration": event.end_time - event.start_time,
+                    "source_count": event.source_count,
+                    "packet_count": event.packet_count,
+                    "bytes_total": event.bytes_total,
+                    "packets_per_second": event.packets_per_second,
+                    "top_sources": event.top_sources[:5],
+                }
+            )
 
         return {
             "total_attacks_detected": len(self.ddos_events),
             "severity_breakdown": dict(severity_counts),
             "attack_type_breakdown": dict(attack_type_counts),
-            "target_breakdown": dict(sorted(
-                target_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:10]),
+            "target_breakdown": dict(sorted(target_counts.items(), key=lambda x: x[1], reverse=True)[:10]),
             "ddos_events": formatted_events,
             "detection_thresholds": {
                 "syn_flood_threshold": self.syn_flood_threshold,
                 "udp_flood_threshold": self.udp_flood_threshold,
                 "icmp_flood_threshold": self.icmp_flood_threshold,
                 "time_window": self.time_window,
-                "syn_ack_ratio_threshold": self.syn_ack_ratio_threshold
-            }
+                "syn_ack_ratio_threshold": self.syn_ack_ratio_threshold,
+            },
         }
 
     def get_summary(self) -> str:

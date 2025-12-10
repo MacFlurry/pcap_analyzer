@@ -10,19 +10,19 @@ Generates controlled DDoS attack patterns:
 WARNING: Use only on authorized systems for testing purposes!
 """
 
-import socket
-import time
-import sys
 import random
+import socket
+import sys
+import time
 from datetime import datetime
 from threading import Thread
 
 
 def print_header(msg):
     """Print formatted header"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"  {msg}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 def syn_flood_attack(target_ip, target_port, packet_count, rate):
@@ -99,7 +99,7 @@ def udp_flood_attack(target_ip, target_port, packet_count, rate, packet_size=102
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # Generate random payload
-    payload = b'X' * packet_size
+    payload = b"X" * packet_size
 
     successful = 0
     failed = 0
@@ -156,10 +156,10 @@ def icmp_flood_attack(target_ip, packet_count, rate):
             try:
                 # Use ping with very short timeout
                 result = subprocess.run(
-                    ['ping', '-c', '1', '-W', '1', target_ip],
+                    ["ping", "-c", "1", "-W", "1", target_ip],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    timeout=0.5
+                    timeout=0.5,
                 )
 
                 if result.returncode == 0:
@@ -254,10 +254,10 @@ def multi_source_syn_flood(target_ip, target_port, source_count, packets_per_sou
 
 
 if __name__ == "__main__":
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  DDoS ATTACK SIMULATION TOOL")
     print("  For Testing DDoS Detector Only")
-    print("="*60)
+    print("=" * 60)
 
     if len(sys.argv) < 2:
         print("\nUsage:")

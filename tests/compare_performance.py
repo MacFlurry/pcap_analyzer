@@ -67,7 +67,7 @@ def checkout_branch(branch: str) -> bool:
     return result.returncode == 0
 
 
-def run_benchmark(pcap_path: Path, quick: bool = False) -> Dict:
+def run_benchmark(pcap_path: Path, quick: bool = False) -> dict:
     """Run benchmark and return results."""
     from benchmark_performance import PerformanceBenchmark
 
@@ -105,7 +105,7 @@ def format_change(baseline: float, current: float, reverse: bool = False) -> str
     return f"{change_pct:+.1f}% {indicator}"
 
 
-def compare_results(baseline: Dict, current: Dict, pcap_path: Path):
+def compare_results(baseline: dict, current: dict, pcap_path: Path):
     """Compare and display benchmark results."""
     print("=" * 70)
     print("Performance Comparison Results")

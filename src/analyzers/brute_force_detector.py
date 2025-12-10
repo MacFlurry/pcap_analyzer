@@ -18,7 +18,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple
 
-from scapy.all import IP, IPv6, Packet, TCP
+from scapy.all import IP, TCP, IPv6, Packet
 
 from .base_analyzer import BaseAnalyzer
 
@@ -26,6 +26,7 @@ from .base_analyzer import BaseAnalyzer
 @dataclass
 class BruteForceEvent:
     """Represents a detected brute-force attack"""
+
     source_ip: str
     target_ip: str
     target_port: int
@@ -66,17 +67,19 @@ class BruteForceDetector(BaseAnalyzer):
         6379: "Redis",
         8080: "HTTP-Alt",
         8443: "HTTPS-Alt",
-        27017: "MongoDB"
+        27017: "MongoDB",
     }
 
-    def __init__(self,
-                 attempt_threshold: int = 10,
-                 time_window: float = 60.0,
-                 failure_rate_threshold: float = 0.7,
-                 attempt_rate_threshold: float = 0.5,
-                 include_localhost: bool = False,
-                 include_private_ips: bool = False,
-                 high_success_threshold: float = 0.9):
+    def __init__(
+        self,
+        attempt_threshold: int = 10,
+        time_window: float = 60.0,
+        failure_rate_threshold: float = 0.7,
+        attempt_rate_threshold: float = 0.5,
+        include_localhost: bool = False,
+        include_private_ips: bool = False,
+        high_success_threshold: float = 0.9,
+    ):
         """
         Initialize brute-force detector.
 
@@ -100,17 +103,17 @@ class BruteForceDetector(BaseAnalyzer):
 
         # Track connection attempts to authentication services
         # {(src_ip, dst_ip, dst_port): [(timestamp, flags, responded, established)]}
-        self.auth_attempts: DefaultDict[Tuple, List[Tuple]] = defaultdict(list)
+        self.auth_attempts: DefaultDict[tuple, list[tuple]] = defaultdict(list)
 
         # Track established connections (successful auth)
         # {(src_ip, dst_ip, src_port, dst_port): timestamp}
-        self.established_connections: Dict[Tuple, float] = {}
+        self.established_connections: dict[tuple, float] = {}
 
         # Track SYN packets waiting for SYN-ACK
-        self.pending_syns: Dict[Tuple, float] = {}
+        self.pending_syns: dict[tuple, float] = {}
 
         # Detected brute-force events
-        self.brute_force_events: List[BruteForceEvent] = []
+        self.brute_force_events: list[BruteForceEvent] = []
 
     @staticmethod
     def _is_localhost(ip: str) -> bool:
@@ -218,9 +221,7 @@ class BruteForceDetector(BaseAnalyzer):
         if flags & 0x02:  # SYN flag
             if not (flags & 0x10):  # Pure SYN (not SYN-ACK)
                 self.pending_syns[flow_key] = timestamp
-                self.auth_attempts[service_key].append(
-                    (timestamp, flags, False, False)
-                )
+                self.auth_attempts[service_key].append((timestamp, flags, False, False))
 
             elif flags & 0x10:  # SYN-ACK (server response)
                 # Mark corresponding SYN as responded
@@ -254,7 +255,7 @@ class BruteForceDetector(BaseAnalyzer):
             # Connection closing
             pass
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """
         Analyze authentication patterns and detect brute-force.
 
@@ -267,14 +268,11 @@ class BruteForceDetector(BaseAnalyzer):
                 continue
 
             src_ip, dst_ip, dst_port = service_key
-            self._analyze_brute_force_pattern(
-                src_ip, dst_ip, dst_port, attempts
-            )
+            self._analyze_brute_force_pattern(src_ip, dst_ip, dst_port, attempts)
 
         return self.get_results()
 
-    def _analyze_brute_force_pattern(self, src_ip: str, dst_ip: str,
-                                      dst_port: int, attempts: List[Tuple]) -> None:
+    def _analyze_brute_force_pattern(self, src_ip: str, dst_ip: str, dst_port: int, attempts: list[tuple]) -> None:
         """Analyze connection attempts for brute-force patterns."""
         if len(attempts) < self.attempt_threshold:
             return
@@ -360,18 +358,15 @@ class BruteForceDetector(BaseAnalyzer):
                 failed_attempts=failed_count,
                 success_rate=success_rate,
                 attempt_rate=attempt_rate,
-                severity=severity
+                severity=severity,
             )
             self.brute_force_events.append(event)
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Get detection results."""
         # Sort by severity and timestamp
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_events = sorted(
-            self.brute_force_events,
-            key=lambda e: (severity_order[e.severity], e.start_time)
-        )
+        sorted_events = sorted(self.brute_force_events, key=lambda e: (severity_order[e.severity], e.start_time))
 
         # Count by severity and service
         severity_counts = defaultdict(int)
@@ -386,29 +381,27 @@ class BruteForceDetector(BaseAnalyzer):
         # Format events for output
         formatted_events = []
         for event in sorted_events[:20]:  # Top 20
-            formatted_events.append({
-                "source_ip": event.source_ip,
-                "target_ip": event.target_ip,
-                "target_port": event.target_port,
-                "service": event.service,
-                "severity": event.severity,
-                "start_time": event.start_time,
-                "duration": event.end_time - event.start_time,
-                "total_attempts": event.total_attempts,
-                "failed_attempts": event.failed_attempts,
-                "success_rate": event.success_rate,
-                "attempt_rate": event.attempt_rate
-            })
+            formatted_events.append(
+                {
+                    "source_ip": event.source_ip,
+                    "target_ip": event.target_ip,
+                    "target_port": event.target_port,
+                    "service": event.service,
+                    "severity": event.severity,
+                    "start_time": event.start_time,
+                    "duration": event.end_time - event.start_time,
+                    "total_attempts": event.total_attempts,
+                    "failed_attempts": event.failed_attempts,
+                    "success_rate": event.success_rate,
+                    "attempt_rate": event.attempt_rate,
+                }
+            )
 
         return {
             "total_attacks_detected": len(self.brute_force_events),
             "severity_breakdown": dict(severity_counts),
             "service_breakdown": dict(service_counts),
-            "target_breakdown": dict(sorted(
-                target_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:10]),
+            "target_breakdown": dict(sorted(target_counts.items(), key=lambda x: x[1], reverse=True)[:10]),
             "brute_force_events": formatted_events,
             "top_attackers": self._get_top_attackers(sorted_events[:10]),
             "detection_thresholds": {
@@ -418,19 +411,21 @@ class BruteForceDetector(BaseAnalyzer):
                 "attempt_rate_threshold": self.attempt_rate_threshold,
                 "high_success_threshold": self.high_success_threshold,
                 "include_private_ips": self.include_private_ips,
-                "include_localhost": self.include_localhost
-            }
+                "include_localhost": self.include_localhost,
+            },
         }
 
-    def _get_top_attackers(self, events: List[BruteForceEvent]) -> List[Dict]:
+    def _get_top_attackers(self, events: list[BruteForceEvent]) -> list[dict]:
         """Get top attacking source IPs."""
-        attacker_stats = defaultdict(lambda: {
-            "attack_count": 0,
-            "total_targets": set(),
-            "services_targeted": set(),
-            "total_attempts": 0,
-            "max_severity": "low"
-        })
+        attacker_stats = defaultdict(
+            lambda: {
+                "attack_count": 0,
+                "total_targets": set(),
+                "services_targeted": set(),
+                "total_attempts": 0,
+                "max_severity": "low",
+            }
+        )
 
         severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
@@ -447,19 +442,20 @@ class BruteForceDetector(BaseAnalyzer):
         # Format and sort
         top_attackers = []
         for ip, stats in attacker_stats.items():
-            top_attackers.append({
-                "source_ip": ip,
-                "attack_count": stats["attack_count"],
-                "unique_targets": len(stats["total_targets"]),
-                "services_targeted": list(stats["services_targeted"]),
-                "total_attempts": stats["total_attempts"],
-                "max_severity": stats["max_severity"]
-            })
+            top_attackers.append(
+                {
+                    "source_ip": ip,
+                    "attack_count": stats["attack_count"],
+                    "unique_targets": len(stats["total_targets"]),
+                    "services_targeted": list(stats["services_targeted"]),
+                    "total_attempts": stats["total_attempts"],
+                    "max_severity": stats["max_severity"],
+                }
+            )
 
-        return sorted(top_attackers, key=lambda x: (
-            severity_order[x["max_severity"]],
-            x["attack_count"]
-        ), reverse=True)[:10]
+        return sorted(
+            top_attackers, key=lambda x: (severity_order[x["max_severity"]], x["attack_count"]), reverse=True
+        )[:10]
 
     def get_summary(self) -> str:
         """Get one-line summary of brute-force detection."""

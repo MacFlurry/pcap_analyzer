@@ -13,16 +13,18 @@ Sprint: 10 (Performance Optimization)
 """
 
 import gc
-import sys
-import psutil
 import os
-from typing import Any, Optional, List
+import sys
 from dataclasses import dataclass
+from typing import Any, List, Optional
+
+import psutil
 
 
 @dataclass
 class MemoryStats:
     """Memory usage statistics."""
+
     total_mb: float
     available_mb: float
     used_mb: float
@@ -80,7 +82,7 @@ class MemoryOptimizer:
             available_mb=vm.available / (1024 * 1024),
             used_mb=vm.used / (1024 * 1024),
             percent=vm.percent,
-            process_mb=process_mem
+            process_mb=process_mem,
         )
 
     def check_memory_pressure(self) -> bool:
@@ -159,7 +161,7 @@ class MemoryOptimizer:
         """
         return sys.getsizeof(obj)
 
-    def optimize_list(self, data_list: List[Any], keep_ratio: float = 0.5) -> List[Any]:
+    def optimize_list(self, data_list: list[Any], keep_ratio: float = 0.5) -> list[Any]:
         """
         Optimize list by sampling if too large.
 
@@ -184,6 +186,7 @@ class MemoryOptimizer:
 
         # Clear regex cache
         import re
+
         re.purge()
 
     def reset_gc_tracking(self):
@@ -230,17 +233,17 @@ class MemoryOptimizer:
         stats = self.get_memory_stats()
 
         return {
-            'current_mb': stats.process_mb,
-            'peak_mb': self.peak_memory_mb,
-            'system_total_mb': stats.total_mb,
-            'system_available_mb': stats.available_mb,
-            'system_percent': stats.percent,
-            'limit_mb': self.memory_limit_mb,
-            'under_pressure': self.check_memory_pressure(),
-            'gc_triggered_count': self.gc_count,
-            'consecutive_empty_gcs': self.consecutive_empty_gcs,
-            'low_memory_mode': self.low_memory_mode,
-            'recommendation': self._get_recommendation(stats)
+            "current_mb": stats.process_mb,
+            "peak_mb": self.peak_memory_mb,
+            "system_total_mb": stats.total_mb,
+            "system_available_mb": stats.available_mb,
+            "system_percent": stats.percent,
+            "limit_mb": self.memory_limit_mb,
+            "under_pressure": self.check_memory_pressure(),
+            "gc_triggered_count": self.gc_count,
+            "consecutive_empty_gcs": self.consecutive_empty_gcs,
+            "low_memory_mode": self.low_memory_mode,
+            "recommendation": self._get_recommendation(stats),
         }
 
     def _get_recommendation(self, stats: MemoryStats) -> str:
@@ -296,11 +299,11 @@ class MemoryMonitor:
     def get_summary(self) -> dict:
         """Get monitoring summary."""
         return {
-            'operation': self.operation_name,
-            'start_mb': self.start_memory_mb,
-            'end_mb': self.end_memory_mb,
-            'used_mb': self.memory_used_mb,
-            'peak_mb': self.optimizer.get_peak_memory()
+            "operation": self.operation_name,
+            "start_mb": self.start_memory_mb,
+            "end_mb": self.end_memory_mb,
+            "used_mb": self.memory_used_mb,
+            "peak_mb": self.optimizer.get_peak_memory(),
         }
 
 
@@ -314,9 +317,9 @@ def get_system_memory_info() -> dict:
     vm = psutil.virtual_memory()
 
     return {
-        'total_gb': vm.total / (1024 ** 3),
-        'available_gb': vm.available / (1024 ** 3),
-        'used_gb': vm.used / (1024 ** 3),
-        'percent': vm.percent,
-        'sufficient_for_large_files': vm.available > 2 * (1024 ** 3)  # >2GB available
+        "total_gb": vm.total / (1024**3),
+        "available_gb": vm.available / (1024**3),
+        "used_gb": vm.used / (1024**3),
+        "percent": vm.percent,
+        "sufficient_for_large_files": vm.available > 2 * (1024**3),  # >2GB available
     }

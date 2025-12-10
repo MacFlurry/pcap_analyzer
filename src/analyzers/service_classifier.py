@@ -63,7 +63,7 @@ class ServiceClassifier:
         self.flow_stats = {}  # Flow -> statistics
         self.flow_classifications = {}  # Flow -> (service_type, confidence)
 
-    def analyze(self, packets: List) -> Dict[str, Any]:
+    def analyze(self, packets: list) -> dict[str, Any]:
         """
         Classify flows based on behavioral patterns.
 
@@ -95,7 +95,7 @@ class ServiceClassifier:
 
         return self.get_results()
 
-    def _get_flow_key(self, packet) -> Tuple:
+    def _get_flow_key(self, packet) -> tuple:
         """Get flow identifier from packet."""
         if IP in packet and (TCP in packet or UDP in packet):
             ip = packet[IP]
@@ -132,7 +132,7 @@ class ServiceClassifier:
         except Exception:
             return 1500  # Default MTU
 
-    def _calculate_flow_statistics(self, flow_key: Tuple, packet_list: List[Tuple]) -> Dict:
+    def _calculate_flow_statistics(self, flow_key: tuple, packet_list: list[tuple]) -> dict:
         """Calculate statistical features for a flow."""
         timestamps = [p[0] for p in packet_list]
         sizes = [p[1] for p in packet_list]
@@ -185,7 +185,7 @@ class ServiceClassifier:
             "protocol": proto,
         }
 
-    def _classify_flow(self, stats: Dict) -> Dict:
+    def _classify_flow(self, stats: dict) -> dict:
         """
         Classify flow based on statistics.
 
@@ -237,7 +237,7 @@ class ServiceClassifier:
             "stats": stats,
         }
 
-    def _score_voip(self, stats: Dict) -> float:
+    def _score_voip(self, stats: dict) -> float:
         """Score VoIP likelihood (0-1)."""
         score = 0.0
 
@@ -263,7 +263,7 @@ class ServiceClassifier:
 
         return min(score, 1.0)
 
-    def _score_streaming(self, stats: Dict) -> float:
+    def _score_streaming(self, stats: dict) -> float:
         """Score streaming likelihood (0-1)."""
         score = 0.0
 
@@ -285,7 +285,7 @@ class ServiceClassifier:
 
         return min(score, 1.0)
 
-    def _score_bulk(self, stats: Dict) -> float:
+    def _score_bulk(self, stats: dict) -> float:
         """Score bulk transfer likelihood (0-1)."""
         score = 0.0
 
@@ -311,7 +311,7 @@ class ServiceClassifier:
 
         return min(score, 1.0)
 
-    def _score_dns(self, stats: Dict) -> float:
+    def _score_dns(self, stats: dict) -> float:
         """Score DNS/Control traffic likelihood (0-1)."""
         score = 0.0
 
@@ -337,7 +337,7 @@ class ServiceClassifier:
 
         return min(score, 1.0)
 
-    def _score_web(self, stats: Dict) -> float:
+    def _score_web(self, stats: dict) -> float:
         """Score web/interactive traffic likelihood (0-1)."""
         score = 0.0
 
@@ -363,12 +363,12 @@ class ServiceClassifier:
 
         return min(score, 1.0)
 
-    def _format_flow_key(self, flow_key: Tuple) -> str:
+    def _format_flow_key(self, flow_key: tuple) -> str:
         """Format flow key as readable string."""
         src_ip, src_port, dst_ip, dst_port, proto = flow_key
         return f"{src_ip}:{src_port} -> {dst_ip}:{dst_port} ({proto})"
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """
         Get classification results.
 

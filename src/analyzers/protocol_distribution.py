@@ -76,10 +76,10 @@ class ProtocolDistributionAnalyzer:
         self.udp_port_counts = Counter()
         self.service_counts = Counter()
         self.protocol_bytes = defaultdict(int)
-        self.tcp_flows: Set[tuple] = set()
-        self.udp_flows: Set[tuple] = set()
+        self.tcp_flows: set[tuple] = set()
+        self.udp_flows: set[tuple] = set()
 
-    def analyze(self, packets: List) -> Dict[str, Any]:
+    def analyze(self, packets: list) -> dict[str, Any]:
         """
         Analyze protocol distribution in packet list.
 
@@ -187,7 +187,7 @@ class ProtocolDistributionAnalyzer:
         if service:
             self.service_counts[service] += 1
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """
         Get analysis results.
 

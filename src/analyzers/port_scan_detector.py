@@ -16,7 +16,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple
 
-from scapy.all import IP, IPv6, Packet, TCP
+from scapy.all import IP, TCP, IPv6, Packet
 
 from .base_analyzer import BaseAnalyzer
 
@@ -24,12 +24,13 @@ from .base_analyzer import BaseAnalyzer
 @dataclass
 class ScanEvent:
     """Represents a detected scan event"""
+
     source_ip: str
     scan_type: str  # "horizontal", "vertical", "distributed"
     start_time: float
     end_time: float
-    target_ips: Set[str]
-    target_ports: Set[int]
+    target_ips: set[str]
+    target_ports: set[int]
     total_attempts: int
     failed_attempts: int
     success_rate: float
@@ -48,14 +49,16 @@ class PortScanDetector(BaseAnalyzer):
     - High scan rate (>5 attempts/second)
     """
 
-    def __init__(self,
-                 horizontal_threshold: int = 10,
-                 vertical_threshold: int = 10,
-                 time_window: float = 60.0,
-                 failure_rate_threshold: float = 0.7,
-                 scan_rate_threshold: float = 5.0,
-                 include_localhost: bool = False,
-                 include_private_ips: bool = False):
+    def __init__(
+        self,
+        horizontal_threshold: int = 10,
+        vertical_threshold: int = 10,
+        time_window: float = 60.0,
+        failure_rate_threshold: float = 0.7,
+        scan_rate_threshold: float = 5.0,
+        include_localhost: bool = False,
+        include_private_ips: bool = False,
+    ):
         """
         Initialize port scan detector.
 
@@ -79,18 +82,18 @@ class PortScanDetector(BaseAnalyzer):
 
         # Track connection attempts by source IP
         # {src_ip: [(timestamp, dst_ip, dst_port, flags, responded)]}
-        self.connection_attempts: DefaultDict[str, List[Tuple]] = defaultdict(list)
+        self.connection_attempts: DefaultDict[str, list[tuple]] = defaultdict(list)
 
         # Track SYN packets waiting for SYN-ACK
         # {(src_ip, dst_ip, src_port, dst_port): (timestamp, seq)}
-        self.pending_syns: Dict[Tuple, Tuple[float, int]] = {}
+        self.pending_syns: dict[tuple, tuple[float, int]] = {}
 
         # Track which connections succeeded
         # {(src_ip, dst_ip, src_port, dst_port): bool}
-        self.connection_success: Dict[Tuple, bool] = {}
+        self.connection_success: dict[tuple, bool] = {}
 
         # Detected scan events
-        self.scan_events: List[ScanEvent] = []
+        self.scan_events: list[ScanEvent] = []
 
     @staticmethod
     def _is_localhost(ip: str) -> bool:
@@ -194,9 +197,7 @@ class PortScanDetector(BaseAnalyzer):
             if not (flags & 0x10):  # Not ACK (pure SYN)
                 # Record connection attempt
                 self.pending_syns[flow_key] = (timestamp, tcp.seq)
-                self.connection_attempts[src_ip].append(
-                    (timestamp, dst_ip, dst_port, flags, False)
-                )
+                self.connection_attempts[src_ip].append((timestamp, dst_ip, dst_port, flags, False))
 
             elif flags & 0x10:  # SYN-ACK
                 # Mark corresponding SYN as responded
@@ -219,7 +220,7 @@ class PortScanDetector(BaseAnalyzer):
             if flow_key in self.pending_syns:
                 self.connection_success[flow_key] = True
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """
         Analyze connection patterns and detect port scans.
 
@@ -239,7 +240,7 @@ class PortScanDetector(BaseAnalyzer):
 
         return self.get_results()
 
-    def _analyze_scan_patterns(self, src_ip: str, attempts: List[Tuple]) -> None:
+    def _analyze_scan_patterns(self, src_ip: str, attempts: list[tuple]) -> None:
         """Analyze connection attempts for scan patterns."""
         if len(attempts) < 5:  # Too few attempts to be a scan
             return
@@ -325,18 +326,15 @@ class PortScanDetector(BaseAnalyzer):
                 failed_attempts=failed_count,
                 success_rate=1.0 - failure_rate,
                 scan_rate=scan_rate,
-                severity=severity
+                severity=severity,
             )
             self.scan_events.append(event)
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """Get detection results."""
         # Sort by severity and timestamp
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_events = sorted(
-            self.scan_events,
-            key=lambda e: (severity_order[e.severity], e.start_time)
-        )
+        sorted_events = sorted(self.scan_events, key=lambda e: (severity_order[e.severity], e.start_time))
 
         # Count by severity
         severity_counts = defaultdict(int)
@@ -349,21 +347,23 @@ class PortScanDetector(BaseAnalyzer):
         # Format events for output
         formatted_events = []
         for event in sorted_events[:20]:  # Top 20
-            formatted_events.append({
-                "source_ip": event.source_ip,
-                "scan_type": event.scan_type,
-                "severity": event.severity,
-                "start_time": event.start_time,
-                "duration": event.end_time - event.start_time,
-                "unique_targets": len(event.target_ips),
-                "unique_ports": len(event.target_ports),
-                "total_attempts": event.total_attempts,
-                "failed_attempts": event.failed_attempts,
-                "success_rate": event.success_rate,
-                "scan_rate": event.scan_rate,
-                "target_ips": list(event.target_ips)[:10],  # First 10
-                "target_ports": sorted(list(event.target_ports))[:20]  # First 20
-            })
+            formatted_events.append(
+                {
+                    "source_ip": event.source_ip,
+                    "scan_type": event.scan_type,
+                    "severity": event.severity,
+                    "start_time": event.start_time,
+                    "duration": event.end_time - event.start_time,
+                    "unique_targets": len(event.target_ips),
+                    "unique_ports": len(event.target_ports),
+                    "total_attempts": event.total_attempts,
+                    "failed_attempts": event.failed_attempts,
+                    "success_rate": event.success_rate,
+                    "scan_rate": event.scan_rate,
+                    "target_ips": list(event.target_ips)[:10],  # First 10
+                    "target_ports": sorted(event.target_ports)[:20],  # First 20
+                }
+            )
 
         return {
             "total_scans_detected": len(self.scan_events),
@@ -376,19 +376,21 @@ class PortScanDetector(BaseAnalyzer):
                 "vertical_threshold": self.vertical_threshold,
                 "time_window": self.time_window,
                 "failure_rate_threshold": self.failure_rate_threshold,
-                "scan_rate_threshold": self.scan_rate_threshold
-            }
+                "scan_rate_threshold": self.scan_rate_threshold,
+            },
         }
 
-    def _get_top_scanners(self, events: List[ScanEvent]) -> List[Dict]:
+    def _get_top_scanners(self, events: list[ScanEvent]) -> list[dict]:
         """Get top scanning source IPs."""
-        scanner_stats = defaultdict(lambda: {
-            "scan_count": 0,
-            "total_targets": set(),
-            "total_ports": set(),
-            "total_attempts": 0,
-            "max_severity": "low"
-        })
+        scanner_stats = defaultdict(
+            lambda: {
+                "scan_count": 0,
+                "total_targets": set(),
+                "total_ports": set(),
+                "total_attempts": 0,
+                "max_severity": "low",
+            }
+        )
 
         severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
@@ -405,19 +407,20 @@ class PortScanDetector(BaseAnalyzer):
         # Format and sort
         top_scanners = []
         for ip, stats in scanner_stats.items():
-            top_scanners.append({
-                "source_ip": ip,
-                "scan_count": stats["scan_count"],
-                "unique_targets": len(stats["total_targets"]),
-                "unique_ports": len(stats["total_ports"]),
-                "total_attempts": stats["total_attempts"],
-                "max_severity": stats["max_severity"]
-            })
+            top_scanners.append(
+                {
+                    "source_ip": ip,
+                    "scan_count": stats["scan_count"],
+                    "unique_targets": len(stats["total_targets"]),
+                    "unique_ports": len(stats["total_ports"]),
+                    "total_attempts": stats["total_attempts"],
+                    "max_severity": stats["max_severity"],
+                }
+            )
 
-        return sorted(top_scanners, key=lambda x: (
-            severity_order[x["max_severity"]],
-            x["scan_count"]
-        ), reverse=True)[:10]
+        return sorted(top_scanners, key=lambda x: (severity_order[x["max_severity"]], x["scan_count"]), reverse=True)[
+            :10
+        ]
 
     def get_summary(self) -> str:
         """Get one-line summary of scan detection."""

@@ -20,7 +20,7 @@ class HTMLReportGenerator:
     def __init__(self):
         pass
 
-    def generate(self, results: Dict[str, Any]) -> str:
+    def generate(self, results: dict[str, Any]) -> str:
         """
         Generate HTML report from analysis results with tabbed navigation.
 
@@ -45,20 +45,22 @@ class HTMLReportGenerator:
         # Tabbed Navigation
         html_parts.append('<div class="tabs-container">')
         html_parts.append('  <div class="tabs-nav">')
-        html_parts.append('    <button class="tab-button active" onclick="switchTab(\'tab-overview\')">📊 Overview</button>')
+        html_parts.append(
+            '    <button class="tab-button active" onclick="switchTab(\'tab-overview\')">📊 Overview</button>'
+        )
         html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-qos\')">🏥 QoS Analysis</button>')
         html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-tcp\')">🔌 TCP Analysis</button>')
         html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-dns\')">🌐 DNS Analysis</button>')
         html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-security\')">🔒 Security</button>')
         html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-network\')">📡 Network</button>')
-        html_parts.append('  </div>')
+        html_parts.append("  </div>")
 
         # Tab 1: Overview (Executive Summary + Health Score)
         html_parts.append('  <div id="tab-overview" class="tab-content active">')
         html_parts.append(self._generate_summary(results))
         if "health_score" in results:
             html_parts.append(self._generate_health_score_section(results))
-        html_parts.append('  </div>')
+        html_parts.append("  </div>")
 
         # Tab 2: QoS Analysis (Jitter, RTT, etc.)
         html_parts.append('  <div id="tab-qos" class="tab-content">')
@@ -66,21 +68,22 @@ class HTMLReportGenerator:
             html_parts.append(self._generate_jitter_section(results))
         else:
             html_parts.append('    <div class="info-box">')
-            html_parts.append('      <p>No QoS metrics available in this capture.</p>')
-            html_parts.append('    </div>')
-        html_parts.append('  </div>')
+            html_parts.append("      <p>No QoS metrics available in this capture.</p>")
+            html_parts.append("    </div>")
+        html_parts.append("  </div>")
 
         # Tab 3: TCP Analysis (Retransmissions, RTT, Window, Handshakes)
         html_parts.append('  <div id="tab-tcp" class="tab-content">')
-        has_tcp = ("retransmission" in results or "rtt" in results or
-                   "tcp_window" in results or "tcp_handshake" in results)
+        has_tcp = (
+            "retransmission" in results or "rtt" in results or "tcp_window" in results or "tcp_handshake" in results
+        )
         if has_tcp:
             html_parts.append(self._generate_tcp_section(results))
         else:
             html_parts.append('    <div class="info-box">')
-            html_parts.append('      <p>No TCP analysis data available in this capture.</p>')
-            html_parts.append('    </div>')
-        html_parts.append('  </div>')
+            html_parts.append("      <p>No TCP analysis data available in this capture.</p>")
+            html_parts.append("    </div>")
+        html_parts.append("  </div>")
 
         # Tab 4: DNS Analysis (Queries, Timeouts, Problematic Domains)
         html_parts.append('  <div id="tab-dns" class="tab-content">')
@@ -88,23 +91,25 @@ class HTMLReportGenerator:
             html_parts.append(self._generate_dns_section(results))
         else:
             html_parts.append('    <div class="info-box">')
-            html_parts.append('      <p>No DNS analysis data available in this capture.</p>')
-            html_parts.append('    </div>')
-        html_parts.append('  </div>')
+            html_parts.append("      <p>No DNS analysis data available in this capture.</p>")
+            html_parts.append("    </div>")
+        html_parts.append("  </div>")
 
         # Tab 5: Security (Port Scans, Brute Force, DDoS, DNS Tunneling)
         html_parts.append('  <div id="tab-security" class="tab-content">')
-        has_security = ("port_scan_detection" in results or
-                        "brute_force_detection" in results or
-                        "ddos_detection" in results or
-                        "dns_tunneling_detection" in results)
+        has_security = (
+            "port_scan_detection" in results
+            or "brute_force_detection" in results
+            or "ddos_detection" in results
+            or "dns_tunneling_detection" in results
+        )
         if has_security:
             html_parts.append(self._generate_security_section(results))
         else:
             html_parts.append('    <div class="info-box">')
-            html_parts.append('      <p>✅ No security threats detected in this capture.</p>')
-            html_parts.append('    </div>')
-        html_parts.append('  </div>')
+            html_parts.append("      <p>✅ No security threats detected in this capture.</p>")
+            html_parts.append("    </div>")
+        html_parts.append("  </div>")
 
         # Tab 6: Network (Protocol Distribution + Service Classification)
         html_parts.append('  <div id="tab-network" class="tab-content">')
@@ -114,12 +119,12 @@ class HTMLReportGenerator:
             html_parts.append(self._generate_service_section(results))
         if "protocol_distribution" not in results and "service_classification" not in results:
             html_parts.append('    <div class="info-box">')
-            html_parts.append('      <p>No network analysis data available.</p>')
-            html_parts.append('    </div>')
-        html_parts.append('  </div>')
+            html_parts.append("      <p>No network analysis data available.</p>")
+            html_parts.append("    </div>")
+        html_parts.append("  </div>")
 
         # Close tabs container
-        html_parts.append('</div>')
+        html_parts.append("</div>")
 
         # Footer
         html_parts.append("</div>")
@@ -128,7 +133,7 @@ class HTMLReportGenerator:
 
         return "\n".join(html_parts)
 
-    def save(self, results: Dict[str, Any], output_path: str):
+    def save(self, results: dict[str, Any], output_path: str):
         """
         Generate and save HTML report to file.
 
@@ -140,7 +145,7 @@ class HTMLReportGenerator:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html)
 
-    def _generate_header(self, results: Dict[str, Any]) -> str:
+    def _generate_header(self, results: dict[str, Any]) -> str:
         """Generate HTML header with embedded CSS."""
         return """<!DOCTYPE html>
 <html lang="en">
@@ -546,7 +551,7 @@ class HTMLReportGenerator:
     </script>
 </head>"""
 
-    def _generate_title(self, results: Dict[str, Any]) -> str:
+    def _generate_title(self, results: dict[str, Any]) -> str:
         """Generate report title."""
         metadata = results.get("metadata", {})
         pcap_file = metadata.get("pcap_file", "Unknown")
@@ -556,7 +561,7 @@ class HTMLReportGenerator:
         <p style="color: #666; font-size: 1.1em; margin-bottom: 30px;">File: <strong>{pcap_file}</strong></p>
         """
 
-    def _generate_summary(self, results: Dict[str, Any]) -> str:
+    def _generate_summary(self, results: dict[str, Any]) -> str:
         """Generate executive summary section."""
         metadata = results.get("metadata", {})
         total_packets = metadata.get("total_packets", 0)
@@ -595,7 +600,7 @@ class HTMLReportGenerator:
         html += "</div>"
         return html
 
-    def _generate_health_score_section(self, results: Dict[str, Any]) -> str:
+    def _generate_health_score_section(self, results: dict[str, Any]) -> str:
         """Generate health score visualization."""
         health_data = results.get("health_score", {})
 
@@ -645,7 +650,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_protocol_section(self, results: Dict[str, Any]) -> str:
+    def _generate_protocol_section(self, results: dict[str, Any]) -> str:
         """Generate protocol distribution section."""
         proto_data = results.get("protocol_distribution", {})
 
@@ -697,7 +702,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_jitter_section(self, results: Dict[str, Any]) -> str:
+    def _generate_jitter_section(self, results: dict[str, Any]) -> str:
         """Generate jitter analysis section."""
         jitter_data = results.get("jitter", {})
 
@@ -767,7 +772,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_service_section(self, results: Dict[str, Any]) -> str:
+    def _generate_service_section(self, results: dict[str, Any]) -> str:
         """Generate service classification section."""
         service_data = results.get("service_classification", {})
 
@@ -855,15 +860,15 @@ class HTMLReportGenerator:
                 service_name = max_service[0]
                 context_messages = {
                     "Control": "This indicates primarily <strong>network management traffic</strong> (DNS, mDNS, NTP, DHCP). "
-                              "Common in passive monitoring or captures with minimal user activity.",
+                    "Common in passive monitoring or captures with minimal user activity.",
                     "Streaming": "This indicates heavy <strong>multimedia usage</strong> (video/audio streaming). "
-                                "May require bandwidth optimization or QoS prioritization.",
+                    "May require bandwidth optimization or QoS prioritization.",
                     "Interactive": "This indicates primarily <strong>web browsing and interactive applications</strong> (HTTP, SSH). "
-                                  "Typical of normal user activity with request/response patterns.",
+                    "Typical of normal user activity with request/response patterns.",
                     "Bulk": "This indicates significant <strong>file transfer activity</strong> (FTP, large downloads). "
-                           "May impact available bandwidth for real-time applications.",
+                    "May impact available bandwidth for real-time applications.",
                     "VoIP": "This indicates heavy <strong>voice/video conferencing usage</strong>. "
-                           "Requires consistent low latency and jitter for quality calls."
+                    "Requires consistent low latency and jitter for quality calls.",
                 }
 
                 message = context_messages.get(service_name, "")
@@ -879,7 +884,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_tcp_section(self, results: Dict[str, Any]) -> str:
+    def _generate_tcp_section(self, results: dict[str, Any]) -> str:
         """Generate TCP analysis section."""
         html = "<h2>🔌 TCP Analysis</h2>"
 
@@ -936,7 +941,7 @@ class HTMLReportGenerator:
                 # Sort flows by retransmission count
                 sorted_flows = sorted(flows.items(), key=lambda x: len(x[1]), reverse=True)[:10]
                 for flow_key, retrans in sorted_flows:
-                    rto_in_flow = sum(1 for r in retrans if r.get('retrans_type') == 'RTO')
+                    rto_in_flow = sum(1 for r in retrans if r.get("retrans_type") == "RTO")
                     html += f"""
                     <tr>
                         <td><code>{flow_key}</code></td>
@@ -1073,7 +1078,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_dns_section(self, results: Dict[str, Any]) -> str:
+    def _generate_dns_section(self, results: dict[str, Any]) -> str:
         """Generate DNS analysis section."""
         html = "<h2>🌐 DNS Analysis</h2>"
 
@@ -1246,7 +1251,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_security_section(self, results: Dict[str, Any]) -> str:
+    def _generate_security_section(self, results: dict[str, Any]) -> str:
         """Generate security analysis section."""
         html = "<h2>🔒 Security Analysis</h2>"
 
@@ -1268,8 +1273,17 @@ class HTMLReportGenerator:
         has_lateral_movement = lateral_movement_data.get("total_lateral_movement_detected", 0) > 0
 
         # If no security issues detected
-        if not any([has_port_scans, has_brute_force, has_ddos, has_dns_tunneling,
-                    has_data_exfiltration, has_c2_beaconing, has_lateral_movement]):
+        if not any(
+            [
+                has_port_scans,
+                has_brute_force,
+                has_ddos,
+                has_dns_tunneling,
+                has_data_exfiltration,
+                has_c2_beaconing,
+                has_lateral_movement,
+            ]
+        ):
             html += """
             <div class="no-issues">
                 ✓ No security issues detected. The network traffic appears clean with no signs of port scanning, brute-force attacks, DDoS, or DNS tunneling.
@@ -1307,7 +1321,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_port_scan_subsection(self, port_scan_data: Dict[str, Any]) -> str:
+    def _generate_port_scan_subsection(self, port_scan_data: dict[str, Any]) -> str:
         """Generate port scan detection subsection."""
         total_scans = port_scan_data.get("total_scans_detected", 0)
 
@@ -1438,7 +1452,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_brute_force_subsection(self, brute_force_data: Dict[str, Any]) -> str:
+    def _generate_brute_force_subsection(self, brute_force_data: dict[str, Any]) -> str:
         """Generate brute-force detection subsection."""
         total_attacks = brute_force_data.get("total_attacks_detected", 0)
 
@@ -1570,7 +1584,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_ddos_subsection(self, ddos_data: Dict[str, Any]) -> str:
+    def _generate_ddos_subsection(self, ddos_data: dict[str, Any]) -> str:
         """Generate DDoS detection subsection."""
         total_attacks = ddos_data.get("total_attacks_detected", 0)
 
@@ -1618,7 +1632,9 @@ class HTMLReportGenerator:
 
         # Attack types
         if attack_type_breakdown:
-            attack_types_html = " | ".join([f"{at.replace('_', ' ').title()}: {cnt}" for at, cnt in attack_type_breakdown.items()])
+            attack_types_html = " | ".join(
+                [f"{at.replace('_', ' ').title()}: {cnt}" for at, cnt in attack_type_breakdown.items()]
+            )
             html += f"""
             <div class="metric-card" style="border-left-color: #17a2b8;">
                 <div class="metric-label">Attack Types</div>
@@ -1689,7 +1705,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_dns_tunneling_subsection(self, dns_tunneling_data: Dict[str, Any]) -> str:
+    def _generate_dns_tunneling_subsection(self, dns_tunneling_data: dict[str, Any]) -> str:
         """Generate DNS tunneling detection subsection."""
         total_tunneling = dns_tunneling_data.get("total_tunneling_detected", 0)
 
@@ -1803,7 +1819,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_data_exfiltration_subsection(self, data_exfiltration_data: Dict[str, Any]) -> str:
+    def _generate_data_exfiltration_subsection(self, data_exfiltration_data: dict[str, Any]) -> str:
         """Generate data exfiltration detection subsection."""
         total_exfiltration = data_exfiltration_data.get("total_exfiltration_detected", 0)
 
@@ -1858,23 +1874,23 @@ class HTMLReportGenerator:
             """
 
             for event in events[:20]:  # Limit to 20 events
-                event_type = event.get('type', 'unknown')
-                source_ip = event.get('source_ip', 'N/A')
-                severity = event.get('severity', 'low')
+                event_type = event.get("type", "unknown")
+                source_ip = event.get("source_ip", "N/A")
+                severity = event.get("severity", "low")
                 badge = self._get_severity_badge(severity)
 
                 # Format details based on type
-                if event_type == 'large_upload':
-                    upload_mb = event.get('upload_volume_mb', 0)
+                if event_type == "large_upload":
+                    upload_mb = event.get("upload_volume_mb", 0)
                     details = f"{upload_mb:.2f} MB uploaded"
-                elif event_type == 'suspicious_ratio':
-                    ratio = event.get('ratio', 0)
+                elif event_type == "suspicious_ratio":
+                    ratio = event.get("ratio", 0)
                     details = f"Upload/Download ratio: {ratio}:1"
-                elif event_type == 'unusual_protocol':
-                    ports = event.get('suspicious_ports', [])
+                elif event_type == "unusual_protocol":
+                    ports = event.get("suspicious_ports", [])
                     details = f"Suspicious ports: {', '.join(map(str, ports))}"
                 else:
-                    details = event.get('description', 'N/A')
+                    details = event.get("description", "N/A")
 
                 html += f"""
                 <tr>
@@ -1903,7 +1919,7 @@ class HTMLReportGenerator:
         html += "</div>"
         return html
 
-    def _generate_c2_beaconing_subsection(self, c2_beaconing_data: Dict[str, Any]) -> str:
+    def _generate_c2_beaconing_subsection(self, c2_beaconing_data: dict[str, Any]) -> str:
         """Generate C2 beaconing detection subsection."""
         total_beaconing = c2_beaconing_data.get("total_beaconing_detected", 0)
 
@@ -1958,12 +1974,12 @@ class HTMLReportGenerator:
             """
 
             for event in events[:20]:  # Limit to 20 events
-                source_ip = event.get('source_ip', 'N/A')
-                dest_ip = event.get('destination_ip', 'N/A')
-                dest_port = event.get('destination_port', 0)
-                beacon_count = event.get('beacon_count', 0)
-                mean_interval = event.get('mean_interval_seconds', 0)
-                severity = event.get('severity', 'low')
+                source_ip = event.get("source_ip", "N/A")
+                dest_ip = event.get("destination_ip", "N/A")
+                dest_port = event.get("destination_port", 0)
+                beacon_count = event.get("beacon_count", 0)
+                mean_interval = event.get("mean_interval_seconds", 0)
+                severity = event.get("severity", "low")
                 badge = self._get_severity_badge(severity)
 
                 html += f"""
@@ -1994,7 +2010,7 @@ class HTMLReportGenerator:
         html += "</div>"
         return html
 
-    def _generate_lateral_movement_subsection(self, lateral_movement_data: Dict[str, Any]) -> str:
+    def _generate_lateral_movement_subsection(self, lateral_movement_data: dict[str, Any]) -> str:
         """Generate lateral movement detection subsection."""
         total_lateral_movement = lateral_movement_data.get("total_lateral_movement_detected", 0)
 
@@ -2050,19 +2066,19 @@ class HTMLReportGenerator:
             """
 
             for event in events[:20]:  # Limit to 20 events
-                event_type = event.get('type', 'unknown')
-                source_ip = event.get('source_ip', 'N/A')
-                target_count = event.get('target_count', 0)
-                targets = event.get('targets', [])
-                protocols = event.get('protocols_used', [])
-                severity = event.get('severity', 'low')
+                event_type = event.get("type", "unknown")
+                source_ip = event.get("source_ip", "N/A")
+                target_count = event.get("target_count", 0)
+                targets = event.get("targets", [])
+                protocols = event.get("protocols_used", [])
+                severity = event.get("severity", "low")
                 badge = self._get_severity_badge(severity)
 
-                targets_str = ', '.join(targets[:3])
+                targets_str = ", ".join(targets[:3])
                 if len(targets) > 3:
                     targets_str += f", ... (+{len(targets) - 3} more)"
 
-                protocols_str = ', '.join(protocols) if protocols else 'N/A'
+                protocols_str = ", ".join(protocols) if protocols else "N/A"
 
                 html += f"""
                 <tr>

@@ -66,7 +66,7 @@ class TimestampAnalyzer:
         self._packet_count = 0
 
         # Flow-aware tracking: {flow_key: last_timestamp}
-        self._flow_last_timestamp: Dict[str, float] = {}
+        self._flow_last_timestamp: dict[str, float] = {}
 
     def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
