@@ -61,6 +61,10 @@ class HTMLReportGenerator:
         if "service_classification" in results:
             html_parts.append(self._generate_service_section(results))
 
+        # Security Analysis Section
+        if "port_scan_detection" in results or "brute_force_detection" in results:
+            html_parts.append(self._generate_security_section(results))
+
         # Footer
         html_parts.append("</div>")
         html_parts.append("</body>")
@@ -311,6 +315,43 @@ class HTMLReportGenerator:
         .badge-info { background: #d1ecf1; color: #0c5460; }
         .badge-warning { background: #fff3cd; color: #856404; }
         .badge-danger { background: #f8d7da; color: #721c24; }
+        .badge-critical { background: #dc3545; color: white; }
+        .badge-high { background: #fd7e14; color: white; }
+        .badge-medium { background: #ffc107; color: #212529; }
+        .badge-low { background: #17a2b8; color: white; }
+
+        .no-issues {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #155724;
+            font-size: 1.1em;
+        }
+
+        .security-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .security-card {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .security-card h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
 
         @media (max-width: 768px) {
             .container {
@@ -662,5 +703,298 @@ class HTMLReportGenerator:
                 </p>
             </div>
             """
+
+        return html
+
+    def _generate_security_section(self, results: Dict[str, Any]) -> str:
+        """Generate security analysis section."""
+        html = "<h2>🔒 Security Analysis</h2>"
+
+        # Check if we have any security data
+        port_scan_data = results.get("port_scan_detection", {})
+        brute_force_data = results.get("brute_force_detection", {})
+
+        has_port_scans = port_scan_data.get("total_scans_detected", 0) > 0
+        has_brute_force = brute_force_data.get("total_attacks_detected", 0) > 0
+
+        # If no security issues detected
+        if not has_port_scans and not has_brute_force:
+            html += """
+            <div class="no-issues">
+                ✓ No security issues detected. The network traffic appears clean with no signs of port scanning or brute-force attacks.
+            </div>
+            """
+            return html
+
+        # Port Scan Detection Section
+        if "port_scan_detection" in results:
+            html += self._generate_port_scan_subsection(port_scan_data)
+
+        # Brute-Force Detection Section
+        if "brute_force_detection" in results:
+            html += self._generate_brute_force_subsection(brute_force_data)
+
+        return html
+
+    def _generate_port_scan_subsection(self, port_scan_data: Dict[str, Any]) -> str:
+        """Generate port scan detection subsection."""
+        total_scans = port_scan_data.get("total_scans_detected", 0)
+
+        if total_scans == 0:
+            return """
+            <h3>Port Scan Detection</h3>
+            <div class="no-issues">
+                ✓ No port scans detected.
+            </div>
+            """
+
+        html = "<h3>⚠️ Port Scan Detection</h3>"
+
+        # Severity breakdown and summary metrics
+        severity_breakdown = port_scan_data.get("severity_breakdown", {})
+        scan_type_breakdown = port_scan_data.get("scan_type_breakdown", {})
+        top_scanners = port_scan_data.get("top_scanners", [])
+
+        html += '<div class="summary-grid">'
+
+        # Total scans
+        html += f"""
+        <div class="metric-card" style="border-left-color: #dc3545;">
+            <div class="metric-label">Total Scans Detected</div>
+            <div class="metric-value" style="color: #dc3545;">{total_scans}</div>
+        </div>
+        """
+
+        # Severity counts
+        critical = severity_breakdown.get("critical", 0)
+        high = severity_breakdown.get("high", 0)
+        medium = severity_breakdown.get("medium", 0)
+        low = severity_breakdown.get("low", 0)
+
+        html += f"""
+        <div class="metric-card" style="border-left-color: #6c757d;">
+            <div class="metric-label">Severity Breakdown</div>
+            <div class="metric-value" style="font-size: 1.2em;">
+                {f'<span class="badge badge-critical">{critical} Critical</span> ' if critical > 0 else ''}
+                {f'<span class="badge badge-high">{high} High</span> ' if high > 0 else ''}
+                {f'<span class="badge badge-medium">{medium} Medium</span> ' if medium > 0 else ''}
+                {f'<span class="badge badge-low">{low} Low</span>' if low > 0 else ''}
+            </div>
+        </div>
+        """
+
+        # Scan types
+        if scan_type_breakdown:
+            scan_types_html = " | ".join([f"{st.title()}: {cnt}" for st, cnt in scan_type_breakdown.items()])
+            html += f"""
+            <div class="metric-card" style="border-left-color: #17a2b8;">
+                <div class="metric-label">Scan Types</div>
+                <div class="metric-value" style="font-size: 1em; color: #555;">{scan_types_html}</div>
+            </div>
+            """
+
+        html += "</div>"
+
+        # Top scanners table
+        if top_scanners:
+            html += "<h4>Top Scanners</h4>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Source IP</th>
+                    <th>Scan Count</th>
+                    <th>Unique Ports</th>
+                    <th>Total Attempts</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for scanner in top_scanners[:10]:
+                severity = scanner.get("max_severity", "low")
+                badge_class = f"badge-{severity}"
+                html += f"""
+                <tr>
+                    <td><strong>{scanner.get("source_ip", "N/A")}</strong></td>
+                    <td>{scanner.get("scan_count", 0)}</td>
+                    <td>{scanner.get("unique_ports", 0)}</td>
+                    <td>{scanner.get("total_attempts", 0)}</td>
+                    <td><span class="badge {badge_class}">{severity.upper()}</span></td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
+
+        # Detailed scan events
+        scan_events = port_scan_data.get("scan_events", [])
+        if scan_events:
+            html += "<h4>Recent Scan Events (Top 10)</h4>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Source IP</th>
+                    <th>Type</th>
+                    <th>Targets</th>
+                    <th>Ports</th>
+                    <th>Attempts</th>
+                    <th>Rate</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for event in scan_events[:10]:
+                severity = event.get("severity", "low")
+                badge_class = f"badge-{severity}"
+                scan_rate = event.get("scan_rate", 0)
+                html += f"""
+                <tr>
+                    <td><strong>{event.get("source_ip", "N/A")}</strong></td>
+                    <td>{event.get("scan_type", "N/A").title()}</td>
+                    <td>{event.get("unique_targets", 0)}</td>
+                    <td>{event.get("unique_ports", 0)}</td>
+                    <td>{event.get("total_attempts", 0)}</td>
+                    <td>{scan_rate:.1f}/s</td>
+                    <td><span class="badge {badge_class}">{severity.upper()}</span></td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
+
+        return html
+
+    def _generate_brute_force_subsection(self, brute_force_data: Dict[str, Any]) -> str:
+        """Generate brute-force detection subsection."""
+        total_attacks = brute_force_data.get("total_attacks_detected", 0)
+
+        if total_attacks == 0:
+            return """
+            <h3>Brute-Force Detection</h3>
+            <div class="no-issues">
+                ✓ No brute-force attacks detected.
+            </div>
+            """
+
+        html = "<h3>⚠️ Brute-Force Detection</h3>"
+
+        # Severity breakdown and summary metrics
+        severity_breakdown = brute_force_data.get("severity_breakdown", {})
+        service_breakdown = brute_force_data.get("service_breakdown", {})
+        top_attackers = brute_force_data.get("top_attackers", [])
+
+        html += '<div class="summary-grid">'
+
+        # Total attacks
+        html += f"""
+        <div class="metric-card" style="border-left-color: #dc3545;">
+            <div class="metric-label">Total Attacks Detected</div>
+            <div class="metric-value" style="color: #dc3545;">{total_attacks}</div>
+        </div>
+        """
+
+        # Severity counts
+        critical = severity_breakdown.get("critical", 0)
+        high = severity_breakdown.get("high", 0)
+        medium = severity_breakdown.get("medium", 0)
+        low = severity_breakdown.get("low", 0)
+
+        html += f"""
+        <div class="metric-card" style="border-left-color: #6c757d;">
+            <div class="metric-label">Severity Breakdown</div>
+            <div class="metric-value" style="font-size: 1.2em;">
+                {f'<span class="badge badge-critical">{critical} Critical</span> ' if critical > 0 else ''}
+                {f'<span class="badge badge-high">{high} High</span> ' if high > 0 else ''}
+                {f'<span class="badge badge-medium">{medium} Medium</span> ' if medium > 0 else ''}
+                {f'<span class="badge badge-low">{low} Low</span>' if low > 0 else ''}
+            </div>
+        </div>
+        """
+
+        # Service breakdown
+        if service_breakdown:
+            services_html = " | ".join([f"{svc}: {cnt}" for svc, cnt in list(service_breakdown.items())[:5]])
+            html += f"""
+            <div class="metric-card" style="border-left-color: #17a2b8;">
+                <div class="metric-label">Services Targeted</div>
+                <div class="metric-value" style="font-size: 1em; color: #555;">{services_html}</div>
+            </div>
+            """
+
+        html += "</div>"
+
+        # Top attackers table
+        if top_attackers:
+            html += "<h4>Top Attackers</h4>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Source IP</th>
+                    <th>Attack Count</th>
+                    <th>Services Targeted</th>
+                    <th>Total Attempts</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for attacker in top_attackers[:10]:
+                severity = attacker.get("max_severity", "low")
+                badge_class = f"badge-{severity}"
+                services = ", ".join(attacker.get("services_targeted", []))
+                html += f"""
+                <tr>
+                    <td><strong>{attacker.get("source_ip", "N/A")}</strong></td>
+                    <td>{attacker.get("attack_count", 0)}</td>
+                    <td>{services}</td>
+                    <td>{attacker.get("total_attempts", 0)}</td>
+                    <td><span class="badge {badge_class}">{severity.upper()}</span></td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
+
+        # Detailed attack events
+        brute_force_events = brute_force_data.get("brute_force_events", [])
+        if brute_force_events:
+            html += "<h4>Recent Attack Events (Top 10)</h4>"
+            html += '<table class="data-table">'
+            html += """
+            <thead>
+                <tr>
+                    <th>Source IP</th>
+                    <th>Target IP</th>
+                    <th>Service</th>
+                    <th>Attempts</th>
+                    <th>Failed</th>
+                    <th>Rate</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+            """
+
+            for event in brute_force_events[:10]:
+                severity = event.get("severity", "low")
+                badge_class = f"badge-{severity}"
+                attempt_rate = event.get("attempt_rate", 0)
+                html += f"""
+                <tr>
+                    <td><strong>{event.get("source_ip", "N/A")}</strong></td>
+                    <td>{event.get("target_ip", "N/A")}</td>
+                    <td>{event.get("service", "N/A")}</td>
+                    <td>{event.get("total_attempts", 0)}</td>
+                    <td>{event.get("failed_attempts", 0)}</td>
+                    <td>{attempt_rate:.2f}/s</td>
+                    <td><span class="badge {badge_class}">{severity.upper()}</span></td>
+                </tr>
+                """
+
+            html += "</tbody></table>"
 
         return html
