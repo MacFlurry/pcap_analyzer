@@ -21,6 +21,7 @@ from scapy.layers.inet6 import IPv6
 from scapy.layers.l2 import Ether
 
 from .analyzer_factory import AnalyzerFactory
+from .analyzers.health_score import HealthScoreCalculator
 from .config import Config, get_config
 from .parsers.fast_parser import FastPacketParser
 from .report_generator import ReportGenerator
@@ -210,9 +211,53 @@ def analyze_pcap_hybrid(
         if key not in results:
             results[key] = {}
 
+    # Calculate Health Score (RFC-compliant overall assessment)
+    console.print("\n[cyan]Calcul du Health Score...[/cyan]")
+    health_calculator = HealthScoreCalculator()
+    health_result = health_calculator.calculate(results)
+    results["health_score"] = {
+        "overall_score": health_result.overall_score,
+        "qos_class": health_result.qos_class,
+        "severity": health_result.severity,
+        "severity_badge": health_result.severity_badge,
+        "metric_scores": [
+            {
+                "metric_name": m.metric_name,
+                "raw_value": m.raw_value,
+                "penalty": m.penalty,
+                "weight": m.weight,
+                "weighted_penalty": m.weighted_penalty,
+                "threshold_status": m.threshold_status,
+                "rfc_reference": m.rfc_reference,
+            }
+            for m in health_result.metric_scores
+        ],
+        "total_penalty": health_result.total_penalty,
+        "top_issues": health_result.top_issues,
+        "recommendations": health_result.recommendations,
+        "analysis_timestamp": health_result.analysis_timestamp,
+    }
+
     # Display summaries
     console.print("\n")
     console.print(Panel.fit("📊 Résultats de l'analyse (Hybrid Mode)", style="bold blue"))
+
+    # Display Health Score first (Executive Summary)
+    console.print("\n")
+    console.print(
+        Panel.fit(
+            f"🏥 Health Score: {health_result.overall_score:.1f}/100 {health_result.severity_badge}", style="bold cyan"
+        )
+    )
+    console.print(f"[bold]Severity:[/bold] {health_result.severity.upper()}")
+    console.print(f"[bold]QoS Class:[/bold] {health_result.qos_class} (ITU-T Y.1541)")
+
+    if health_result.recommendations:
+        console.print("\n[bold yellow]📋 Top Recommendations:[/bold yellow]")
+        for i, rec in enumerate(health_result.recommendations[:3], 1):
+            console.print(f"  {i}. {rec}")
+
+    console.print("")  # Separator
     console.print("\n" + timestamp_analyzer.get_gaps_summary())
     console.print("\n" + handshake_analyzer.get_summary())
     console.print("\n" + retrans_analyzer.get_summary())
