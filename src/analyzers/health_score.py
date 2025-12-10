@@ -497,7 +497,8 @@ class HealthScoreCalculator:
         """
         Calculate penalty for jitter (IPDV) per RFC 3393.
 
-        Uses RTT standard deviation as jitter metric.
+        Uses dedicated jitter analyzer (RFC 3393 IPDV) if available,
+        otherwise falls back to RTT standard deviation.
 
         Penalty function:
         - 0ms: 0 penalty
@@ -512,9 +513,18 @@ class HealthScoreCalculator:
         Returns:
             MetricScore for jitter
         """
-        rtt_data = analysis_results.get("rtt", {})
-        global_stats = rtt_data.get("global_statistics", {})
-        stdev_rtt = global_stats.get("stdev_rtt", 0.0)
+        # Prefer dedicated jitter analyzer (RFC 3393 IPDV)
+        jitter_data = analysis_results.get("jitter", {})
+        jitter_stats = jitter_data.get("global_statistics", {})
+        mean_jitter = jitter_stats.get("mean_jitter", None)
+
+        # Fallback to RTT stdev if jitter analyzer not available
+        if mean_jitter is None:
+            rtt_data = analysis_results.get("rtt", {})
+            global_stats = rtt_data.get("global_statistics", {})
+            mean_jitter = global_stats.get("stdev_rtt", 0.0)
+
+        stdev_rtt = mean_jitter  # Use mean_jitter for calculation
 
         # Calculate penalty - jitter should have minimal impact on perfect networks
         # Only penalize jitter above 10ms threshold

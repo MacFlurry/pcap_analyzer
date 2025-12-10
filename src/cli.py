@@ -22,6 +22,8 @@ from scapy.layers.l2 import Ether
 
 from .analyzer_factory import AnalyzerFactory
 from .analyzers.health_score import HealthScoreCalculator
+from .analyzers.jitter_analyzer import JitterAnalyzer
+from .analyzers.protocol_distribution import ProtocolDistributionAnalyzer
 from .config import Config, get_config
 from .parsers.fast_parser import FastPacketParser
 from .report_generator import ReportGenerator
@@ -156,6 +158,13 @@ def analyze_pcap_hybrid(
     dns_analyzer = analyzer_dict["dns"]
     icmp_analyzer = analyzer_dict["icmp"]
 
+    # Sprint 2: New analyzers for protocol distribution and jitter
+    protocol_analyzer = ProtocolDistributionAnalyzer()
+    jitter_analyzer = JitterAnalyzer()
+
+    # Collect packets for batch analysis
+    scapy_packets = []
+
     complex_packet_count = 0
     with Progress(
         SpinnerColumn(),
@@ -168,6 +177,9 @@ def analyze_pcap_hybrid(
 
         with PcapReader(pcap_file) as reader:
             for i, packet in enumerate(reader):
+                # Collect all packets for protocol/jitter analysis
+                scapy_packets.append(packet)
+
                 # Only process packets that need deep inspection
                 if packet.haslayer(DNS):
                     dns_analyzer.process_packet(packet, i)
@@ -178,6 +190,13 @@ def analyze_pcap_hybrid(
 
                 if i % PROGRESS_UPDATE_INTERVAL == 0:
                     progress.update(task, completed=i)
+
+    # Analyze protocol distribution and jitter
+    console.print("[cyan]Analyzing protocol distribution...[/cyan]")
+    protocol_results = protocol_analyzer.analyze(scapy_packets)
+
+    console.print("[cyan]Analyzing jitter (RFC 3393 IPDV)...[/cyan]")
+    jitter_results = jitter_analyzer.analyze(scapy_packets)
 
     console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
 
@@ -206,6 +225,10 @@ def analyze_pcap_hybrid(
     results["temporal"] = temporal_analyzer._generate_report()
     results["dns"] = dns_analyzer._generate_report()
     results["icmp"] = icmp_analyzer._generate_report()
+
+    # Sprint 2: New analyzer results
+    results["protocol_distribution"] = protocol_results
+    results["jitter"] = jitter_results
 
     # Add empty results for unimplemented analyzers with proper structure
     for key in ["ip_fragmentation", "asymmetric_traffic", "sack"]:
@@ -276,6 +299,28 @@ def analyze_pcap_hybrid(
     console.print("\n" + icmp_analyzer.get_summary())
     console.print("\n" + dns_analyzer.get_summary())
     console.print("\n" + toptalkers_analyzer.get_summary())
+
+    # Sprint 2: Display protocol distribution summary
+    console.print("\n📊 Protocol Distribution:")
+    if protocol_results["total_packets"] > 0:
+        console.print(f"  Total Packets: {protocol_results['total_packets']}")
+        for proto, count in protocol_results.get("layer4_distribution", {}).items():
+            pct = protocol_results.get("layer4_percentages", {}).get(proto, 0)
+            console.print(f"  - {proto}: {count} ({pct:.1f}%)")
+        if protocol_results.get("top_tcp_ports"):
+            top_ports = protocol_results["top_tcp_ports"][:3]
+            console.print(f"  Top TCP Ports: {', '.join(f'{p['port']} ({p['service']})' for p in top_ports)}")
+
+    # Sprint 2: Display jitter summary
+    console.print("\n📡 Jitter Analysis (RFC 3393):")
+    if jitter_results["total_flows"] > 0:
+        console.print(f"  Total Flows Analyzed: {jitter_results['total_flows']}")
+        if jitter_results.get("global_statistics"):
+            stats = jitter_results["global_statistics"]
+            console.print(f"  Mean Jitter: {stats.get('mean_jitter', 0)*1000:.2f}ms")
+            console.print(f"  Max Jitter: {stats.get('max_jitter', 0)*1000:.2f}ms")
+        if jitter_results.get("high_jitter_flows"):
+            console.print(f"  [yellow]High Jitter Flows: {len(jitter_results['high_jitter_flows'])}[/yellow]")
 
     return results
 
