@@ -93,28 +93,39 @@ class HTMLReportGenerator:
         # Title
         html_parts.append(self._generate_title(results))
 
-        # Tabbed Navigation
+        # Tabbed Navigation (Pure CSS - no JavaScript required)
         html_parts.append('<div class="tabs-container">')
+
+        # Radio buttons (hidden, manage state)
+        html_parts.append('  <input type="radio" name="report-tabs" id="tab-overview" class="tab-radio" checked>')
+        html_parts.append('  <input type="radio" name="report-tabs" id="tab-qos" class="tab-radio">')
+        html_parts.append('  <input type="radio" name="report-tabs" id="tab-tcp" class="tab-radio">')
+        html_parts.append('  <input type="radio" name="report-tabs" id="tab-dns" class="tab-radio">')
+        html_parts.append('  <input type="radio" name="report-tabs" id="tab-security" class="tab-radio">')
+        html_parts.append('  <input type="radio" name="report-tabs" id="tab-network" class="tab-radio">')
+
+        # Tab labels (clickable headers)
         html_parts.append('  <div class="tabs-nav">')
-        html_parts.append(
-            '    <button class="tab-button active" onclick="switchTab(\'tab-overview\')">📊 Overview</button>'
-        )
-        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-qos\')">🏥 QoS Analysis</button>')
-        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-tcp\')">🔌 TCP Analysis</button>')
-        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-dns\')">🌐 DNS Analysis</button>')
-        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-security\')">🔒 Security</button>')
-        html_parts.append('    <button class="tab-button" onclick="switchTab(\'tab-network\')">📡 Network</button>')
+        html_parts.append('    <label for="tab-overview" class="tab-label">📊 Overview</label>')
+        html_parts.append('    <label for="tab-qos" class="tab-label">🏥 QoS Analysis</label>')
+        html_parts.append('    <label for="tab-tcp" class="tab-label">🔌 TCP Analysis</label>')
+        html_parts.append('    <label for="tab-dns" class="tab-label">🌐 DNS Analysis</label>')
+        html_parts.append('    <label for="tab-security" class="tab-label">🔒 Security</label>')
+        html_parts.append('    <label for="tab-network" class="tab-label">📡 Network</label>')
         html_parts.append("  </div>")
 
+        # Tab contents wrapper
+        html_parts.append('  <div class="tab-contents">')
+
         # Tab 1: Overview (Executive Summary + Health Score)
-        html_parts.append('  <div id="tab-overview" class="tab-content active">')
+        html_parts.append('    <div class="tab-content" data-tab="tab-overview">')
         html_parts.append(self._generate_summary(results))
         if "health_score" in results:
             html_parts.append(self._generate_health_score_section(results))
         html_parts.append("  </div>")
 
         # Tab 2: QoS Analysis (Jitter, RTT, etc.)
-        html_parts.append('  <div id="tab-qos" class="tab-content">')
+        html_parts.append('    <div class="tab-content" data-tab="tab-qos">')
         if "jitter" in results:
             html_parts.append(self._generate_jitter_section(results))
         else:
@@ -124,7 +135,7 @@ class HTMLReportGenerator:
         html_parts.append("  </div>")
 
         # Tab 3: TCP Analysis (Retransmissions, RTT, Window, Handshakes)
-        html_parts.append('  <div id="tab-tcp" class="tab-content">')
+        html_parts.append('    <div class="tab-content" data-tab="tab-tcp">')
         has_tcp = (
             "retransmission" in results or "rtt" in results or "tcp_window" in results or "tcp_handshake" in results
         )
@@ -137,7 +148,7 @@ class HTMLReportGenerator:
         html_parts.append("  </div>")
 
         # Tab 4: DNS Analysis (Queries, Timeouts, Problematic Domains)
-        html_parts.append('  <div id="tab-dns" class="tab-content">')
+        html_parts.append('    <div class="tab-content" data-tab="tab-dns">')
         if "dns" in results:
             html_parts.append(self._generate_dns_section(results))
         else:
@@ -147,7 +158,7 @@ class HTMLReportGenerator:
         html_parts.append("  </div>")
 
         # Tab 5: Security (Port Scans, Brute Force, DDoS, DNS Tunneling)
-        html_parts.append('  <div id="tab-security" class="tab-content">')
+        html_parts.append('    <div class="tab-content" data-tab="tab-security">')
         has_security = (
             "port_scan_detection" in results
             or "brute_force_detection" in results
@@ -163,7 +174,7 @@ class HTMLReportGenerator:
         html_parts.append("  </div>")
 
         # Tab 6: Network (Protocol Distribution + Service Classification)
-        html_parts.append('  <div id="tab-network" class="tab-content">')
+        html_parts.append('    <div class="tab-content" data-tab="tab-network">')
         if "protocol_distribution" in results:
             html_parts.append(self._generate_protocol_section(results))
         if "service_classification" in results:
@@ -172,6 +183,9 @@ class HTMLReportGenerator:
             html_parts.append('    <div class="info-box">')
             html_parts.append("      <p>No network analysis data available.</p>")
             html_parts.append("    </div>")
+        html_parts.append("    </div>")
+
+        # Close tab-contents wrapper
         html_parts.append("  </div>")
 
         # Close tabs container
@@ -527,6 +541,15 @@ class HTMLReportGenerator:
             margin: 30px 0;
         }
 
+        /* Pure CSS Tabs - No JavaScript Required */
+
+        /* Hide radio buttons */
+        .tab-radio {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .tabs-nav {
             display: flex;
             border-bottom: 2px solid #e0e0e0;
@@ -535,7 +558,7 @@ class HTMLReportGenerator:
             flex-wrap: wrap;
         }
 
-        .tab-button {
+        .tab-label {
             padding: 12px 24px;
             background: #f5f5f5;
             border: none;
@@ -546,35 +569,45 @@ class HTMLReportGenerator:
             color: #666;
             transition: all 0.3s ease;
             border-radius: 6px 6px 0 0;
+            user-select: none;
         }
 
-        .tab-button:hover {
+        .tab-label:hover {
             background: #e8e8e8;
             color: #333;
         }
 
-        .tab-button.active {
+        /* Active tab styling (when radio is checked) */
+        #tab-overview:checked ~ .tabs-nav label[for="tab-overview"],
+        #tab-qos:checked ~ .tabs-nav label[for="tab-qos"],
+        #tab-tcp:checked ~ .tabs-nav label[for="tab-tcp"],
+        #tab-dns:checked ~ .tabs-nav label[for="tab-dns"],
+        #tab-security:checked ~ .tabs-nav label[for="tab-security"],
+        #tab-network:checked ~ .tabs-nav label[for="tab-network"] {
             background: white;
             color: #3498db;
             border-bottom-color: #3498db;
         }
 
+        /* Hide all tab contents by default */
         .tab-content {
             display: none;
             animation: fadeIn 0.3s ease;
         }
 
-        .tab-content.active {
+        /* Show content when corresponding radio is checked */
+        #tab-overview:checked ~ .tab-contents .tab-content[data-tab="tab-overview"],
+        #tab-qos:checked ~ .tab-contents .tab-content[data-tab="tab-qos"],
+        #tab-tcp:checked ~ .tab-contents .tab-content[data-tab="tab-tcp"],
+        #tab-dns:checked ~ .tab-contents .tab-content[data-tab="tab-dns"],
+        #tab-security:checked ~ .tab-contents .tab-content[data-tab="tab-security"],
+        #tab-network:checked ~ .tab-contents .tab-content[data-tab="tab-network"] {
             display: block;
         }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
-        }
-
-        .tab-icon {
-            margin-right: 6px;
         }
 
         /* ================================================
@@ -799,11 +832,16 @@ class HTMLReportGenerator:
             margin: 6px 0;
         }
 
-        /* Collapsible Section Enhancements */
+        /* Collapsible Section Enhancements (Pure CSS - No JavaScript) */
         .collapsible-section {
             margin: 30px 0;
             border-radius: 8px;
             overflow: hidden;
+        }
+
+        /* Hide checkbox (used only for state management) */
+        .collapsible-checkbox {
+            display: none;
         }
 
         .collapsible-header {
@@ -835,7 +873,8 @@ class HTMLReportGenerator:
             transition: transform 0.3s ease;
         }
 
-        .collapsible-header.active .toggle-icon {
+        /* When checkbox is checked: rotate arrow */
+        .collapsible-checkbox:checked + .collapsible-header .toggle-icon {
             transform: rotate(90deg);
         }
 
@@ -850,19 +889,18 @@ class HTMLReportGenerator:
             opacity: 0.9;
         }
 
+        /* Default: content hidden */
         .collapsible-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
+            display: none;
             background: white;
             border-radius: 0 0 8px 8px;
             border: 1px solid #e0e0e0;
             border-top: none;
         }
 
-        .collapsible-content.active {
-            max-height: 5000px;
-            transition: max-height 0.5s ease-in;
+        /* When checkbox is checked: show content */
+        .collapsible-checkbox:checked ~ .collapsible-content {
+            display: block;
         }
 
         .content-inner {
@@ -1350,61 +1388,9 @@ class HTMLReportGenerator:
         }
     </style>
     <script>
-        function switchTab(tabId) {
-            // Hide all tab contents
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-
-            // Deactivate all tab buttons
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.classList.remove('active');
-            });
-
-            // Show selected tab content
-            const selectedTab = document.getElementById(tabId);
-            if (selectedTab) {
-                selectedTab.classList.add('active');
-            }
-
-            // Activate selected tab button
-            const selectedButton = document.querySelector(`[onclick="switchTab('${tabId}')"]`);
-            if (selectedButton) {
-                selectedButton.classList.add('active');
-            }
-
-            // Save tab preference to localStorage
-            localStorage.setItem('activeTab', tabId);
-        }
-
-        // Restore last active tab on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            const savedTab = localStorage.getItem('activeTab') || 'tab-overview';
-            switchTab(savedTab);
-        });
-
         /* ==========================================
            RETRANSMISSION UI INTERACTIVITY
            ========================================== */
-
-        // Toggle collapsible sections (main flow list)
-        function toggleCollapsible(header) {
-            const content = header.nextElementSibling;
-            const isActive = header.classList.contains('active');
-
-            header.classList.toggle('active');
-            content.classList.toggle('active');
-
-            // Update ARIA attribute for accessibility
-            header.setAttribute('aria-expanded', !isActive);
-
-            // Optional: Smooth scroll to section if expanding
-            if (!isActive) {
-                setTimeout(() => {
-                    header.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }, 100);
-            }
-        }
 
         // Toggle mechanism details (Learn More buttons)
         function toggleMechanismDetails(btn) {
@@ -1481,16 +1467,10 @@ class HTMLReportGenerator:
             });
         }
 
-        // Keyboard support for accessibility
+        // Keyboard support for accessibility (collapsible headers use Pure CSS with labels)
         document.addEventListener('keydown', function(e) {
-            // Enter key on collapsible headers
-            if (e.key === 'Enter' && e.target.classList.contains('collapsible-header')) {
-                e.preventDefault();
-                toggleCollapsible(e.target);
-            }
-
             // Space key on buttons
-            if (e.key === ' ' && (e.target.classList.contains('expand-btn') || e.target.classList.contains('flow-expand-btn'))) {  # noqa: E501
+            if (e.key === ' ' && (e.target.classList.contains('expand-btn') || e.target.classList.contains('flow-expand-btn'))) {
                 e.preventDefault();
                 if (e.target.classList.contains('expand-btn')) {
                     toggleMechanismDetails(e.target);
@@ -1500,22 +1480,43 @@ class HTMLReportGenerator:
             }
         });
 
-        // Initialize event listeners for retransmission UI on DOM load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Add keyboard focus support to collapsible headers
-            document.querySelectorAll('.collapsible-header').forEach(header => {
-                if (!header.hasAttribute('tabindex')) {
-                    header.setAttribute('tabindex', '0');
-                }
-            });
-
-            // Ensure all interactive buttons are keyboard accessible
-            document.querySelectorAll('.expand-btn, .flow-expand-btn').forEach(btn => {
+        // Initialize event listeners for retransmission UI (collapsibles use Pure CSS now)
+        function initializeEventListeners() {
+            // Add click event listeners to expand buttons
+            document.querySelectorAll('.expand-btn').forEach(btn => {
                 if (!btn.hasAttribute('tabindex')) {
                     btn.setAttribute('tabindex', '0');
                 }
+                btn.addEventListener('click', function() {
+                    toggleMechanismDetails(this);
+                });
             });
-        });
+
+            // Add click event listeners to flow expand buttons
+            document.querySelectorAll('.flow-expand-btn').forEach(btn => {
+                if (!btn.hasAttribute('tabindex')) {
+                    btn.setAttribute('tabindex', '0');
+                }
+                btn.addEventListener('click', function() {
+                    toggleFlowDetails(this);
+                });
+            });
+
+            // Add click event listeners to copy buttons
+            document.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    copyToClipboard(this);
+                });
+            });
+        }
+
+        // Initialize when DOM is ready (handle both cases: already loaded or still loading)
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeEventListeners);
+        } else {
+            // DOM already loaded, initialize immediately
+            initializeEventListeners();
+        }
     </script>
 </head>"""
 
@@ -1801,14 +1802,15 @@ class HTMLReportGenerator:
                 reverse=True,
             )[:10]
 
-            # Collapsible section for jitter flows
+            # Collapsible section for jitter flows (Pure CSS with checkbox)
             html += '<div class="collapsible-section">'
             html += f"""
-                <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">  # noqa: E501
+                <input type="checkbox" id="collapsible-jitter" class="collapsible-checkbox">
+                <label for="collapsible-jitter" class="collapsible-header">
                     <span class="toggle-icon">▶</span>
                     <span class="header-title">Top Flows with High Jitter ({len(top_flows)})</span>
                     <span class="header-info">Click to expand flow details</span>
-                </div>
+                </label>
                 <div class="collapsible-content">
                     <div class="content-inner">
             """
@@ -2775,14 +2777,15 @@ class HTMLReportGenerator:
                 # Sort flows by retransmission count
                 sorted_flows = sorted(flows.items(), key=lambda x: len(x[1]), reverse=True)[:10]
 
-                # Collapsible section for flows
+                # Collapsible section for flows (Pure CSS with checkbox)
                 html += '<div class="collapsible-section">'
                 html += f"""
-                    <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">  # noqa: E501
+                    <input type="checkbox" id="collapsible-retransmissions" class="collapsible-checkbox">
+                    <label for="collapsible-retransmissions" class="collapsible-header">
                         <span class="toggle-icon">▶</span>
                         <span class="header-title">Top Flows with Retransmissions ({len(sorted_flows)})</span>
                         <span class="header-info">Click to expand flow details</span>
-                    </div>
+                    </label>
                     <div class="collapsible-content">
                         <div class="content-inner">
                 """
@@ -2926,14 +2929,15 @@ class HTMLReportGenerator:
                         flows_with_zero_windows, key=lambda f: f.get("zero_window_count", 0), reverse=True
                     )[:10]
 
-                    # Collapsible section for top 10 flows
+                    # Collapsible section for top 10 flows (Pure CSS with checkbox)
                     html += '<div class="collapsible-section">'
                     html += f"""
-                        <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">  # noqa: E501
+                        <input type="checkbox" id="collapsible-window-issues" class="collapsible-checkbox">
+                        <label for="collapsible-window-issues" class="collapsible-header">
                             <span class="toggle-icon">▶</span>
                             <span class="header-title">Top Flows with Window Issues ({len(sorted_flows)})</span>
                             <span class="header-info">Click to expand flow details</span>
-                        </div>
+                        </label>
                         <div class="collapsible-content">
                             <div class="content-inner">
                     """
