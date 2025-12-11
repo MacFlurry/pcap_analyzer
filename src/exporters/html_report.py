@@ -809,10 +809,28 @@ class HTMLReportGenerator:
             color: #1abc9c;
         }
 
+        /* Pure CSS Mechanism Expand (No JavaScript Required) */
+        .mechanism-expand-checkbox {
+            display: none;
+        }
+
+        /* Default: details hidden */
         .mechanism-details-expanded {
+            display: none;
             margin-top: 12px;
             padding-top: 12px;
             border-top: 1px solid #e0e0e0;
+        }
+
+        /* When checkbox is checked: show details and update button style */
+        .mechanism-expand-checkbox:checked ~ .mechanism-details-expanded {
+            display: block;
+        }
+
+        .mechanism-expand-checkbox:checked + .expand-btn {
+            background: #e8f8f5;
+            border-color: #1abc9c;
+            color: #1abc9c;
         }
 
         .mechanism-details-expanded p {
@@ -1037,15 +1055,36 @@ class HTMLReportGenerator:
             transform: rotate(45deg);
         }
 
+        /* Pure CSS Flow Expand (No JavaScript Required) */
+        .flow-expand-checkbox {
+            display: none;
+        }
+
         /* Flow Details (Expanded Content) */
         .flow-details-collapsible {
             margin-top: 20px;
         }
 
+        /* Default: flow details hidden */
         .flow-details {
+            display: none;
             margin-top: 20px;
             padding-top: 20px;
             border-top: 2px solid #e0e0e0;
+        }
+
+        /* When checkbox is checked: show details, update button style, and rotate icon */
+        .flow-expand-checkbox:checked ~ .flow-details {
+            display: block;
+        }
+
+        .flow-expand-checkbox:checked + .flow-expand-btn {
+            background: #3498db;
+            color: white;
+        }
+
+        .flow-expand-checkbox:checked + .flow-expand-btn .expand-icon {
+            transform: rotate(45deg);
         }
 
         .mechanism-breakdown,
@@ -1392,19 +1431,6 @@ class HTMLReportGenerator:
            RETRANSMISSION UI INTERACTIVITY
            ========================================== */
 
-        // Toggle mechanism details (Learn More buttons)
-        function toggleMechanismDetails(btn) {
-            const targetId = btn.dataset.target;
-            const details = document.getElementById(targetId);
-            const isHidden = details.style.display === 'none';
-
-            details.style.display = isHidden ? 'block' : 'none';
-            btn.classList.toggle('expanded');
-
-            // Update button text
-            btn.textContent = isHidden ? 'Hide Details ↑' : 'Learn More ↓';
-        }
-
         // Copy to clipboard function
         function copyToClipboard(btn) {
             const code = btn.previousElementSibling;
@@ -1423,85 +1449,8 @@ class HTMLReportGenerator:
             });
         }
 
-        // Toggle flow details (individual flow expand buttons)
-        function toggleFlowDetails(btn) {
-            const flowId = btn.dataset.flowId;
-            const details = document.getElementById(flowId);
-            const isHidden = details.style.display === 'none';
-            const expandIcon = btn.querySelector('.expand-icon');
-
-            details.style.display = isHidden ? 'block' : 'none';
-            btn.classList.toggle('expanded');
-
-            // Update expand icon rotation via class
-            if (isHidden) {
-                setTimeout(() => {
-                    btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }, 100);
-            }
-        }
-
-        // Expand all flows (utility function)
-        function expandAllFlows() {
-            const buttons = document.querySelectorAll('.flow-expand-btn');
-            buttons.forEach(btn => {
-                const flowId = btn.dataset.flowId;
-                const details = document.getElementById(flowId);
-                if (details && details.style.display === 'none') {
-                    details.style.display = 'block';
-                    btn.classList.add('expanded');
-                }
-            });
-        }
-
-        // Collapse all flows (utility function)
-        function collapseAllFlows() {
-            const buttons = document.querySelectorAll('.flow-expand-btn');
-            buttons.forEach(btn => {
-                const flowId = btn.dataset.flowId;
-                const details = document.getElementById(flowId);
-                if (details && details.style.display !== 'none') {
-                    details.style.display = 'none';
-                    btn.classList.remove('expanded');
-                }
-            });
-        }
-
-        // Keyboard support for accessibility (collapsible headers use Pure CSS with labels)
-        document.addEventListener('keydown', function(e) {
-            // Space key on buttons
-            if (e.key === ' ' && (e.target.classList.contains('expand-btn') || e.target.classList.contains('flow-expand-btn'))) {
-                e.preventDefault();
-                if (e.target.classList.contains('expand-btn')) {
-                    toggleMechanismDetails(e.target);
-                } else if (e.target.classList.contains('flow-expand-btn')) {
-                    toggleFlowDetails(e.target);
-                }
-            }
-        });
-
-        // Initialize event listeners for retransmission UI (collapsibles use Pure CSS now)
+        // Initialize event listeners for copy buttons (all expand buttons use Pure CSS now)
         function initializeEventListeners() {
-            // Add click event listeners to expand buttons
-            document.querySelectorAll('.expand-btn').forEach(btn => {
-                if (!btn.hasAttribute('tabindex')) {
-                    btn.setAttribute('tabindex', '0');
-                }
-                btn.addEventListener('click', function() {
-                    toggleMechanismDetails(this);
-                });
-            });
-
-            // Add click event listeners to flow expand buttons
-            document.querySelectorAll('.flow-expand-btn').forEach(btn => {
-                if (!btn.hasAttribute('tabindex')) {
-                    btn.setAttribute('tabindex', '0');
-                }
-                btn.addEventListener('click', function() {
-                    toggleFlowDetails(this);
-                });
-            });
-
             // Add click event listeners to copy buttons
             document.querySelectorAll('.copy-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -1622,7 +1571,7 @@ class HTMLReportGenerator:
                 <div class="component-score-card">
                     <div class="component-name">{component.replace('_', ' ').title()}</div>
                     <div class="progress-bar">
-                        <div class="progress-fill" style="width: {comp_score}%; background-color: {color};">{comp_score:.0f}%</div>  # noqa: E501
+                        <div class="progress-fill" style="width: {comp_score}%; background-color: {color};">{comp_score:.0f}%</div>
                     </div>
                 """
 
@@ -1641,10 +1590,10 @@ class HTMLReportGenerator:
         else:
             # If no component scores available, provide guidance
             html += """
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
                 <p style="margin: 0; font-size: 0.95em; color: #856404;">
                     <strong>ℹ️ Component Score Details Not Available</strong><br>
-                    The health score is based on overall network metrics. Run analysis with more detailed options to see component breakdowns.  # noqa: E501
+                    The health score is based on overall network metrics. Run analysis with more detailed options to see component breakdowns.
                 </p>
             </div>
             """
@@ -1729,10 +1678,10 @@ class HTMLReportGenerator:
 
         # Add explanation box
         html += """
-        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
+        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">
             <p style="margin: 0 0 10px 0;"><strong>ℹ️ What is Jitter (RFC 3393 IPDV)?</strong></p>
             <p style="margin: 0 0 8px 0; font-size: 0.95em;">
-                Jitter measures the <strong>variation in packet delay</strong>. High jitter causes choppy audio/video in real-time applications.  # noqa: E501
+                Jitter measures the <strong>variation in packet delay</strong>. High jitter causes choppy audio/video in real-time applications.
             </p>
             <p style="margin: 0; font-size: 0.9em; color: #555;">
                 <strong>Typical thresholds:</strong>
@@ -1779,12 +1728,12 @@ class HTMLReportGenerator:
             mean_jitter_ms = global_stats.get("mean_jitter", 0) * 1000
             if mean_jitter_ms > 1000:  # > 1 second
                 html += """
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
                     <p style="margin: 0 0 8px 0;"><strong>⚠️ High Jitter Detected</strong></p>
                     <p style="margin: 0; font-size: 0.95em; color: #856404;">
-                        The extremely high jitter values (> 1 second) typically indicate a <strong>long-duration capture with significant gaps</strong>  # noqa: E501
-                        between packets, rather than continuous real-time traffic. This is normal for passive monitoring or captures  # noqa: E501
-                        spanning hours/days. For real-time application analysis, use shorter capture windows (5-10 minutes).  # noqa: E501
+                        The extremely high jitter values (> 1 second) typically indicate a <strong>long-duration capture with significant gaps</strong>
+                        between packets, rather than continuous real-time traffic. This is normal for passive monitoring or captures
+                        spanning hours/days. For real-time application analysis, use shorter capture windows (5-10 minutes).
                     </p>
                 </div>
                 """
@@ -1863,10 +1812,10 @@ class HTMLReportGenerator:
                 if service_name != "Unknown":
                     service_badge = f'<span class="service-badge">{service_emoji} {service_name}</span>'
                 else:
-                    service_badge = f'<span class="service-badge">🔌 Port {dst_port_int}</span>' if dst_port_int > 0 else '<span class="service-badge">🔌 Unknown</span>'  # noqa: E501
+                    service_badge = f'<span class="service-badge">🔌 Port {dst_port_int}</span>' if dst_port_int > 0 else '<span class="service-badge">🔌 Unknown</span>'
 
                 # Generate Wireshark filter
-                wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"  # noqa: E501
+                wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"
 
                 # Build flow card HTML
                 html += f"""
@@ -1943,13 +1892,13 @@ class HTMLReportGenerator:
 
         # Add explanation box
         html += """
-        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
+        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">
             <p style="margin: 0 0 10px 0;"><strong>ℹ️ What is Service Classification?</strong></p>
             <p style="margin: 0 0 12px 0; font-size: 0.95em;">
                 Intelligent traffic classification based on <strong>behavioral patterns</strong>, not just port numbers.
                 Identifies application types by analyzing packet sizes, timing, and flow characteristics.
             </p>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.9em;">  # noqa: E501
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.9em;">
                 <div>
                     <strong>📞 VoIP:</strong> Small packets (100-300B), constant rate (10-40ms intervals)
                 </div>
@@ -2037,7 +1986,7 @@ class HTMLReportGenerator:
                 message = context_messages.get(service_name, "")
                 if message:
                     html += f"""
-            <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
+            <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 15px; margin: 15px 0; border-radius: 4px;">
                 <p style="margin: 0 0 8px 0;"><strong>💡 Traffic Pattern Analysis</strong></p>
                 <p style="margin: 0; font-size: 0.95em; color: #555;">
                     <strong>{service_name}</strong> dominates with {max_percentage:.1f}% of flows. {message}
@@ -2089,7 +2038,7 @@ class HTMLReportGenerator:
 
                 # Add note about unknown services
                 html += """
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
                     <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Unknown Classification</strong></p>
                     <p style="margin: 0; font-size: 0.95em; color: #856404;">
                         Flows are classified as "Unknown" when they don't match known behavioral patterns.
@@ -2256,10 +2205,11 @@ class HTMLReportGenerator:
                         <strong>Severity:</strong>
                         <span class="badge {mech["severity"]}">{mech["severity_text"]}</span>
                     </div>
-                    <button class="expand-btn" data-target="{mech["id"]}" onclick="toggleMechanismDetails(this)">
+                    <input type="checkbox" id="{mech["id"]}" class="mechanism-expand-checkbox">
+                    <label for="{mech["id"]}" class="expand-btn">
                         Learn More ↓
-                    </button>
-                    <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
+                    </label>
+                    <div class="mechanism-details-expanded">
                         <p><strong>Why it occurs:</strong></p>
                         <ul>
             """
@@ -2369,10 +2319,11 @@ class HTMLReportGenerator:
                         <strong>Timing:</strong>
                         <span class="badge {mech["severity"]}">{mech["timing"]}</span>
                     </div>
-                    <button class="expand-btn" data-target="{mech["id"]}" onclick="toggleMechanismDetails(this)">
+                    <input type="checkbox" id="{mech["id"]}" class="mechanism-expand-checkbox">
+                    <label for="{mech["id"]}" class="expand-btn">
                         Learn More ↓
-                    </button>
-                    <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
+                    </label>
+                    <div class="mechanism-details-expanded">
                         <p><strong>Why it occurs:</strong></p>
                         <ul>
             """
@@ -2480,10 +2431,11 @@ class HTMLReportGenerator:
                         <strong>Severity:</strong>
                         <span class="badge {mech["severity"]}">{mech["severity_text"]}</span>
                     </div>
-                    <button class="expand-btn" data-target="{mech["id"]}" onclick="toggleMechanismDetails(this)">
+                    <input type="checkbox" id="{mech["id"]}" class="mechanism-expand-checkbox">
+                    <label for="{mech["id"]}" class="expand-btn">
                         Learn More ↓
-                    </button>
-                    <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
+                    </label>
+                    <div class="mechanism-details-expanded">
                         <p><strong>Why it occurs:</strong></p>
                         <ul>
             """
@@ -2599,14 +2551,15 @@ class HTMLReportGenerator:
         """
         html += "    </div>"
 
-        # Collapsible detailed analysis
+        # Collapsible detailed analysis (Pure CSS with checkbox)
         html += '    <div class="flow-details-collapsible">'
         html += f"""
-          <button class="flow-expand-btn" data-flow-id="flow-{index}" onclick="toggleFlowDetails(this)">
+          <input type="checkbox" id="flow-{index}" class="flow-expand-checkbox">
+          <label for="flow-{index}" class="flow-expand-btn">
               <span class="expand-icon">+</span>
               View Detailed Analysis
-          </button>
-          <div class="flow-details" id="flow-{index}" style="display: none;">
+          </label>
+          <div class="flow-details">
         """
 
         # Mechanism breakdown table
@@ -2746,13 +2699,13 @@ class HTMLReportGenerator:
                 <div class="metric-icon">⏱️</div>
                 <div class="metric-label">RTO (Timeout)</div>
                 <div class="metric-value">{rto_count:,}</div>
-                <div class="metric-subtext">{(rto_count/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>  # noqa: E501
+                <div class="metric-subtext">{(rto_count/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>
             </div>
             <div class="metric-card metric-warning">
                 <div class="metric-icon">⚡</div>
                 <div class="metric-label">Fast Retransmissions</div>
                 <div class="metric-value">{fast_retrans:,}</div>
-                <div class="metric-subtext">{(fast_retrans/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>  # noqa: E501
+                <div class="metric-subtext">{(fast_retrans/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>
             </div>
             """
             html += "</div>"
@@ -2906,7 +2859,7 @@ class HTMLReportGenerator:
                     <span class="tooltip-wrapper">
                         <span class="tooltip-icon">ℹ️</span>
                         <span class="tooltip-text">
-                            Cumulative time all flows spent in zero-window state (sender blocked, unable to transmit). Longer durations indicate more severe throughput impact.  # noqa: E501
+                            Cumulative time all flows spent in zero-window state (sender blocked, unable to transmit). Longer durations indicate more severe throughput impact.
                         </span>
                     </span>
                 </div>
@@ -2994,11 +2947,11 @@ class HTMLReportGenerator:
                                                 <span class="tooltip-wrapper">
                                                     <span class="tooltip-icon">ℹ️</span>
                                                     <span class="tooltip-text">
-                                                        Time this flow spent in zero-window state. During this period, the sender was blocked and could not transmit data.  # noqa: E501
+                                                        Time this flow spent in zero-window state. During this period, the sender was blocked and could not transmit data.
                                                     </span>
                                                 </span>
                                             </span>
-                                            <span class="stat-value">{self._format_duration(zero_window_duration)}</span>  # noqa: E501
+                                            <span class="stat-value">{self._format_duration(zero_window_duration)}</span>
                                         </div>
                                         <div class="flow-stat">
                                             <span class="stat-label">Suspected Bottleneck</span>
@@ -3077,7 +3030,7 @@ class HTMLReportGenerator:
             <div class="metric-value">{errors:,}</div>
             <div style="font-size: 0.75em; color: #666; margin-top: 0.5rem;">
                 <div style="color: #28a745;">✓ Expected K8s: {k8s_expected_errors}</div>
-                <div style="color: {'#dc3545' if real_errors > 0 else '#28a745'};">{'⚠️' if real_errors > 0 else '✓'} Real Issues: {real_errors}</div>  # noqa: E501
+                <div style="color: {'#dc3545' if real_errors > 0 else '#28a745'};">{'⚠️' if real_errors > 0 else '✓'} Real Issues: {real_errors}</div>
             </div>
         </div>
             """
@@ -3199,12 +3152,12 @@ class HTMLReportGenerator:
         k8s_errors_details = dns_data.get("k8s_expected_errors_details", [])
         if k8s_errors_details:
             html += f"""
-            <div style="margin-top: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">  # noqa: E501
+            <div style="margin-top: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">
                 <h4 style="margin: 0 0 0.5rem 0; color: #28a745;">
                     ℹ️ Kubernetes Expected DNS Errors ({k8s_expected_errors} total)
                 </h4>
                 <p style="margin: 0 0 1rem 0; font-size: 0.9em; color: #666;">
-                    These NXDOMAIN responses for *.cluster.local domains are normal in Kubernetes multi-level DNS resolution.  # noqa: E501
+                    These NXDOMAIN responses for *.cluster.local domains are normal in Kubernetes multi-level DNS resolution.
                     They are excluded from problematic domains analysis.
                 </p>
                 <details style="cursor: pointer;">
@@ -3343,7 +3296,7 @@ class HTMLReportGenerator:
         ):
             html += """
             <div class="no-issues">
-                ✓ No security issues detected. The network traffic appears clean with no signs of port scanning, brute-force attacks, DDoS, or DNS tunneling.  # noqa: E501
+                ✓ No security issues detected. The network traffic appears clean with no signs of port scanning, brute-force attacks, DDoS, or DNS tunneling.
             </div>
             """
             return html
@@ -3879,12 +3832,12 @@ class HTMLReportGenerator:
 
             # Explanation box
             html += """
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
                 <p style="margin: 0 0 8px 0;"><strong>ℹ️ About DNS Tunneling</strong></p>
                 <p style="margin: 0; font-size: 0.9em; color: #555;">
-                    DNS tunneling is a technique used to encode data of other programs or protocols in DNS queries and responses.  # noqa: E501
-                    It's commonly used for <strong>command & control (C2) communication</strong>, <strong>data exfiltration</strong>,  # noqa: E501
-                    and <strong>bypassing firewalls</strong>. Indicators include unusually long queries, high entropy subdomains  # noqa: E501
+                    DNS tunneling is a technique used to encode data of other programs or protocols in DNS queries and responses.
+                    It's commonly used for <strong>command & control (C2) communication</strong>, <strong>data exfiltration</strong>,
+                    and <strong>bypassing firewalls</strong>. Indicators include unusually long queries, high entropy subdomains
                     (base64/hex encoding), and excessive query rates to suspicious domains.
                 </p>
             </div>
@@ -3982,7 +3935,7 @@ class HTMLReportGenerator:
                 <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Data Exfiltration</strong></p>
                 <p style="margin: 0; font-size: 0.9em; color: #555;">
                     Data exfiltration is the unauthorized transfer of data from a system.
-                    Indicators include <strong>large upload volumes</strong>, <strong>suspicious upload/download ratios</strong>,  # noqa: E501
+                    Indicators include <strong>large upload volumes</strong>, <strong>suspicious upload/download ratios</strong>,
                     and <strong>data transfers over unusual protocols</strong>. Attackers may use non-standard ports or
                     encoding techniques to evade detection.
                 </p>
@@ -4072,8 +4025,8 @@ class HTMLReportGenerator:
             <div class="info-box">
                 <p style="margin: 0 0 8px 0;"><strong>ℹ️ About C2 Beaconing</strong></p>
                 <p style="margin: 0; font-size: 0.9em; color: #555;">
-                    Command & Control (C2) beaconing is periodic communication between compromised hosts and attacker servers.  # noqa: E501
-                    Characteristics include <strong>regular time intervals</strong>, <strong>consistent payload sizes</strong>,  # noqa: E501
+                    Command & Control (C2) beaconing is periodic communication between compromised hosts and attacker servers.
+                    Characteristics include <strong>regular time intervals</strong>, <strong>consistent payload sizes</strong>,
                     and <strong>persistent connections</strong>. Beacons are used for remote control, data staging,
                     and maintaining persistent access.
                 </p>
@@ -4171,8 +4124,8 @@ class HTMLReportGenerator:
                 <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Lateral Movement</strong></p>
                 <p style="margin: 0; font-size: 0.9em; color: #555;">
                     Lateral movement is the technique attackers use to progressively move through a network,
-                    searching for key assets and data. Common protocols include <strong>SMB/CIFS (ports 445, 139)</strong>,  # noqa: E501
-                    <strong>RDP (port 3389)</strong>, <strong>WinRM (ports 5985, 5986)</strong>, and <strong>RPC (port 135)</strong>.  # noqa: E501
+                    searching for key assets and data. Common protocols include <strong>SMB/CIFS (ports 445, 139)</strong>,
+                    <strong>RDP (port 3389)</strong>, <strong>WinRM (ports 5985, 5986)</strong>, and <strong>RPC (port 135)</strong>.
                     Multiple internal connections using administrative protocols are strong indicators.
                 </p>
             </div>
