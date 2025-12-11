@@ -45,6 +45,52 @@ BULK_TRANSFER_DURATION_MIN = 5.0  # seconds
 DNS_PKT_SIZE_MAX = 512  # bytes
 DNS_INTER_ARRIVAL_MIN = 0.5  # seconds (sporadic)
 
+# Known service ports (prioritized over behavioral heuristics)
+# Format: port -> (service_name, is_async)
+KNOWN_SERVICE_PORTS = {
+    # Message Brokers / Async Services
+    9092: ("Kafka", True),
+    9093: ("Kafka SSL", True),
+    5672: ("RabbitMQ", True),
+    5671: ("RabbitMQ SSL", True),
+
+    # Databases
+    6379: ("Redis", True),
+    27017: ("MongoDB", True),
+    27018: ("MongoDB Shard", True),
+    27019: ("MongoDB Config", True),
+    3306: ("MySQL", True),
+    5432: ("PostgreSQL", True),
+
+    # Search / Analytics
+    9200: ("Elasticsearch", True),
+    9300: ("Elasticsearch Cluster", True),
+
+    # Common Web Services
+    80: ("HTTP", False),
+    443: ("HTTPS", False),
+    8080: ("HTTP Alt", False),
+    8443: ("HTTPS Alt", False),
+
+    # DNS
+    53: ("DNS", False),
+
+    # SSH/Telnet
+    22: ("SSH", False),
+    23: ("Telnet", False),
+
+    # FTP
+    20: ("FTP Data", False),
+    21: ("FTP Control", False),
+
+    # Mail
+    25: ("SMTP", False),
+    110: ("POP3", False),
+    143: ("IMAP", False),
+    993: ("IMAPS", False),
+    995: ("POP3S", False),
+}
+
 
 class ServiceClassifier:
     """
@@ -137,6 +183,11 @@ class ServiceClassifier:
         timestamps = [p[0] for p in packet_list]
         sizes = [p[1] for p in packet_list]
 
+        # Extract ports from flow_key
+        # flow_key format: (src_ip, src_port, dst_ip, dst_port, proto)
+        src_port = flow_key[1]
+        dst_port = flow_key[3]
+
         # Basic stats
         packet_count = len(packet_list)
         total_bytes = sum(sizes)
@@ -183,6 +234,8 @@ class ServiceClassifier:
             "inter_arrival_variance": inter_arrival_variance,
             "throughput": throughput,
             "protocol": proto,
+            "src_port": src_port,
+            "dst_port": dst_port,
         }
 
     def _classify_flow(self, stats: dict) -> dict:
@@ -194,47 +247,67 @@ class ServiceClassifier:
         service_type = "Unknown"
         confidence = 0.0
         reasons = []
+        is_async = False
 
-        # VoIP/Real-time detection
-        voip_score = self._score_voip(stats)
-        if voip_score > confidence:
-            service_type = "VoIP"
-            confidence = voip_score
-            reasons = ["Small packets", "Constant rate", "UDP"]
+        # PRIORITY 1: Check known service ports (source or destination)
+        src_port = stats.get("src_port", 0)
+        dst_port = stats.get("dst_port", 0)
 
-        # Video streaming detection
-        streaming_score = self._score_streaming(stats)
-        if streaming_score > confidence:
-            service_type = "Streaming"
-            confidence = streaming_score
-            reasons = ["Large packets", "Sustained throughput"]
+        # Check destination port first (most common case)
+        if dst_port in KNOWN_SERVICE_PORTS:
+            service_name, is_async = KNOWN_SERVICE_PORTS[dst_port]
+            service_type = service_name
+            confidence = 1.0  # High confidence for known ports
+            reasons = [f"Known port {dst_port}"]
+        # Then check source port (for reverse flows)
+        elif src_port in KNOWN_SERVICE_PORTS:
+            service_name, is_async = KNOWN_SERVICE_PORTS[src_port]
+            service_type = service_name
+            confidence = 0.9  # Slightly lower confidence for source port match
+            reasons = [f"Known source port {src_port}"]
+        else:
+            # PRIORITY 2: Use behavioral heuristics if port unknown
+            # VoIP/Real-time detection
+            voip_score = self._score_voip(stats)
+            if voip_score > confidence:
+                service_type = "VoIP"
+                confidence = voip_score
+                reasons = ["Small packets", "Constant rate", "UDP"]
 
-        # Bulk transfer detection
-        bulk_score = self._score_bulk(stats)
-        if bulk_score > confidence:
-            service_type = "Bulk"
-            confidence = bulk_score
-            reasons = ["Large packets", "Long duration", "TCP"]
+            # Video streaming detection
+            streaming_score = self._score_streaming(stats)
+            if streaming_score > confidence:
+                service_type = "Streaming"
+                confidence = streaming_score
+                reasons = ["Large packets", "Sustained throughput"]
 
-        # DNS/Control detection
-        dns_score = self._score_dns(stats)
-        if dns_score > confidence:
-            service_type = "DNS" if "53" in str(stats.get("dst_port", "")) else "Control"
-            confidence = dns_score
-            reasons = ["Small packets", "Sporadic", "UDP"]
+            # Bulk transfer detection
+            bulk_score = self._score_bulk(stats)
+            if bulk_score > confidence:
+                service_type = "Bulk"
+                confidence = bulk_score
+                reasons = ["Large packets", "Long duration", "TCP"]
 
-        # Interactive/Web detection
-        web_score = self._score_web(stats)
-        if web_score > confidence:
-            service_type = "Interactive"
-            confidence = web_score
-            reasons = ["Moderate size", "TCP"]
+            # DNS/Control detection
+            dns_score = self._score_dns(stats)
+            if dns_score > confidence:
+                service_type = "DNS" if "53" in str(dst_port) else "Control"
+                confidence = dns_score
+                reasons = ["Small packets", "Sporadic", "UDP"]
+
+            # Interactive/Web detection
+            web_score = self._score_web(stats)
+            if web_score > confidence:
+                service_type = "Interactive"
+                confidence = web_score
+                reasons = ["Moderate size", "TCP"]
 
         return {
             "service_type": service_type,
             "confidence": confidence,
             "reasons": reasons,
             "stats": stats,
+            "is_async": is_async,  # For jitter severity adjustment
         }
 
     def _score_voip(self, stats: dict) -> float:
@@ -389,6 +462,7 @@ class ServiceClassifier:
                 "service_type": classification["service_type"],
                 "confidence": classification["confidence"],
                 "reasons": classification["reasons"],
+                "is_async": classification.get("is_async", False),
                 "packet_count": classification["stats"]["packet_count"],
                 "avg_packet_size": classification["stats"]["avg_packet_size"],
                 "flow_duration": classification["stats"]["flow_duration"],
