@@ -2086,6 +2086,19 @@ class HTMLReportGenerator:
         </span>
         """
         html += "  </div>"
+
+        # Add explanation box for confidence levels
+        html += """
+        <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 12px; margin: 15px 0; border-radius: 4px;">
+            <p style="margin: 0 0 10px 0; font-size: 0.95em;"><strong>ℹ️ Understanding Confidence Levels</strong></p>
+            <div style="font-size: 0.9em; color: #555; line-height: 1.6;">
+                <p style="margin: 5px 0;"><strong>🟢 High Confidence:</strong> Clear TCP sequence/ACK patterns with unambiguous retransmission signals. High reliability for troubleshooting decisions.</p>
+                <p style="margin: 5px 0;"><strong>🟡 Medium Confidence:</strong> Retransmission detected but with some ambiguity (e.g., out-of-order packets, missing context). Recommend correlation with other metrics.</p>
+                <p style="margin: 5px 0;"><strong>🟠 Low Confidence:</strong> Possible retransmission but limited evidence (small sample size, incomplete flow data, or edge cases). Use as indicator only, verify with packet-level analysis.</p>
+            </div>
+        </div>
+        """
+
         html += '  <div class="confidence-details">'
         html += (
             f'    <p class="confidence-reason">Detection confidence is <strong>{confidence_text}</strong> based on:</p>'
