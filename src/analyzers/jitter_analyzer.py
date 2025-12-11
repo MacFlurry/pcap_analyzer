@@ -316,6 +316,7 @@ class JitterAnalyzer:
                         "max_jitter": stats_to_check["max_jitter"],
                         "p95_jitter": p95_jitter,
                         "severity": self._classify_jitter_severity(mean_jitter),
+                        "packets": len(self.flow_packets[flow_key]),
                     }
                 )
 

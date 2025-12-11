@@ -17,6 +17,19 @@ from typing import Any
 class HTMLReportGenerator:
     """Generates HTML reports from analysis results."""
 
+    # Known async services where high jitter is expected
+    KNOWN_ASYNC_SERVICES = {
+        9092: ("Kafka", "🐘", "Message broker using async batching"),
+        9093: ("Kafka SSL", "🐘", "Secure Kafka with async batching"),
+        5672: ("RabbitMQ", "🐰", "Message queue with async processing"),
+        5671: ("RabbitMQ SSL", "🐰", "Secure RabbitMQ with async processing"),
+        6379: ("Redis", "📦", "In-memory cache with async replication"),
+        27017: ("MongoDB", "🍃", "NoSQL database with async operations"),
+        9200: ("Elasticsearch", "🔍", "Search engine with batch indexing"),
+        5432: ("PostgreSQL", "🐘", "Database with async replication"),
+        3306: ("MySQL", "🐬", "Database with async replication"),
+    }
+
     def __init__(self):
         pass
 
@@ -42,6 +55,21 @@ class HTMLReportGenerator:
             hours = int(duration / 3600)
             minutes = int((duration % 3600) / 60)
             return f"{hours}h {minutes}m"
+
+    def _identify_service(self, port: int) -> tuple[str, str, str, bool]:
+        """
+        Identify service and whether high jitter is expected.
+
+        Args:
+            port: Port number to identify
+
+        Returns:
+            Tuple of (service_name, emoji, description, expect_high_jitter)
+        """
+        if port in self.KNOWN_ASYNC_SERVICES:
+            name, emoji, description = self.KNOWN_ASYNC_SERVICES[port]
+            return (name, emoji, description, True)  # High jitter expected
+        return ("Unknown", "❓", "Unknown service", False)
 
     def generate(self, results: dict[str, Any]) -> str:
         """
@@ -431,6 +459,17 @@ class HTMLReportGenerator:
         .badge-high { background: #fd7e14; color: white; }
         .badge-medium { background: #ffc107; color: #212529; }
         .badge-low { background: #17a2b8; color: white; }
+
+        .service-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            background: #e3f2fd;
+            color: #1565c0;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 500;
+            margin-right: 6px;
+        }
 
         .no-issues {
             background: #d4edda;
@@ -1162,6 +1201,24 @@ class HTMLReportGenerator:
             opacity: 1;
         }
 
+        /* Service Context Info */
+        .service-context {
+            margin-top: 12px;
+            padding: 10px 12px;
+            background: #e8f4f8;
+            border-left: 3px solid #3498db;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .service-context .context-text {
+            font-style: italic;
+        }
+
         /* Severity Badges */
         .severity-badge {
             display: inline-block;
@@ -1731,42 +1788,148 @@ class HTMLReportGenerator:
                 </div>
                 """
 
-        # High jitter flows table
+        # High jitter flows - modern collapsible card design
         high_jitter_flows = jitter_data.get("high_jitter_flows", [])
         if high_jitter_flows:
-            html += "<h3>⚠️ Flows with High Jitter</h3>"
-            html += '<table class="data-table">'
-            html += """
-            <thead>
-                <tr>
-                    <th>Flow</th>
-                    <th>Mean Jitter</th>
-                    <th>Max Jitter</th>
-                    <th>P95 Jitter</th>
-                    <th>Severity</th>
-                </tr>
-            </thead>
-            <tbody>
+            # Limit to top 10 flows sorted by severity/mean jitter
+            top_flows = sorted(
+                high_jitter_flows,
+                key=lambda x: (
+                    {"critical": 3, "high": 2, "medium": 1, "low": 0}.get(x.get("severity", "low"), 0),
+                    x.get("mean_jitter", 0),
+                ),
+                reverse=True,
+            )[:10]
+
+            # Collapsible section for jitter flows
+            html += '<div class="collapsible-section">'
+            html += f"""
+                <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">  # noqa: E501
+                    <span class="toggle-icon">▶</span>
+                    <span class="header-title">Top Flows with High Jitter ({len(top_flows)})</span>
+                    <span class="header-info">Click to expand flow details</span>
+                </div>
+                <div class="collapsible-content">
+                    <div class="content-inner">
             """
 
-            for flow in high_jitter_flows[:15]:
+            # Generate flow detail cards
+            for idx, flow in enumerate(top_flows):
+                flow_str = flow.get("flow", "N/A")
                 severity = flow.get("severity", "low")
-                badge_class = f"badge-{severity}"
-                mean_jitter = flow.get("mean_jitter", 0) * 1000
+                mean_jitter = flow.get("mean_jitter", 0) * 1000  # Convert to ms
                 max_jitter = flow.get("max_jitter", 0) * 1000
                 p95_jitter = flow.get("p95_jitter", 0) * 1000
+                packet_count = flow.get("packets", "N/A")
 
+                # Parse flow string for IPs, ports, and Wireshark filter
+                # Format: "src_ip:src_port -> dst_ip:dst_port (proto)"
+                src_ip, src_port, dst_ip, dst_port = "0.0.0.0", "0", "0.0.0.0", "0"
+                try:
+                    if " -> " in flow_str:
+                        parts = flow_str.replace(" -> ", ":").split(":")
+                        if len(parts) >= 4:
+                            src_ip = parts[0]
+                            src_port = parts[1]
+                            dst_ip = parts[2]
+                            dst_port_str = parts[3].split(" ")[0]  # Remove "(TCP)" or "(UDP)"
+                            dst_port = dst_port_str
+                except (IndexError, ValueError):
+                    pass  # Keep defaults if parsing fails
+
+                # Parse port as integer for service detection
+                dst_port_int = 0
+                try:
+                    dst_port_int = int(dst_port)
+                except (ValueError, TypeError):
+                    pass
+
+                # Identify service and adjust severity
+                service_name, service_emoji, service_desc, expect_high_jitter = self._identify_service(dst_port_int)  # noqa: E501
+
+                # Adjust severity badge if high jitter is expected for this service
+                adjusted_severity = severity
+                severity_note = ""
+                if expect_high_jitter and severity in ["critical", "high"]:
+                    adjusted_severity = "medium"
+                    severity_note = " (Expected)"
+
+                # Determine badge class
+                badge_class = f"badge-{adjusted_severity}"
+
+                # Service badge display
+                if service_name != "Unknown":
+                    service_badge = f'<span class="service-badge">{service_emoji} {service_name}</span>'
+                else:
+                    service_badge = f'<span class="service-badge">🔌 Port {dst_port_int}</span>' if dst_port_int > 0 else '<span class="service-badge">🔌 Unknown</span>'  # noqa: E501
+
+                # Generate Wireshark filter
+                wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"  # noqa: E501
+
+                # Build flow card HTML
                 html += f"""
-                <tr>
-                    <td><code>{flow.get("flow", "N/A")}</code></td>
-                    <td>{mean_jitter:.2f} ms</td>
-                    <td>{max_jitter:.2f} ms</td>
-                    <td>{p95_jitter:.2f} ms</td>
-                    <td><span class="badge {badge_class}">{severity.upper()}</span></td>
-                </tr>
+                    <div class="flow-detail-card">
+                        <div class="flow-header">
+                            <div class="flow-title">
+                                <span class="flow-label">Flow {idx + 1}</span>
+                                <code class="flow-key">{flow_str}</code>
+                            </div>
+                            <div class="flow-badges">
+                                {service_badge}
+                                <span class="severity-badge {badge_class}">
+                                    {adjusted_severity.upper()}{severity_note}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flow-body">
+                            <div class="flow-stats-grid">
+                                <div class="flow-stat">
+                                    <span class="stat-label">Mean Jitter</span>
+                                    <span class="stat-value">{mean_jitter:.2f} ms</span>
+                                </div>
+                                <div class="flow-stat">
+                                    <span class="stat-label">Max Jitter</span>
+                                    <span class="stat-value">{max_jitter:.2f} ms</span>
+                                </div>
+                                <div class="flow-stat">
+                                    <span class="stat-label">P95 Jitter</span>
+                                    <span class="stat-value">{p95_jitter:.2f} ms</span>
+                                </div>
+                                <div class="flow-stat">
+                                    <span class="stat-label">Packets</span>
+                                    <span class="stat-value">{packet_count}</span>
+                                </div>
+                            </div>
                 """
 
-            html += "</tbody></table>"
+                # Add service context tooltip for async services
+                if expect_high_jitter:
+                    html += f"""
+                            <div class="service-context">
+                                <span class="tooltip-wrapper">
+                                    <span class="tooltip-icon">ℹ️</span>
+                                    <span class="tooltip-text">
+                                        High jitter is expected for {service_name} due to async batching and long-polling
+                                    </span>
+                                </span>
+                                <span class="context-text">High jitter is normal for this service</span>
+                            </div>
+                    """
+
+                # Add Wireshark debug section
+                html += f"""
+                            <div class="wireshark-section">
+                                <strong>🔍 Debug this flow:</strong>
+                                <code class="copy-code">{wireshark_filter}</code>
+                                <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                """
+
+            html += "            </div>"  # content-inner
+            html += "        </div>"  # collapsible-content
+            html += "    </div>"  # collapsible-section
 
         return html
 
@@ -2382,10 +2545,16 @@ class HTMLReportGenerator:
             severity_text = "Low Retrans Rate"
 
         # Calculate duration
+        # Issue #12 Fix: Use min/max timestamps instead of first/last to handle delay-sorted lists
+        # retrans_list is sorted by delay (descending) in retransmission.py:989, not by timestamp.
+        # When high-delay retrans (RTO) occurs chronologically AFTER low-delay retrans (Fast Retrans),
+        # using first/last would yield negative durations.
+        # Example: RTO at t=15s (delay=500ms) sorted before Fast Retrans at t=5s (delay=50ms)
+        # Old: last - first = 5 - 15 = -10s (WRONG)
+        # New: max - min = 15 - 5 = 10s (CORRECT)
         if retrans_list:
-            first_time = retrans_list[0].get("timestamp", 0)
-            last_time = retrans_list[-1].get("timestamp", 0)
-            duration = last_time - first_time
+            timestamps = [r.get("timestamp", 0) for r in retrans_list]
+            duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
         else:
             duration = 0
 

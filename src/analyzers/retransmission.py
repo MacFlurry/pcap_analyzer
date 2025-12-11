@@ -27,7 +27,7 @@ References:
 """
 
 from collections import defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from scapy.all import IP, TCP, Packet
@@ -61,6 +61,17 @@ class TCPRetransmission:
             - 'RTO': Retransmission timeout (delay > threshold, typically 200ms)
             - 'Fast Retransmission': Triggered by duplicate ACKs (delay < 50ms)
             - 'Retransmission': Generic retransmission (between thresholds)
+
+        Phase 1: Context enrichment (factual observations, not causal claims)
+        expected_ack: Expected next ACK number (calculated from seq + len)
+        last_ack_seen: Last ACK observed in capture before this retransmission
+        last_ack_packet_num: Packet number where last ACK was observed
+        time_since_last_ack_ms: Time elapsed since last ACK (milliseconds)
+        dup_ack_count: Number of duplicate ACKs observed before retransmission
+        receiver_window_raw: Raw TCP window value from receiver (before scaling)
+
+        suspected_mechanisms: List of possible mechanisms (not definitive causes)
+        confidence: Confidence level of analysis ("low" | "medium" | "high")
     """
 
     packet_num: int
@@ -73,6 +84,23 @@ class TCPRetransmission:
     original_packet_num: int
     delay: float
     retrans_type: str = "Unknown"
+
+    # Phase 1: Context enrichment
+    expected_ack: Optional[int] = None
+    last_ack_seen: Optional[int] = None
+    last_ack_packet_num: Optional[int] = None
+    time_since_last_ack_ms: Optional[float] = None
+    dup_ack_count: int = 0
+    receiver_window_raw: Optional[int] = None
+
+    # Suspected mechanisms (NOT definitive cause!)
+    suspected_mechanisms: List[str] = None
+    confidence: str = "low"  # low | medium | high
+
+    def __post_init__(self):
+        """Initialize default list for suspected_mechanisms."""
+        if self.suspected_mechanisms is None:
+            self.suspected_mechanisms = []
 
 
 @dataclass
@@ -181,6 +209,9 @@ class RetransmissionAnalyzer:
         self._expected_seq: dict[str, int] = {}
         self._dup_ack_count: dict[str, int] = defaultdict(int)  # Compteur de DUP ACK par flux
         self._last_ack: dict[str, int] = {}  # Dernier ACK vu par flux
+        # Phase 1: Track packet number and timestamp of last ACK
+        self._last_ack_packet_num: dict[str, int] = {}  # Packet number of last ACK
+        self._last_ack_timestamp: dict[str, float] = {}  # Timestamp of last ACK
         # Tracking du plus haut seq vu par flux (méthode Wireshark)
         self._highest_seq: dict[str, tuple[int, int, float]] = {}  # flow_key -> (highest_seq, packet_num, timestamp)
         # Tracking du plus haut ACK vu par flux (pour Spurious Retransmission)
@@ -232,6 +263,79 @@ class RetransmissionAnalyzer:
             self._cleanup_old_segments()
 
         self._analyze_packet(packet_num, packet)
+
+    def _diagnose_retransmission(
+        self,
+        seq: int,
+        logical_len: int,
+        reverse_key: str,
+        timestamp: float,
+        dup_ack_count: int,
+        max_ack_seen: int,
+        receiver_window: Optional[int] = None,
+    ) -> Tuple[List[str], str]:
+        """
+        Phase 1: Diagnose retransmission with evidence-based context.
+
+        This method provides conservative, evidence-based analysis of retransmissions
+        based on observable facts from the capture. It does NOT claim definitive
+        root cause (impossible from single-sided capture per RFC and research).
+
+        Args:
+            seq: TCP sequence number of retransmitted segment
+            logical_len: Logical length of segment (payload + SYN + FIN)
+            reverse_key: Reverse flow key for ACK tracking
+            timestamp: Current packet timestamp
+            dup_ack_count: Number of duplicate ACKs observed
+            max_ack_seen: Highest ACK number seen from receiver
+            receiver_window: TCP window size from receiver (if available)
+
+        Returns:
+            Tuple of (suspected_mechanisms, confidence_level)
+            - suspected_mechanisms: List of possible mechanisms (NOT definitive causes)
+            - confidence_level: "low" | "medium" | "high"
+
+        Evidence-Based Logic (per ISSUE_11_COUNTER_ANALYSIS.md):
+        1. High Confidence: Spurious retransmission (seq+len <= max_ack_seen)
+           - We observed the ACK, so we know receiver already received data
+        2. Medium Confidence: Fast retransmission (dup_ack_count >= 3)
+           - RFC 5681 behavior: 3+ DUP ACKs indicate isolated packet loss
+        3. Low Confidence: Timeout-based (default)
+           - Multiple possible causes: packet loss, ACK loss, delay, congestion
+        """
+        suspected_mechanisms = []
+        confidence = "low"
+
+        # HIGH CONFIDENCE: Spurious retransmission (already ACKed)
+        if seq + logical_len <= max_ack_seen:
+            confidence = "high"
+            suspected_mechanisms = [
+                "Spurious retransmission (already ACKed)",
+                "Possible causes: ACK delay, premature timeout, packet reordering",
+            ]
+
+        # MEDIUM CONFIDENCE: Fast retransmission (3+ DUP ACKs per RFC 5681)
+        elif dup_ack_count >= 3:
+            confidence = "medium"
+            suspected_mechanisms = [
+                "Isolated packet loss (RFC 5681)",
+                "Triggered by 3+ duplicate ACKs indicating later packets arrived",
+            ]
+
+        # LOW CONFIDENCE: Timeout-based retransmission (RTO)
+        else:
+            confidence = "low"
+            suspected_mechanisms = [
+                "Timeout-based retransmission (RTO)",
+                "Multiple possibilities (see report):",
+                "  - Original packet lost in network",
+                "  - ACK packet lost on return path",
+                "  - Network congestion causing delay",
+                "  - Application pause at receiver",
+                "Note: Single-sided capture cannot distinguish between causes",
+            ]
+
+        return suspected_mechanisms, confidence
 
     def _cleanup_old_segments(self) -> None:
         """
@@ -377,6 +481,29 @@ class RetransmissionAnalyzer:
                 elif delay <= self.fast_retrans_delay_max:
                     retrans_type = "Fast Retransmission"
 
+                # Phase 1: Calculate context enrichment fields
+                expected_ack = seq + logical_len
+                last_ack = self._last_ack.get(reverse_key)
+                last_ack_pkt = self._last_ack_packet_num.get(reverse_key)
+                last_ack_ts = self._last_ack_timestamp.get(reverse_key)
+                time_since_last_ack = None
+                if last_ack_ts is not None:
+                    time_since_last_ack = (timestamp - last_ack_ts) * 1000  # Convert to ms
+
+                current_dup_ack_count = self._dup_ack_count.get(reverse_key, 0)
+                max_ack = self._max_ack_seen.get(reverse_key, 0)
+
+                # Phase 1: Diagnose with evidence-based logic
+                suspected_mechanisms, confidence = self._diagnose_retransmission(
+                    seq=seq,
+                    logical_len=logical_len,
+                    reverse_key=reverse_key,
+                    timestamp=timestamp,
+                    dup_ack_count=current_dup_ack_count,
+                    max_ack_seen=max_ack,
+                    receiver_window=metadata.tcp_window,
+                )
+
                 retrans = TCPRetransmission(
                     packet_num=packet_num,
                     timestamp=timestamp,
@@ -388,6 +515,15 @@ class RetransmissionAnalyzer:
                     original_packet_num=original_num,
                     delay=delay,
                     retrans_type=retrans_type,
+                    # Phase 1: Context enrichment
+                    expected_ack=expected_ack,
+                    last_ack_seen=last_ack,
+                    last_ack_packet_num=last_ack_pkt,
+                    time_since_last_ack_ms=time_since_last_ack,
+                    dup_ack_count=current_dup_ack_count,
+                    receiver_window_raw=metadata.tcp_window,
+                    suspected_mechanisms=suspected_mechanisms,
+                    confidence=confidence,
                 )
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]["retransmissions"] += 1
@@ -427,6 +563,9 @@ class RetransmissionAnalyzer:
 
             self._last_ack[reverse_key] = ack
             self._expected_ack[reverse_key] = ack
+            # Phase 1: Track packet number and timestamp of ACK
+            self._last_ack_packet_num[reverse_key] = packet_num
+            self._last_ack_timestamp[reverse_key] = timestamp
 
         # Détection Out-of-Order
         if logical_len > 0:
@@ -580,6 +719,29 @@ class RetransmissionAnalyzer:
                 elif delay <= self.fast_retrans_delay_max:
                     retrans_type = "Fast Retransmission"
 
+                # Phase 1: Calculate context enrichment fields
+                expected_ack = seq + logical_len
+                last_ack = self._last_ack.get(reverse_key)
+                last_ack_pkt = self._last_ack_packet_num.get(reverse_key)
+                last_ack_ts = self._last_ack_timestamp.get(reverse_key)
+                time_since_last_ack = None
+                if last_ack_ts is not None:
+                    time_since_last_ack = (timestamp - last_ack_ts) * 1000  # Convert to ms
+
+                current_dup_ack_count = self._dup_ack_count.get(reverse_key, 0)
+                max_ack = self._max_ack_seen.get(reverse_key, 0)
+
+                # Phase 1: Diagnose with evidence-based logic
+                suspected_mechanisms, confidence = self._diagnose_retransmission(
+                    seq=seq,
+                    logical_len=logical_len,
+                    reverse_key=reverse_key,
+                    timestamp=timestamp,
+                    dup_ack_count=current_dup_ack_count,
+                    max_ack_seen=max_ack,
+                    receiver_window=tcp.window,
+                )
+
                 retrans = TCPRetransmission(
                     packet_num=packet_num,
                     timestamp=timestamp,
@@ -591,6 +753,15 @@ class RetransmissionAnalyzer:
                     original_packet_num=original_num,
                     delay=delay,
                     retrans_type=retrans_type,  # Assign the type
+                    # Phase 1: Context enrichment
+                    expected_ack=expected_ack,
+                    last_ack_seen=last_ack,
+                    last_ack_packet_num=last_ack_pkt,
+                    time_since_last_ack_ms=time_since_last_ack,
+                    dup_ack_count=current_dup_ack_count,
+                    receiver_window_raw=tcp.window,
+                    suspected_mechanisms=suspected_mechanisms,
+                    confidence=confidence,
                 )
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]["retransmissions"] += 1
@@ -639,6 +810,9 @@ class RetransmissionAnalyzer:
 
             self._last_ack[reverse_flow] = ack
             self._expected_ack[reverse_flow] = ack
+            # Phase 1: Track packet number and timestamp of ACK
+            self._last_ack_packet_num[reverse_flow] = packet_num
+            self._last_ack_timestamp[reverse_flow] = timestamp
 
         # Détection Out-of-Order
         # FIX: Check logical_len instead of just payload (accounts for SYN/FIN)
