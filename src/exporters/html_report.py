@@ -1258,6 +1258,10 @@ class HTMLReportGenerator:
         errors = dns_data.get("error_transactions", 0)
         slow = dns_data.get("slow_transactions", 0)
 
+        # Fix for Issue #10: Separate K8s expected errors from real errors
+        k8s_expected_errors = dns_data.get("k8s_expected_errors", 0)
+        real_errors = dns_data.get("real_errors", 0)
+
         html += '<div class="summary-grid">'
         html += f"""
         <div class="metric-card">
@@ -1276,11 +1280,31 @@ class HTMLReportGenerator:
             <div class="metric-label">Timeouts</div>
             <div class="metric-value">{timeouts:,}</div>
         </div>
+        """
+
+        # Errors metric - show breakdown if K8s errors detected
+        if k8s_expected_errors > 0 and real_errors >= 0:
+            # Show detailed breakdown: K8s expected vs real errors
+            error_color = "#dc3545" if real_errors > 0 else "#ffc107"
+            html += f"""
+        <div class="metric-card" style="border-left-color: {error_color};">
+            <div class="metric-label">Errors</div>
+            <div class="metric-value">{errors:,}</div>
+            <div style="font-size: 0.75em; color: #666; margin-top: 0.5rem;">
+                <div style="color: #28a745;">✓ Expected K8s: {k8s_expected_errors}</div>
+                <div style="color: {'#dc3545' if real_errors > 0 else '#28a745'};">{'⚠️' if real_errors > 0 else '✓'} Real Issues: {real_errors}</div>
+            </div>
+        </div>
+            """
+        else:
+            # Standard error display (no K8s breakdown)
+            html += f"""
         <div class="metric-card" style="border-left-color: {'#dc3545' if errors > 0 else '#28a745'};">
             <div class="metric-label">Errors</div>
             <div class="metric-value">{errors:,}</div>
         </div>
-        """
+            """
+
         html += "</div>"
 
         # Response Time Statistics
@@ -1385,6 +1409,54 @@ class HTMLReportGenerator:
                 """
 
             html += "</tbody></table>"
+
+        # Fix for Issue #10: Show K8s Expected Errors (informational)
+        k8s_errors_details = dns_data.get("k8s_expected_errors_details", [])
+        if k8s_errors_details:
+            html += f"""
+            <div style="margin-top: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">
+                <h4 style="margin: 0 0 0.5rem 0; color: #28a745;">
+                    ℹ️ Kubernetes Expected DNS Errors ({k8s_expected_errors} total)
+                </h4>
+                <p style="margin: 0 0 1rem 0; font-size: 0.9em; color: #666;">
+                    These NXDOMAIN responses for *.cluster.local domains are normal in Kubernetes multi-level DNS resolution.
+                    They are excluded from problematic domains analysis.
+                </p>
+                <details style="cursor: pointer;">
+                    <summary style="font-weight: 500; padding: 0.5rem; background: white; border-radius: 4px;">
+                        Show Details ({len(k8s_errors_details)} samples)
+                    </summary>
+                    <table class="data-table" style="margin-top: 1rem;">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Error Code</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            """
+            for trans in k8s_errors_details[:15]:
+                query = trans.get("query", {})
+                response = trans.get("response", {})
+                domain = query.get("query_name", "N/A")
+                error_code = response.get("response_code_name", "N/A")
+                timestamp = trans.get("timestamp", 0)
+
+                html += f"""
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em;">{domain}</td>
+                            <td><span class="badge badge-info">{error_code}</span></td>
+                            <td style="font-size: 0.85em;">{timestamp:.3f}s</td>
+                        </tr>
+                """
+
+            html += """
+                        </tbody>
+                    </table>
+                </details>
+            </div>
+            """
 
         # Slow Transactions Details
         slow_details = dns_data.get("slow_transactions_details", [])

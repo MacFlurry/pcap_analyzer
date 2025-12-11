@@ -46,6 +46,10 @@ class JitterAnalyzer:
     - Session-aware segmentation (TCP SYN detection)
     - Configurable gap threshold for session breaks
     - Dual reporting (raw + filtered statistics)
+
+    Fix for Issue #10:
+    - RST/FIN flag detection for pod restart/migration scenarios
+    - Critical for Kubernetes environments where pods restart frequently
     """
 
     def __init__(self, session_gap_threshold: float = 60.0, enable_session_detection: bool = True):
@@ -62,13 +66,14 @@ class JitterAnalyzer:
 
     def reset(self):
         """Reset all counters and state."""
-        self.flow_packets = defaultdict(list)  # Flow -> list of (timestamp, packet_num, is_syn)
+        self.flow_packets = defaultdict(list)  # Flow -> list of (timestamp, packet_num, is_syn, is_rst_fin)
         self.flow_jitters = defaultdict(list)  # Flow -> list of jitter values
         self.flow_jitters_filtered = defaultdict(list)  # Jitter without large gaps
         self.all_jitters = []  # Global jitter values (raw)
         self.all_jitters_filtered = []  # Global jitter values (filtered)
         self.sessions_detected = 0  # Count of session boundaries detected
         self.large_gaps_filtered = 0  # Count of large gaps filtered out
+        self.rst_fin_detected = 0  # Count of RST/FIN flags detected (Issue #10)
 
     def analyze(self, packets: list) -> dict[str, Any]:
         """
@@ -82,13 +87,14 @@ class JitterAnalyzer:
         """
         self.reset()
 
-        # Group packets by flow and detect TCP SYN packets
+        # Group packets by flow and detect TCP SYN/RST/FIN packets
         for idx, packet in enumerate(packets):
             flow_key = self._get_flow_key(packet)
             if flow_key:
                 timestamp = self._get_timestamp(packet)
                 is_syn = self._is_tcp_syn(packet) if self.enable_session_detection else False
-                self.flow_packets[flow_key].append((timestamp, idx, is_syn))
+                is_rst_fin = self._is_tcp_rst_or_fin(packet) if self.enable_session_detection else False
+                self.flow_packets[flow_key].append((timestamp, idx, is_syn, is_rst_fin))
 
         # Calculate jitter for each flow with session segmentation
         for flow_key, packet_info in self.flow_packets.items():
@@ -176,15 +182,40 @@ class JitterAnalyzer:
             return bool(flags & 0x02) and not bool(flags & 0x10)
         return False
 
-    def _segment_sessions(self, packet_info: list[tuple]) -> list[list[tuple]]:
+    def _is_tcp_rst_or_fin(self, packet) -> bool:
         """
-        Segment packets into sessions based on TCP SYN and large time gaps.
+        Check if packet has RST or FIN flag (session termination).
 
         Args:
-            packet_info: List of (timestamp, packet_num, is_syn) tuples
+            packet: Scapy packet
+
+        Returns:
+            True if TCP RST or FIN flag is set
+
+        Rationale (Issue #10):
+        In Kubernetes, pod restarts/migrations trigger RST/FIN.
+        These create artificial jitter spikes and should segment sessions.
+        """
+        if TCP in packet:
+            tcp_layer = packet[TCP]
+            flags = tcp_layer.flags
+            # RST = 0x04, FIN = 0x01
+            return bool(flags & 0x04) or bool(flags & 0x01)
+        return False
+
+    def _segment_sessions(self, packet_info: list[tuple]) -> list[list[tuple]]:
+        """
+        Segment packets into sessions based on TCP SYN/RST/FIN and large time gaps.
+
+        Args:
+            packet_info: List of (timestamp, packet_num, is_syn, is_rst_fin) tuples
 
         Returns:
             List of sessions, where each session is a list of packet_info tuples
+
+        Fix for Issue #10:
+            RST/FIN flags now trigger session boundaries (pod restarts/migrations).
+            Critical for Kubernetes where connection resets are frequent and legitimate.
 
         Note:
             Fix for test compatibility - Only treat SYN as session boundary if
@@ -199,16 +230,17 @@ class JitterAnalyzer:
         current_session = [packet_info[0]]
 
         for i in range(1, len(packet_info)):
-            timestamp, pkt_num, is_syn = packet_info[i]
+            timestamp, pkt_num, is_syn, is_rst_fin = packet_info[i]
             prev_timestamp = packet_info[i - 1][0]
+            prev_is_rst_fin = packet_info[i - 1][3]  # Was previous packet a RST/FIN?
 
             # Calculate time gap
             time_gap = timestamp - prev_timestamp
 
             # Start new session if:
             # 1. Large time gap detected (> session_gap_threshold)
-            # 2. TCP SYN detected WITH a reasonable time gap (>1s) to avoid
-            #    treating consecutive test packets with SYN flags as separate sessions
+            # 2. TCP SYN detected WITH a reasonable time gap (>1s)
+            # 3. Previous packet was RST/FIN (connection terminated) + reasonable gap (>0.1s)
             should_start_new_session = False
 
             if time_gap > self.session_gap_threshold:
@@ -217,6 +249,11 @@ class JitterAnalyzer:
             elif self.enable_session_detection and is_syn and time_gap > 1.0:
                 # SYN with reasonable gap (>1s) suggests new connection
                 should_start_new_session = True
+            elif self.enable_session_detection and prev_is_rst_fin and time_gap > 0.1:
+                # Previous packet terminated connection, start new session
+                # Requirement: >0.1s gap to avoid treating rapid RST/FIN as separate sessions
+                should_start_new_session = True
+                self.rst_fin_detected += 1
 
             if should_start_new_session:
                 # Save current session and start new one
@@ -299,6 +336,7 @@ class JitterAnalyzer:
             "session_gap_threshold": self.session_gap_threshold,
             "sessions_detected": self.sessions_detected,
             "large_gaps_filtered": self.large_gaps_filtered,
+            "rst_fin_detected": self.rst_fin_detected,  # Issue #10: Track RST/FIN session boundaries
         }
 
     def _calculate_flow_stats(self, flow_key: tuple, jitters: list[float]) -> dict[str, Any]:

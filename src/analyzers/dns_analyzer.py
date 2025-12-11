@@ -354,6 +354,21 @@ class DNSAnalyzer:
         timeouts = [t for t in self.transactions if t.timed_out]
         repeated = [t for t in self.transactions if t.repeated]
 
+        # Fix for Issue #10: Separate K8s expected DNS errors from real errors
+        k8s_expected_errors = []
+        real_errors = []
+        for t in errors:
+            # K8s NXDOMAIN for *.cluster.local is expected (multi-level DNS resolution)
+            if (
+                self.ignore_k8s_domains
+                and self._is_k8s_domain(t.query.query_name)
+                and t.response
+                and t.response.response_code == 3  # NXDOMAIN
+            ):
+                k8s_expected_errors.append(t)
+            else:
+                real_errors.append(t)
+
         # Response times
         response_times = [t.response_time for t in self.transactions if t.response_time is not None]
 
@@ -366,29 +381,26 @@ class DNSAnalyzer:
             }
 
         # Domaines problématiques (Agrégation enrichie)
+        # Fix for Issue #10: Only use real_errors (exclude K8s expected errors)
         problematic_domains = defaultdict(lambda: {"count": 0, "types": defaultdict(int)})
-        for t in self.transactions:
-            if t.status in ["slow", "error", "timeout"]:
-                domain = t.query.query_name
 
-                # Skip Kubernetes domains if configured (NXDOMAIN for *.cluster.local is expected)
-                if self.ignore_k8s_domains and self._is_k8s_domain(domain):
-                    # Only skip if it's an NXDOMAIN error (expected in K8s DNS resolution chain)
-                    if t.response and t.response.response_code == 3:  # NXDOMAIN
-                        continue
+        # Process slow, timeouts, and REAL errors (not K8s expected)
+        problematic_transactions = slow + timeouts + real_errors
 
-                problematic_domains[domain]["count"] += 1
+        for t in problematic_transactions:
+            domain = t.query.query_name
+            problematic_domains[domain]["count"] += 1
 
-                # Détermine le type d'erreur
-                error_type = "Unknown"
-                if t.timed_out:
-                    error_type = "Timeout"
-                elif t.status == "slow":
-                    error_type = "Slow Response"
-                elif t.response:
-                    error_type = t.response.response_code_name
+            # Détermine le type d'erreur
+            error_type = "Unknown"
+            if t.timed_out:
+                error_type = "Timeout"
+            elif t.status == "slow":
+                error_type = "Slow Response"
+            elif t.response:
+                error_type = t.response.response_code_name
 
-                problematic_domains[domain]["types"][error_type] += 1
+            problematic_domains[domain]["types"][error_type] += 1
 
         # Top domaines problématiques (Format liste de dicts)
         top_problematic = []
@@ -420,6 +432,10 @@ class DNSAnalyzer:
             "error_transactions": len(errors),
             "timeout_transactions": len(timeouts),
             "repeated_queries": len(repeated),
+            # Fix for Issue #10: Separate K8s expected errors from real errors
+            "k8s_expected_errors": len(k8s_expected_errors),
+            "real_errors": len(real_errors),
+            "k8s_expected_errors_details": [self._transaction_to_dict(t) for t in k8s_expected_errors[:20]],
             "response_time_statistics": stats,
             "thresholds": {
                 "warning_seconds": self.response_warning,
