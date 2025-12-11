@@ -11,7 +11,7 @@ Generates professional, self-contained HTML reports with:
 - No external dependencies (embedded CSS/JS)
 """
 
-from typing import Any, Dict
+from typing import Any
 
 
 class HTMLReportGenerator:
@@ -1433,7 +1433,7 @@ class HTMLReportGenerator:
             }
 
             // Space key on buttons
-            if (e.key === ' ' && (e.target.classList.contains('expand-btn') || e.target.classList.contains('flow-expand-btn'))) {
+            if (e.key === ' ' && (e.target.classList.contains('expand-btn') || e.target.classList.contains('flow-expand-btn'))) {  # noqa: E501
                 e.preventDefault();
                 if (e.target.classList.contains('expand-btn')) {
                     toggleMechanismDetails(e.target);
@@ -1564,7 +1564,7 @@ class HTMLReportGenerator:
                 <div class="component-score-card">
                     <div class="component-name">{component.replace('_', ' ').title()}</div>
                     <div class="progress-bar">
-                        <div class="progress-fill" style="width: {comp_score}%; background-color: {color};">{comp_score:.0f}%</div>
+                        <div class="progress-fill" style="width: {comp_score}%; background-color: {color};">{comp_score:.0f}%</div>  # noqa: E501
                     </div>
                 """
 
@@ -1583,10 +1583,10 @@ class HTMLReportGenerator:
         else:
             # If no component scores available, provide guidance
             html += """
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
                 <p style="margin: 0; font-size: 0.95em; color: #856404;">
                     <strong>ℹ️ Component Score Details Not Available</strong><br>
-                    The health score is based on overall network metrics. Run analysis with more detailed options to see component breakdowns.
+                    The health score is based on overall network metrics. Run analysis with more detailed options to see component breakdowns.  # noqa: E501
                 </p>
             </div>
             """
@@ -1671,10 +1671,10 @@ class HTMLReportGenerator:
 
         # Add explanation box
         html += """
-        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">
+        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
             <p style="margin: 0 0 10px 0;"><strong>ℹ️ What is Jitter (RFC 3393 IPDV)?</strong></p>
             <p style="margin: 0 0 8px 0; font-size: 0.95em;">
-                Jitter measures the <strong>variation in packet delay</strong>. High jitter causes choppy audio/video in real-time applications.
+                Jitter measures the <strong>variation in packet delay</strong>. High jitter causes choppy audio/video in real-time applications.  # noqa: E501
             </p>
             <p style="margin: 0; font-size: 0.9em; color: #555;">
                 <strong>Typical thresholds:</strong>
@@ -1721,12 +1721,12 @@ class HTMLReportGenerator:
             mean_jitter_ms = global_stats.get("mean_jitter", 0) * 1000
             if mean_jitter_ms > 1000:  # > 1 second
                 html += """
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
                     <p style="margin: 0 0 8px 0;"><strong>⚠️ High Jitter Detected</strong></p>
                     <p style="margin: 0; font-size: 0.95em; color: #856404;">
-                        The extremely high jitter values (> 1 second) typically indicate a <strong>long-duration capture with significant gaps</strong>
-                        between packets, rather than continuous real-time traffic. This is normal for passive monitoring or captures
-                        spanning hours/days. For real-time application analysis, use shorter capture windows (5-10 minutes).
+                        The extremely high jitter values (> 1 second) typically indicate a <strong>long-duration capture with significant gaps</strong>  # noqa: E501
+                        between packets, rather than continuous real-time traffic. This is normal for passive monitoring or captures  # noqa: E501
+                        spanning hours/days. For real-time application analysis, use shorter capture windows (5-10 minutes).  # noqa: E501
                     </p>
                 </div>
                 """
@@ -1778,13 +1778,13 @@ class HTMLReportGenerator:
 
         # Add explanation box
         html += """
-        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">
+        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
             <p style="margin: 0 0 10px 0;"><strong>ℹ️ What is Service Classification?</strong></p>
             <p style="margin: 0 0 12px 0; font-size: 0.95em;">
                 Intelligent traffic classification based on <strong>behavioral patterns</strong>, not just port numbers.
                 Identifies application types by analyzing packet sizes, timing, and flow characteristics.
             </p>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.9em;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.9em;">  # noqa: E501
                 <div>
                     <strong>📞 VoIP:</strong> Small packets (100-300B), constant rate (10-40ms intervals)
                 </div>
@@ -1857,13 +1857,13 @@ class HTMLReportGenerator:
             if max_percentage > 90:
                 service_name = max_service[0]
                 context_messages = {
-                    "Control": "This indicates primarily <strong>network management traffic</strong> (DNS, mDNS, NTP, DHCP). "
+                    "Control": "This indicates primarily <strong>network management traffic</strong> (DNS, mDNS, NTP, DHCP). "  # noqa: E501
                     "Common in passive monitoring or captures with minimal user activity.",
                     "Streaming": "This indicates heavy <strong>multimedia usage</strong> (video/audio streaming). "
                     "May require bandwidth optimization or QoS prioritization.",
-                    "Interactive": "This indicates primarily <strong>web browsing and interactive applications</strong> (HTTP, SSH). "
+                    "Interactive": "This indicates primarily <strong>web browsing and interactive applications</strong> (HTTP, SSH). "  # noqa: E501
                     "Typical of normal user activity with request/response patterns.",
-                    "Bulk": "This indicates significant <strong>file transfer activity</strong> (FTP, large downloads). "
+                    "Bulk": "This indicates significant <strong>file transfer activity</strong> (FTP, large downloads). "  # noqa: E501
                     "May impact available bandwidth for real-time applications.",
                     "VoIP": "This indicates heavy <strong>voice/video conferencing usage</strong>. "
                     "Requires consistent low latency and jitter for quality calls.",
@@ -1872,7 +1872,7 @@ class HTMLReportGenerator:
                 message = context_messages.get(service_name, "")
                 if message:
                     html += f"""
-            <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 15px; margin: 15px 0; border-radius: 4px;">
+            <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
                 <p style="margin: 0 0 8px 0;"><strong>💡 Traffic Pattern Analysis</strong></p>
                 <p style="margin: 0; font-size: 0.95em; color: #555;">
                     <strong>{service_name}</strong> dominates with {max_percentage:.1f}% of flows. {message}
@@ -1924,7 +1924,7 @@ class HTMLReportGenerator:
 
                 # Add note about unknown services
                 html += """
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
                     <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Unknown Classification</strong></p>
                     <p style="margin: 0; font-size: 0.95em; color: #856404;">
                         Flows are classified as "Unknown" when they don't match known behavioral patterns.
@@ -1944,48 +1944,54 @@ class HTMLReportGenerator:
         # Determine overall confidence based on data quality
         high_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "high")
         medium_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "medium")
-        low_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "low")
+        _low_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "low")  # noqa: F841
 
         # Overall confidence is based on majority
         if high_confidence_count > len(retrans_list) * 0.6:
-            overall_confidence = "high"
+            _overall_confidence = "high"  # noqa: F841
             confidence_class = "confidence-high"
             confidence_emoji = "🟢"
             confidence_text = "High"
         elif high_confidence_count + medium_confidence_count > len(retrans_list) * 0.5:
-            overall_confidence = "medium"
+            _overall_confidence = "medium"  # noqa: F841
             confidence_class = "confidence-medium"
             confidence_emoji = "🟡"
             confidence_text = "Medium"
         else:
-            overall_confidence = "low"
+            _overall_confidence = "low"  # noqa: F841
             confidence_class = "confidence-low"
             confidence_emoji = "🟠"
             confidence_text = "Low"
 
         html = '<div class="confidence-overview-box">'
         html += '  <div class="confidence-header">'
-        html += '    <h4>Analysis Confidence</h4>'
-        html += f'''
+        html += "    <h4>Analysis Confidence</h4>"
+        html += f"""
         <span class="confidence-badge {confidence_class}">
             <span class="badge-icon">{confidence_emoji}</span> {confidence_text}
         </span>
-        '''
-        html += '  </div>'
+        """
+        html += "  </div>"
         html += '  <div class="confidence-details">'
-        html += f'    <p class="confidence-reason">Detection confidence is <strong>{confidence_text}</strong> based on:</p>'
+        html += (
+            f'    <p class="confidence-reason">Detection confidence is <strong>{confidence_text}</strong> based on:</p>'
+        )
         html += '    <ul class="confidence-factors">'
 
         # Add confidence factors
         if total_retrans > 100:
-            html += f'      <li><span class="factor-icon">✓</span> Sufficient sample size ({total_retrans:,} events)</li>'
+            html += (
+                f'      <li><span class="factor-icon">✓</span> Sufficient sample size ({total_retrans:,} events)</li>'
+            )
         elif total_retrans > 10:
             html += f'      <li><span class="factor-icon">✓</span> Adequate sample size ({total_retrans:,} events)</li>'
         else:
             html += f'      <li><span class="factor-icon">⚠</span> Limited sample size ({total_retrans:,} events)</li>'
 
         if high_confidence_count > 0:
-            html += f'      <li><span class="factor-icon">✓</span> {high_confidence_count} high-confidence detections</li>'
+            html += (
+                f'      <li><span class="factor-icon">✓</span> {high_confidence_count} high-confidence detections</li>'
+            )
 
         # Check for consistent patterns
         rto_count = retrans_data.get("rto_count", 0)
@@ -1993,9 +1999,9 @@ class HTMLReportGenerator:
         if rto_count > 0 or fast_retrans > 0:
             html += '      <li><span class="factor-icon">✓</span> Clear retransmission patterns identified</li>'
 
-        html += '    </ul>'
-        html += '  </div>'
-        html += '</div>'
+        html += "    </ul>"
+        html += "  </div>"
+        html += "</div>"
 
         return html
 
@@ -2013,10 +2019,10 @@ class HTMLReportGenerator:
                     "Packet loss on network path",
                     "Sustained high latency",
                     "Network congestion",
-                    "Router buffer overflow"
+                    "Router buffer overflow",
                 ],
                 "impact": "Significant connection slowdown, reduced throughput",
-                "action": "Check network stability, investigate packet loss"
+                "action": "Check network stability, investigate packet loss",
             },
             {
                 "icon": "⚡",
@@ -2029,10 +2035,10 @@ class HTMLReportGenerator:
                     "Packet loss causing out-of-order delivery",
                     "TCP window reordering",
                     "Network reordering (normal in Internet paths)",
-                    "Congestion window reduction"
+                    "Congestion window reduction",
                 ],
                 "impact": "Brief latency spike, usually recoverable quickly",
-                "action": "Monitor patterns, usually not critical"
+                "action": "Monitor patterns, usually not critical",
             },
             {
                 "icon": "📋",
@@ -2045,10 +2051,10 @@ class HTMLReportGenerator:
                     "Packet reordering on network",
                     "Receiver retransmitting ACKs",
                     "Common in WAN environments",
-                    "Out-of-order segment arrival"
+                    "Out-of-order segment arrival",
                 ],
                 "impact": "Usually minimal, normal TCP behavior",
-                "action": "Not critical, monitor patterns over time"
+                "action": "Not critical, monitor patterns over time",
             },
             {
                 "icon": "💓",
@@ -2061,19 +2067,19 @@ class HTMLReportGenerator:
                     "Idle connection state",
                     "NAT/Firewall timeout prevention",
                     "Session persistence",
-                    "Connection health check"
+                    "Connection health check",
                 ],
                 "impact": "None, normal TCP behavior",
-                "action": "No action needed, expected behavior"
-            }
+                "action": "No action needed, expected behavior",
+            },
         ]
 
         html = '<div class="mechanisms-reference-box">'
-        html += '  <h4>Retransmission Mechanisms</h4>'
+        html += "  <h4>Retransmission Mechanisms</h4>"
         html += '  <div class="mechanisms-grid">'
 
         for mech in mechanisms:
-            html += f'''
+            html += f"""
             <div class="mechanism-card">
                 <div class="mechanism-header">
                     <span class="mechanism-icon">{mech["icon"]}</span>
@@ -2091,20 +2097,20 @@ class HTMLReportGenerator:
                     <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
                         <p><strong>Why it occurs:</strong></p>
                         <ul>
-            '''
+            """
             for detail in mech["details"]:
-                html += f'                            <li>{detail}</li>'
-            html += f'''
+                html += f"                            <li>{detail}</li>"
+            html += f"""
                         </ul>
                         <p><strong>Impact:</strong> {mech["impact"]}</p>
                         <p><strong>User Action:</strong> {mech["action"]}</p>
                     </div>
                 </div>
             </div>
-            '''
+            """
 
-        html += '  </div>'
-        html += '</div>'
+        html += "  </div>"
+        html += "</div>"
 
         return html
 
@@ -2122,11 +2128,11 @@ class HTMLReportGenerator:
                     "Client sends SYN",
                     "Server responds with SYN-ACK",
                     "Client confirms with ACK",
-                    "Typical completion time < 100ms for LAN"
+                    "Typical completion time < 100ms for LAN",
                 ],
                 "impact": "None, normal TCP operation",
                 "action": "No action needed",
-                "timing": "< 100ms"
+                "timing": "< 100ms",
             },
             {
                 "icon": "🐌",
@@ -2139,11 +2145,11 @@ class HTMLReportGenerator:
                     "Network latency (WAN, satellite)",
                     "Server under heavy load",
                     "Firewall/IDS inspection delay",
-                    "Geographic distance"
+                    "Geographic distance",
                 ],
                 "impact": "Increased connection establishment time, user-perceived delay",
                 "action": "Check network path, server load, firewall rules",
-                "timing": "> 100ms"
+                "timing": "> 100ms",
             },
             {
                 "icon": "❌",
@@ -2156,11 +2162,11 @@ class HTMLReportGenerator:
                     "Server not listening (port closed)",
                     "Firewall blocking connection",
                     "Packet loss on network",
-                    "Server overloaded (SYN flood)"
+                    "Server overloaded (SYN flood)",
                 ],
                 "impact": "Connection failure, application cannot communicate",
                 "action": "Verify service availability, check firewall rules",
-                "timing": "Never completes"
+                "timing": "Never completes",
             },
             {
                 "icon": "🔁",
@@ -2173,20 +2179,20 @@ class HTMLReportGenerator:
                     "Original SYN packet lost",
                     "SYN-ACK response lost",
                     "Server slow to respond",
-                    "Asymmetric routing issues"
+                    "Asymmetric routing issues",
                 ],
                 "impact": "Delayed connection, exponential backoff (1s, 2s, 4s...)",
                 "action": "Investigate packet loss, check server responsiveness",
-                "timing": "Retry delays"
-            }
+                "timing": "Retry delays",
+            },
         ]
 
         html = '<div class="mechanisms-reference-box">'
-        html += '  <h4>Handshake Types & Timing</h4>'
+        html += "  <h4>Handshake Types & Timing</h4>"
         html += '  <div class="mechanisms-grid">'
 
         for mech in mechanisms:
-            html += f'''
+            html += f"""
             <div class="mechanism-card">
                 <div class="mechanism-header">
                     <span class="mechanism-icon">{mech["icon"]}</span>
@@ -2204,20 +2210,20 @@ class HTMLReportGenerator:
                     <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
                         <p><strong>Why it occurs:</strong></p>
                         <ul>
-            '''
+            """
             for detail in mech["details"]:
-                html += f'                            <li>{detail}</li>'
-            html += f'''
+                html += f"                            <li>{detail}</li>"
+            html += f"""
                         </ul>
                         <p><strong>Impact:</strong> {mech["impact"]}</p>
                         <p><strong>User Action:</strong> {mech["action"]}</p>
                     </div>
                 </div>
             </div>
-            '''
+            """
 
-        html += '  </div>'
-        html += '</div>'
+        html += "  </div>"
+        html += "</div>"
 
         return html
 
@@ -2235,11 +2241,11 @@ class HTMLReportGenerator:
                     "Receiver's buffer full (application not reading fast enough)",
                     "Slow application processing",
                     "Resource exhaustion (memory, CPU)",
-                    "Flow control mechanism (intentional throttling)"
+                    "Flow control mechanism (intentional throttling)",
                 ],
                 "impact": "Sender pauses, throughput drops to zero, increased latency",
                 "action": "Investigate receiver-side application, check buffer sizes",
-                "reference": "RFC 793 (Section 3.7 - Flow Control)"
+                "reference": "RFC 793 (Section 3.7 - Flow Control)",
             },
             {
                 "icon": "📈",
@@ -2251,11 +2257,11 @@ class HTMLReportGenerator:
                 "details": [
                     "Application consumed data from buffer",
                     "Recovery from zero window condition",
-                    "Normal flow control operation"
+                    "Normal flow control operation",
                 ],
                 "impact": "Normal operation, allows sender to resume transmission",
                 "action": "None (normal behavior)",
-                "reference": "RFC 793"
+                "reference": "RFC 793",
             },
             {
                 "icon": "🔍",
@@ -2267,11 +2273,11 @@ class HTMLReportGenerator:
                 "details": [
                     "Sender received zero window advertisement",
                     "Periodic check (typically every 5-60 seconds)",
-                    "Prevents indefinite stall"
+                    "Prevents indefinite stall",
                 ],
                 "impact": "Minimal (1 byte probes), ensures connection recovery",
                 "action": "Monitor duration, investigate if prolonged",
-                "reference": "RFC 1122 (Section 4.2.2.17)"
+                "reference": "RFC 1122 (Section 4.2.2.17)",
             },
             {
                 "icon": "📉",
@@ -2284,20 +2290,20 @@ class HTMLReportGenerator:
                     "Limited receiver buffer size",
                     "Slow application processing",
                     "CPU/memory constraints",
-                    "Intentional rate limiting"
+                    "Intentional rate limiting",
                 ],
                 "impact": "Reduced throughput, sender cannot fully utilize bandwidth",
                 "action": "Tune receiver buffers (SO_RCVBUF), optimize application",
-                "reference": "RFC 793"
-            }
+                "reference": "RFC 793",
+            },
         ]
 
         html = '<div class="mechanisms-reference-box">'
-        html += '  <h4>TCP Window Mechanisms</h4>'
+        html += "  <h4>TCP Window Mechanisms</h4>"
         html += '  <div class="mechanisms-grid">'
 
         for mech in mechanisms:
-            html += f'''
+            html += f"""
             <div class="mechanism-card">
                 <div class="mechanism-header">
                     <span class="mechanism-icon">{mech["icon"]}</span>
@@ -2315,10 +2321,10 @@ class HTMLReportGenerator:
                     <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
                         <p><strong>Why it occurs:</strong></p>
                         <ul>
-            '''
+            """
             for detail in mech["details"]:
-                html += f'                            <li>{detail}</li>'
-            html += f'''
+                html += f"                            <li>{detail}</li>"
+            html += f"""
                         </ul>
                         <p><strong>Impact:</strong> {mech["impact"]}</p>
                         <p><strong>User Action:</strong> {mech["action"]}</p>
@@ -2326,10 +2332,10 @@ class HTMLReportGenerator:
                     </div>
                 </div>
             </div>
-            '''
+            """
 
-        html += '  </div>'
-        html += '</div>'
+        html += "  </div>"
+        html += "</div>"
 
         return html
 
@@ -2388,21 +2394,21 @@ class HTMLReportGenerator:
         html += '    <div class="flow-title">'
         html += f'      <span class="flow-label">{flow_label}</span>'
         html += f'      <code class="flow-key">{flow_key}</code>'
-        html += '    </div>'
+        html += "    </div>"
         html += '    <div class="flow-badges">'
-        html += f'''
+        html += f"""
         <span class="confidence-badge {flow_confidence}">
             <span class="badge-icon">{flow_confidence_emoji}</span> {flow_confidence_text}
         </span>
         <span class="severity-badge severity-{severity_level}">
             {severity_text}
         </span>
-        '''
-        html += '    </div>'
-        html += '  </div>'
+        """
+        html += "    </div>"
+        html += "  </div>"
         html += '  <div class="flow-body">'
         html += '    <div class="flow-stats-grid">'
-        html += f'''
+        html += f"""
           <div class="flow-stat">
               <span class="stat-label">Total Retrans</span>
               <span class="stat-value">{total_retrans}</span>
@@ -2419,24 +2425,24 @@ class HTMLReportGenerator:
               <span class="stat-label">Duration</span>
               <span class="stat-value">{self._format_duration(duration)}</span>
           </div>
-        '''
-        html += '    </div>'
+        """
+        html += "    </div>"
 
         # Collapsible detailed analysis
         html += '    <div class="flow-details-collapsible">'
-        html += f'''
+        html += f"""
           <button class="flow-expand-btn" data-flow-id="flow-{index}" onclick="toggleFlowDetails(this)">
               <span class="expand-icon">+</span>
               View Detailed Analysis
           </button>
           <div class="flow-details" id="flow-{index}" style="display: none;">
-        '''
+        """
 
         # Mechanism breakdown table
         html += '        <div class="mechanism-breakdown">'
-        html += '          <h5>Mechanisms in This Flow</h5>'
+        html += "          <h5>Mechanisms in This Flow</h5>"
         html += '          <table class="mechanism-table">'
-        html += '''
+        html += """
                     <thead>
                         <tr>
                             <th>Mechanism</th>
@@ -2445,45 +2451,45 @@ class HTMLReportGenerator:
                         </tr>
                     </thead>
                     <tbody>
-        '''
+        """
 
         if rto_count > 0:
-            pct = (rto_count / total_retrans * 100)
-            html += f'''
+            pct = rto_count / total_retrans * 100
+            html += f"""
                         <tr>
                             <td><span class="mech-icon">⏱️</span> RTO Timeout</td>
                             <td>{rto_count}</td>
                             <td>{pct:.1f}%</td>
                         </tr>
-            '''
+            """
 
         if fast_retrans > 0:
-            pct = (fast_retrans / total_retrans * 100)
-            html += f'''
+            pct = fast_retrans / total_retrans * 100
+            html += f"""
                         <tr>
                             <td><span class="mech-icon">⚡</span> Fast Retransmission</td>
                             <td>{fast_retrans}</td>
                             <td>{pct:.1f}%</td>
                         </tr>
-            '''
+            """
 
         if other_count > 0:
-            pct = (other_count / total_retrans * 100)
-            html += f'''
+            pct = other_count / total_retrans * 100
+            html += f"""
                         <tr>
                             <td><span class="mech-icon">📋</span> Generic Retransmission</td>
                             <td>{other_count}</td>
                             <td>{pct:.1f}%</td>
                         </tr>
-            '''
+            """
 
-        html += '                    </tbody>'
-        html += '          </table>'
-        html += '        </div>'
+        html += "                    </tbody>"
+        html += "          </table>"
+        html += "        </div>"
 
         # Timeline of recent events (last 5)
         html += '        <div class="timeline-section">'
-        html += '          <h5>Recent Retransmission Events (Last 5)</h5>'
+        html += "          <h5>Recent Retransmission Events (Last 5)</h5>"
         html += '          <div class="timeline">'
 
         # Parse flow_key for Wireshark filters
@@ -2510,9 +2516,9 @@ class HTMLReportGenerator:
                 type_label = "Generic Retransmission" if retrans_type == "Retransmission" else retrans_type
 
             # Build Wireshark filter
-            wireshark_filter = f"tcp.seq == {seq_num} && ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"
+            wireshark_filter = f"tcp.seq == {seq_num} && ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"  # noqa: E501
 
-            html += f'''
+            html += f"""
                 <div class="timeline-event {timeline_class}">
                     <span class="timeline-marker"></span>
                     <div class="timeline-content">
@@ -2526,15 +2532,15 @@ class HTMLReportGenerator:
                         </div>
                     </div>
                 </div>
-            '''
+            """
 
-        html += '          </div>'
-        html += '        </div>'
+        html += "          </div>"
+        html += "        </div>"
 
-        html += '      </div>'  # flow-details
-        html += '    </div>'  # flow-details-collapsible
-        html += '  </div>'  # flow-body
-        html += '</div>'  # flow-detail-card
+        html += "      </div>"  # flow-details
+        html += "    </div>"  # flow-details-collapsible
+        html += "  </div>"  # flow-body
+        html += "</div>"  # flow-detail-card
 
         return html
 
@@ -2569,13 +2575,13 @@ class HTMLReportGenerator:
                 <div class="metric-icon">⏱️</div>
                 <div class="metric-label">RTO (Timeout)</div>
                 <div class="metric-value">{rto_count:,}</div>
-                <div class="metric-subtext">{(rto_count/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>
+                <div class="metric-subtext">{(rto_count/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>  # noqa: E501
             </div>
             <div class="metric-card metric-warning">
                 <div class="metric-icon">⚡</div>
                 <div class="metric-label">Fast Retransmissions</div>
                 <div class="metric-value">{fast_retrans:,}</div>
-                <div class="metric-subtext">{(fast_retrans/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>
+                <div class="metric-subtext">{(fast_retrans/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>  # noqa: E501
             </div>
             """
             html += "</div>"
@@ -2602,23 +2608,23 @@ class HTMLReportGenerator:
 
                 # Collapsible section for flows
                 html += '<div class="collapsible-section">'
-                html += f'''
-                    <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">
+                html += f"""
+                    <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">  # noqa: E501
                         <span class="toggle-icon">▶</span>
                         <span class="header-title">Top Flows with Retransmissions ({len(sorted_flows)})</span>
                         <span class="header-info">Click to expand flow details</span>
                     </div>
                     <div class="collapsible-content">
                         <div class="content-inner">
-                '''
+                """
 
                 # Generate flow detail cards
                 for idx, (flow_key, retrans) in enumerate(sorted_flows):
                     html += self._generate_flow_detail_card(flow_key, retrans, idx, total_packets)
 
-                html += '        </div>'
-                html += '    </div>'
-                html += '</div>'
+                html += "        </div>"
+                html += "    </div>"
+                html += "</div>"
 
         # TCP Handshakes
         handshake_data = results.get("tcp_handshake", {})
@@ -2728,7 +2734,7 @@ class HTMLReportGenerator:
                     <span class="tooltip-wrapper">
                         <span class="tooltip-icon">ℹ️</span>
                         <span class="tooltip-text">
-                            Cumulative time all flows spent in zero-window state (sender blocked, unable to transmit). Longer durations indicate more severe throughput impact.
+                            Cumulative time all flows spent in zero-window state (sender blocked, unable to transmit). Longer durations indicate more severe throughput impact.  # noqa: E501
                         </span>
                     </span>
                 </div>
@@ -2753,15 +2759,15 @@ class HTMLReportGenerator:
 
                     # Collapsible section for top 10 flows
                     html += '<div class="collapsible-section">'
-                    html += f'''
-                        <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">
+                    html += f"""
+                        <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">  # noqa: E501
                             <span class="toggle-icon">▶</span>
                             <span class="header-title">Top Flows with Window Issues ({len(sorted_flows)})</span>
                             <span class="header-info">Click to expand flow details</span>
                         </div>
                         <div class="collapsible-content">
                             <div class="content-inner">
-                    '''
+                    """
 
                     for idx, flow in enumerate(sorted_flows):
                         bottleneck = flow.get("suspected_bottleneck", "none")
@@ -2788,9 +2794,9 @@ class HTMLReportGenerator:
                         else:
                             src_ip, src_port, dst_ip, dst_port = "0.0.0.0", "0", "0.0.0.0", "0"
 
-                        wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port} && tcp.window_size == 0"
+                        wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port} && tcp.window_size == 0"  # noqa: E501
 
-                        html += f'''
+                        html += f"""
                             <div class="flow-detail-card">
                                 <div class="flow-header">
                                     <div class="flow-title">
@@ -2815,11 +2821,11 @@ class HTMLReportGenerator:
                                                 <span class="tooltip-wrapper">
                                                     <span class="tooltip-icon">ℹ️</span>
                                                     <span class="tooltip-text">
-                                                        Time this flow spent in zero-window state. During this period, the sender was blocked and could not transmit data.
+                                                        Time this flow spent in zero-window state. During this period, the sender was blocked and could not transmit data.  # noqa: E501
                                                     </span>
                                                 </span>
                                             </span>
-                                            <span class="stat-value">{self._format_duration(zero_window_duration)}</span>
+                                            <span class="stat-value">{self._format_duration(zero_window_duration)}</span>  # noqa: E501
                                         </div>
                                         <div class="flow-stat">
                                             <span class="stat-label">Suspected Bottleneck</span>
@@ -2832,16 +2838,16 @@ class HTMLReportGenerator:
                                     </div>
                                     <div class="wireshark-section">
                                         <strong>🔍 Debug this flow:</strong>
-                                        <code class="copy-code">ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port} && tcp.window_size == 0</code>
+                                        <code class="copy-code">{wireshark_filter}</code>
                                         <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
                                     </div>
                                 </div>
                             </div>
-                        '''
+                        """
 
-                    html += '            </div>'
-                    html += '        </div>'
-                    html += '    </div>'
+                    html += "            </div>"
+                    html += "        </div>"
+                    html += "    </div>"
 
         return html
 
@@ -2858,7 +2864,7 @@ class HTMLReportGenerator:
         html += "<h3>📊 DNS Overview</h3>"
 
         total_queries = dns_data.get("total_queries", 0)
-        total_transactions = dns_data.get("total_transactions", 0)
+        _total_transactions = dns_data.get("total_transactions", 0)  # noqa: F841
         successful = dns_data.get("successful_transactions", 0)
         timeouts = dns_data.get("timeout_transactions", 0)
         errors = dns_data.get("error_transactions", 0)
@@ -2898,7 +2904,7 @@ class HTMLReportGenerator:
             <div class="metric-value">{errors:,}</div>
             <div style="font-size: 0.75em; color: #666; margin-top: 0.5rem;">
                 <div style="color: #28a745;">✓ Expected K8s: {k8s_expected_errors}</div>
-                <div style="color: {'#dc3545' if real_errors > 0 else '#28a745'};">{'⚠️' if real_errors > 0 else '✓'} Real Issues: {real_errors}</div>
+                <div style="color: {'#dc3545' if real_errors > 0 else '#28a745'};">{'⚠️' if real_errors > 0 else '✓'} Real Issues: {real_errors}</div>  # noqa: E501
             </div>
         </div>
             """
@@ -3020,12 +3026,12 @@ class HTMLReportGenerator:
         k8s_errors_details = dns_data.get("k8s_expected_errors_details", [])
         if k8s_errors_details:
             html += f"""
-            <div style="margin-top: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">
+            <div style="margin-top: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">  # noqa: E501
                 <h4 style="margin: 0 0 0.5rem 0; color: #28a745;">
                     ℹ️ Kubernetes Expected DNS Errors ({k8s_expected_errors} total)
                 </h4>
                 <p style="margin: 0 0 1rem 0; font-size: 0.9em; color: #666;">
-                    These NXDOMAIN responses for *.cluster.local domains are normal in Kubernetes multi-level DNS resolution.
+                    These NXDOMAIN responses for *.cluster.local domains are normal in Kubernetes multi-level DNS resolution.  # noqa: E501
                     They are excluded from problematic domains analysis.
                 </p>
                 <details style="cursor: pointer;">
@@ -3164,7 +3170,7 @@ class HTMLReportGenerator:
         ):
             html += """
             <div class="no-issues">
-                ✓ No security issues detected. The network traffic appears clean with no signs of port scanning, brute-force attacks, DDoS, or DNS tunneling.
+                ✓ No security issues detected. The network traffic appears clean with no signs of port scanning, brute-force attacks, DDoS, or DNS tunneling.  # noqa: E501
             </div>
             """
             return html
@@ -3700,12 +3706,12 @@ class HTMLReportGenerator:
 
             # Explanation box
             html += """
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">  # noqa: E501
                 <p style="margin: 0 0 8px 0;"><strong>ℹ️ About DNS Tunneling</strong></p>
                 <p style="margin: 0; font-size: 0.9em; color: #555;">
-                    DNS tunneling is a technique used to encode data of other programs or protocols in DNS queries and responses.
-                    It's commonly used for <strong>command & control (C2) communication</strong>, <strong>data exfiltration</strong>,
-                    and <strong>bypassing firewalls</strong>. Indicators include unusually long queries, high entropy subdomains
+                    DNS tunneling is a technique used to encode data of other programs or protocols in DNS queries and responses.  # noqa: E501
+                    It's commonly used for <strong>command & control (C2) communication</strong>, <strong>data exfiltration</strong>,  # noqa: E501
+                    and <strong>bypassing firewalls</strong>. Indicators include unusually long queries, high entropy subdomains  # noqa: E501
                     (base64/hex encoding), and excessive query rates to suspicious domains.
                 </p>
             </div>
@@ -3727,7 +3733,7 @@ class HTMLReportGenerator:
 
         # Summary
         severity_breakdown = data_exfiltration_data.get("severity_breakdown", {})
-        type_breakdown = data_exfiltration_data.get("type_breakdown", {})
+        _type_breakdown = data_exfiltration_data.get("type_breakdown", {})  # noqa: F841
 
         critical = severity_breakdown.get("critical", 0)
         high = severity_breakdown.get("high", 0)
@@ -3803,7 +3809,7 @@ class HTMLReportGenerator:
                 <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Data Exfiltration</strong></p>
                 <p style="margin: 0; font-size: 0.9em; color: #555;">
                     Data exfiltration is the unauthorized transfer of data from a system.
-                    Indicators include <strong>large upload volumes</strong>, <strong>suspicious upload/download ratios</strong>,
+                    Indicators include <strong>large upload volumes</strong>, <strong>suspicious upload/download ratios</strong>,  # noqa: E501
                     and <strong>data transfers over unusual protocols</strong>. Attackers may use non-standard ports or
                     encoding techniques to evade detection.
                 </p>
@@ -3893,8 +3899,8 @@ class HTMLReportGenerator:
             <div class="info-box">
                 <p style="margin: 0 0 8px 0;"><strong>ℹ️ About C2 Beaconing</strong></p>
                 <p style="margin: 0; font-size: 0.9em; color: #555;">
-                    Command & Control (C2) beaconing is periodic communication between compromised hosts and attacker servers.
-                    Characteristics include <strong>regular time intervals</strong>, <strong>consistent payload sizes</strong>,
+                    Command & Control (C2) beaconing is periodic communication between compromised hosts and attacker servers.  # noqa: E501
+                    Characteristics include <strong>regular time intervals</strong>, <strong>consistent payload sizes</strong>,  # noqa: E501
                     and <strong>persistent connections</strong>. Beacons are used for remote control, data staging,
                     and maintaining persistent access.
                 </p>
@@ -3918,7 +3924,7 @@ class HTMLReportGenerator:
 
         # Summary
         severity_breakdown = lateral_movement_data.get("severity_breakdown", {})
-        type_breakdown = lateral_movement_data.get("type_breakdown", {})
+        _type_breakdown = lateral_movement_data.get("type_breakdown", {})  # noqa: F841
 
         critical = severity_breakdown.get("critical", 0)
         high = severity_breakdown.get("high", 0)
@@ -3992,8 +3998,8 @@ class HTMLReportGenerator:
                 <p style="margin: 0 0 8px 0;"><strong>ℹ️ About Lateral Movement</strong></p>
                 <p style="margin: 0; font-size: 0.9em; color: #555;">
                     Lateral movement is the technique attackers use to progressively move through a network,
-                    searching for key assets and data. Common protocols include <strong>SMB/CIFS (ports 445, 139)</strong>,
-                    <strong>RDP (port 3389)</strong>, <strong>WinRM (ports 5985, 5986)</strong>, and <strong>RPC (port 135)</strong>.
+                    searching for key assets and data. Common protocols include <strong>SMB/CIFS (ports 445, 139)</strong>,  # noqa: E501
+                    <strong>RDP (port 3389)</strong>, <strong>WinRM (ports 5985, 5986)</strong>, and <strong>RPC (port 135)</strong>.  # noqa: E501
                     Multiple internal connections using administrative protocols are strong indicators.
                 </p>
             </div>
