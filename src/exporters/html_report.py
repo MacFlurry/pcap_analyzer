@@ -20,6 +20,29 @@ class HTMLReportGenerator:
     def __init__(self):
         pass
 
+    def _format_duration(self, duration: float) -> str:
+        """
+        Format duration intelligently based on magnitude.
+
+        Args:
+            duration: Duration in seconds
+
+        Returns:
+            Formatted duration string with appropriate unit
+        """
+        if duration < 1.0:
+            return f"{duration * 1000:.1f}ms"
+        elif duration < 60:
+            return f"{duration:.2f}s"
+        elif duration < 3600:
+            minutes = int(duration / 60)
+            seconds = duration % 60
+            return f"{minutes}m {seconds:.1f}s"
+        else:
+            hours = int(duration / 3600)
+            minutes = int((duration % 3600) / 60)
+            return f"{hours}h {minutes}m"
+
     def generate(self, results: dict[str, Any]) -> str:
         """
         Generate HTML report from analysis results with tabbed navigation.
@@ -514,6 +537,760 @@ class HTMLReportGenerator:
         .tab-icon {
             margin-right: 6px;
         }
+
+        /* ================================================
+           RETRANSMISSION DISPLAY ENHANCEMENTS
+           ================================================ */
+
+        /* Confidence Badges */
+        .confidence-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 0.9em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            vertical-align: middle;
+            border: 1px solid transparent;
+        }
+
+        .confidence-badge.confidence-high {
+            background: #d5f4e6;
+            color: #155724;
+            border-color: #27ae60;
+        }
+
+        .confidence-badge.confidence-medium {
+            background: #fef5e7;
+            color: #856404;
+            border-color: #f39c12;
+        }
+
+        .confidence-badge.confidence-low {
+            background: #ecf0f1;
+            color: #555;
+            border-color: #95a5a6;
+        }
+
+        .badge-icon {
+            font-size: 1.1em;
+            line-height: 1;
+        }
+
+        /* Confidence Overview Box */
+        .confidence-overview-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+            color: #1a1a1a;
+        }
+
+        .confidence-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .confidence-header h4 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+
+        .confidence-details {
+            margin-top: 10px;
+        }
+
+        .confidence-reason {
+            margin: 0 0 10px 0;
+            font-size: 0.95em;
+            color: #333;
+        }
+
+        .confidence-factors {
+            list-style: none;
+            margin-left: 0;
+            padding-left: 0;
+        }
+
+        .confidence-factors li {
+            margin: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            color: #333;
+            font-size: 0.9em;
+        }
+
+        .factor-icon {
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        /* Mechanisms Reference Box */
+        .mechanisms-reference-box {
+            margin: 30px 0;
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .mechanisms-reference-box h4 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-size: 1.2em;
+        }
+
+        .mechanisms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .mechanism-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .mechanism-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .mechanism-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .mechanism-icon {
+            font-size: 1.5em;
+        }
+
+        .mechanism-name {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1em;
+        }
+
+        .mechanism-body {
+            padding: 16px;
+        }
+
+        .mechanism-description {
+            margin: 0 0 12px 0;
+            color: #555;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+
+        .mechanism-details {
+            margin-bottom: 12px;
+        }
+
+        .expand-btn {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: #3498db;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            width: 100%;
+            text-align: left;
+        }
+
+        .expand-btn:hover {
+            background: #e8e8e8;
+            border-color: #3498db;
+            color: #2980b9;
+        }
+
+        .expand-btn:focus {
+            outline: 2px solid #3498db;
+            outline-offset: 2px;
+        }
+
+        .expand-btn.expanded {
+            background: #e8f8f5;
+            border-color: #1abc9c;
+            color: #1abc9c;
+        }
+
+        .mechanism-details-expanded {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .mechanism-details-expanded p {
+            margin: 10px 0;
+            color: #333;
+            font-size: 0.9em;
+        }
+
+        .mechanism-details-expanded ul {
+            margin: 10px 0;
+            padding-left: 20px;
+            color: #333;
+            font-size: 0.9em;
+        }
+
+        .mechanism-details-expanded li {
+            margin: 6px 0;
+        }
+
+        /* Collapsible Section Enhancements */
+        .collapsible-section {
+            margin: 30px 0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .collapsible-header {
+            cursor: pointer;
+            user-select: none;
+            padding: 18px;
+            background: #3498db;
+            color: white;
+            border-radius: 8px 8px 0 0;
+            transition: background 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .collapsible-header:hover {
+            background: #2980b9;
+        }
+
+        .collapsible-header:focus {
+            outline: 2px solid white;
+            outline-offset: -4px;
+        }
+
+        .toggle-icon {
+            display: inline-block;
+            width: 20px;
+            font-weight: bold;
+            transition: transform 0.3s ease;
+        }
+
+        .collapsible-header.active .toggle-icon {
+            transform: rotate(90deg);
+        }
+
+        .header-title {
+            font-weight: 600;
+            font-size: 1.05em;
+            flex: 1;
+        }
+
+        .header-info {
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            background: white;
+            border-radius: 0 0 8px 8px;
+            border: 1px solid #e0e0e0;
+            border-top: none;
+        }
+
+        .collapsible-content.active {
+            max-height: 5000px;
+            transition: max-height 0.5s ease-in;
+        }
+
+        .content-inner {
+            padding: 20px;
+        }
+
+        /* Flow Detail Cards */
+        .flow-detail-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .flow-detail-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .flow-header {
+            background: #f8f9fa;
+            padding: 16px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .flow-title {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .flow-label {
+            display: block;
+            font-size: 0.85em;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .flow-key {
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #2c3e50;
+        }
+
+        .flow-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .flow-body {
+            padding: 20px;
+        }
+
+        .flow-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .flow-stat {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.8em;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 1.4em;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .flow-expand-btn {
+            background: white;
+            border: 2px solid #3498db;
+            color: #3498db;
+            padding: 12px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .flow-expand-btn:hover {
+            background: #3498db;
+            color: white;
+        }
+
+        .flow-expand-btn:focus {
+            outline: 2px solid #3498db;
+            outline-offset: 2px;
+        }
+
+        .flow-expand-btn.expanded {
+            background: #3498db;
+            color: white;
+        }
+
+        .expand-icon {
+            display: inline-block;
+            font-size: 1.2em;
+            transition: transform 0.2s ease;
+        }
+
+        .flow-expand-btn.expanded .expand-icon {
+            transform: rotate(45deg);
+        }
+
+        /* Flow Details (Expanded Content) */
+        .flow-details-collapsible {
+            margin-top: 20px;
+        }
+
+        .flow-details {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .mechanism-breakdown,
+        .timeline-section {
+            margin-bottom: 25px;
+        }
+
+        .mechanism-breakdown h5,
+        .timeline-section h5 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 1em;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 8px;
+        }
+
+        .mechanism-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .mechanism-table th,
+        .mechanism-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 0.9em;
+        }
+
+        .mechanism-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .mech-icon {
+            margin-right: 8px;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .timeline-event {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            left: -28px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid #e0e0e0;
+            background: white;
+        }
+
+        .timeline-rto .timeline-marker {
+            background: #e74c3c;
+            border-color: #e74c3c;
+        }
+
+        .timeline-fast .timeline-marker {
+            background: #f39c12;
+            border-color: #f39c12;
+        }
+
+        .timeline-success .timeline-marker {
+            background: #27ae60;
+            border-color: #27ae60;
+        }
+
+        .timeline-content {
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .timeline-time {
+            display: block;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        .timeline-type {
+            display: block;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.95em;
+        }
+
+        .timeline-detail {
+            display: block;
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        /* Wireshark Debug Section */
+        .wireshark-section {
+            margin-top: 16px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-left: 3px solid #17a2b8;
+            border-radius: 4px;
+        }
+
+        .copy-code {
+            display: inline-block;
+            background: white;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            margin: 8px 0;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 8px;
+            font-size: 0.9em;
+            transition: background 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: #138496;
+        }
+
+        /* Tooltip Styles */
+        .tooltip-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip-icon {
+            display: inline-block;
+            margin-left: 5px;
+            color: #6c757d;
+            font-size: 0.85em;
+            cursor: help;
+        }
+
+        .tooltip-text {
+            visibility: hidden;
+            position: absolute;
+            z-index: 1000;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            line-height: 1.4;
+            width: 280px;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+
+        .tooltip-wrapper:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Severity Badges */
+        .severity-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .severity-warning {
+            background: #fef5e7;
+            color: #856404;
+            border: 1px solid #f39c12;
+        }
+
+        .severity-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #17a2b8;
+        }
+
+        .severity-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #e74c3c;
+        }
+
+        /* Utility Classes for Enhanced Metric Cards */
+        .metric-danger {
+            border-left: 4px solid #e74c3c;
+        }
+
+        .metric-warning {
+            border-left: 4px solid #f39c12;
+        }
+
+        .metric-info {
+            border-left: 4px solid #3498db;
+        }
+
+        .metric-icon {
+            font-size: 1.8em;
+            margin-bottom: 8px;
+        }
+
+        .metric-subtext {
+            font-size: 0.85em;
+            color: #666;
+            margin: 6px 0;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .flow-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .flow-badges {
+                width: 100%;
+            }
+
+            .mechanisms-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .flow-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .collapsible-header {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .header-info {
+                width: 100%;
+                text-align: right;
+            }
+
+            .flow-title {
+                min-width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .flow-stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Reduced Motion Support (Accessibility) */
+        @media (prefers-reduced-motion: reduce) {
+            .collapsible-content,
+            .flow-expand-btn,
+            .mechanism-card,
+            .expand-btn,
+            .flow-expand-btn .expand-icon {
+                transition: none;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            .collapsible-header .toggle-icon {
+                display: none;
+            }
+
+            .flow-expand-btn {
+                display: none;
+            }
+
+            .flow-details {
+                display: block !important;
+                margin: 0;
+            }
+
+            .expand-btn {
+                display: none;
+            }
+
+            .mechanism-details-expanded {
+                display: block !important;
+            }
+
+            .flow-detail-card {
+                page-break-inside: avoid;
+            }
+        }
     </style>
     <script>
         function switchTab(tabId) {
@@ -547,6 +1324,140 @@ class HTMLReportGenerator:
         document.addEventListener('DOMContentLoaded', function() {
             const savedTab = localStorage.getItem('activeTab') || 'tab-overview';
             switchTab(savedTab);
+        });
+
+        /* ==========================================
+           RETRANSMISSION UI INTERACTIVITY
+           ========================================== */
+
+        // Toggle collapsible sections (main flow list)
+        function toggleCollapsible(header) {
+            const content = header.nextElementSibling;
+            const isActive = header.classList.contains('active');
+
+            header.classList.toggle('active');
+            content.classList.toggle('active');
+
+            // Update ARIA attribute for accessibility
+            header.setAttribute('aria-expanded', !isActive);
+
+            // Optional: Smooth scroll to section if expanding
+            if (!isActive) {
+                setTimeout(() => {
+                    header.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
+        }
+
+        // Toggle mechanism details (Learn More buttons)
+        function toggleMechanismDetails(btn) {
+            const targetId = btn.dataset.target;
+            const details = document.getElementById(targetId);
+            const isHidden = details.style.display === 'none';
+
+            details.style.display = isHidden ? 'block' : 'none';
+            btn.classList.toggle('expanded');
+
+            // Update button text
+            btn.textContent = isHidden ? 'Hide Details ↑' : 'Learn More ↓';
+        }
+
+        // Copy to clipboard function
+        function copyToClipboard(btn) {
+            const code = btn.previousElementSibling;
+            navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.style.background = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '#17a2b8';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                btn.textContent = '✗ Failed';
+                setTimeout(() => btn.textContent = '📋 Copy', 2000);
+            });
+        }
+
+        // Toggle flow details (individual flow expand buttons)
+        function toggleFlowDetails(btn) {
+            const flowId = btn.dataset.flowId;
+            const details = document.getElementById(flowId);
+            const isHidden = details.style.display === 'none';
+            const expandIcon = btn.querySelector('.expand-icon');
+
+            details.style.display = isHidden ? 'block' : 'none';
+            btn.classList.toggle('expanded');
+
+            // Update expand icon rotation via class
+            if (isHidden) {
+                setTimeout(() => {
+                    btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
+        }
+
+        // Expand all flows (utility function)
+        function expandAllFlows() {
+            const buttons = document.querySelectorAll('.flow-expand-btn');
+            buttons.forEach(btn => {
+                const flowId = btn.dataset.flowId;
+                const details = document.getElementById(flowId);
+                if (details && details.style.display === 'none') {
+                    details.style.display = 'block';
+                    btn.classList.add('expanded');
+                }
+            });
+        }
+
+        // Collapse all flows (utility function)
+        function collapseAllFlows() {
+            const buttons = document.querySelectorAll('.flow-expand-btn');
+            buttons.forEach(btn => {
+                const flowId = btn.dataset.flowId;
+                const details = document.getElementById(flowId);
+                if (details && details.style.display !== 'none') {
+                    details.style.display = 'none';
+                    btn.classList.remove('expanded');
+                }
+            });
+        }
+
+        // Keyboard support for accessibility
+        document.addEventListener('keydown', function(e) {
+            // Enter key on collapsible headers
+            if (e.key === 'Enter' && e.target.classList.contains('collapsible-header')) {
+                e.preventDefault();
+                toggleCollapsible(e.target);
+            }
+
+            // Space key on buttons
+            if (e.key === ' ' && (e.target.classList.contains('expand-btn') || e.target.classList.contains('flow-expand-btn'))) {
+                e.preventDefault();
+                if (e.target.classList.contains('expand-btn')) {
+                    toggleMechanismDetails(e.target);
+                } else if (e.target.classList.contains('flow-expand-btn')) {
+                    toggleFlowDetails(e.target);
+                }
+            }
+        });
+
+        // Initialize event listeners for retransmission UI on DOM load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add keyboard focus support to collapsible headers
+            document.querySelectorAll('.collapsible-header').forEach(header => {
+                if (!header.hasAttribute('tabindex')) {
+                    header.setAttribute('tabindex', '0');
+                }
+            });
+
+            // Ensure all interactive buttons are keyboard accessible
+            document.querySelectorAll('.expand-btn, .flow-expand-btn').forEach(btn => {
+                if (!btn.hasAttribute('tabindex')) {
+                    btn.setAttribute('tabindex', '0');
+                }
+            });
         });
     </script>
 </head>"""
@@ -1025,6 +1936,608 @@ class HTMLReportGenerator:
 
         return html
 
+    def _generate_confidence_overview(self, retrans_data: dict) -> str:
+        """Generate confidence overview box for retransmission analysis."""
+        total_retrans = retrans_data.get("total_retransmissions", 0)
+        retrans_list = retrans_data.get("retransmissions", [])
+
+        # Determine overall confidence based on data quality
+        high_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "high")
+        medium_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "medium")
+        low_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "low")
+
+        # Overall confidence is based on majority
+        if high_confidence_count > len(retrans_list) * 0.6:
+            overall_confidence = "high"
+            confidence_class = "confidence-high"
+            confidence_emoji = "🟢"
+            confidence_text = "High"
+        elif high_confidence_count + medium_confidence_count > len(retrans_list) * 0.5:
+            overall_confidence = "medium"
+            confidence_class = "confidence-medium"
+            confidence_emoji = "🟡"
+            confidence_text = "Medium"
+        else:
+            overall_confidence = "low"
+            confidence_class = "confidence-low"
+            confidence_emoji = "🟠"
+            confidence_text = "Low"
+
+        html = '<div class="confidence-overview-box">'
+        html += '  <div class="confidence-header">'
+        html += '    <h4>Analysis Confidence</h4>'
+        html += f'''
+        <span class="confidence-badge {confidence_class}">
+            <span class="badge-icon">{confidence_emoji}</span> {confidence_text}
+        </span>
+        '''
+        html += '  </div>'
+        html += '  <div class="confidence-details">'
+        html += f'    <p class="confidence-reason">Detection confidence is <strong>{confidence_text}</strong> based on:</p>'
+        html += '    <ul class="confidence-factors">'
+
+        # Add confidence factors
+        if total_retrans > 100:
+            html += f'      <li><span class="factor-icon">✓</span> Sufficient sample size ({total_retrans:,} events)</li>'
+        elif total_retrans > 10:
+            html += f'      <li><span class="factor-icon">✓</span> Adequate sample size ({total_retrans:,} events)</li>'
+        else:
+            html += f'      <li><span class="factor-icon">⚠</span> Limited sample size ({total_retrans:,} events)</li>'
+
+        if high_confidence_count > 0:
+            html += f'      <li><span class="factor-icon">✓</span> {high_confidence_count} high-confidence detections</li>'
+
+        # Check for consistent patterns
+        rto_count = retrans_data.get("rto_count", 0)
+        fast_retrans = retrans_data.get("fast_retrans_count", 0)
+        if rto_count > 0 or fast_retrans > 0:
+            html += '      <li><span class="factor-icon">✓</span> Clear retransmission patterns identified</li>'
+
+        html += '    </ul>'
+        html += '  </div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_mechanism_cards(self) -> str:
+        """Generate retransmission mechanism reference cards."""
+        mechanisms = [
+            {
+                "icon": "⏱️",
+                "name": "RTO Timeout",
+                "description": "ACK not received within the Retransmission Timeout window.",
+                "severity": "badge-danger",
+                "severity_text": "High",
+                "id": "rto-details",
+                "details": [
+                    "Packet loss on network path",
+                    "Sustained high latency",
+                    "Network congestion",
+                    "Router buffer overflow"
+                ],
+                "impact": "Significant connection slowdown, reduced throughput",
+                "action": "Check network stability, investigate packet loss"
+            },
+            {
+                "icon": "⚡",
+                "name": "Fast Retransmission",
+                "description": "Three or more duplicate ACKs received (RFC 5681).",
+                "severity": "badge-warning",
+                "severity_text": "Medium",
+                "id": "fast-retrans-details",
+                "details": [
+                    "Packet loss causing out-of-order delivery",
+                    "TCP window reordering",
+                    "Network reordering (normal in Internet paths)",
+                    "Congestion window reduction"
+                ],
+                "impact": "Brief latency spike, usually recoverable quickly",
+                "action": "Monitor patterns, usually not critical"
+            },
+            {
+                "icon": "📋",
+                "name": "Duplicate ACK",
+                "description": "Same ACK number received multiple times.",
+                "severity": "badge-info",
+                "severity_text": "Low",
+                "id": "dup-ack-details",
+                "details": [
+                    "Packet reordering on network",
+                    "Receiver retransmitting ACKs",
+                    "Common in WAN environments",
+                    "Out-of-order segment arrival"
+                ],
+                "impact": "Usually minimal, normal TCP behavior",
+                "action": "Not critical, monitor patterns over time"
+            },
+            {
+                "icon": "💓",
+                "name": "Keep-Alive",
+                "description": "Connection maintenance packet to prevent NAT timeout.",
+                "severity": "badge-success",
+                "severity_text": "Low",
+                "id": "keepalive-details",
+                "details": [
+                    "Idle connection state",
+                    "NAT/Firewall timeout prevention",
+                    "Session persistence",
+                    "Connection health check"
+                ],
+                "impact": "None, normal TCP behavior",
+                "action": "No action needed, expected behavior"
+            }
+        ]
+
+        html = '<div class="mechanisms-reference-box">'
+        html += '  <h4>Retransmission Mechanisms</h4>'
+        html += '  <div class="mechanisms-grid">'
+
+        for mech in mechanisms:
+            html += f'''
+            <div class="mechanism-card">
+                <div class="mechanism-header">
+                    <span class="mechanism-icon">{mech["icon"]}</span>
+                    <span class="mechanism-name">{mech["name"]}</span>
+                </div>
+                <div class="mechanism-body">
+                    <p class="mechanism-description">{mech["description"]}</p>
+                    <div class="mechanism-details">
+                        <strong>Severity:</strong>
+                        <span class="badge {mech["severity"]}">{mech["severity_text"]}</span>
+                    </div>
+                    <button class="expand-btn" data-target="{mech["id"]}" onclick="toggleMechanismDetails(this)">
+                        Learn More ↓
+                    </button>
+                    <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
+                        <p><strong>Why it occurs:</strong></p>
+                        <ul>
+            '''
+            for detail in mech["details"]:
+                html += f'                            <li>{detail}</li>'
+            html += f'''
+                        </ul>
+                        <p><strong>Impact:</strong> {mech["impact"]}</p>
+                        <p><strong>User Action:</strong> {mech["action"]}</p>
+                    </div>
+                </div>
+            </div>
+            '''
+
+        html += '  </div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_handshake_mechanisms(self) -> str:
+        """Generate TCP handshake mechanism reference cards."""
+        mechanisms = [
+            {
+                "icon": "✅",
+                "name": "Normal Handshake",
+                "description": "Standard 3-way handshake completing within expected time.",
+                "severity": "badge-success",
+                "severity_text": "Normal",
+                "id": "normal-handshake-details",
+                "details": [
+                    "Client sends SYN",
+                    "Server responds with SYN-ACK",
+                    "Client confirms with ACK",
+                    "Typical completion time < 100ms for LAN"
+                ],
+                "impact": "None, normal TCP operation",
+                "action": "No action needed",
+                "timing": "< 100ms"
+            },
+            {
+                "icon": "🐌",
+                "name": "Slow Handshake",
+                "description": "Handshake taking longer than expected (> 100ms).",
+                "severity": "badge-warning",
+                "severity_text": "Medium",
+                "id": "slow-handshake-details",
+                "details": [
+                    "Network latency (WAN, satellite)",
+                    "Server under heavy load",
+                    "Firewall/IDS inspection delay",
+                    "Geographic distance"
+                ],
+                "impact": "Increased connection establishment time, user-perceived delay",
+                "action": "Check network path, server load, firewall rules",
+                "timing": "> 100ms"
+            },
+            {
+                "icon": "❌",
+                "name": "Incomplete Handshake",
+                "description": "Handshake not completed (missing SYN-ACK or ACK).",
+                "severity": "badge-danger",
+                "severity_text": "High",
+                "id": "incomplete-handshake-details",
+                "details": [
+                    "Server not listening (port closed)",
+                    "Firewall blocking connection",
+                    "Packet loss on network",
+                    "Server overloaded (SYN flood)"
+                ],
+                "impact": "Connection failure, application cannot communicate",
+                "action": "Verify service availability, check firewall rules",
+                "timing": "Never completes"
+            },
+            {
+                "icon": "🔁",
+                "name": "SYN Retransmission",
+                "description": "Client retrying SYN packet (no SYN-ACK received).",
+                "severity": "badge-warning",
+                "severity_text": "Medium",
+                "id": "syn-retrans-details",
+                "details": [
+                    "Original SYN packet lost",
+                    "SYN-ACK response lost",
+                    "Server slow to respond",
+                    "Asymmetric routing issues"
+                ],
+                "impact": "Delayed connection, exponential backoff (1s, 2s, 4s...)",
+                "action": "Investigate packet loss, check server responsiveness",
+                "timing": "Retry delays"
+            }
+        ]
+
+        html = '<div class="mechanisms-reference-box">'
+        html += '  <h4>Handshake Types & Timing</h4>'
+        html += '  <div class="mechanisms-grid">'
+
+        for mech in mechanisms:
+            html += f'''
+            <div class="mechanism-card">
+                <div class="mechanism-header">
+                    <span class="mechanism-icon">{mech["icon"]}</span>
+                    <span class="mechanism-name">{mech["name"]}</span>
+                </div>
+                <div class="mechanism-body">
+                    <p class="mechanism-description">{mech["description"]}</p>
+                    <div class="mechanism-details">
+                        <strong>Timing:</strong>
+                        <span class="badge {mech["severity"]}">{mech["timing"]}</span>
+                    </div>
+                    <button class="expand-btn" data-target="{mech["id"]}" onclick="toggleMechanismDetails(this)">
+                        Learn More ↓
+                    </button>
+                    <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
+                        <p><strong>Why it occurs:</strong></p>
+                        <ul>
+            '''
+            for detail in mech["details"]:
+                html += f'                            <li>{detail}</li>'
+            html += f'''
+                        </ul>
+                        <p><strong>Impact:</strong> {mech["impact"]}</p>
+                        <p><strong>User Action:</strong> {mech["action"]}</p>
+                    </div>
+                </div>
+            </div>
+            '''
+
+        html += '  </div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_window_mechanisms(self) -> str:
+        """Generate TCP window mechanism reference cards."""
+        mechanisms = [
+            {
+                "icon": "🚫",
+                "name": "Zero Window",
+                "description": "Receiver advertises window size of 0 (cannot accept more data).",
+                "severity": "badge-danger",
+                "severity_text": "High",
+                "id": "zero-window-details",
+                "details": [
+                    "Receiver's buffer full (application not reading fast enough)",
+                    "Slow application processing",
+                    "Resource exhaustion (memory, CPU)",
+                    "Flow control mechanism (intentional throttling)"
+                ],
+                "impact": "Sender pauses, throughput drops to zero, increased latency",
+                "action": "Investigate receiver-side application, check buffer sizes",
+                "reference": "RFC 793 (Section 3.7 - Flow Control)"
+            },
+            {
+                "icon": "📈",
+                "name": "Window Update",
+                "description": "Receiver advertises increased window size (ready for more data).",
+                "severity": "badge-success",
+                "severity_text": "Low",
+                "id": "window-update-details",
+                "details": [
+                    "Application consumed data from buffer",
+                    "Recovery from zero window condition",
+                    "Normal flow control operation"
+                ],
+                "impact": "Normal operation, allows sender to resume transmission",
+                "action": "None (normal behavior)",
+                "reference": "RFC 793"
+            },
+            {
+                "icon": "🔍",
+                "name": "Zero Window Probe",
+                "description": "Sender probes receiver to check if window has opened.",
+                "severity": "badge-warning",
+                "severity_text": "Medium",
+                "id": "window-probe-details",
+                "details": [
+                    "Sender received zero window advertisement",
+                    "Periodic check (typically every 5-60 seconds)",
+                    "Prevents indefinite stall"
+                ],
+                "impact": "Minimal (1 byte probes), ensures connection recovery",
+                "action": "Monitor duration, investigate if prolonged",
+                "reference": "RFC 1122 (Section 4.2.2.17)"
+            },
+            {
+                "icon": "📉",
+                "name": "Receiver Bottleneck",
+                "description": "Receiver consistently advertises small window sizes.",
+                "severity": "badge-warning",
+                "severity_text": "Medium",
+                "id": "receiver-bottleneck-details",
+                "details": [
+                    "Limited receiver buffer size",
+                    "Slow application processing",
+                    "CPU/memory constraints",
+                    "Intentional rate limiting"
+                ],
+                "impact": "Reduced throughput, sender cannot fully utilize bandwidth",
+                "action": "Tune receiver buffers (SO_RCVBUF), optimize application",
+                "reference": "RFC 793"
+            }
+        ]
+
+        html = '<div class="mechanisms-reference-box">'
+        html += '  <h4>TCP Window Mechanisms</h4>'
+        html += '  <div class="mechanisms-grid">'
+
+        for mech in mechanisms:
+            html += f'''
+            <div class="mechanism-card">
+                <div class="mechanism-header">
+                    <span class="mechanism-icon">{mech["icon"]}</span>
+                    <span class="mechanism-name">{mech["name"]}</span>
+                </div>
+                <div class="mechanism-body">
+                    <p class="mechanism-description">{mech["description"]}</p>
+                    <div class="mechanism-details">
+                        <strong>Severity:</strong>
+                        <span class="badge {mech["severity"]}">{mech["severity_text"]}</span>
+                    </div>
+                    <button class="expand-btn" data-target="{mech["id"]}" onclick="toggleMechanismDetails(this)">
+                        Learn More ↓
+                    </button>
+                    <div class="mechanism-details-expanded" id="{mech["id"]}" style="display: none;">
+                        <p><strong>Why it occurs:</strong></p>
+                        <ul>
+            '''
+            for detail in mech["details"]:
+                html += f'                            <li>{detail}</li>'
+            html += f'''
+                        </ul>
+                        <p><strong>Impact:</strong> {mech["impact"]}</p>
+                        <p><strong>User Action:</strong> {mech["action"]}</p>
+                        <p><strong>RFC Reference:</strong> {mech["reference"]}</p>
+                    </div>
+                </div>
+            </div>
+            '''
+
+        html += '  </div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_flow_detail_card(self, flow_key: str, retrans_list: list, index: int, flow_count: int) -> str:
+        """Generate individual flow detail card with expandable analysis."""
+        flow_label = f"Flow {index + 1}"
+        total_retrans = len(retrans_list)
+
+        # Count mechanisms
+        rto_count = sum(1 for r in retrans_list if r.get("retrans_type") == "RTO")
+        fast_retrans = sum(1 for r in retrans_list if r.get("retrans_type") == "Fast Retransmission")
+        other_count = total_retrans - rto_count - fast_retrans
+
+        # Determine overall confidence for this flow
+        confidence_counts = {"high": 0, "medium": 0, "low": 0}
+        for r in retrans_list:
+            conf = r.get("confidence", "low")
+            if conf in confidence_counts:
+                confidence_counts[conf] += 1
+
+        if confidence_counts["high"] > total_retrans * 0.5:
+            flow_confidence = "confidence-high"
+            flow_confidence_text = "High Confidence"
+            flow_confidence_emoji = "🟢"
+        elif confidence_counts["high"] + confidence_counts["medium"] > total_retrans * 0.5:
+            flow_confidence = "confidence-medium"
+            flow_confidence_text = "Medium Confidence"
+            flow_confidence_emoji = "🟡"
+        else:
+            flow_confidence = "confidence-low"
+            flow_confidence_text = "Low Confidence"
+            flow_confidence_emoji = "🟠"
+
+        # Determine severity
+        retrans_rate = total_retrans / flow_count if flow_count > 0 else 0
+        if retrans_rate > 0.05 or total_retrans > 50:
+            severity_level = "warning"
+            severity_text = "⚠️ High Retrans Rate"
+        elif retrans_rate > 0.02 or total_retrans > 20:
+            severity_level = "info"
+            severity_text = "Moderate Retrans Rate"
+        else:
+            severity_level = "info"
+            severity_text = "Low Retrans Rate"
+
+        # Calculate duration
+        if retrans_list:
+            first_time = retrans_list[0].get("timestamp", 0)
+            last_time = retrans_list[-1].get("timestamp", 0)
+            duration = last_time - first_time
+        else:
+            duration = 0
+
+        html = '<div class="flow-detail-card">'
+        html += '  <div class="flow-header">'
+        html += '    <div class="flow-title">'
+        html += f'      <span class="flow-label">{flow_label}</span>'
+        html += f'      <code class="flow-key">{flow_key}</code>'
+        html += '    </div>'
+        html += '    <div class="flow-badges">'
+        html += f'''
+        <span class="confidence-badge {flow_confidence}">
+            <span class="badge-icon">{flow_confidence_emoji}</span> {flow_confidence_text}
+        </span>
+        <span class="severity-badge severity-{severity_level}">
+            {severity_text}
+        </span>
+        '''
+        html += '    </div>'
+        html += '  </div>'
+        html += '  <div class="flow-body">'
+        html += '    <div class="flow-stats-grid">'
+        html += f'''
+          <div class="flow-stat">
+              <span class="stat-label">Total Retrans</span>
+              <span class="stat-value">{total_retrans}</span>
+          </div>
+          <div class="flow-stat">
+              <span class="stat-label">RTO Events</span>
+              <span class="stat-value">{rto_count}</span>
+          </div>
+          <div class="flow-stat">
+              <span class="stat-label">Fast Retrans</span>
+              <span class="stat-value">{fast_retrans}</span>
+          </div>
+          <div class="flow-stat">
+              <span class="stat-label">Duration</span>
+              <span class="stat-value">{self._format_duration(duration)}</span>
+          </div>
+        '''
+        html += '    </div>'
+
+        # Collapsible detailed analysis
+        html += '    <div class="flow-details-collapsible">'
+        html += f'''
+          <button class="flow-expand-btn" data-flow-id="flow-{index}" onclick="toggleFlowDetails(this)">
+              <span class="expand-icon">+</span>
+              View Detailed Analysis
+          </button>
+          <div class="flow-details" id="flow-{index}" style="display: none;">
+        '''
+
+        # Mechanism breakdown table
+        html += '        <div class="mechanism-breakdown">'
+        html += '          <h5>Mechanisms in This Flow</h5>'
+        html += '          <table class="mechanism-table">'
+        html += '''
+                    <thead>
+                        <tr>
+                            <th>Mechanism</th>
+                            <th>Count</th>
+                            <th>Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        '''
+
+        if rto_count > 0:
+            pct = (rto_count / total_retrans * 100)
+            html += f'''
+                        <tr>
+                            <td><span class="mech-icon">⏱️</span> RTO Timeout</td>
+                            <td>{rto_count}</td>
+                            <td>{pct:.1f}%</td>
+                        </tr>
+            '''
+
+        if fast_retrans > 0:
+            pct = (fast_retrans / total_retrans * 100)
+            html += f'''
+                        <tr>
+                            <td><span class="mech-icon">⚡</span> Fast Retransmission</td>
+                            <td>{fast_retrans}</td>
+                            <td>{pct:.1f}%</td>
+                        </tr>
+            '''
+
+        if other_count > 0:
+            pct = (other_count / total_retrans * 100)
+            html += f'''
+                        <tr>
+                            <td><span class="mech-icon">📋</span> Generic Retransmission</td>
+                            <td>{other_count}</td>
+                            <td>{pct:.1f}%</td>
+                        </tr>
+            '''
+
+        html += '                    </tbody>'
+        html += '          </table>'
+        html += '        </div>'
+
+        # Timeline of recent events (last 5)
+        html += '        <div class="timeline-section">'
+        html += '          <h5>Recent Retransmission Events (Last 5)</h5>'
+        html += '          <div class="timeline">'
+
+        # Parse flow_key for Wireshark filters
+        # Format: "src_ip:src_port → dst_ip:dst_port"
+        flow_parts = flow_key.replace(" → ", ":").split(":")
+        if len(flow_parts) == 4:
+            src_ip, src_port, dst_ip, dst_port = flow_parts
+        else:
+            src_ip, src_port, dst_ip, dst_port = "0.0.0.0", "0", "0.0.0.0", "0"
+
+        for r in retrans_list[-5:]:
+            retrans_type = r.get("retrans_type", "Unknown")
+            timestamp = r.get("timestamp", 0)
+            seq_num = r.get("seq_num", 0)
+
+            if retrans_type == "RTO":
+                timeline_class = "timeline-rto"
+                type_label = "RTO Timeout"
+            elif retrans_type == "Fast Retransmission":
+                timeline_class = "timeline-fast"
+                type_label = "Fast Retrans"
+            else:
+                timeline_class = "timeline-success"
+                type_label = "Generic Retransmission" if retrans_type == "Retransmission" else retrans_type
+
+            # Build Wireshark filter
+            wireshark_filter = f"tcp.seq == {seq_num} && ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"
+
+            html += f'''
+                <div class="timeline-event {timeline_class}">
+                    <span class="timeline-marker"></span>
+                    <div class="timeline-content">
+                        <span class="timeline-time">{timestamp:.3f}s</span>
+                        <span class="timeline-type">{type_label}</span>
+                        <span class="timeline-detail">Seq: {seq_num}</span>
+                        <div class="wireshark-section">
+                            <strong>🔍 Debug this packet:</strong>
+                            <code class="copy-code">{wireshark_filter}</code>
+                            <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                        </div>
+                    </div>
+                </div>
+            '''
+
+        html += '          </div>'
+        html += '        </div>'
+
+        html += '      </div>'  # flow-details
+        html += '    </div>'  # flow-details-collapsible
+        html += '  </div>'  # flow-body
+        html += '</div>'  # flow-detail-card
+
+        return html
+
     def _generate_tcp_section(self, results: dict[str, Any]) -> str:
         """Generate TCP analysis section."""
         html = "<h2>🔌 TCP Analysis</h2>"
@@ -1043,61 +2556,69 @@ class HTMLReportGenerator:
             total_packets = metadata.get("total_packets", 0)
             retrans_rate = (total_retrans / total_packets * 100) if total_packets > 0 else 0
 
+            # Enhanced metric cards with icons
             html += '<div class="summary-grid">'
             html += f"""
-            <div class="metric-card" style="border-left-color: #dc3545;">
+            <div class="metric-card metric-danger">
+                <div class="metric-icon">📦</div>
                 <div class="metric-label">Total Retransmissions</div>
                 <div class="metric-value">{total_retrans:,}</div>
-                <div class="metric-label" style="font-size: 0.8em; margin-top: 5px;">{retrans_rate:.2f}% of total packets</div>
+                <div class="metric-subtext">{retrans_rate:.2f}% of total packets</div>
             </div>
-            <div class="metric-card" style="border-left-color: #fd7e14;">
+            <div class="metric-card metric-warning">
+                <div class="metric-icon">⏱️</div>
                 <div class="metric-label">RTO (Timeout)</div>
                 <div class="metric-value">{rto_count:,}</div>
+                <div class="metric-subtext">{(rto_count/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>
             </div>
-            <div class="metric-card" style="border-left-color: #ffc107;">
+            <div class="metric-card metric-warning">
+                <div class="metric-icon">⚡</div>
                 <div class="metric-label">Fast Retransmissions</div>
                 <div class="metric-value">{fast_retrans:,}</div>
+                <div class="metric-subtext">{(fast_retrans/total_retrans*100) if total_retrans > 0 else 0:.1f}% of retransmissions</div>
             </div>
             """
             html += "</div>"
 
-            # Top flows with retransmissions
+            # Add confidence overview
+            html += self._generate_confidence_overview(retrans_data)
+
+            # Add mechanism reference cards
+            html += self._generate_mechanism_cards()
+
+            # Top flows with retransmissions - Enhanced with collapsible cards
             retrans_list = retrans_data.get("retransmissions", [])
             if retrans_list:
                 # Group by flow
                 flows = {}
-                for r in retrans_list[:100]:  # Limit to first 100
+                for r in retrans_list[:200]:  # Increased limit for better coverage
                     flow_key = f"{r.get('src_ip')}:{r.get('src_port')} → {r.get('dst_ip')}:{r.get('dst_port')}"
                     if flow_key not in flows:
                         flows[flow_key] = []
                     flows[flow_key].append(r)
 
-                html += "<h4>Top Flows with Retransmissions</h4>"
-                html += '<table class="data-table">'
-                html += """
-                <thead>
-                    <tr>
-                        <th>Flow</th>
-                        <th>Retransmissions</th>
-                        <th>RTO Count</th>
-                    </tr>
-                </thead>
-                <tbody>
-                """
-
                 # Sort flows by retransmission count
                 sorted_flows = sorted(flows.items(), key=lambda x: len(x[1]), reverse=True)[:10]
-                for flow_key, retrans in sorted_flows:
-                    rto_in_flow = sum(1 for r in retrans if r.get("retrans_type") == "RTO")
-                    html += f"""
-                    <tr>
-                        <td><code>{flow_key}</code></td>
-                        <td>{len(retrans)}</td>
-                        <td>{rto_in_flow}</td>
-                    </tr>
-                    """
 
-                html += "</tbody></table>"
+                # Collapsible section for flows
+                html += '<div class="collapsible-section">'
+                html += f'''
+                    <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">
+                        <span class="toggle-icon">▶</span>
+                        <span class="header-title">Top Flows with Retransmissions ({len(sorted_flows)})</span>
+                        <span class="header-info">Click to expand flow details</span>
+                    </div>
+                    <div class="collapsible-content">
+                        <div class="content-inner">
+                '''
+
+                # Generate flow detail cards
+                for idx, (flow_key, retrans) in enumerate(sorted_flows):
+                    html += self._generate_flow_detail_card(flow_key, retrans, idx, total_packets)
+
+                html += '        </div>'
+                html += '    </div>'
+                html += '</div>'
 
         # TCP Handshakes
         handshake_data = results.get("tcp_handshake", {})
@@ -1120,6 +2641,9 @@ class HTMLReportGenerator:
                 </div>
                 """
                 html += "</div>"
+
+                # Add handshake mechanism cards
+                html += self._generate_handshake_mechanisms()
 
         # RTT Analysis
         rtt_data = results.get("rtt", {})
@@ -1183,14 +2707,38 @@ class HTMLReportGenerator:
         if window_data and window_data.get("flows_with_issues", 0) > 0:
             html += "<h3>🪟 TCP Window Analysis</h3>"
 
+            # Calculate total zero windows and duration
+            flow_stats = window_data.get("flow_statistics", [])
+            total_zero_windows = sum(f.get("zero_window_count", 0) for f in flow_stats)
+            total_duration = sum(f.get("zero_window_total_duration", 0) for f in flow_stats)
+
             html += '<div class="summary-grid">'
             html += f"""
             <div class="metric-card" style="border-left-color: #ffc107;">
                 <div class="metric-label">Flows with Window Issues</div>
                 <div class="metric-value">{window_data.get("flows_with_issues", 0)}</div>
             </div>
+            <div class="metric-card" style="border-left-color: #dc3545;">
+                <div class="metric-label">Total Zero Windows</div>
+                <div class="metric-value">{total_zero_windows}</div>
+            </div>
+            <div class="metric-card" style="border-left-color: #dc3545;">
+                <div class="metric-label">
+                    Total Duration
+                    <span class="tooltip-wrapper">
+                        <span class="tooltip-icon">ℹ️</span>
+                        <span class="tooltip-text">
+                            Cumulative time all flows spent in zero-window state (sender blocked, unable to transmit). Longer durations indicate more severe throughput impact.
+                        </span>
+                    </span>
+                </div>
+                <div class="metric-value">{self._format_duration(total_duration)}</div>
+            </div>
             """
             html += "</div>"
+
+            # Add window mechanism cards
+            html += self._generate_window_mechanisms()
 
             flow_stats = window_data.get("flow_statistics", [])
             if flow_stats:
@@ -1198,44 +2746,102 @@ class HTMLReportGenerator:
                 flows_with_zero_windows = [f for f in flow_stats if f.get("zero_window_count", 0) > 0]
 
                 if flows_with_zero_windows:
-                    html += "<h4>Flows with Window Issues</h4>"
-                    html += '<table class="data-table">'
-                    html += """
-                    <thead>
-                        <tr>
-                            <th>Flow</th>
-                            <th>Suspected Bottleneck</th>
-                            <th>Zero Windows</th>
-                            <th>Zero Window Duration</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    """
-
                     # Sort by zero window count (descending) to show worst first
                     sorted_flows = sorted(
                         flows_with_zero_windows, key=lambda f: f.get("zero_window_count", 0), reverse=True
-                    )
+                    )[:10]
 
-                    for flow in sorted_flows[:15]:
+                    # Collapsible section for top 10 flows
+                    html += '<div class="collapsible-section">'
+                    html += f'''
+                        <div class="collapsible-header" onclick="toggleCollapsible(this)" role="button" tabindex="0" aria-expanded="false">
+                            <span class="toggle-icon">▶</span>
+                            <span class="header-title">Top Flows with Window Issues ({len(sorted_flows)})</span>
+                            <span class="header-info">Click to expand flow details</span>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="content-inner">
+                    '''
+
+                    for idx, flow in enumerate(sorted_flows):
                         bottleneck = flow.get("suspected_bottleneck", "none")
-                        # Show all flows with zero windows, color-code by bottleneck type
+                        flow_key = flow.get("flow_key", "N/A")
+                        zero_window_count = flow.get("zero_window_count", 0)
+                        zero_window_duration = flow.get("zero_window_total_duration", 0)
+
+                        # Determine severity badge
                         if bottleneck == "application":
                             badge_class = "badge-danger"
+                            badge_text = "🚫 Critical Window Issue"
                         elif bottleneck == "network":
                             badge_class = "badge-warning"
+                            badge_text = "⚠️ Network Bottleneck"
                         else:
                             badge_class = "badge-info"
-                        html += f"""
-                        <tr>
-                            <td><code>{flow.get("flow_key", "N/A")}</code></td>
-                            <td><span class="badge {badge_class}">{bottleneck.upper()}</span></td>
-                            <td>{flow.get("zero_window_count", 0)}</td>
-                            <td>{flow.get("zero_window_total_duration", 0):.3f}s</td>
-                        </tr>
-                        """
+                            badge_text = "Window Issue"
 
-                    html += "</tbody></table>"
+                        # Parse flow_key for Wireshark filter
+                        # Window flow_key format: "src_ip:src_port->dst_ip:dst_port" (no spaces)
+                        flow_parts = flow_key.replace("->", ":").split(":")
+                        if len(flow_parts) == 4:
+                            src_ip, src_port, dst_ip, dst_port = flow_parts
+                        else:
+                            src_ip, src_port, dst_ip, dst_port = "0.0.0.0", "0", "0.0.0.0", "0"
+
+                        wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port} && tcp.window_size == 0"
+
+                        html += f'''
+                            <div class="flow-detail-card">
+                                <div class="flow-header">
+                                    <div class="flow-title">
+                                        <span class="flow-label">Flow {idx + 1}</span>
+                                        <code class="flow-key">{flow_key}</code>
+                                    </div>
+                                    <div class="flow-badges">
+                                        <span class="severity-badge {badge_class}">
+                                            {badge_text}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="flow-body">
+                                    <div class="flow-stats-grid">
+                                        <div class="flow-stat">
+                                            <span class="stat-label">Zero Windows</span>
+                                            <span class="stat-value">{zero_window_count}</span>
+                                        </div>
+                                        <div class="flow-stat">
+                                            <span class="stat-label">
+                                                Total Duration
+                                                <span class="tooltip-wrapper">
+                                                    <span class="tooltip-icon">ℹ️</span>
+                                                    <span class="tooltip-text">
+                                                        Time this flow spent in zero-window state. During this period, the sender was blocked and could not transmit data.
+                                                    </span>
+                                                </span>
+                                            </span>
+                                            <span class="stat-value">{self._format_duration(zero_window_duration)}</span>
+                                        </div>
+                                        <div class="flow-stat">
+                                            <span class="stat-label">Suspected Bottleneck</span>
+                                            <span class="stat-value">{bottleneck.upper()}</span>
+                                        </div>
+                                        <div class="flow-stat">
+                                            <span class="stat-label">Service</span>
+                                            <span class="stat-value">Port {dst_port}</span>
+                                        </div>
+                                    </div>
+                                    <div class="wireshark-section">
+                                        <strong>🔍 Debug this flow:</strong>
+                                        <code class="copy-code">ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port} && tcp.window_size == 0</code>
+                                        <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                                    </div>
+                                </div>
+                            </div>
+                        '''
+
+                    html += '            </div>'
+                    html += '        </div>'
+                    html += '    </div>'
 
         return html
 
