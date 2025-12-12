@@ -198,7 +198,7 @@ class HTMLReportGenerator:
         rto_count: int,
         fast_retrans: int,
         duration: float,
-        retrans_rate: float,
+        retrans_per_second: float,
         flow_confidence: str,
     ) -> str:
         """
@@ -209,7 +209,7 @@ class HTMLReportGenerator:
             rto_count: Number of RTO retransmissions
             fast_retrans: Number of fast retransmissions
             duration: Flow duration in seconds
-            retrans_rate: Retransmission rate (retrans/total_packets)
+            retrans_per_second: Rate of retransmissions per second
             flow_confidence: Confidence level (confidence-high/medium/low)
 
         Returns:
@@ -251,26 +251,44 @@ class HTMLReportGenerator:
                 f"{rto_count} RTO events and {fast_retrans} Fast Retransmissions."
             )
 
-        # Why flagged
-        retrans_rate_percent = retrans_rate * 100
-        if retrans_rate > 0.05 or total_retrans > 50:
+        # Why flagged - using absolute counts and rate per second
+        if total_retrans > 50 or retrans_per_second > 5:
             severity_level = "HIGH"
-            why_flagged = (
-                f"<strong>Why flagged {severity_level}:</strong> Retransmission rate of <strong>{retrans_rate_percent:.1f}%</strong> "
-                "indicates <strong>significant packet loss or network congestion</strong>. This is well above the typical healthy threshold of 1-2%."
-            )
-        elif retrans_rate > 0.02 or total_retrans > 20:
+            if duration > 0:
+                why_flagged = (
+                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced <strong>{total_retrans} retransmissions</strong> "
+                    f"(<strong>{retrans_per_second:.1f} per second</strong>), indicating <strong>significant packet loss or network congestion</strong>. "
+                    "This high frequency suggests persistent network issues."
+                )
+            else:
+                why_flagged = (
+                    f"<strong>Why flagged {severity_level}:</strong> <strong>{total_retrans} retransmissions</strong> "
+                    "indicates <strong>significant packet loss or network congestion</strong>."
+                )
+        elif total_retrans > 20 or retrans_per_second > 2:
             severity_level = "MODERATE"
-            why_flagged = (
-                f"<strong>Why flagged {severity_level}:</strong> Retransmission rate of <strong>{retrans_rate_percent:.1f}%</strong> "
-                "suggests <strong>intermittent packet loss</strong> or network congestion issues."
-            )
+            if duration > 0:
+                why_flagged = (
+                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced <strong>{total_retrans} retransmissions</strong> "
+                    f"(<strong>{retrans_per_second:.1f} per second</strong>), suggesting <strong>intermittent packet loss</strong> or network congestion issues."
+                )
+            else:
+                why_flagged = (
+                    f"<strong>Why flagged {severity_level}:</strong> <strong>{total_retrans} retransmissions</strong> "
+                    "suggests <strong>intermittent packet loss</strong> or network congestion issues."
+                )
         else:
             severity_level = "LOW"
-            why_flagged = (
-                f"<strong>Why flagged {severity_level}:</strong> Retransmission rate of <strong>{retrans_rate_percent:.1f}%</strong> "
-                "is within acceptable range for most networks, but worth monitoring."
-            )
+            if duration > 0:
+                why_flagged = (
+                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced <strong>{total_retrans} retransmissions</strong> "
+                    f"(<strong>{retrans_per_second:.1f} per second</strong>), which is relatively low and within acceptable range for most networks."
+                )
+            else:
+                why_flagged = (
+                    f"<strong>Why flagged {severity_level}:</strong> <strong>{total_retrans} retransmissions</strong> "
+                    "is relatively low and within acceptable range for most networks."
+                )
 
         # Impact and probable cause based on mechanism
         if dominant_mechanism == "RTO":
@@ -2841,19 +2859,7 @@ class HTMLReportGenerator:
             flow_confidence_emoji = "🟠"
             flow_confidence_note = "Mixed mechanisms, detailed analysis needed"
 
-        # Determine severity
-        retrans_rate = total_retrans / flow_count if flow_count > 0 else 0
-        if retrans_rate > 0.05 or total_retrans > 50:
-            severity_level = "warning"
-            severity_text = "⚠️ High Retrans Rate"
-        elif retrans_rate > 0.02 or total_retrans > 20:
-            severity_level = "info"
-            severity_text = "Moderate Retrans Rate"
-        else:
-            severity_level = "info"
-            severity_text = "Low Retrans Rate"
-
-        # Calculate duration
+        # Calculate duration FIRST (needed for severity calculation)
         # Issue #12 Fix: Use min/max timestamps instead of first/last to handle delay-sorted lists
         # retrans_list is sorted by delay (descending) in retransmission.py:989, not by timestamp.
         # When high-delay retrans (RTO) occurs chronologically AFTER low-delay retrans (Fast Retrans),
@@ -2866,6 +2872,20 @@ class HTMLReportGenerator:
             duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
         else:
             duration = 0
+
+        # Determine severity based on absolute count and rate per second
+        # Note: We don't have per-flow packet count, so we use absolute thresholds
+        retrans_per_second = total_retrans / duration if duration > 0 else total_retrans
+
+        if total_retrans > 50 or (duration > 0 and retrans_per_second > 5):
+            severity_level = "warning"
+            severity_text = "⚠️ High Retrans Rate"
+        elif total_retrans > 20 or (duration > 0 and retrans_per_second > 2):
+            severity_level = "info"
+            severity_text = "Moderate Retrans Rate"
+        else:
+            severity_level = "info"
+            severity_text = "Low Retrans Rate"
 
         html = '<div class="flow-detail-card">'
         html += '  <div class="flow-header">'
@@ -2912,7 +2932,7 @@ class HTMLReportGenerator:
             rto_count=rto_count,
             fast_retrans=fast_retrans,
             duration=duration,
-            retrans_rate=retrans_rate,
+            retrans_per_second=retrans_per_second,
             flow_confidence=flow_confidence,
         )
 
