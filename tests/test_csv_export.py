@@ -58,7 +58,7 @@ class TestCSVExportBasics:
         results = {
             "service_classification": {
                 "service_classifications": {
-                    "VoIP": 5,
+                    "DNS": 5,
                     "Streaming": 10,
                     "Interactive": 15,
                 },
@@ -80,7 +80,7 @@ class TestCSVExportBasics:
                 rows = list(reader)
                 assert len(rows) == 3
                 service_types = [row["Service Type"] for row in rows]
-                assert "VoIP" in service_types
+                assert "DNS" in service_types
         finally:
             if os.path.exists(output_path):
                 os.unlink(output_path)
@@ -211,7 +211,7 @@ class TestCSVExportAll:
         results = {
             "metadata": {"pcap_file": "test.pcap", "total_packets": 1000},
             "protocol_distribution": {"layer4_distribution": {"TCP": 800, "UDP": 200}},
-            "service_classification": {"service_classifications": {"VoIP": 5}},
+            "service_classification": {"service_classifications": {"DNS": 5}},
             "jitter": {"global_statistics": {"mean_jitter": 0.015}},
         }
 

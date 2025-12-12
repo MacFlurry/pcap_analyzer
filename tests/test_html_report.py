@@ -194,7 +194,7 @@ class TestServiceClassificationVisualization:
         results = {
             "service_classification": {
                 "service_classifications": {
-                    "VoIP": 5,
+                    "DNS": 5,
                     "Streaming": 3,
                     "Interactive": 10,
                 },
@@ -204,7 +204,7 @@ class TestServiceClassificationVisualization:
         generator = HTMLReportGenerator()
         html = generator.generate(results)
 
-        assert "VoIP" in html
+        assert "DNS" in html
         assert "Streaming" in html
         assert "Interactive" in html
 
@@ -323,7 +323,7 @@ class TestCompleteReport:
                 "global_statistics": {"mean_jitter": 0.012, "max_jitter": 0.045},
             },
             "service_classification": {
-                "service_classifications": {"VoIP": 5, "Streaming": 10},
+                "service_classifications": {"DNS": 5, "Streaming": 10},
             },
         }
 

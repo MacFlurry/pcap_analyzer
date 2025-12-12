@@ -25,41 +25,41 @@ from src.utils.result_sanitizer import sanitize_results
 class TestServiceClassifierIntegration:
     """Integration tests for Service Classifier."""
 
-    def test_voip_flow_classification(self):
-        """Test end-to-end VoIP flow classification."""
+    def test_streaming_flow_classification(self):
+        """Test end-to-end streaming flow classification."""
         packets = []
 
-        # Simulate RTP stream: Small constant-rate UDP
+        # Simulate video streaming: Large packets, sustained throughput
         for i in range(100):
-            pkt = Ether() / IP(src="192.168.1.100", dst="10.0.0.50") / UDP(sport=10000, dport=5004) / (b"A" * 160)
-            pkt.time = 1.0 + i * 0.02  # 20ms intervals
+            pkt = Ether() / IP(src="192.168.1.100", dst="10.0.0.50") / TCP(sport=50000, dport=443) / (b"V" * 1400)
+            pkt.time = 1.0 + i * 0.01  # High rate
             packets.append(pkt)
 
         classifier = ServiceClassifier()
         results = classifier.analyze(packets)
 
-        # Should classify as VoIP
+        # Should classify as Streaming
         assert results["total_flows"] == 1
         assert results["classification_summary"]["classified_count"] >= 1
 
         # Check service type
         service_types = results["service_classifications"]
-        assert "VoIP" in service_types or "Real-time" in service_types
+        assert "Streaming" in service_types or "Bulk" in service_types
 
     def test_mixed_service_classification(self):
         """Test classification of multiple service types."""
         packets = []
 
-        # VoIP flow (UDP, small, constant)
-        for i in range(50):
-            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=10000, dport=5004) / (b"V" * 160)
-            pkt.time = 1.0 + i * 0.02
-            packets.append(pkt)
-
         # Streaming flow (TCP, large, sustained)
         for i in range(50):
             pkt = Ether() / IP(src="192.168.1.2", dst="10.0.0.2") / TCP(sport=50000, dport=443) / (b"S" * 1400)
             pkt.time = 1.0 + i * 0.01
+            packets.append(pkt)
+
+        # Interactive/Web flow (TCP, moderate size)
+        for i in range(30):
+            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / TCP(sport=50001, dport=80) / (b"W" * 500)
+            pkt.time = 1.0 + i * 0.1
             packets.append(pkt)
 
         # DNS flow (UDP, small, sporadic)
@@ -92,10 +92,10 @@ class TestServiceClassifierWithProtocolDistribution:
             pkt.time = 1.0 + i * 0.1
             packets.append(pkt)
 
-        # VoIP traffic
-        for i in range(50):
-            pkt = Ether() / IP(src="192.168.1.101", dst="10.0.0.2") / UDP(sport=10000, dport=5004) / (b"V" * 160)
-            pkt.time = 1.0 + i * 0.02
+        # DNS traffic
+        for i in range(20):
+            pkt = Ether() / IP(src="192.168.1.101", dst="8.8.8.8") / UDP(sport=50000 + i, dport=53) / (b"D" * 100)
+            pkt.time = 1.0 + i * 2.0
             packets.append(pkt)
 
         # Analyze with both
@@ -117,16 +117,16 @@ class TestServiceClassifierWithProtocolDistribution:
 class TestServiceClassifierWithJitter:
     """Test Service Classifier integration with Jitter Analyzer."""
 
-    def test_voip_with_jitter_analysis(self):
-        """Test VoIP classification correlates with jitter."""
+    def test_streaming_with_jitter_analysis(self):
+        """Test streaming classification correlates with jitter."""
         packets = []
 
-        # VoIP with some jitter
+        # Video streaming with some jitter
         for i in range(100):
-            pkt = Ether() / IP(src="192.168.1.100", dst="10.0.0.50") / UDP(sport=10000, dport=5004) / (b"V" * 160)
+            pkt = Ether() / IP(src="192.168.1.100", dst="10.0.0.50") / TCP(sport=50000, dport=443) / (b"V" * 1400)
             # Add occasional jitter spikes
             jitter = 0.01 if i % 10 == 0 else 0.0
-            pkt.time = 1.0 + i * 0.02 + jitter
+            pkt.time = 1.0 + i * 0.01 + jitter
             packets.append(pkt)
 
         service_classifier = ServiceClassifier()
@@ -135,9 +135,9 @@ class TestServiceClassifierWithJitter:
         service_results = service_classifier.analyze(packets)
         jitter_results = jitter_analyzer.analyze(packets)
 
-        # Should classify as VoIP
+        # Should classify as Streaming
         service_types = service_results["service_classifications"]
-        assert "VoIP" in service_types or len(service_types) > 0
+        assert "Streaming" in service_types or "Bulk" in service_types or len(service_types) > 0
 
         # Should also detect jitter
         assert jitter_results["total_flows"] >= 1
@@ -152,25 +152,19 @@ class TestEndToEndSprint3Pipeline:
         packets = []
 
         # Create realistic diverse traffic
-        # 1. VoIP call
-        for i in range(100):
-            pkt = Ether() / IP(src="192.168.1.10", dst="10.0.0.10") / UDP(sport=10000, dport=5004) / (b"V" * 160)
-            pkt.time = 1.0 + i * 0.02
-            packets.append(pkt)
-
-        # 2. Video streaming
+        # 1. Video streaming
         for i in range(80):
             pkt = Ether() / IP(src="192.168.1.20", dst="10.0.0.20") / TCP(sport=50000, dport=443) / (b"S" * 1400)
             pkt.time = 1.0 + i * 0.01
             packets.append(pkt)
 
-        # 3. Web browsing
+        # 2. Web browsing
         for i in range(20):
             pkt = Ether() / IP(src="192.168.1.30", dst="10.0.0.30") / TCP(sport=51000, dport=80) / (b"W" * 600)
             pkt.time = 1.0 + i * 0.5
             packets.append(pkt)
 
-        # 4. DNS queries
+        # 3. DNS queries
         for i in range(10):
             pkt = Ether() / IP(src="192.168.1.40", dst="8.8.8.8") / UDP(sport=52000 + i, dport=53) / (b"D" * 80)
             pkt.time = 1.0 + i * 3.0
@@ -186,15 +180,15 @@ class TestEndToEndSprint3Pipeline:
         service_results = service_classifier.analyze(packets)
 
         # Verify protocol distribution
-        assert protocol_results["total_packets"] == 210
+        assert protocol_results["total_packets"] == 110
         assert "TCP" in protocol_results["layer4_distribution"]
         assert "UDP" in protocol_results["layer4_distribution"]
 
         # Verify jitter analysis
-        assert jitter_results["total_flows"] >= 4
+        assert jitter_results["total_flows"] >= 3
 
         # Verify service classification
-        assert service_results["total_flows"] >= 4
+        assert service_results["total_flows"] >= 3
         assert service_results["classification_summary"]["classified_count"] >= 2
 
         # Verify different service types detected
@@ -257,14 +251,14 @@ class TestEndToEndSprint3Pipeline:
 class TestServiceClassificationAccuracy:
     """Test service classification accuracy with known patterns."""
 
-    def test_voip_pattern_accuracy(self):
-        """Test VoIP detection accuracy with perfect RTP pattern."""
+    def test_dns_pattern_accuracy(self):
+        """Test DNS detection accuracy with known port."""
         packets = []
 
-        # Perfect RTP: 160 bytes, 20ms intervals, UDP
-        for i in range(100):
-            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=10000, dport=5004) / (b"V" * 160)
-            pkt.time = 1.0 + i * 0.02
+        # DNS queries to port 53 (known port)
+        for i in range(20):
+            pkt = Ether() / IP(src="192.168.1.1", dst="8.8.8.8") / UDP(sport=50000 + i, dport=53) / (b"D" * 100)
+            pkt.time = 1.0 + i * 2.0  # Sporadic
             packets.append(pkt)
 
         classifier = ServiceClassifier()
@@ -274,9 +268,9 @@ class TestServiceClassificationAccuracy:
         summary = results["classification_summary"]
         assert summary["classification_rate"] >= 80.0  # At least 80%
 
-        # Should classify as VoIP
+        # Should classify as DNS (known port)
         service_types = results["service_classifications"]
-        assert "VoIP" in service_types
+        assert "DNS" in service_types
 
     def test_streaming_pattern_accuracy(self):
         """Test streaming detection accuracy."""

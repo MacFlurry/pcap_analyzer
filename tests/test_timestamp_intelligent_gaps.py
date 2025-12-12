@@ -222,7 +222,7 @@ class TestIntelligentGapDetection:
 
     def test_udp_streaming_jitter_tolerance(self):
         """
-        Test Case 5: UDP streaming (VoIP, video) - jitter tolerance
+        Test Case 5: UDP streaming (real-time, video) - jitter tolerance
 
         Given: UDP RTP stream with normal jitter (<200ms variation)
         When: Gap detection applies streaming media thresholds
@@ -232,7 +232,7 @@ class TestIntelligentGapDetection:
         """
         analyzer = TimestampAnalyzer()
 
-        # Simulate VoIP RTP stream - 20ms packet interval with normal jitter
+        # Simulate real-time RTP stream - 20ms packet interval with normal jitter
         base_interval = 0.020  # 20ms
         packets = [
             create_udp_packet(
@@ -251,7 +251,7 @@ class TestIntelligentGapDetection:
         result = analyzer.finalize()
 
         # Normal jitter should not be flagged
-        assert len(result["gaps"]) == 0, "Normal VoIP jitter should not create gaps"
+        assert len(result["gaps"]) == 0, "Normal real-time jitter should not create gaps"
 
     def test_periodic_polling_pattern(self):
         """

@@ -34,10 +34,10 @@ class TestHTMLReportIntegration:
         """Test HTML report generation with all Sprint 1-4 data."""
         # Generate packets
         packets = []
-        # VoIP
-        for i in range(50):
-            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=10000, dport=5004) / (b"V" * 160)
-            pkt.time = 1.0 + i * 0.02
+        # DNS traffic
+        for i in range(25):
+            pkt = Ether() / IP(src="192.168.1.1", dst="8.8.8.8") / UDP(sport=50000 + i, dport=53) / (b"D" * 100)
+            pkt.time = 1.0 + i * 2.0
             packets.append(pkt)
 
         # Streaming
@@ -239,10 +239,10 @@ class TestExportWithAllSprints:
         # Create diverse traffic
         packets = []
 
-        # VoIP
-        for i in range(50):
-            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=10000, dport=5004) / (b"V" * 160)
-            pkt.time = 1.0 + i * 0.02
+        # DNS
+        for i in range(25):
+            pkt = Ether() / IP(src="192.168.1.1", dst="8.8.8.8") / UDP(sport=50000 + i, dport=53) / (b"D" * 100)
+            pkt.time = 1.0 + i * 2.0
             packets.append(pkt)
 
         # HTTP

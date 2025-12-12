@@ -155,7 +155,7 @@ class HTMLReportGenerator:
         else:
             if max_jitter_ms > 10000:  # > 10 seconds
                 impact = (
-                    "<strong>Impact:</strong> For <strong>real-time applications</strong> (live streaming, VoIP, gaming), "
+                    "<strong>Impact:</strong> For <strong>real-time applications</strong> (live streaming, gaming, real-time communications), "
                     "this would make communication <span style='color: #dc3545;'>⚠ completely unusable</span>. "
                     "For batch processing or async APIs, this might be normal behavior."
                 )
@@ -1838,9 +1838,9 @@ class HTMLReportGenerator:
             </p>
             <p style="margin: 0; font-size: 0.9em; color: #555;">
                 <strong>Typical thresholds:</strong>
-                VoIP: &lt;30ms (good), &lt;50ms (acceptable) |
                 Video: &lt;100ms |
-                Web/Data: &lt;200ms
+                Streaming: &lt;200ms |
+                Web/Data: &lt;500ms
             </p>
         </div>
         """
@@ -2064,9 +2064,6 @@ class HTMLReportGenerator:
             </p>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.9em;">
                 <div>
-                    <strong>📞 VoIP:</strong> Small packets (100-300B), constant rate (10-40ms intervals)
-                </div>
-                <div>
                     <strong>📹 Streaming:</strong> Large packets (>1000B), sustained throughput (>1Mbps)
                 </div>
                 <div>
@@ -2143,8 +2140,6 @@ class HTMLReportGenerator:
                     "Typical of normal user activity with request/response patterns.",
                     "Bulk": "This indicates significant <strong>file transfer activity</strong> (FTP, large downloads). "  # noqa: E501
                     "May impact available bandwidth for real-time applications.",
-                    "VoIP": "This indicates heavy <strong>voice/video conferencing usage</strong>. "
-                    "Requires consistent low latency and jitter for quality calls.",
                 }
 
                 message = context_messages.get(service_name, "")

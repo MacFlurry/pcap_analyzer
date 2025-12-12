@@ -2,7 +2,6 @@
 Test suite for Service Classification Engine
 
 Tests intelligent traffic classification based on behavioral patterns:
-- VoIP detection (RTP-like patterns: small packets, constant rate)
 - Video streaming (large sustained flows)
 - Interactive traffic (request-response patterns)
 - Bulk transfer (large persistent flows)
@@ -27,24 +26,6 @@ class TestServiceClassifierBasics:
 
         assert results["total_flows"] == 0
         assert results["classified_flows"] == {}
-
-    def test_voip_detection_small_constant_udp(self):
-        """Test VoIP detection based on small constant-rate UDP packets."""
-        from src.analyzers.service_classifier import ServiceClassifier
-
-        packets = []
-        # Simulate RTP: UDP, small packets (160 bytes), 20ms intervals
-        for i in range(100):
-            pkt = Ether() / IP(src="192.168.1.100", dst="10.0.0.50") / UDP(sport=10000, dport=5004) / (b"A" * 160)
-            pkt.time = 1.0 + i * 0.02  # 20ms intervals (50 pps)
-            packets.append(pkt)
-
-        classifier = ServiceClassifier()
-        results = classifier.analyze(packets)
-
-        # Should classify as VoIP
-        flow_classifications = results["service_classifications"]
-        assert "VoIP" in flow_classifications or "Real-time" in flow_classifications
 
     def test_video_streaming_detection(self):
         """Test video streaming detection based on large sustained flow."""
@@ -143,7 +124,7 @@ class TestTrafficPatternDetection:
         from src.analyzers.service_classifier import ServiceClassifier
 
         packets = []
-        # Constant inter-arrival time (VoIP-like)
+        # Constant inter-arrival time (real-time communication pattern)
         for i in range(50):
             pkt = Ether() / IP() / UDP(sport=10000, dport=5004) / (b"A" * 160)
             pkt.time = 1.0 + i * 0.02  # Constant 20ms
@@ -180,42 +161,22 @@ class TestTrafficPatternDetection:
 class TestServiceClassification:
     """Test service classification accuracy."""
 
-    def test_voip_classification_confidence(self):
-        """Test VoIP classification confidence scoring."""
-        from src.analyzers.service_classifier import ServiceClassifier
-
-        packets = []
-        # Perfect VoIP pattern
-        for i in range(100):
-            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=10000, dport=5004) / (b"A" * 160)
-            pkt.time = 1.0 + i * 0.02
-            packets.append(pkt)
-
-        classifier = ServiceClassifier()
-        results = classifier.analyze(packets)
-
-        # Should have high confidence for VoIP
-        classifications = results.get("classified_flows", {})
-        if classifications:
-            flow = list(classifications.values())[0]
-            assert flow.get("confidence", 0) > 0.5
-
     def test_mixed_traffic_classification(self):
         """Test classification of mixed traffic types."""
         from src.analyzers.service_classifier import ServiceClassifier
 
         packets = []
 
-        # VoIP flow
-        for i in range(50):
-            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=10000, dport=5004) / (b"A" * 160)
-            pkt.time = 1.0 + i * 0.02
-            packets.append(pkt)
-
         # Video streaming flow
         for i in range(50):
             pkt = Ether() / IP(src="192.168.1.2", dst="10.0.0.2") / TCP(sport=50000, dport=443) / (b"V" * 1400)
             pkt.time = 1.0 + i * 0.01
+            packets.append(pkt)
+
+        # Web/Interactive flow
+        for i in range(20):
+            pkt = Ether() / IP(src="192.168.1.3", dst="10.0.0.3") / TCP(sport=50001, dport=80) / (b"W" * 500)
+            pkt.time = 1.0 + i * 0.5
             packets.append(pkt)
 
         classifier = ServiceClassifier()

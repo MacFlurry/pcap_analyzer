@@ -2,7 +2,7 @@
 Jitter Analyzer - RFC 3393 IPDV (Inter-Packet Delay Variation)
 
 Analyzes jitter (delay variation) in packet flows, which is critical
-for real-time applications like VoIP, video streaming, and gaming.
+for real-time applications like video streaming, gaming, and real-time communications.
 
 RFC 3393 defines jitter as:
   IPDV = |delay[i] - delay[i-1]|
@@ -10,7 +10,7 @@ RFC 3393 defines jitter as:
 Where delay[i] is the inter-arrival time between packets i and i-1.
 
 High jitter indicators:
-- Mean jitter > 30ms: Noticeable in VoIP
+- Mean jitter > 30ms: Noticeable in real-time communications
 - Max jitter > 100ms: Significant quality degradation
 - P95 jitter > 50ms: Frequent disruptions
 

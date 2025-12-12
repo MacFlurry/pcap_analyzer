@@ -85,11 +85,11 @@ class TestProtocolDistributionIntegration:
 class TestJitterIntegration:
     """Integration tests for Jitter Analyzer."""
 
-    def test_jitter_analysis_voip_traffic(self):
-        """Test jitter analysis on VoIP-like traffic."""
+    def test_jitter_analysis_realtime_traffic(self):
+        """Test jitter analysis on real-time communication traffic."""
         packets = []
 
-        # Simulate VoIP: regular 20ms packets with some jitter
+        # Simulate real-time UDP: regular 20ms packets with some jitter
         base_time = 1.0
         for i in range(50):
             pkt = Ether() / IP(src="192.168.1.100", dst="10.0.0.50") / UDP(sport=5060, dport=5060)
@@ -108,7 +108,7 @@ class TestJitterIntegration:
         assert results["total_flows"] == 1
         assert len(results["flows_with_jitter"]) > 0
 
-        # VoIP flow should have measurable jitter
+        # Real-time flow should have measurable jitter
         flow_key = list(results["flows_with_jitter"].keys())[0]
         jitter_stats = results["flows_with_jitter"][flow_key]
         assert jitter_stats["mean_jitter"] >= 0

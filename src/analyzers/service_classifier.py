@@ -5,7 +5,6 @@ Intelligent traffic classification based on behavioral patterns rather than
 just port numbers. Uses heuristics to identify traffic types:
 
 Service Types:
-- VoIP/Real-time: Small packets, constant rate, low latency
 - Video Streaming: Large packets, sustained throughput
 - Web/Interactive: Request-response patterns, moderate size
 - Bulk Transfer: Large persistent flows
@@ -30,11 +29,6 @@ from typing import Any, Dict, List, Tuple
 from scapy.all import IP, TCP, UDP, IPv6
 
 # Classification thresholds
-VOIP_PKT_SIZE_MAX = 300  # bytes
-VOIP_PKT_SIZE_MIN = 100  # bytes
-VOIP_INTER_ARRIVAL_MAX = 0.04  # 40ms
-VOIP_INTER_ARRIVAL_MIN = 0.01  # 10ms
-
 STREAMING_PKT_SIZE_MIN = 1000  # bytes
 STREAMING_THROUGHPUT_MIN = 1000000  # 1 Mbps
 
@@ -267,13 +261,6 @@ class ServiceClassifier:
             reasons = [f"Known source port {src_port}"]
         else:
             # PRIORITY 2: Use behavioral heuristics if port unknown
-            # VoIP/Real-time detection
-            voip_score = self._score_voip(stats)
-            if voip_score > confidence:
-                service_type = "VoIP"
-                confidence = voip_score
-                reasons = ["Small packets", "Constant rate", "UDP"]
-
             # Video streaming detection
             streaming_score = self._score_streaming(stats)
             if streaming_score > confidence:
@@ -309,32 +296,6 @@ class ServiceClassifier:
             "stats": stats,
             "is_async": is_async,  # For jitter severity adjustment
         }
-
-    def _score_voip(self, stats: dict) -> float:
-        """Score VoIP likelihood (0-1)."""
-        score = 0.0
-
-        # Must be UDP
-        if stats["protocol"] != "UDP":
-            return 0.0
-
-        # Small packets
-        if VOIP_PKT_SIZE_MIN <= stats["avg_packet_size"] <= VOIP_PKT_SIZE_MAX:
-            score += 0.4
-
-        # Constant inter-arrival time (low variance)
-        if stats["avg_inter_arrival"] > 0:
-            if VOIP_INTER_ARRIVAL_MIN <= stats["avg_inter_arrival"] <= VOIP_INTER_ARRIVAL_MAX:
-                score += 0.3
-                # Low variance = more constant
-                if stats["inter_arrival_variance"] < 0.001:
-                    score += 0.2
-
-        # Many packets
-        if stats["packet_count"] >= 20:
-            score += 0.1
-
-        return min(score, 1.0)
 
     def _score_streaming(self, stats: dict) -> float:
         """Score streaming likelihood (0-1)."""

@@ -167,7 +167,7 @@ class TestJitterStatistics:
         # Flow with high jitter
         packets = []
         for i in range(10):
-            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=5060, dport=5060)  # VoIP
+            pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=5060, dport=5060)  # Real-time UDP
             # Extreme jitter pattern
             if i % 3 == 0:
                 pkt.time = 1.0 + i * 0.5  # 500ms spikes
@@ -233,15 +233,15 @@ class TestRFC3393Compliance:
 
         assert jitter_stats["max_jitter"] >= 0.09  # Should see ~100ms jitter (floating point tolerance)
 
-    def test_udp_jitter_for_voip(self):
-        """Test jitter analysis for VoIP traffic (UDP port 5060)."""
+    def test_udp_jitter_for_constant_rate(self):
+        """Test jitter analysis for constant-rate UDP traffic (port 5060)."""
         from src.analyzers.jitter_analyzer import JitterAnalyzer
 
         packets = []
-        # Simulate VoIP packets (should have low jitter ideally)
+        # Simulate constant-rate real-time packets (should have low jitter ideally)
         for i in range(20):
             pkt = Ether() / IP(src="192.168.1.1", dst="10.0.0.1") / UDP(sport=5060, dport=5060)
-            pkt.time = 1.0 + i * 0.02  # 20ms constant (VoIP packet rate)
+            pkt.time = 1.0 + i * 0.02  # 20ms constant packet rate
             packets.append(pkt)
 
         analyzer = JitterAnalyzer()
@@ -250,7 +250,7 @@ class TestRFC3393Compliance:
         flow_key = list(results["flows_with_jitter"].keys())[0]
         jitter_stats = results["flows_with_jitter"][flow_key]
 
-        # VoIP with constant delay should have near-zero jitter
+        # Constant-rate traffic should have near-zero jitter
         assert jitter_stats["mean_jitter"] < 0.001
 
 
