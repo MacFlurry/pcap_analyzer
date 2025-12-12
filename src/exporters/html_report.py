@@ -71,6 +71,127 @@ class HTMLReportGenerator:
             return (name, emoji, description, True)  # High jitter expected
         return ("Unknown", "❓", "Unknown service", False)
 
+    def _generate_jitter_interpretation(
+        self,
+        mean_jitter_ms: float,
+        max_jitter_ms: float,
+        packet_count: int,
+        severity: str,
+        service_name: str,
+        expect_high_jitter: bool,
+    ) -> str:
+        """
+        Generate natural language interpretation of jitter metrics.
+
+        Args:
+            mean_jitter_ms: Mean jitter in milliseconds
+            max_jitter_ms: Max jitter in milliseconds
+            packet_count: Number of packets in flow
+            severity: Severity level (critical, high, medium, low)
+            service_name: Identified service name
+            expect_high_jitter: Whether high jitter is expected for this service
+
+        Returns:
+            HTML string with interpretation
+        """
+
+        def format_jitter_duration(ms: float) -> str:
+            """Format jitter duration in human-readable form."""
+            if ms < 1000:
+                return f"{ms:.0f} milliseconds"
+            elif ms < 60000:
+                return f"{ms / 1000:.1f} seconds"
+            elif ms < 3600000:
+                minutes = int(ms / 60000)
+                seconds = (ms % 60000) / 1000
+                return f"{minutes} minute{' ' if minutes == 1 else 's '}{seconds:.0f} seconds"
+            else:
+                hours = int(ms / 3600000)
+                minutes = int((ms % 3600000) / 60000)
+                return f"{hours} hour{' ' if hours == 1 else 's '}{minutes} minutes"
+
+        # Format durations
+        max_duration = format_jitter_duration(max_jitter_ms)
+        mean_duration = format_jitter_duration(mean_jitter_ms)
+
+        # Build interpretation sections
+        what_happened = f"Packets arrived with delays varying up to <strong>{max_duration}</strong> (max jitter)"
+        if mean_jitter_ms > 100:  # Only mention mean if significant
+            what_happened += f", with an average variation of <strong>{mean_duration}</strong> (mean jitter)"
+        what_happened += f". This flow captured <strong>{packet_count} packet{'s' if packet_count != 1 else ''}</strong>."
+
+        # Why flagged
+        severity_upper = severity.upper()
+        if severity in ["critical", "high"]:
+            if packet_count < 10:
+                why_flagged = (
+                    f"<strong>Why flagged {severity_upper}:</strong> These extreme variations with few packets "
+                    "indicate either <strong>intermittent traffic with long pauses</strong> between transmissions, "
+                    "or severe network congestion."
+                )
+            else:
+                why_flagged = (
+                    f"<strong>Why flagged {severity_upper}:</strong> These extreme variations indicate "
+                    "either <strong>long pauses in communication</strong> or <strong>severe network congestion</strong>."
+                )
+        elif severity == "medium":
+            why_flagged = (
+                f"<strong>Why flagged {severity_upper}:</strong> Moderate variations that could affect "
+                "time-sensitive applications or indicate network instability."
+            )
+        else:
+            why_flagged = (
+                f"<strong>Why flagged {severity_upper}:</strong> Minor variations within acceptable range "
+                "for most applications."
+            )
+
+        # Impact assessment
+        if expect_high_jitter:
+            impact = (
+                f"<strong>Impact:</strong> This is <span style='color: #28a745;'>✓ normal behavior</span> "
+                f"for <strong>{service_name}</strong>, which uses async batching, long-polling, or delayed processing. "
+                "High jitter is expected and does not indicate a problem."
+            )
+        else:
+            if max_jitter_ms > 10000:  # > 10 seconds
+                impact = (
+                    "<strong>Impact:</strong> For <strong>real-time applications</strong> (live streaming, VoIP, gaming), "
+                    "this would make communication <span style='color: #dc3545;'>⚠ completely unusable</span>. "
+                    "For batch processing or async APIs, this might be normal behavior."
+                )
+            elif max_jitter_ms > 1000:  # > 1 second
+                impact = (
+                    "<strong>Impact:</strong> For <strong>interactive applications</strong> (web APIs, databases), "
+                    "users would experience <span style='color: #ffc107;'>⚠ noticeable delays and inconsistent performance</span>."
+                )
+            elif max_jitter_ms > 100:  # > 100ms
+                impact = (
+                    "<strong>Impact:</strong> For <strong>streaming or gaming</strong>, "
+                    "this would cause <span style='color: #ffc107;'>⚠ stuttering or lag</span>. "
+                    "For web browsing, it may go unnoticed."
+                )
+            else:
+                impact = (
+                    "<strong>Impact:</strong> Minor impact. "
+                    "Most applications would handle this variation without issues."
+                )
+
+        # Build HTML
+        html = f"""
+                            <div class="jitter-interpretation">
+                                <div class="interpretation-header">
+                                    <strong>📊 What does this mean?</strong>
+                                </div>
+                                <div class="interpretation-body">
+                                    <p style="margin: 8px 0;">{what_happened}</p>
+                                    <p style="margin: 8px 0;">{why_flagged}</p>
+                                    <p style="margin: 8px 0;">{impact}</p>
+                                </div>
+                            </div>
+        """
+
+        return html
+
     def generate(self, results: dict[str, Any]) -> str:
         """
         Generate HTML report from analysis results with tabbed navigation.
@@ -1014,6 +1135,38 @@ class HTMLReportGenerator:
             color: #2c3e50;
         }
 
+        /* Jitter Interpretation Section */
+        .jitter-interpretation {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e8f4f8 100%);
+            border-left: 4px solid #3498db;
+            border-radius: 6px;
+            padding: 16px;
+            margin: 16px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .interpretation-header {
+            color: #2c3e50;
+            font-size: 0.95em;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #3498db;
+        }
+
+        .interpretation-body {
+            color: #555;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .interpretation-body p {
+            margin: 8px 0;
+        }
+
+        .interpretation-body strong {
+            color: #2c3e50;
+        }
+
         .flow-expand-btn {
             background: white;
             border: 2px solid #3498db;
@@ -1852,6 +2005,17 @@ class HTMLReportGenerator:
                                 </div>
                             </div>
                 """
+
+                # Add interpretation section
+                interpretation_html = self._generate_jitter_interpretation(
+                    mean_jitter_ms=mean_jitter,
+                    max_jitter_ms=max_jitter,
+                    packet_count=packet_count if isinstance(packet_count, int) else 0,
+                    severity=severity,
+                    service_name=service_name,
+                    expect_high_jitter=expect_high_jitter,
+                )
+                html += interpretation_html
 
                 # Add service context tooltip for async services
                 if expect_high_jitter:
