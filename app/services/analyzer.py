@@ -253,9 +253,19 @@ class AnalyzerService:
             results["metadata"] = {}
         results["metadata"]["pcap_file"] = Path(pcap_path).name
 
-        # Extraire total_packets depuis protocol_distribution
-        if "protocol_distribution" in results:
-            results["metadata"]["total_packets"] = results["protocol_distribution"].get("total_packets", 0)
+        # Extraire total_packets - priorité aux données Phase 1 (dpkt) qui sont toujours fiables
+        total_packets = 0
+        # 1. Essayer timestamps (Phase 1 - dpkt)
+        if "timestamps" in results and "total_packets" in results["timestamps"]:
+            total_packets = results["timestamps"].get("total_packets", 0)
+        # 2. Sinon essayer retransmission (Phase 1 - dpkt)
+        elif "retransmission" in results and "total_packets_analyzed" in results["retransmission"]:
+            total_packets = results["retransmission"].get("total_packets_analyzed", 0)
+        # 3. En dernier recours protocol_distribution (Phase 2 - Scapy, peut être vide)
+        elif "protocol_distribution" in results:
+            total_packets = results["protocol_distribution"].get("total_packets", 0)
+
+        results["metadata"]["total_packets"] = total_packets
 
         # Extraire capture_duration depuis timestamps
         if "timestamps" in results:

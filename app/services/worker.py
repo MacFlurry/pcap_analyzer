@@ -225,7 +225,8 @@ class AnalysisWorker:
         report_paths = result["reports"]
 
         total_packets = analysis_results.get("metadata", {}).get("total_packets", 0)
-        health_score = analysis_results.get("health_score", {}).get("score", 0.0)
+        # Fix: la clé est "overall_score" pas "score"
+        health_score = analysis_results.get("health_score", {}).get("overall_score", 0.0)
 
         await self.db_service.update_results(
             task_id=task_id,
