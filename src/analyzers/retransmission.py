@@ -456,6 +456,18 @@ class RetransmissionAnalyzer:
                 if seq == expected_seq:
                     is_retransmission = True
 
+            # 4. Wireshark-style: Sequence Gap Detection
+            # Si le flux a déjà avancé au-delà de ce seq, c'est une retransmission
+            # Ceci détecte les cas où l'original n'est pas dans la capture mais
+            # le flux a progressé (ex: pure ACK avec seq plus élevé)
+            if not is_retransmission and flow_key in self._highest_seq:
+                highest_seq, highest_pkt, highest_time = self._highest_seq[flow_key]
+                if seq < highest_seq:
+                    is_retransmission = True
+                    # Utiliser le paquet qui a établi highest_seq comme référence
+                    original_num = highest_pkt
+                    original_time = highest_time
+
             if is_retransmission:
                 # Essayer de trouver le paquet original exact
                 if original_num is None:
@@ -690,6 +702,18 @@ class RetransmissionAnalyzer:
                 if seq == expected_seq:
                     is_retransmission = True
                     # Fast Retransmission confirmée
+
+            # 4. Wireshark-style: Sequence Gap Detection
+            # Si le flux a déjà avancé au-delà de ce seq, c'est une retransmission
+            # Ceci détecte les cas où l'original n'est pas dans la capture mais
+            # le flux a progressé (ex: pure ACK avec seq plus élevé)
+            if not is_retransmission and flow_key in self._highest_seq:
+                highest_seq, highest_pkt, highest_time = self._highest_seq[flow_key]
+                if seq < highest_seq:
+                    is_retransmission = True
+                    # Utiliser le paquet qui a établi highest_seq comme référence
+                    original_num = highest_pkt
+                    original_time = highest_time
 
             if is_retransmission:
                 # Essayer de trouver le paquet original exact si pas encore trouvé
