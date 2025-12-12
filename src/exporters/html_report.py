@@ -2254,11 +2254,12 @@ class HTMLReportGenerator:
         # Add explanation box for confidence levels
         html += """
         <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 12px; margin: 15px 0; border-radius: 4px;">
-            <p style="margin: 0 0 10px 0; font-size: 0.95em;"><strong>ℹ️ Understanding Confidence Levels</strong></p>
+            <p style="margin: 0 0 10px 0; font-size: 0.95em;"><strong>ℹ️ Understanding Confidence Levels (Pattern Clarity)</strong></p>
             <div style="font-size: 0.9em; color: #555; line-height: 1.6;">
-                <p style="margin: 5px 0;"><strong>🟢 High Confidence:</strong> Clear TCP sequence/ACK patterns with unambiguous retransmission signals. High reliability for troubleshooting decisions.</p>
-                <p style="margin: 5px 0;"><strong>🟡 Medium Confidence:</strong> Retransmission detected but with some ambiguity (e.g., out-of-order packets, missing context). Recommend correlation with other metrics.</p>
-                <p style="margin: 5px 0;"><strong>🟠 Low Confidence:</strong> Possible retransmission but limited evidence (small sample size, incomplete flow data, or edge cases). Use as indicator only, verify with packet-level analysis.</p>
+                <p style="margin: 5px 0;"><em>Note: Confidence reflects how clear the retransmission pattern is, not certainty of the root cause.</em></p>
+                <p style="margin: 5px 0;"><strong>🟢 High Confidence:</strong> Clear, consistent pattern - 100% of one mechanism (RTO, Fast Retransmission, or Spurious) with sufficient sample size (3+ events). Pattern is unambiguous.</p>
+                <p style="margin: 5px 0;"><strong>🟡 Medium Confidence:</strong> Dominant pattern - Either 100% uniform with small sample (2 events), or dominant mechanism (80%+). Pattern is mostly clear with minor ambiguity.</p>
+                <p style="margin: 5px 0;"><strong>🟠 Low Confidence:</strong> Mixed mechanisms - Multiple retransmission types present (<80% dominant). Requires detailed packet-level analysis to understand root causes.</p>
             </div>
         </div>
         """
@@ -2643,25 +2644,52 @@ class HTMLReportGenerator:
         fast_retrans = sum(1 for r in retrans_list if r.get("retrans_type") == "Fast Retransmission")
         other_count = total_retrans - rto_count - fast_retrans
 
-        # Determine overall confidence for this flow
+        # Determine overall confidence for this flow based on PATTERN CLARITY
+        # HIGH confidence = Consistent single mechanism with sufficient sample size
+        # MEDIUM confidence = Dominant pattern or uniform but small sample
+        # LOW confidence = Mixed/unclear pattern
+
         confidence_counts = {"high": 0, "medium": 0, "low": 0}
         for r in retrans_list:
             conf = r.get("confidence", "low")
             if conf in confidence_counts:
                 confidence_counts[conf] += 1
 
-        if confidence_counts["high"] > total_retrans * 0.5:
+        # Calculate mechanism distribution
+        rto_count = sum(1 for r in retrans_list if r.get("retrans_type") == "RTO")
+        fast_count = sum(1 for r in retrans_list if r.get("retrans_type") == "Fast Retransmission")
+        spurious_count = confidence_counts["high"]  # Spurious = high confidence individual
+
+        # Determine which mechanism is dominant
+        max_mechanism_count = max(rto_count, fast_count, spurious_count)
+        mechanism_percentage = (max_mechanism_count / total_retrans * 100) if total_retrans > 0 else 0
+        is_uniform = (max_mechanism_count == total_retrans)  # 100% of one mechanism
+
+        # NEW LOGIC: Pattern Clarity
+        if is_uniform and total_retrans >= 3:
+            # 100% of single mechanism with sufficient sample
             flow_confidence = "confidence-high"
             flow_confidence_text = "High Confidence"
             flow_confidence_emoji = "🟢"
-        elif confidence_counts["high"] + confidence_counts["medium"] > total_retrans * 0.5:
+            flow_confidence_note = "Clear, consistent pattern"
+        elif is_uniform and total_retrans >= 2:
+            # 100% uniform but small sample (2 retransmissions)
             flow_confidence = "confidence-medium"
             flow_confidence_text = "Medium Confidence"
             flow_confidence_emoji = "🟡"
+            flow_confidence_note = "Consistent pattern, small sample"
+        elif mechanism_percentage >= 80:
+            # Dominant mechanism (80%+)
+            flow_confidence = "confidence-medium"
+            flow_confidence_text = "Medium Confidence"
+            flow_confidence_emoji = "🟡"
+            flow_confidence_note = "Dominant pattern"
         else:
+            # Mixed mechanisms
             flow_confidence = "confidence-low"
             flow_confidence_text = "Low Confidence"
             flow_confidence_emoji = "🟠"
+            flow_confidence_note = "Mixed mechanisms, detailed analysis needed"
 
         # Determine severity
         retrans_rate = total_retrans / flow_count if flow_count > 0 else 0
@@ -2697,7 +2725,7 @@ class HTMLReportGenerator:
         html += "    </div>"
         html += '    <div class="flow-badges">'
         html += f"""
-        <span class="confidence-badge {flow_confidence}">
+        <span class="confidence-badge {flow_confidence}" title="{flow_confidence_note}">
             <span class="badge-icon">{flow_confidence_emoji}</span> {flow_confidence_text}
         </span>
         <span class="severity-badge severity-{severity_level}">
