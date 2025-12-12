@@ -1,0 +1,19 @@
+# Web framework dependencies (additional to requirements.txt)
+# These are required for the web interface on top of the CLI tool
+
+# FastAPI + ASGI server
+fastapi>=0.104.0,<1.0
+uvicorn[standard]>=0.24.0,<1.0
+
+# File handling
+python-multipart>=0.0.6  # Upload multipart/form-data
+aiofiles>=23.2.1         # Async file operations
+
+# Scheduling
+apscheduler>=3.10.0,<4.0  # Cleanup scheduler
+
+# Database (SQLite async)
+aiosqlite>=0.19.0,<1.0
+
+# Optional: Monitoring (uncomment if needed)
+# prometheus-client>=0.19.0  # Prometheus metrics

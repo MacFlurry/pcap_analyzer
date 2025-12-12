@@ -1,145 +1,118 @@
 """
-Pytest configuration and shared fixtures for PCAP Analyzer tests.
+Pytest fixtures et configuration commune pour les tests
 """
 
-from typing import List
+import asyncio
+import os
+import tempfile
+from pathlib import Path
+from typing import AsyncGenerator, Generator
 
 import pytest
-from scapy.all import DNS, ICMP, IP, TCP, UDP, Ether, Packet
+from fastapi.testclient import TestClient
+from httpx import AsyncClient
+
+# Import app
+from app.main import app
+from app.services.database import DatabaseService
+from app.services.worker import AnalysisWorker
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create event loop for async tests"""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 
 @pytest.fixture
-def sample_tcp_packet() -> Packet:
-    """Create a sample TCP packet for testing."""
-    return Ether() / IP(src="192.168.1.100", dst="192.168.1.1") / TCP(sport=12345, dport=80, flags="S", seq=1000)
+def test_data_dir() -> Generator[Path, None, None]:
+    """Create temporary data directory for tests"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        data_dir = Path(tmpdir)
+        (data_dir / "uploads").mkdir()
+        (data_dir / "reports").mkdir()
+        yield data_dir
 
 
 @pytest.fixture
-def sample_tcp_syn_packet() -> Packet:
-    """Create a TCP SYN packet."""
-    return Ether() / IP(src="192.168.1.100", dst="192.168.1.1") / TCP(sport=12345, dport=80, flags="S", seq=1000)
+async def test_db(test_data_dir: Path) -> AsyncGenerator[DatabaseService, None]:
+    """Create test database"""
+    db_path = test_data_dir / "test.db"
+    db = DatabaseService(db_path=str(db_path))
+    await db.init_db()
+    yield db
 
 
 @pytest.fixture
-def sample_tcp_synack_packet() -> Packet:
-    """Create a TCP SYN-ACK packet."""
-    return (
-        Ether()
-        / IP(src="192.168.1.1", dst="192.168.1.100")
-        / TCP(sport=80, dport=12345, flags="SA", seq=2000, ack=1001)
+async def test_worker(test_data_dir: Path, test_db: DatabaseService) -> AsyncGenerator[AnalysisWorker, None]:
+    """Create test worker"""
+    worker = AnalysisWorker(
+        max_queue_size=5,
+        data_dir=str(test_data_dir),
+        db_service=test_db,
+        analyzer_service=None  # Mock analyzer in tests
     )
+    await worker.start()
+    yield worker
+    await worker.stop()
 
 
 @pytest.fixture
-def sample_tcp_ack_packet() -> Packet:
-    """Create a TCP ACK packet."""
-    return (
-        Ether() / IP(src="192.168.1.100", dst="192.168.1.1") / TCP(sport=12345, dport=80, flags="A", seq=1001, ack=2001)
+def client() -> Generator[TestClient, None, None]:
+    """Create test client for FastAPI"""
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+async def async_client() -> AsyncGenerator[AsyncClient, None]:
+    """Create async test client"""
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+
+
+@pytest.fixture
+def sample_pcap_file(test_data_dir: Path) -> Path:
+    """Create a minimal valid PCAP file for testing"""
+    pcap_file = test_data_dir / "sample.pcap"
+    
+    # PCAP global header (little-endian)
+    # Magic number: 0xa1b2c3d4
+    # Version: 2.4
+    # Timezone: 0
+    # Sigfigs: 0
+    # Snaplen: 65535
+    # Network: 1 (Ethernet)
+    global_header = bytes.fromhex(
+        "d4c3b2a1"  # Magic
+        "0200"      # Major version
+        "0400"      # Minor version
+        "00000000"  # Timezone
+        "00000000"  # Sigfigs
+        "ffff0000"  # Snaplen
+        "01000000"  # Network (Ethernet)
     )
+    
+    pcap_file.write_bytes(global_header)
+    return pcap_file
 
 
 @pytest.fixture
-def sample_tcp_data_packet() -> Packet:
-    """Create a TCP data packet."""
-    return (
-        Ether()
-        / IP(src="192.168.1.100", dst="192.168.1.1")
-        / TCP(sport=12345, dport=80, flags="PA", seq=1001, ack=2001)
-        / b"GET / HTTP/1.1\r\n"
-    )
+def invalid_pcap_file(test_data_dir: Path) -> Path:
+    """Create an invalid PCAP file (wrong magic bytes)"""
+    invalid_file = test_data_dir / "invalid.pcap"
+    invalid_file.write_bytes(b"INVALID_HEADER_DATA")
+    return invalid_file
 
 
 @pytest.fixture
-def sample_tcp_fin_packet() -> Packet:
-    """Create a TCP FIN packet."""
-    return (
-        Ether()
-        / IP(src="192.168.1.100", dst="192.168.1.1")
-        / TCP(sport=12345, dport=80, flags="FA", seq=1017, ack=2001)
-    )
-
-
-@pytest.fixture
-def sample_tcp_rst_packet() -> Packet:
-    """Create a TCP RST packet."""
-    return Ether() / IP(src="192.168.1.100", dst="192.168.1.1") / TCP(sport=12345, dport=80, flags="R", seq=1001)
-
-
-@pytest.fixture
-def sample_udp_packet() -> Packet:
-    """Create a sample UDP packet."""
-    return Ether() / IP(src="192.168.1.100", dst="8.8.8.8") / UDP(sport=53210, dport=53)
-
-
-@pytest.fixture
-def sample_dns_query() -> Packet:
-    """Create a DNS query packet."""
-    return (
-        Ether()
-        / IP(src="192.168.1.100", dst="8.8.8.8")
-        / UDP(sport=53210, dport=53)
-        / DNS(rd=1, qd=DNS.DNSQR(qname="example.com"))
-    )
-
-
-@pytest.fixture
-def sample_dns_response() -> Packet:
-    """Create a DNS response packet."""
-    return (
-        Ether()
-        / IP(src="8.8.8.8", dst="192.168.1.100")
-        / UDP(sport=53, dport=53210)
-        / DNS(qr=1, qd=DNS.DNSQR(qname="example.com"), an=DNS.DNSRR(rrname="example.com", rdata="93.184.216.34"))
-    )
-
-
-@pytest.fixture
-def sample_icmp_packet() -> Packet:
-    """Create an ICMP echo request packet."""
-    return Ether() / IP(src="192.168.1.100", dst="8.8.8.8") / ICMP(type=8, code=0)
-
-
-@pytest.fixture
-def sample_ipv6_packet() -> Packet:
-    """Create an IPv6 packet."""
-    from scapy.all import IPv6
-
-    return Ether() / IPv6(src="2001:db8::1", dst="2001:db8::2") / TCP(sport=12345, dport=80, flags="S", seq=1000)
-
-
-@pytest.fixture
-def tcp_handshake_packets(sample_tcp_syn_packet, sample_tcp_synack_packet, sample_tcp_ack_packet) -> list[Packet]:
-    """Create a complete TCP handshake sequence."""
-    return [sample_tcp_syn_packet, sample_tcp_synack_packet, sample_tcp_ack_packet]
-
-
-@pytest.fixture
-def tcp_connection_packets(tcp_handshake_packets, sample_tcp_data_packet, sample_tcp_fin_packet) -> list[Packet]:
-    """Create a complete TCP connection with data transfer and close."""
-    return tcp_handshake_packets + [sample_tcp_data_packet, sample_tcp_fin_packet]
-
-
-@pytest.fixture
-def retransmission_packets() -> list[Packet]:
-    """Create packets demonstrating a retransmission."""
-    # Original data packet
-    pkt1 = (
-        Ether()
-        / IP(src="192.168.1.100", dst="192.168.1.1")
-        / TCP(sport=12345, dport=80, flags="PA", seq=1001, ack=2001)
-        / b"DATA1"
-    )
-    # Retransmission of same data
-    pkt2 = (
-        Ether()
-        / IP(src="192.168.1.100", dst="192.168.1.1")
-        / TCP(sport=12345, dport=80, flags="PA", seq=1001, ack=2001)
-        / b"DATA1"
-    )
-    return [pkt1, pkt2]
-
-
-@pytest.fixture
-def mock_timestamp():
-    """Mock timestamp for testing time-based analyzers."""
-    return 1638360000.0  # 2021-12-01 12:00:00 UTC
+def large_file(test_data_dir: Path) -> Path:
+    """Create a file larger than max upload size"""
+    large_file = test_data_dir / "large.pcap"
+    # Create 501 MB file (over 500 MB limit)
+    size = 501 * 1024 * 1024
+    with open(large_file, "wb") as f:
+        f.write(b'\x00' * size)
+    return large_file

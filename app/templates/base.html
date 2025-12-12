@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PCAP Analyzer - Analyse automatisée de fichiers de capture réseau">
+    <title>{% block title %}PCAP Analyzer{% endblock %}</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tailwind Config - Palette Design System -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3498db',
+                        secondary: '#2c3e50',
+                        accent: '#1abc9c',
+                        success: '#27ae60',
+                        warning: '#f39c12',
+                        danger: '#e74c3c',
+                    },
+                    backgroundImage: {
+                        'gradient-primary': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        'gradient-success': 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                        'gradient-warning': 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                        'gradient-danger': 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                    }
+                }
+            },
+            darkMode: 'class',
+        }
+    </script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <!-- Navigation -->
+    <nav class="bg-white dark:bg-gray-800 shadow-lg border-b-4 border-primary">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center space-x-3 group">
+                        <div class="bg-gradient-primary p-2 rounded-lg group-hover:scale-110 transition-transform duration-200">
+                            <i class="fas fa-network-wired text-white text-xl"></i>
+                        </div>
+                        <span class="text-xl font-bold text-gray-900 dark:text-white">
+                            PCAP Analyzer
+                        </span>
+                    </a>
+                </div>
+
+                <!-- Navigation Links -->
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="/" class="nav-link {% block nav_upload %}{% endblock %}">
+                        <i class="fas fa-upload mr-2"></i>Upload
+                    </a>
+                    <a href="/history" class="nav-link {% block nav_history %}{% endblock %}">
+                        <i class="fas fa-history mr-2"></i>Historique
+                    </a>
+                    <a href="/api/docs" target="_blank" class="nav-link">
+                        <i class="fas fa-code mr-2"></i>API Docs
+                    </a>
+                </div>
+
+                <!-- Dark Mode Toggle -->
+                <div class="flex items-center space-x-4">
+                    <button id="theme-toggle" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        <i class="fas fa-moon dark:hidden text-gray-600"></i>
+                        <i class="fas fa-sun hidden dark:inline text-yellow-400"></i>
+                    </button>
+
+                    <!-- Health Status -->
+                    <div id="health-status" class="hidden md:flex items-center space-x-2 px-3 py-1 rounded-full bg-green-100 dark:bg-green-900">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        <span class="text-sm font-medium text-green-700 dark:text-green-300">Healthy</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                    <i class="fas fa-code text-primary mr-2"></i>
+                    PCAP Analyzer v1.0.0 - Powered by FastAPI
+                </div>
+                <div class="flex items-center space-x-6 text-sm text-gray-600 dark:text-gray-400">
+                    <a href="/api/health" target="_blank" class="hover:text-primary transition-colors">
+                        <i class="fas fa-heartbeat mr-1"></i>Health Check
+                    </a>
+                    <a href="https://github.com" target="_blank" class="hover:text-primary transition-colors">
+                        <i class="fab fa-github mr-1"></i>GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Common JavaScript -->
+    <script src="/static/js/common.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

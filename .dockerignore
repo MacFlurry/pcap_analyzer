@@ -1,0 +1,116 @@
+# ============================================
+# .dockerignore for PCAP Analyzer
+# Minimize image size by excluding unnecessary files
+# ============================================
+
+# Git
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Documentation
+docs/
+*.md
+!README.md
+README*
+CHANGELOG*
+LICENSE
+CONTRIBUTING.md
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+.tox/
+qa_reports/
+*.stats
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.project
+.pydevproject
+.settings/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Reports (not needed in image)
+reports/
+*.html
+*.json
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+azure-pipelines.yml
+.circleci/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Scripts (not needed in runtime)
+scripts/
+*.sh
+install.sh
+test_ssh.py
+
+# Misc
+*.log
+*.tmp
+*.temp
+.cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# SSH keys and secrets
+*.pem
+*.key
+id_*
+id_ed25519*
+
+# Large test files
+*.pcap
+*.pcapng
+
+# Web development (will be added later)
+web/node_modules/
+web/dist/
+web/build/
+
+# Benchmarking data
+*.prof
+*.svg
+benchmark_*.txt

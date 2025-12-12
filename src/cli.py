@@ -178,7 +178,12 @@ def _handle_exports(
 def configure_scapy_performance() -> None:
     """Configure Scapy for optimal performance with selective layer parsing."""
     # Only dissect layers we actually use in our analyzers
-    conf.layers.filter([Ether, IP, IPv6, TCP, UDP, ICMP, DNS])
+    # Check if already filtered (important for persistent workers)
+    try:
+        conf.layers.filter([Ether, IP, IPv6, TCP, UDP, ICMP, DNS])
+    except ValueError:
+        # Already filtered, skip (happens in persistent worker environments)
+        pass
 
     # Disable verbose mode for performance
     conf.verb = 0

@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Analyse en cours - PCAP Analyzer{% endblock %}
+
+{% block content %}
+<!-- Progress Header -->
+<div class="max-w-5xl mx-auto">
+    <!-- Back button -->
+    <div class="mb-6">
+        <a href="/" class="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">
+            <i class="fas fa-arrow-left mr-2"></i>
+            Retour à l'upload
+        </a>
+    </div>
+
+    <!-- Main Progress Card -->
+    <div class="card">
+        <!-- Status Badge -->
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    Analyse PCAP
+                </h1>
+                <p class="text-gray-600 dark:text-gray-400" id="filename">
+                    Chargement...
+                </p>
+            </div>
+            <span id="status-badge" class="badge badge-processing">
+                <i class="fas fa-spinner fa-spin mr-1"></i>
+                En cours
+            </span>
+        </div>
+
+        <!-- Progress Circle -->
+        <div class="flex flex-col md:flex-row items-center justify-center space-y-8 md:space-y-0 md:space-x-12 my-12">
+            <!-- SVG Circle Progress -->
+            <div class="relative">
+                <svg class="progress-ring" width="200" height="200">
+                    <circle class="text-gray-200 dark:text-gray-700"
+                            stroke="currentColor"
+                            stroke-width="10"
+                            fill="none"
+                            r="90"
+                            cx="100"
+                            cy="100"/>
+                    <circle id="progress-circle"
+                            class="progress-ring-circle text-primary"
+                            stroke="url(#gradient-primary)"
+                            stroke-width="10"
+                            fill="none"
+                            r="90"
+                            cx="100"
+                            cy="100"
+                            style="stroke-dasharray: 565; stroke-dashoffset: 565;"/>
+                    <defs>
+                        <linearGradient id="gradient-primary" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="text-center">
+                        <div class="text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent" id="progress-percent">
+                            0%
+                        </div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400 mt-1" id="progress-phase">
+                            Initialisation
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="space-y-4 w-full md:w-auto">
+                <!-- Phase -->
+                <div class="flex items-center space-x-3">
+                    <div class="bg-blue-100 dark:bg-blue-900 p-2 rounded-lg">
+                        <i class="fas fa-tasks text-primary"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase">Phase</div>
+                        <div class="font-semibold text-gray-900 dark:text-white" id="current-phase">-</div>
+                    </div>
+                </div>
+
+                <!-- Packets Processed -->
+                <div class="flex items-center space-x-3">
+                    <div class="bg-green-100 dark:bg-green-900 p-2 rounded-lg">
+                        <i class="fas fa-network-wired text-success"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase">Paquets</div>
+                        <div class="font-semibold text-gray-900 dark:text-white" id="packets-count">
+                            0 / 0
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current Analyzer -->
+                <div class="flex items-center space-x-3">
+                    <div class="bg-purple-100 dark:bg-purple-900 p-2 rounded-lg">
+                        <i class="fas fa-microscope text-purple-600 dark:text-purple-400"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase">Analyseur</div>
+                        <div class="font-semibold text-gray-900 dark:text-white text-sm" id="current-analyzer">-</div>
+                    </div>
+                </div>
+
+                <!-- Elapsed Time -->
+                <div class="flex items-center space-x-3">
+                    <div class="bg-orange-100 dark:bg-orange-900 p-2 rounded-lg">
+                        <i class="fas fa-clock text-warning"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase">Durée</div>
+                        <div class="font-semibold text-gray-900 dark:text-white" id="elapsed-time">0s</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Linear Progress Bar (Alternative) -->
+        <div class="progress-bar mb-4">
+            <div id="progress-bar-fill" class="progress-fill" style="width: 0%"></div>
+        </div>
+
+        <!-- Current Message -->
+        <div id="current-message" class="text-center text-gray-600 dark:text-gray-400 mb-6">
+            Connexion au serveur...
+        </div>
+
+        <!-- Action Button (hidden until completed) -->
+        <div id="action-buttons" class="hidden flex space-x-4">
+            <a id="view-report-btn" href="#" class="btn btn-success flex-1">
+                <i class="fas fa-file-alt mr-2"></i>
+                Voir le rapport HTML
+            </a>
+            <a id="download-json-btn" href="#" class="btn btn-secondary">
+                <i class="fas fa-download mr-2"></i>
+                JSON
+            </a>
+            <a href="/" class="btn btn-outline">
+                <i class="fas fa-upload mr-2"></i>
+                Nouvelle analyse
+            </a>
+        </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="card mt-8">
+        <div class="card-header">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                <i class="fas fa-list mr-2 text-primary"></i>
+                Journal d'événements
+            </h2>
+        </div>
+
+        <div id="event-log" class="space-y-2 max-h-96 overflow-y-auto">
+            <!-- Events will be added here dynamically -->
+            <div class="text-center text-gray-500 dark:text-gray-400 py-8">
+                <i class="fas fa-info-circle text-2xl mb-2"></i>
+                <p>En attente d'événements...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Info -->
+    <div class="mt-8 bg-gray-100 dark:bg-gray-800 rounded-lg p-4">
+        <div class="flex items-center justify-between text-sm">
+            <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+                <i class="fas fa-fingerprint"></i>
+                <span>Task ID:</span>
+                <code class="bg-white dark:bg-gray-700 px-2 py-1 rounded text-primary font-mono" id="task-id"></code>
+                <button onclick="window.utils.copyToClipboard(document.getElementById('task-id').textContent)"
+                        class="text-gray-400 hover:text-primary transition-colors">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+            <div class="text-gray-600 dark:text-gray-400">
+                <i class="fas fa-clock mr-1"></i>
+                <span id="start-time">-</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/progress.js"></script>
+<script>
+    // Extract task_id from URL path /progress/{task_id}
+    const pathParts = window.location.pathname.split('/');
+    const taskId = pathParts[pathParts.length - 1];
+
+    if (taskId) {
+        document.getElementById('task-id').textContent = taskId;
+        // Initialize progress monitor
+        window.progressMonitor = new ProgressMonitor(taskId);
+    } else {
+        window.toast.error('Task ID manquant dans l\'URL');
+        setTimeout(() => window.location.href = '/', 2000);
+    }
+</script>
+{% endblock %}

@@ -1,3 +1,3 @@
 """
-Test suite for PCAP Analyzer.
+Tests pour PCAP Analyzer
 """

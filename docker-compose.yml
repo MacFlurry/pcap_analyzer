@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  pcap-analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pcap-analyzer:latest
+    container_name: pcap-analyzer
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistent data storage (uploads, reports, database)
+      - pcap_data:/data
+    environment:
+      # Configuration (override defaults)
+      - MAX_UPLOAD_SIZE_MB=500
+      - REPORT_TTL_HOURS=24
+      - DATA_DIR=/data
+      - LOG_LEVEL=INFO
+      - MAX_QUEUE_SIZE=5
+    deploy:
+      resources:
+        limits:
+          memory: 4G     # Hard limit (OOM killer at 4GB)
+          cpus: '2.0'    # Max 2 cores
+        reservations:
+          memory: 1G     # Soft reservation
+          cpus: '1.0'    # Min 1 core
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: false  # Need write access to /data and /tmp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health').read()"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+volumes:
+  pcap_data:
+    driver: local
+    # Optional: Bind to specific host path
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /var/lib/pcap_analyzer/data

@@ -13,6 +13,7 @@ __pycache__/
 *.pcap
 *.pcapng
 *.py[cod]
+pcap-dir/
 *.so
 *.swo
 *.swp

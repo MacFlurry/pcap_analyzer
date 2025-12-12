@@ -1,0 +1,384 @@
+/**
+ * PCAP Analyzer - Common JavaScript
+ * Fonctions utilitaires, dark mode, toasts, health check
+ */
+
+// ========================================
+// 1. DARK MODE
+// ========================================
+
+class ThemeManager {
+    constructor() {
+        this.theme = localStorage.getItem('theme') || 'light';
+        this.init();
+    }
+
+    init() {
+        // Appliquer le thème initial
+        if (this.theme === 'dark') {
+            document.documentElement.classList.add('dark');
+        }
+
+        // Event listener pour le toggle
+        const toggle = document.getElementById('theme-toggle');
+        if (toggle) {
+            toggle.addEventListener('click', () => this.toggle());
+        }
+    }
+
+    toggle() {
+        // Disable transitions temporairement
+        document.documentElement.classList.add('no-transition');
+
+        if (this.theme === 'light') {
+            this.theme = 'dark';
+            document.documentElement.classList.add('dark');
+        } else {
+            this.theme = 'light';
+            document.documentElement.classList.remove('dark');
+        }
+
+        localStorage.setItem('theme', this.theme);
+
+        // Re-enable transitions
+        setTimeout(() => {
+            document.documentElement.classList.remove('no-transition');
+        }, 100);
+    }
+}
+
+// ========================================
+// 2. TOAST NOTIFICATIONS
+// ========================================
+
+class ToastManager {
+    constructor() {
+        this.container = document.getElementById('toast-container');
+        if (!this.container) {
+            this.container = document.createElement('div');
+            this.container.id = 'toast-container';
+            this.container.className = 'fixed top-4 right-4 z-50 space-y-2';
+            document.body.appendChild(this.container);
+        }
+    }
+
+    show(message, type = 'info', duration = 5000) {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+
+        const icon = this.getIcon(type);
+
+        toast.innerHTML = `
+            <div class="flex-shrink-0">
+                <i class="${icon} text-xl"></i>
+            </div>
+            <div class="flex-1">
+                <p class="font-medium">${message}</p>
+            </div>
+            <button class="flex-shrink-0 ml-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    onclick="this.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+
+        this.container.appendChild(toast);
+
+        // Auto-remove après duration
+        if (duration > 0) {
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        return toast;
+    }
+
+    getIcon(type) {
+        const icons = {
+            success: 'fas fa-check-circle text-success',
+            error: 'fas fa-exclamation-circle text-danger',
+            warning: 'fas fa-exclamation-triangle text-warning',
+            info: 'fas fa-info-circle text-primary'
+        };
+        return icons[type] || icons.info;
+    }
+
+    success(message, duration) {
+        return this.show(message, 'success', duration);
+    }
+
+    error(message, duration) {
+        return this.show(message, 'error', duration);
+    }
+
+    warning(message, duration) {
+        return this.show(message, 'warning', duration);
+    }
+
+    info(message, duration) {
+        return this.show(message, 'info', duration);
+    }
+}
+
+// ========================================
+// 3. HEALTH CHECK MONITOR
+// ========================================
+
+class HealthMonitor {
+    constructor(interval = 30000) {
+        this.interval = interval;
+        this.statusElement = document.getElementById('health-status');
+        this.check();
+        setInterval(() => this.check(), this.interval);
+    }
+
+    async check() {
+        try {
+            const response = await fetch('/api/health');
+            const data = await response.json();
+
+            if (this.statusElement) {
+                this.updateStatus(data.status === 'healthy');
+            }
+        } catch (error) {
+            console.error('Health check failed:', error);
+            if (this.statusElement) {
+                this.updateStatus(false);
+            }
+        }
+    }
+
+    updateStatus(healthy) {
+        if (!this.statusElement) return;
+
+        if (healthy) {
+            this.statusElement.innerHTML = `
+                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span class="text-sm font-medium text-green-700 dark:text-green-300">Healthy</span>
+            `;
+            this.statusElement.className = 'hidden md:flex items-center space-x-2 px-3 py-1 rounded-full bg-green-100 dark:bg-green-900';
+        } else {
+            this.statusElement.innerHTML = `
+                <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                <span class="text-sm font-medium text-red-700 dark:text-red-300">Unhealthy</span>
+            `;
+            this.statusElement.className = 'hidden md:flex items-center space-x-2 px-3 py-1 rounded-full bg-red-100 dark:bg-red-900';
+        }
+    }
+}
+
+// ========================================
+// 4. UTILITY FUNCTIONS
+// ========================================
+
+const Utils = {
+    /**
+     * Formate une taille de fichier en octets vers une chaîne lisible
+     */
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    },
+
+    /**
+     * Formate une durée en secondes vers une chaîne lisible
+     */
+    formatDuration(seconds) {
+        if (seconds < 60) {
+            return `${Math.round(seconds)}s`;
+        } else if (seconds < 3600) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.round(seconds % 60);
+            return `${mins}m ${secs}s`;
+        } else {
+            const hours = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${mins}m`;
+        }
+    },
+
+    /**
+     * Formate une date ISO vers une chaîne lisible
+     */
+    formatDate(isoString) {
+        const date = new Date(isoString);
+        return date.toLocaleString('fr-FR', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    },
+
+    /**
+     * Formate un timestamp relatif (il y a X minutes)
+     */
+    formatRelativeTime(isoString) {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+
+        if (diffSec < 60) return 'À l\'instant';
+        if (diffMin < 60) return `Il y a ${diffMin} min`;
+        if (diffHour < 24) return `Il y a ${diffHour}h`;
+        if (diffDay < 7) return `Il y a ${diffDay}j`;
+        return this.formatDate(isoString);
+    },
+
+    /**
+     * Copie du texte dans le clipboard
+     */
+    async copyToClipboard(text) {
+        try {
+            await navigator.clipboard.writeText(text);
+            window.toast.success('Copié dans le presse-papier');
+        } catch (err) {
+            window.toast.error('Erreur lors de la copie');
+        }
+    },
+
+    /**
+     * Récupère le badge CSS pour un statut
+     */
+    getStatusBadge(status) {
+        const badges = {
+            pending: 'badge-pending',
+            processing: 'badge-processing',
+            completed: 'badge-completed',
+            failed: 'badge-failed',
+            expired: 'badge-expired'
+        };
+        return badges[status] || 'badge-pending';
+    },
+
+    /**
+     * Récupère l'icône pour un statut
+     */
+    getStatusIcon(status) {
+        const icons = {
+            pending: 'fas fa-clock text-gray-500',
+            processing: 'fas fa-spinner fa-spin text-blue-500',
+            completed: 'fas fa-check-circle text-green-500',
+            failed: 'fas fa-exclamation-circle text-red-500',
+            expired: 'fas fa-hourglass-end text-orange-500'
+        };
+        return icons[status] || icons.pending;
+    },
+
+    /**
+     * Génère un UUID v4 simple
+     */
+    generateUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    },
+
+    /**
+     * Debounce function
+     */
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    },
+
+    /**
+     * Throttle function
+     */
+    throttle(func, limit) {
+        let inThrottle;
+        return function(...args) {
+            if (!inThrottle) {
+                func.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+};
+
+// ========================================
+// 5. LOADING OVERLAY
+// ========================================
+
+class LoadingOverlay {
+    constructor() {
+        this.overlay = null;
+    }
+
+    show(title = 'Chargement...', message = 'Veuillez patienter') {
+        // Supprimer l'overlay existant si présent
+        this.hide();
+
+        // Créer l'overlay
+        this.overlay = document.createElement('div');
+        this.overlay.className = 'loading-overlay';
+        this.overlay.innerHTML = `
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <div class="loading-title">${title}</div>
+                <div class="loading-message">${message}</div>
+            </div>
+        `;
+
+        document.body.appendChild(this.overlay);
+    }
+
+    update(title, message) {
+        if (this.overlay) {
+            const titleEl = this.overlay.querySelector('.loading-title');
+            const messageEl = this.overlay.querySelector('.loading-message');
+            if (titleEl) titleEl.textContent = title;
+            if (messageEl) messageEl.textContent = message;
+        }
+    }
+
+    hide() {
+        if (this.overlay && this.overlay.parentNode) {
+            this.overlay.parentNode.removeChild(this.overlay);
+            this.overlay = null;
+        }
+    }
+}
+
+// ========================================
+// 6. INITIALIZATION
+// ========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize theme manager
+    window.themeManager = new ThemeManager();
+
+    // Initialize toast manager
+    window.toast = new ToastManager();
+
+    // Initialize health monitor
+    window.healthMonitor = new HealthMonitor();
+
+    // Initialize loading overlay
+    window.loadingOverlay = new LoadingOverlay();
+
+    // Expose utils globally
+    window.utils = Utils;
+
+    console.log('PCAP Analyzer - Common JS initialized');
+});

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Upload PCAP - PCAP Analyzer{% endblock %}
+{% block nav_upload %}active{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="text-center mb-12">
+    <div class="inline-block bg-gradient-primary p-4 rounded-2xl mb-4 animate-bounce-subtle">
+        <i class="fas fa-network-wired text-white text-5xl"></i>
+    </div>
+    <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+        Analysez vos fichiers PCAP
+    </h1>
+    <p class="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+        Upload un fichier de capture réseau (.pcap ou .pcapng) pour une analyse automatisée complète.
+        Détection d'anomalies, statistiques de performance et rapport détaillé.
+    </p>
+</div>
+
+<!-- Upload Zone -->
+<div class="max-w-4xl mx-auto">
+    <!-- Drag & Drop Area -->
+    <div id="dropzone" class="dropzone">
+        <input type="file" id="file-input" class="hidden" accept=".pcap,.pcapng" />
+
+        <div id="dropzone-default" class="dropzone-content">
+            <i class="fas fa-cloud-upload-alt dropzone-icon"></i>
+            <h3 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
+                Glissez-déposez votre fichier PCAP
+            </h3>
+            <p class="text-gray-600 dark:text-gray-400 mb-4">
+                ou cliquez pour parcourir vos fichiers
+            </p>
+            <button id="browse-btn" class="btn btn-primary">
+                <i class="fas fa-folder-open mr-2"></i>
+                Parcourir
+            </button>
+        </div>
+
+        <div id="dropzone-loading" class="hidden">
+            <div class="spinner-lg mx-auto mb-4"></div>
+            <p class="text-lg font-medium text-gray-700 dark:text-gray-300">
+                Upload en cours...
+            </p>
+            <p class="text-sm text-gray-500 dark:text-gray-400" id="upload-progress">
+                0%
+            </p>
+        </div>
+    </div>
+
+    <!-- File Info (shown after selection) -->
+    <div id="file-info" class="hidden mt-6 card">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
+                    <i class="fas fa-file-alt text-primary text-2xl"></i>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 dark:text-white" id="file-name"></h4>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" id="file-size"></p>
+                </div>
+            </div>
+            <button id="cancel-btn" class="text-gray-400 hover:text-danger transition-colors">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+
+        <div class="mt-4 flex space-x-4">
+            <button id="upload-btn" class="btn btn-primary flex-1">
+                <i class="fas fa-upload mr-2"></i>
+                Lancer l'analyse
+            </button>
+            <button id="clear-btn" class="btn btn-secondary">
+                <i class="fas fa-trash mr-2"></i>
+                Annuler
+            </button>
+        </div>
+    </div>
+
+    <!-- Information Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+        <!-- Formats acceptés -->
+        <div class="card">
+            <div class="text-center">
+                <div class="bg-blue-100 dark:bg-blue-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-file-code text-primary text-2xl"></i>
+                </div>
+                <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Formats</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    .pcap, .pcapng
+                </p>
+            </div>
+        </div>
+
+        <!-- Taille max -->
+        <div class="card">
+            <div class="text-center">
+                <div class="bg-green-100 dark:bg-green-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-database text-success text-2xl"></i>
+                </div>
+                <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Taille max</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    500 MB par fichier
+                </p>
+            </div>
+        </div>
+
+        <!-- Durée -->
+        <div class="card">
+            <div class="text-center">
+                <div class="bg-purple-100 dark:bg-purple-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-clock text-purple-600 dark:text-purple-400 text-2xl"></i>
+                </div>
+                <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Analyse</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    ~1-2 min / 100k paquets
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Uploads (Queue Status) -->
+    <div class="mt-12 card">
+        <div class="card-header">
+            <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+                <i class="fas fa-server mr-2 text-primary"></i>
+                État du serveur
+            </h3>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="stat-card">
+                <div class="stat-value" id="queue-size">-</div>
+                <div class="stat-label">Files d'attente</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="queue-available">-</div>
+                <div class="stat-label">Slots disponibles</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="tasks-completed">-</div>
+                <div class="stat-label">Analyses terminées</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="tasks-processing">-</div>
+                <div class="stat-label">En cours</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="mt-12 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-8">
+        <div class="flex items-start space-x-4">
+            <div class="bg-white dark:bg-gray-600 p-3 rounded-lg">
+                <i class="fas fa-info-circle text-primary text-2xl"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Comment ça marche ?
+                </h3>
+                <ol class="text-sm text-gray-600 dark:text-gray-300 space-y-2 list-decimal list-inside">
+                    <li>Uploadez votre fichier PCAP (capture Wireshark, tcpdump, etc.)</li>
+                    <li>L'analyse démarre automatiquement en arrière-plan</li>
+                    <li>Suivez la progression en temps réel</li>
+                    <li>Consultez le rapport HTML détaillé avec graphiques et recommandations</li>
+                </ol>
+                <div class="mt-4 flex space-x-4">
+                    <a href="/api/docs" target="_blank" class="text-primary hover:underline text-sm font-medium">
+                        <i class="fas fa-book mr-1"></i>
+                        Documentation API
+                    </a>
+                    <a href="/history" class="text-primary hover:underline text-sm font-medium">
+                        <i class="fas fa-history mr-1"></i>
+                        Voir l'historique
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/upload.js"></script>
+{% endblock %}
