@@ -192,6 +192,147 @@ class HTMLReportGenerator:
 
         return html
 
+    def _generate_retransmission_interpretation(
+        self,
+        total_retrans: int,
+        rto_count: int,
+        fast_retrans: int,
+        duration: float,
+        retrans_rate: float,
+        flow_confidence: str,
+    ) -> str:
+        """
+        Generate natural language interpretation of retransmission metrics.
+
+        Args:
+            total_retrans: Total number of retransmissions
+            rto_count: Number of RTO retransmissions
+            fast_retrans: Number of fast retransmissions
+            duration: Flow duration in seconds
+            retrans_rate: Retransmission rate (retrans/total_packets)
+            flow_confidence: Confidence level (confidence-high/medium/low)
+
+        Returns:
+            HTML string with interpretation
+        """
+
+        # Determine dominant mechanism
+        dominant_mechanism = "mixed"
+        dominant_count = 0
+        if rto_count > fast_retrans and rto_count > 0:
+            dominant_mechanism = "RTO"
+            dominant_count = rto_count
+        elif fast_retrans > rto_count and fast_retrans > 0:
+            dominant_mechanism = "Fast Retransmission"
+            dominant_count = fast_retrans
+        elif rto_count == fast_retrans and rto_count > 0:
+            dominant_mechanism = "mixed"
+            dominant_count = total_retrans
+
+        # What happened
+        if dominant_mechanism == "RTO":
+            percentage = (rto_count / total_retrans * 100) if total_retrans > 0 else 0
+            what_happened = (
+                f"This flow experienced <strong>{total_retrans} retransmission{'s' if total_retrans != 1 else ''}</strong> "
+                f"over {self._format_duration(duration)}. <strong>{rto_count} ({percentage:.0f}%)</strong> were "
+                f"<strong>RTO (Retransmission Timeout)</strong> events, where TCP waited for acknowledgment but received none."
+            )
+        elif dominant_mechanism == "Fast Retransmission":
+            percentage = (fast_retrans / total_retrans * 100) if total_retrans > 0 else 0
+            what_happened = (
+                f"This flow experienced <strong>{total_retrans} retransmission{'s' if total_retrans != 1 else ''}</strong> "
+                f"over {self._format_duration(duration)}. <strong>{fast_retrans} ({percentage:.0f}%)</strong> were "
+                f"<strong>Fast Retransmissions</strong>, triggered by duplicate ACKs indicating out-of-order delivery."
+            )
+        else:
+            what_happened = (
+                f"This flow experienced <strong>{total_retrans} retransmission{'s' if total_retrans != 1 else ''}</strong> "
+                f"over {self._format_duration(duration)}, with a <strong>mix of mechanisms</strong>: "
+                f"{rto_count} RTO events and {fast_retrans} Fast Retransmissions."
+            )
+
+        # Why flagged
+        retrans_rate_percent = retrans_rate * 100
+        if retrans_rate > 0.05 or total_retrans > 50:
+            severity_level = "HIGH"
+            why_flagged = (
+                f"<strong>Why flagged {severity_level}:</strong> Retransmission rate of <strong>{retrans_rate_percent:.1f}%</strong> "
+                "indicates <strong>significant packet loss or network congestion</strong>. This is well above the typical healthy threshold of 1-2%."
+            )
+        elif retrans_rate > 0.02 or total_retrans > 20:
+            severity_level = "MODERATE"
+            why_flagged = (
+                f"<strong>Why flagged {severity_level}:</strong> Retransmission rate of <strong>{retrans_rate_percent:.1f}%</strong> "
+                "suggests <strong>intermittent packet loss</strong> or network congestion issues."
+            )
+        else:
+            severity_level = "LOW"
+            why_flagged = (
+                f"<strong>Why flagged {severity_level}:</strong> Retransmission rate of <strong>{retrans_rate_percent:.1f}%</strong> "
+                "is within acceptable range for most networks, but worth monitoring."
+            )
+
+        # Impact and probable cause based on mechanism
+        if dominant_mechanism == "RTO":
+            impact = (
+                "<strong>Impact & Probable Cause:</strong> "
+                "RTO events cause <span style='color: #dc3545;'>⚠ significant delays</span> "
+                "(typically 200ms-3s per event) as TCP conservatively backs off. "
+                "This usually indicates <strong>packet loss due to:</strong> "
+                "<br>• Network congestion (router/switch buffer overflow)"
+                "<br>• Unreliable network path (WiFi interference, lossy links)"
+                "<br>• ACK loss (acknowledgments not reaching sender)"
+            )
+        elif dominant_mechanism == "Fast Retransmission":
+            impact = (
+                "<strong>Impact & Probable Cause:</strong> "
+                "Fast Retransmissions cause <span style='color: #ffc107;'>⚠ moderate performance impact</span> "
+                "as TCP quickly recovers using duplicate ACKs. "
+                "This typically indicates <strong>out-of-order packet delivery</strong> due to:"
+                "<br>• Network path changes (load balancing, routing changes)"
+                "<br>• Packet reordering (multipath routing, priority queuing)"
+                "<br>• Selective packet loss (not entire window dropped)"
+            )
+        else:
+            impact = (
+                "<strong>Impact & Probable Cause:</strong> "
+                "Mixed mechanisms suggest <span style='color: #ffc107;'>⚠ variable network conditions</span>. "
+                "This could indicate:"
+                "<br>• Intermittent congestion (sometimes severe, sometimes mild)"
+                "<br>• Path instability (routing changes during connection)"
+                "<br>• Multiple network issues affecting the connection"
+            )
+
+        # Pattern clarity note
+        if "high" in flow_confidence:
+            pattern_note = (
+                "<br><br><em>✓ Pattern Clarity: <strong>High</strong> - Clear, consistent retransmission pattern makes root cause analysis more straightforward.</em>"
+            )
+        elif "medium" in flow_confidence:
+            pattern_note = (
+                "<br><br><em>~ Pattern Clarity: <strong>Medium</strong> - Mostly consistent pattern, but limited sample size or some variation makes definitive analysis challenging.</em>"
+            )
+        else:
+            pattern_note = (
+                "<br><br><em>⚠ Pattern Clarity: <strong>Low</strong> - Mixed mechanisms suggest multiple concurrent issues. Detailed packet-level analysis recommended.</em>"
+            )
+
+        # Build HTML
+        html = f"""
+                            <div class="retrans-interpretation">
+                                <div class="interpretation-header">
+                                    <strong>📊 What does this mean?</strong>
+                                </div>
+                                <div class="interpretation-body">
+                                    <p style="margin: 8px 0;">{what_happened}</p>
+                                    <p style="margin: 8px 0;">{why_flagged}</p>
+                                    <p style="margin: 8px 0;">{impact}{pattern_note}</p>
+                                </div>
+                            </div>
+        """
+
+        return html
+
     def generate(self, results: dict[str, Any]) -> str:
         """
         Generate HTML report from analysis results with tabbed navigation.
@@ -1165,6 +1306,20 @@ class HTMLReportGenerator:
 
         .interpretation-body strong {
             color: #2c3e50;
+        }
+
+        /* Retransmission Interpretation Section */
+        .retrans-interpretation {
+            background: linear-gradient(135deg, #fff5f5 0%, #ffe8e8 100%);
+            border-left: 4px solid #e74c3c;
+            border-radius: 6px;
+            padding: 16px;
+            margin: 16px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .retrans-interpretation .interpretation-header {
+            border-bottom: 2px solid #e74c3c;
         }
 
         .flow-expand-btn {
@@ -2750,6 +2905,16 @@ class HTMLReportGenerator:
           </div>
         """
         html += "    </div>"
+
+        # Add natural language interpretation
+        html += self._generate_retransmission_interpretation(
+            total_retrans=total_retrans,
+            rto_count=rto_count,
+            fast_retrans=fast_retrans,
+            duration=duration,
+            retrans_rate=retrans_rate,
+            flow_confidence=flow_confidence,
+        )
 
         # Collapsible detailed analysis (Pure CSS with checkbox)
         html += '    <div class="flow-details-collapsible">'
