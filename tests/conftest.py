@@ -64,6 +64,23 @@ def client(test_data_dir: Path, monkeypatch) -> Generator[TestClient, None, None
     """Create test client for FastAPI"""
     # Set DATA_DIR to temporary directory for tests
     monkeypatch.setenv("DATA_DIR", str(test_data_dir))
+
+    # Patch DATA_DIR in all modules that define it at module level
+    from app.api.routes import upload, reports, health
+    monkeypatch.setattr(upload, "DATA_DIR", test_data_dir)
+    monkeypatch.setattr(upload, "UPLOADS_DIR", test_data_dir / "uploads")
+    monkeypatch.setattr(reports, "DATA_DIR", test_data_dir)
+    monkeypatch.setattr(reports, "REPORTS_DIR", test_data_dir / "reports")
+    monkeypatch.setattr(health, "DATA_DIR", test_data_dir)
+
+    # Reset DatabaseService singleton to pick up the new DATA_DIR
+    from app.services import database
+    database._db_service = None
+
+    # Reset Worker singleton as well
+    from app.services import worker
+    worker._worker = None
+
     with TestClient(app) as test_client:
         yield test_client
 
