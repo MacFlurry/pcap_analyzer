@@ -6,21 +6,61 @@
 [![GitHub issues](https://img.shields.io/github/issues/MacFlurry/pcap_analyzer)](https://github.com/MacFlurry/pcap_analyzer/issues)
 [![Latest Release](https://img.shields.io/github/v/release/MacFlurry/pcap_analyzer?include_prereleases)](https://github.com/MacFlurry/pcap_analyzer/releases)
 
-**Version 3.1.0**
+**Version 4.0.0**
 
-Outil avancé d'analyse automatisée de fichiers PCAP. Il permet d'identifier et de diagnostiquer de manière intelligente les causes de latence et de problèmes réseau, avec une interface utilisateur intuitive et des rapports HTML modernes avec support du mode sombre.
+Outil avancé d'analyse automatisée de fichiers PCAP avec **interface web moderne**. Il permet d'identifier et de diagnostiquer de manière intelligente les causes de latence et de problèmes réseau, avec une interface utilisateur intuitive, des rapports HTML interactifs avec support du mode sombre, et des messages contextuels basés sur les RFC officielles.
 
-Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), et RFC 6298 (RTO). Support complet IPv4 et IPv6.
+Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), RFC 6298 (RTO), RFC 4253 (SSH), RFC 6762 (mDNS). Support complet IPv4 et IPv6.
+
+## 🌟 Nouveautés Version 4.0.0
+
+### Interface Web avec Docker
+
+- **Application Web Moderne** : Interface web complète avec FastAPI et analyse en temps réel
+- **Docker Multi-stage** : Déploiement simplifié avec image optimisée (485 MB)
+- **Progression Temps Réel** : Server-Sent Events (SSE) pour suivre l'analyse en direct
+- **Base de Données SQLite** : Historique des analyses avec rétention 24h automatique
+- **Rapports Persistants** : Accès aux rapports HTML/JSON via URLs dédiées
+
+### Messages Intelligents et Contextuels
+
+- **Erreurs en Français** : Traduction automatique des erreurs techniques en messages compréhensibles
+- **Analyse Jitter Contextuelle** : Messages adaptés par service (SSH, mDNS, HTTP, etc.)
+  - **SSH (RFC 4253)** : Impact sur terminaux interactifs
+  - **mDNS (RFC 6762)** : Aucun impact (broadcast tolérant au jitter)
+  - **HTTP** : Impact sur requête/réponse
+- **Classification Retransmissions** : 3 types avec explications claires
+  - **RTO** (délai ≥ 200ms) : Timeout grave, perte de paquets
+  - **Fast Retransmission** (délai ≤ 50ms) : Détection rapide via duplicate ACKs
+  - **Generic Retransmission** (50-200ms) : Congestion modérée
+
+### Améliorations UX
+
+- **Affichage Taux Retransmission** : Pas d'extrapolation trompeuse pour flows < 1s
+  - Avant: "195 retransmissions (burst rate: 11837.5/sec)" ❌
+  - Maintenant: "195 retransmissions in 16.5ms" ✅
+- **Support IPv6 Amélioré** : Parsing correct des ports avec `rfind(":")` pour IPv6
+- **Frontend Réactif** : Mise à jour automatique des compteurs et statuts
 
 ## Fonctionnalités Clés
 
+### Interface Web (Nouveau en v4.0)
+
+*   **🌐 Interface Web Moderne** : Application web complète avec upload, analyse temps réel et visualisation des rapports
+*   **📊 Progression en Temps Réel** : Suivi SSE (Server-Sent Events) de l'analyse avec phases et pourcentages
+*   **💾 Historique des Analyses** : Base SQLite avec rétention automatique 24h
+*   **🐳 Déploiement Docker** : Multi-stage build optimisé (485 MB) avec docker-compose
+*   **🔄 Nettoyage Automatique** : Suppression automatique des anciens rapports après 24h
+*   **📱 Interface Responsive** : Design adaptatif mobile/desktop avec mode sombre
+
 ### Analyse Réseau
 
-*   **Rapports HTML Interactifs :** Visualisation claire et pédagogique des problèmes détectés, avec des explications contextuelles et des suggestions d'investigation. Support automatique du mode sombre avec excellent contraste et lisibilité.
-*   **Analyse TCP Intelligente :** Détection nuancée des retransmissions (RTO/Fast Retrans), des handshakes lents, et des problèmes de fenêtre TCP. Conforme RFC 793 et RFC 2581.
+*   **Rapports HTML Interactifs :** Visualisation claire et pédagogique des problèmes détectés, avec des explications contextuelles basées sur les RFC officielles et des suggestions d'investigation. Support automatique du mode sombre avec excellent contraste et lisibilité.
+*   **Analyse TCP Intelligente :** Détection nuancée des retransmissions (RTO/Fast Retrans/Generic), des handshakes lents, et des problèmes de fenêtre TCP. Conforme RFC 793 et RFC 2581.
+*   **Messages Contextuels :** Interprétations adaptées au service détecté (SSH, mDNS, HTTP, DNS) basées sur les RFC officielles (4253, 6762, etc.)
 *   **Diagnostic DNS Approfondi :** Identification des timeouts, des réponses lentes et des erreurs DNS, avec détail par domaine.
 *   **Détection d'Anomalies :** Analyse des gaps temporels (différenciant pauses applicatives et incidents réseau), des bursts de trafic, de la fragmentation IP et du trafic asymétrique.
-*   **Support IPv6 Complet :** Analyse transparente des flux IPv4 et IPv6 à travers tous les analyseurs, avec gestion robuste des ports hexadécimaux.
+*   **Support IPv6 Complet :** Analyse transparente des flux IPv4 et IPv6 à travers tous les analyseurs, avec gestion robuste des ports hexadécimaux et parsing IPv6 correct.
 *   **Capture à Distance via SSH (Optionnelle) :** Possibilité de lancer des captures `tcpdump` sur des serveurs distants et de les analyser automatiquement. Non requis pour l'analyse locale.
 
 ### Qualité et Performance
@@ -29,11 +69,39 @@ Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), et RFC 6298
 *   **Optimisation Mémoire :** Gestion intelligente de la mémoire avec cleanup périodique pour les captures de longue durée.
 *   **Tests Complets :** Suite de tests unitaires et d'intégration avec couverture >80% (pytest).
 *   **CI/CD :** Tests automatisés sur Ubuntu et macOS avec Python 3.9-3.12.
-*   **Sécurité Renforcée :** Protection contre XSS, path traversal, et validation stricte des entrées.
+*   **Sécurité Renforcée :** Protection contre XSS, path traversal, validation stricte des entrées, et messages d'erreur traduits.
 
 ## Installation
 
-### Prérequis
+### Option 1: Interface Web avec Docker (Recommandé)
+
+```bash
+# Cloner le repository
+git clone https://github.com/MacFlurry/pcap_analyzer.git
+cd pcap_analyzer
+
+# Lancer l'application web
+docker-compose up -d
+
+# Accéder à l'interface web
+# http://localhost:8000
+```
+
+**Fonctionnalités Web:**
+- Upload de fichiers PCAP (glisser-déposer)
+- Analyse en temps réel avec barre de progression
+- Visualisation des rapports HTML/JSON
+- Historique des analyses (24h de rétention)
+- Gestion automatique du nettoyage
+
+**Arrêter l'application:**
+```bash
+docker-compose down
+```
+
+### Option 2: Installation CLI (Analyse locale)
+
+#### Prérequis
 
 *   Python 3.9, 3.10, 3.11 ou 3.12
 *   `libpcap` (installé automatiquement via les dépendances)
@@ -43,7 +111,7 @@ Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), et RFC 6298
 *   Accès SSH avec authentification par clé au serveur de capture
 *   Configuration SSH dans `config.yaml`
 
-### Étapes
+#### Étapes
 
 ```bash
 # Cloner le repository
@@ -81,23 +149,46 @@ reports:
   output_dir: reports
 ```
 
-## Utilisation Rapide
+## Utilisation
 
-### Analyser un fichier PCAP
+### Interface Web (Docker)
+
+```bash
+# Démarrer l'application
+docker-compose up -d
+
+# Accéder à l'interface web
+open http://localhost:8000
+
+# Voir les logs
+docker-compose logs -f pcap-analyzer
+
+# Arrêter l'application
+docker-compose down
+```
+
+**Workflow:**
+1. Glisser-déposer un fichier PCAP
+2. Voir la progression en temps réel (SSE)
+3. Consulter le rapport HTML interactif
+4. Télécharger le rapport JSON si besoin
+5. Accéder à l'historique des analyses
+
+### CLI - Analyser un fichier PCAP
 
 ```bash
 pcap_analyzer analyze ma_capture.pcap
 # Génère automatiquement un rapport HTML et JSON dans le dossier reports/
 ```
 
-### Lancer une capture et analyser (via SSH)
+### CLI - Lancer une capture et analyser (via SSH)
 
 ```bash
 # Capture de 10 minutes sur le serveur configuré (config.yaml) et analyse auto.
 pcap_analyzer capture --duration 600
 ```
 
-### Options Avancées
+### Options Avancées CLI
 
 ```bash
 # Filtrer par seuil de latence (ne montrer que les flux avec latence > seuil)
@@ -111,6 +202,123 @@ pcap_analyzer analyze capture.pcap --no-report
 
 # Limiter l'affichage des détails
 pcap_analyzer analyze capture.pcap --details-limit 10
+```
+
+## Architecture
+
+### Structure du Projet
+
+```
+pcap_analyzer/
+├── app/                         # Application Web (FastAPI)
+│   ├── main.py                  # Point d'entrée FastAPI
+│   ├── api/                     # Routes API
+│   │   ├── routes/
+│   │   │   ├── upload.py        # Upload fichier PCAP
+│   │   │   ├── progress.py      # SSE pour progression
+│   │   │   └── reports.py       # Endpoints rapports
+│   ├── models/                  # Modèles Pydantic
+│   │   └── schemas.py           # TaskInfo, TaskStatus, etc.
+│   ├── services/                # Services métier
+│   │   ├── analyzer.py          # Wrapper analyse PCAP
+│   │   ├── database.py          # SQLite avec aiosqlite
+│   │   └── worker.py            # Worker async pour analyses
+│   ├── static/                  # Fichiers statiques
+│   │   ├── css/                 # Styles
+│   │   └── js/                  # JavaScript (progress.js)
+│   └── templates/               # Templates Jinja2
+│       ├── index.html           # Page upload
+│       └── progress.html        # Page progression
+│
+├── src/                         # Code source CLI
+│   ├── cli.py                   # Interface en ligne de commande
+│   ├── config.py                # Gestion de la configuration
+│   ├── ssh_capture.py           # Module de capture SSH/tcpdump
+│   ├── report_generator.py      # Générateur de rapports JSON/HTML
+│   ├── analyzer_factory.py      # Factory pour créer les analyseurs
+│   │
+│   ├── analyzers/               # 17 analyseurs spécialisés
+│   │   ├── timestamp_analyzer.py      # Analyse des timestamps et gaps
+│   │   ├── tcp_handshake.py           # Analyse handshake TCP
+│   │   ├── syn_retransmission.py      # Retransmissions SYN détaillées
+│   │   ├── retransmission.py          # Retransmissions et anomalies
+│   │   ├── rtt_analyzer.py            # Round Trip Time
+│   │   ├── tcp_window.py              # Fenêtres TCP et saturation
+│   │   ├── icmp_pmtu.py               # ICMP et PMTU
+│   │   ├── dns_analyzer.py            # Résolutions DNS
+│   │   ├── tcp_reset.py               # Analyse TCP RST
+│   │   ├── ip_fragmentation.py        # Fragmentation IP
+│   │   ├── top_talkers.py             # Top talkers
+│   │   ├── throughput.py              # Débit et throughput
+│   │   ├── tcp_timeout.py             # Timeouts TCP
+│   │   ├── asymmetric_traffic.py      # Trafic asymétrique
+│   │   ├── burst.py                   # Bursts de paquets
+│   │   ├── temporal_pattern.py        # Patterns temporels
+│   │   └── sack_analyzer.py           # Analyse SACK/D-SACK
+│   │
+│   ├── exporters/               # Générateurs de rapports
+│   │   └── html_report.py       # Rapport HTML avec messages contextuels
+│   │
+│   └── utils/                   # Utilitaires
+│       ├── packet_utils.py      # Extraction d'infos paquets (IPv4/IPv6)
+│       └── tcp_utils.py         # Utilitaires TCP (flags, longueur logique)
+│
+├── templates/                   # Templates Jinja2 pour rapports CLI
+│   ├── report_template.html
+│   └── static/css/
+│       └── report.css           # Styles avec support mode sombre
+│
+├── docker-compose.yml           # Configuration Docker
+├── Dockerfile                   # Multi-stage build
+├── requirements.txt             # Dépendances Python CLI
+├── requirements-web.txt         # Dépendances Python Web
+├── tests/                       # Tests unitaires et d'intégration
+├── config.yaml                  # Configuration (seuils, SSH optionnel)
+└── reports/                     # Rapports générés (ignoré par git)
+```
+
+### Flux de Données - Interface Web
+
+```
+┌──────────────┐
+│  UTILISATEUR │
+│  (Browser)   │
+└──────┬───────┘
+       │
+       │ 1. Upload PCAP
+       ▼
+┌──────────────────┐
+│   FastAPI        │
+│   /api/upload    │
+└──────┬───────────┘
+       │
+       │ 2. Enqueue task
+       ▼
+┌──────────────────┐     ┌──────────────────┐
+│   Worker         │────▶│   SQLite DB      │
+│   (Async)        │     │   (aiosqlite)    │
+└──────┬───────────┘     └──────────────────┘
+       │
+       │ 3. Analyze PCAP
+       ▼
+┌──────────────────┐
+│   CLI Analyzer   │
+│   (dpkt + Scapy) │
+└──────┬───────────┘
+       │
+       │ 4. Generate reports
+       ▼
+┌──────────────────┐
+│   HTML + JSON    │
+│   Reports        │
+└──────┬───────────┘
+       │
+       │ 5. SSE updates
+       ▼
+┌──────────────────┐
+│   Progress Page  │
+│   (progress.js)  │
+└──────────────────┘
 ```
 
 ## Performance
@@ -130,84 +338,13 @@ Le PCAP Analyzer utilise une **architecture hybride optimisée** qui combine:
 
 **Gain:** 38 secondes économisées (40% de réduction)
 
-> **Note:** Le mode hybride est activé par défaut et constitue la seule option d'analyse.
+### Docker Image
 
-### Analyseurs Optimisés (12/17)
+**Taille:** 485 MB (multi-stage build optimisé)
+- Stage 1 (builder): Compile avec gcc/g++/libpcap-dev
+- Stage 2 (runtime): Copie seulement les binaires compilés
 
-Les analyseurs suivants utilisent dpkt pour l'extraction rapide:
-
-1. ✅ Timestamp gaps
-2. ✅ TCP handshake
-3. ✅ Retransmissions
-4. ✅ RTT measurement
-5. ✅ TCP window
-6. ✅ TCP reset
-7. ✅ Top talkers
-8. ✅ Throughput
-9. ✅ SYN retransmissions
-10. ✅ TCP timeouts
-11. ✅ Traffic bursts
-12. ✅ Temporal patterns
-
-Les 5 analyseurs restants (DNS, ICMP, IP fragmentation, SACK, asymmetric traffic) nécessitent l'inspection approfondie Scapy et sont traités en phase 2.
-
-### Évolutivité
-
-Le mode hybride maintient des performances constantes sur des captures volumineuses:
-- Cleanup mémoire périodique (tous les 50k paquets)
-- Parsing sélectif en phase 2 (DNS/ICMP uniquement)
-- Architecture streaming pour éviter de charger tout le PCAP en mémoire
-
-## Nouveautés Version 3.1.0
-
-### Améliorations des Rapports
-
-*   **Rapports Plus Concis** :
-    - Liste des périodes de silence réduite de 20 à 10 éléments (Top 10)
-    - Liste des bursts détectés réduite de Top 20 à Top 10
-    - Sections collapsibles pour "Pics de trafic" et "Distribution horaire"
-
-*   **Détection d'Incidents Améliorée** :
-    - Nouveau titre "⏸️ Pause Applicative Probable" pour les gaps sans RTOs
-    - Distinction claire entre incidents réseau et pauses applicatives
-    - Logique de détection plus précise et contextuelle
-
-*   **Mode Sombre Amélioré** :
-    - Correction de la lisibilité des alertes info (`.alert-info`)
-    - Meilleur contraste pour les titres h4 en dark mode
-    - Support complet du thème sombre pour toutes les alertes
-
-### Performance
-
-*   **Architecture Hybride dpkt + Scapy** :
-    - Migration de 12 analyseurs sur 17 vers dpkt (extraction rapide)
-    - **Speedup global de 1.7x** sur l'analyse complète
-    - Réduction de 40% du temps d'analyse (38 secondes économisées sur 131K paquets)
-    - Mode hybride activé par défaut
-
-## Nouveautés Version 3.0.0
-
-### Changements Majeurs
-
-*   **Support IPv6 Complet** : Tous les analyseurs gèrent maintenant IPv4 et IPv6 de manière transparente
-*   **Configuration SSH Optionnelle** : SSH n'est plus requis pour l'analyse locale, seulement pour la capture distante
-*   **Mode Sombre Automatique** : Les rapports HTML s'adaptent automatiquement au thème système avec un excellent contraste
-
-### Améliorations
-
-*   **Rapports HTML Refactorisés** :
-    - CSS externe modulaire avec variables de thème
-    - Support du mode sombre via `@media (prefers-color-scheme: dark)`
-    - Meilleure lisibilité dans tous les thèmes
-*   **Gestion Robuste des Ports** : Correction du parsing des ports hexadécimaux retournés par Scapy
-*   **Affichage Optimisé** : Affichage du nom de fichier uniquement (pas le chemin complet) dans les rapports
-*   **Tests Améliorés** : Compatibilité Python 3.9-3.12, tous les tests passent sur toutes les plateformes
-
-### Corrections de Bugs
-
-*   Fixed: KeyError dans l'analyseur de patterns temporels
-*   Fixed: Parsing des ports TCP en hexadécimal
-*   Fixed: Lisibilité en mode sombre (info-boxes, alertes, titres)
+Sans multi-stage build: ~800-900 MB
 
 ## Tests
 
@@ -241,159 +378,38 @@ pytest -n auto
 
 Voir [tests/README.md](tests/README.md) pour plus de détails.
 
-## Documentation
+## API REST (Interface Web)
 
-### Architecture
+### Endpoints Disponibles
 
-#### Structure du Projet
+| Endpoint | Méthode | Description |
+|----------|---------|-------------|
+| `/` | GET | Page d'accueil (upload) |
+| `/progress/{task_id}` | GET | Page de progression |
+| `/api/upload` | POST | Upload fichier PCAP |
+| `/api/progress/{task_id}` | GET | SSE progression temps réel |
+| `/api/status/{task_id}` | GET | Statut actuel d'une tâche |
+| `/api/history` | GET | Historique des analyses |
+| `/reports/{task_id}.html` | GET | Rapport HTML |
+| `/reports/{task_id}.json` | GET | Rapport JSON |
+| `/api/health` | GET | Health check |
 
-```
-pcap_analyzer/
-├── src/                         # Code source
-│   ├── cli.py                   # Interface en ligne de commande (point d'entrée)
-│   ├── config.py                # Gestion de la configuration
-│   ├── ssh_capture.py           # Module de capture SSH/tcpdump (optionnel)
-│   ├── report_generator.py      # Générateur de rapports JSON/HTML
-│   ├── analyzer_factory.py      # Factory pour créer les analyseurs
-│   │
-│   ├── analyzers/               # 17 analyseurs spécialisés
-│   │   ├── timestamp_analyzer.py      # Analyse des timestamps et gaps
-│   │   ├── tcp_handshake.py           # Analyse handshake TCP
-│   │   ├── syn_retransmission.py      # Retransmissions SYN détaillées
-│   │   ├── retransmission.py          # Retransmissions et anomalies
-│   │   ├── rtt_analyzer.py            # Round Trip Time
-│   │   ├── tcp_window.py              # Fenêtres TCP et saturation
-│   │   ├── icmp_pmtu.py               # ICMP et PMTU
-│   │   ├── dns_analyzer.py            # Résolutions DNS
-│   │   ├── tcp_reset.py               # Analyse TCP RST
-│   │   ├── ip_fragmentation.py        # Fragmentation IP
-│   │   ├── top_talkers.py             # Top talkers
-│   │   ├── throughput.py              # Débit et throughput
-│   │   ├── tcp_timeout.py             # Timeouts TCP
-│   │   ├── asymmetric_traffic.py      # Trafic asymétrique
-│   │   ├── burst.py                   # Bursts de paquets
-│   │   ├── temporal_pattern.py        # Patterns temporels
-│   │   └── sack_analyzer.py           # Analyse SACK/D-SACK
-│   │
-│   └── utils/                   # Utilitaires
-│       ├── packet_utils.py      # Extraction d'infos paquets (IPv4/IPv6)
-│       └── tcp_utils.py         # Utilitaires TCP (flags, longueur logique)
-│
-├── templates/                   # Templates Jinja2 pour rapports HTML
-│   ├── report_template.html
-│   └── static/css/
-│       └── report.css           # Styles avec support mode sombre
-│
-├── tests/                       # Tests unitaires et d'intégration
-├── config.yaml                  # Configuration (seuils, SSH optionnel)
-└── reports/                     # Rapports générés (ignoré par git)
-```
+### Exemples d'Utilisation
 
-#### Flux de Données
+```bash
+# Upload un fichier PCAP
+curl -X POST http://localhost:8000/api/upload \
+  -F "file=@capture.pcap"
+# Retourne: {"task_id": "abc123", "status": "pending"}
 
-```
-┌──────────────┐
-│   CAPTURE    │ Option 1: Capture distante via SSH (optionnel)
-│   (SSH)      ├──────────────────────────────┐
-└──────────────┘                              │
-                                              │
-┌──────────────┐                              │
-│   PCAP FILE  │ Option 2: Fichier existant  │
-│   (Local)    ├──────────────────────────────┤
-└──────────────┘                              │
-                                              ▼
-                                    ┌──────────────────┐
-                                    │  Load PCAP       │
-                                    │  (Scapy)         │
-                                    └────────┬─────────┘
-                                             │
-                    ┌────────────────────────┴────────────────────────┐
-                    │                                                  │
-                    ▼                                                  ▼
-        ┌───────────────────────┐                         ┌───────────────────────┐
-        │  17 ANALYZERS         │                         │   LATENCY FILTER      │
-        │  Process packets      │◄────────────────────────┤   (-l option)         │
-        │  in streaming mode    │                         └───────────────────────┘
-        └───────────┬───────────┘
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │  AGGREGATED RESULTS   │
-        │  (Python Dict)        │
-        └───────────┬───────────┘
-                    │
-                    ├──────────────────────┬──────────────────────┐
-                    │                      │                      │
-                    ▼                      ▼                      ▼
-        ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-        │  Console Output  │  │   JSON Report    │  │   HTML Report    │
-        │  (Rich)          │  │   (Structured)   │  │   (Visual)       │
-        └──────────────────┘  └──────────────────┘  └──────────────────┘
-```
+# Vérifier le statut
+curl http://localhost:8000/api/status/abc123
 
-### Analyseurs Disponibles
+# Télécharger le rapport JSON
+curl http://localhost:8000/reports/abc123.json > report.json
 
-| Analyseur | Description | RFC |
-|-----------|-------------|-----|
-| `TCPHandshakeAnalyzer` | Détecte et mesure les délais de handshake TCP (SYN/SYN-ACK/ACK) | RFC 793 |
-| `RetransmissionAnalyzer` | Détecte retransmissions (RTO, Fast Retrans), DUP ACKs, out-of-order | RFC 793, 2581, 6298 |
-| `RTTAnalyzer` | Mesure Round Trip Time par flux et globalement | RFC 793, 1323 |
-| `DNSAnalyzer` | Analyse requêtes/réponses DNS, détecte timeouts | - |
-| `TimestampAnalyzer` | Détecte gaps temporels et pauses applicatives | - |
-| `BurstAnalyzer` | Identifie les bursts de trafic | - |
-| `AsymmetricAnalyzer` | Détecte trafic asymétrique entre flux | - |
-
-### API des Analyseurs
-
-Tous les analyseurs héritent de `BaseAnalyzer` et implémentent l'interface suivante :
-
-```python
-from src.analyzers.base_analyzer import BaseAnalyzer
-from scapy.all import Packet
-from typing import List, Dict, Any
-
-class MonAnalyseur(BaseAnalyzer):
-    def process_packet(self, packet: Packet, packet_num: int) -> None:
-        """Traite un paquet individuel."""
-        pass
-
-    def finalize(self) -> Dict[str, Any]:
-        """Finalise l'analyse et retourne les résultats."""
-        return {}
-
-    # Méthode de commodité (héritée)
-    def analyze(self, packets: List[Packet]) -> Dict[str, Any]:
-        """Analyse une liste de paquets."""
-        pass
-```
-
-### Exemples d'Utilisation Programmatique
-
-```python
-from scapy.all import rdpcap
-from src.analyzers.tcp_handshake import TCPHandshakeAnalyzer
-from src.analyzers.retransmission import RetransmissionAnalyzer
-
-# Charger une capture
-packets = rdpcap("ma_capture.pcap")
-
-# Analyser les handshakes TCP
-handshake_analyzer = TCPHandshakeAnalyzer(
-    syn_synack_threshold=0.1,  # 100ms
-    total_threshold=0.3        # 300ms
-)
-handshake_results = handshake_analyzer.analyze(packets)
-
-print(f"Handshakes détectés : {handshake_results['total_handshakes']}")
-print(f"Handshakes lents : {handshake_results['slow_handshakes']}")
-
-# Analyser les retransmissions
-retrans_analyzer = RetransmissionAnalyzer()
-retrans_results = retrans_analyzer.analyze(packets)
-
-print(f"Retransmissions totales : {retrans_results['total_retransmissions']}")
-print(f"RTOs : {retrans_results['rto_count']}")
-print(f"Fast Retrans : {retrans_results['fast_retrans_count']}")
+# Voir l'historique
+curl http://localhost:8000/api/history
 ```
 
 ## Contribution & Licence
@@ -404,3 +420,7 @@ Les contributions sont les bienvenues ! N'hésitez pas à :
 *   Améliorer la documentation
 
 Licence MIT - voir le fichier [LICENSE](LICENSE) pour plus de détails.
+
+## Changelog
+
+Voir [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des versions.

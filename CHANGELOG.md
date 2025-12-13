@@ -7,6 +7,169 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.0.0] - 2025-12-13
+
+### 🚀 Changements Majeurs
+
+- **Interface Web Complète avec Docker**
+  - Application web FastAPI avec upload drag-and-drop
+  - Analyse en temps réel avec Server-Sent Events (SSE)
+  - Base de données SQLite avec aiosqlite pour l'historique
+  - Déploiement simplifié avec docker-compose
+  - Image Docker optimisée (485 MB) avec multi-stage build
+  - Rétention automatique des rapports (24h)
+
+- **Messages d'Erreur en Français**
+  - Traduction automatique des erreurs techniques en messages compréhensibles
+  - Fonction `translate_error_to_human()` pour convertir les exceptions Python
+  - Messages contextuels pour erreurs courantes (PCAP corrompu, permissions, etc.)
+  - Affichage frontend avec alertes stylisées
+
+- **Analyse Jitter Contextuelle par Service**
+  - Détection automatique des services (SSH, mDNS, HTTP, DNS, Kafka, etc.)
+  - Messages adaptés basés sur les RFC officielles :
+    - **SSH (RFC 4253)** : Impact sur terminaux interactifs
+    - **mDNS (RFC 6762)** : Aucun impact (broadcast tolérant)
+    - **HTTP** : Impact sur requête/réponse
+  - Classification hiérarchique : async > interactive > broadcast > request-response
+  - Badges de service avec emojis dans les rapports HTML
+
+- **Classification des Retransmissions Améliorée**
+  - Support de 3 types de retransmissions au lieu de 2 :
+    - **RTO** (délai ≥ 200ms) : Timeout grave, perte de paquets
+    - **Fast Retransmission** (délai ≤ 50ms) : Détection rapide via duplicate ACKs
+    - **Generic Retransmission** (50-200ms) : Congestion modérée
+  - Affichage des compteurs détaillés dans les flow cards
+  - Messages d'interprétation adaptés par type dominant
+
+### ✨ Ajouts
+
+- **API REST Complète**
+  - `POST /api/upload` : Upload fichier PCAP
+  - `GET /api/progress/{task_id}` : SSE pour progression temps réel
+  - `GET /api/status/{task_id}` : Statut actuel d'une tâche
+  - `GET /api/history` : Historique des 20 dernières analyses
+  - `GET /reports/{task_id}.html` : Téléchargement rapport HTML
+  - `GET /reports/{task_id}.json` : Téléchargement rapport JSON
+  - `GET /api/health` : Health check de l'application
+
+- **Frontend Moderne**
+  - Page d'upload avec glisser-déposer
+  - Page de progression avec SSE (`progress.js`)
+  - Mise à jour temps réel : phases, pourcentages, compteurs de paquets
+  - Gestion des états : pending, processing, completed, failed, expired
+  - Reconnexion automatique SSE en cas de perte de connexion
+  - Design responsive avec TailwindCSS
+
+- **Base de Données SQLite**
+  - Schéma avec table `tasks` (task_id, filename, status, timestamps, etc.)
+  - Support async avec aiosqlite
+  - Rétention automatique 24h via APScheduler
+  - Nettoyage périodique des anciens rapports (uploads + reports)
+
+- **Worker Asynchrone**
+  - File d'attente pour traiter les analyses en arrière-plan
+  - Gestion des erreurs avec traduction automatique
+  - Callbacks de progression pour SSE
+  - Stockage des résultats dans la base de données
+
+- **Service Detection (Jitter)**
+  - `INTERACTIVE_SERVICES` : SSH (22), Telnet (23), RDP (3389), VNC (5900)
+  - `REQUEST_RESPONSE_SERVICES` : HTTP (80/443), DNS (53), HTTPS, etc.
+  - `BROADCAST_SERVICES` : mDNS (5353), SSDP (1900), NetBIOS (137)
+  - `ASYNC_SERVICES` : Kafka (9092), MQTT (1883), AMQP (5672)
+  - Fonction `_identify_service()` avec retour (name, emoji, desc, expect_high_jitter, type)
+
+### 🎨 Améliorations
+
+- **Affichage Taux de Retransmission**
+  - Flows < 1s : affichage "X retransmissions in Y ms" sans extrapolation
+  - Flows ≥ 1s : affichage "X retransmissions (Y per second)"
+  - Évite les taux trompeurs comme "11837.5/sec" pour un flow de 16.5ms
+
+- **Parsing IPv6 Amélioré**
+  - Utilisation de `rfind(":")` au lieu de `split(":")` pour extraire les ports
+  - Gestion correcte des adresses IPv6 avec colons multiples
+  - Exemple : `fe80::1800:4cee:4f58:b7b9:5353` → port `5353` correctement extrait
+
+- **Interprétation des Retransmissions**
+  - Ajout du paramètre `generic_retrans` dans `_generate_retransmission_interpretation()`
+  - Messages pour mécanisme dominant "Generic" (50-200ms)
+  - Comptage correct : `rto_count + fast_retrans + generic_retrans = total_retrans`
+  - Affichage de la grille de stats avec "Generic Retrans" en plus
+
+- **Gestion des Erreurs Frontend**
+  - Messages d'erreur traduits affichés dans la page de progression
+  - Alertes stylisées avec bouton "Réessayer avec un autre fichier"
+  - Affichage du statut "Expiré" pour les rapports > 24h
+  - Gestion des tâches expirées avec message explicatif
+
+- **DNS Analyzer Robustesse**
+  - Vérification `packet.haslayer(IP)` avant accès à la couche IP
+  - Gestion des paquets DNS sans `qname` (malformés)
+  - Try/except autour de `dns.qd.qname` pour éviter les crashes
+
+### 🐳 Docker
+
+- **Multi-stage Build**
+  - Stage 1 (builder) : Installation gcc, g++, libpcap-dev, compilation dépendances
+  - Stage 2 (runtime) : Copie des binaires compilés seulement
+  - Image finale : 485 MB (vs ~800-900 MB sans multi-stage)
+
+- **Docker Compose**
+  - Service `pcap-analyzer` avec volume `/data` pour persistence
+  - Montage du répertoire `pcap-dir` pour accès aux fichiers locaux
+  - Port 8000 exposé pour l'interface web
+  - Healthcheck avec `/api/health`
+
+- **Configuration**
+  - Variable d'environnement `DATA_DIR=/data` pour uploads/reports
+  - APScheduler pour nettoyage automatique toutes les heures
+  - Logging structuré en JSON avec timestamps
+
+### 🔧 Corrections de Bugs
+
+- **Fixed: Classification retransmissions manquante**
+  - Ajout du type "Generic Retransmission" (50-200ms) aux compteurs
+  - Évite le message confus "0 RTO and 0 Fast Retransmissions" quand toutes les retrans sont génériques
+
+- **Fixed: Taux de retransmission trompeur**
+  - Pas d'extrapolation à la seconde pour les flows très courts (< 1s)
+  - Affichage du délai réel au lieu d'un taux par seconde trompeur
+
+- **Fixed: Port parsing pour IPv6**
+  - Utilisation de `rfind(":")` pour trouver le dernier colon (séparateur port)
+  - Évite la confusion avec les colons dans les adresses IPv6
+
+- **Fixed: DNS analyzer crashes**
+  - Vérification de la présence de la couche IP avant accès
+  - Gestion des paquets DNS malformés sans `qname`
+
+- **Fixed: Affichage compteurs paquets**
+  - Mise à jour de `updatePackets()` dans `handleCompletion()` (progress.js)
+  - Affichage correct du compteur "PAQUETS : X / Y" au lieu de "0 / 0"
+
+- **Fixed: Statut analyzer affiché**
+  - Affichage "Terminé" ou "Échec" au lieu de "-" dans `currentAnalyzer`
+  - Mise à jour dans `handleCompletion()` et `handleFailure()`
+
+### 📝 Documentation
+
+- **README.md Complet**
+  - Documentation de l'interface web Docker
+  - Exemples d'utilisation API REST
+  - Architecture détaillée (app/ + src/)
+  - Flux de données SSE
+  - Section Performance avec taille image Docker
+
+- **CHANGELOG.md Mis à Jour**
+  - Ajout de la section 4.0.0 avec toutes les nouveautés
+  - Classification par catégories (Changements Majeurs, Ajouts, Améliorations, etc.)
+
+### 🗑️ Suppressions
+
+- Aucune suppression dans cette version (rétrocompatible avec CLI)
+
 ## [3.0.0] - 2025-12-07
 
 ### 🚀 Changements Majeurs
