@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.11', '3.12']
 
     steps:
     - uses: actions/checkout@v3
@@ -85,32 +85,93 @@ jobs:
       run: |
         pre-commit run --all-files --show-diff-on-failure
 
-  lint-legacy:
+  docker-build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-    - name: Install linting tools
+    - name: Build Docker image
       run: |
-        python -m pip install --upgrade pip
-        pip install flake8 black isort mypy
+        docker build -t pcap-analyzer:test .
 
-    - name: Run flake8
+    - name: Test Docker image
       run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 src --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 src --count --exit-zero --max-complexity=15 --max-line-length=120 --statistics
+        docker run -d --name test-container -p 8000:8000 pcap-analyzer:test
+        sleep 10
+        curl -f http://localhost:8000/api/health || exit 1
+        docker stop test-container
+        docker rm test-container
 
-    - name: Check code formatting with black
-      run: |
-        black --check --line-length=120 src/
+  helm-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
 
-    - name: Check import sorting with isort
+    - name: Install kind
       run: |
-        isort --check-only --profile=black --line-length=120 src/
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+
+    - name: Install kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/kubectl
+
+    - name: Install Helm
+      run: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+    - name: Create kind cluster
+      run: |
+        cat <<EOF | kind create cluster --name test-cluster --config -
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        nodes:
+        - role: control-plane
+          extraPortMappings:
+          - containerPort: 30080
+            hostPort: 8000
+            protocol: TCP
+        EOF
+
+    - name: Build and load Docker image
+      run: |
+        docker build -t pcap-analyzer:test .
+        kind load docker-image pcap-analyzer:test --name test-cluster
+
+    - name: Lint Helm chart
+      run: |
+        helm lint ./helm-chart/pcap-analyzer
+
+    - name: Install Helm chart
+      run: |
+        helm install pcap-analyzer ./helm-chart/pcap-analyzer \
+          --set image.tag=test \
+          --namespace pcap-analyzer \
+          --create-namespace \
+          --wait \
+          --timeout 5m
+
+    - name: Verify deployment
+      run: |
+        kubectl get all -n pcap-analyzer
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=pcap-analyzer -n pcap-analyzer --timeout=300s
+
+    - name: Test application
+      run: |
+        kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- curl -f http://localhost:8000/api/health
+
+    - name: Show logs on failure
+      if: failure()
+      run: |
+        kubectl logs -n pcap-analyzer deployment/pcap-analyzer --tail=100
+
+    - name: Cleanup
+      if: always()
+      run: |
+        kind delete cluster --name test-cluster
