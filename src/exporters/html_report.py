@@ -30,6 +30,31 @@ class HTMLReportGenerator:
         3306: ("MySQL", "🐬", "Database with async replication"),
     }
 
+    # Interactive terminal/shell services (TCP-based, jitter causes perceived latency)
+    INTERACTIVE_SERVICES = {
+        22: ("SSH", "🔐", "Secure shell (RFC 4253)"),
+        23: ("Telnet", "📟", "Terminal protocol"),
+        3389: ("RDP", "🖥️", "Remote Desktop Protocol"),
+        5900: ("VNC", "🖥️", "Virtual Network Computing"),
+    }
+
+    # Request-response services (tolerant to jitter due to TCP buffering)
+    REQUEST_RESPONSE_SERVICES = {
+        80: ("HTTP", "🌐", "Web traffic"),
+        443: ("HTTPS", "🔒", "Secure web traffic"),
+        8080: ("HTTP Alt", "🌐", "Alternative HTTP"),
+        8443: ("HTTPS Alt", "🔒", "Alternative HTTPS"),
+        53: ("DNS", "🔍", "Domain Name System (RFC 1035)"),
+    }
+
+    # Broadcast/multicast services (jitter irrelevant - no reliability requirement)
+    BROADCAST_SERVICES = {
+        5353: ("mDNS", "🔍", "Multicast DNS / Bonjour (RFC 6762)"),
+        1900: ("SSDP", "📡", "Simple Service Discovery Protocol (UPnP)"),
+        137: ("NetBIOS", "📡", "NetBIOS Name Service"),
+        138: ("NetBIOS-DG", "📡", "NetBIOS Datagram Service"),
+    }
+
     def __init__(self):
         pass
 
@@ -56,7 +81,7 @@ class HTMLReportGenerator:
             minutes = int((duration % 3600) / 60)
             return f"{hours}h {minutes}m"
 
-    def _identify_service(self, port: int) -> tuple[str, str, str, bool]:
+    def _identify_service(self, port: int) -> tuple[str, str, str, bool, str]:
         """
         Identify service and whether high jitter is expected.
 
@@ -64,12 +89,22 @@ class HTMLReportGenerator:
             port: Port number to identify
 
         Returns:
-            Tuple of (service_name, emoji, description, expect_high_jitter)
+            Tuple of (service_name, emoji, description, expect_high_jitter, service_type)
+            service_type: "async", "interactive", "request-response", "broadcast", or "unknown"
         """
         if port in self.KNOWN_ASYNC_SERVICES:
             name, emoji, description = self.KNOWN_ASYNC_SERVICES[port]
-            return (name, emoji, description, True)  # High jitter expected
-        return ("Unknown", "❓", "Unknown service", False)
+            return (name, emoji, description, True, "async")  # High jitter expected
+        elif port in self.INTERACTIVE_SERVICES:
+            name, emoji, description = self.INTERACTIVE_SERVICES[port]
+            return (name, emoji, description, False, "interactive")  # Jitter causes perceived latency
+        elif port in self.BROADCAST_SERVICES:
+            name, emoji, description = self.BROADCAST_SERVICES[port]
+            return (name, emoji, description, True, "broadcast")  # Jitter irrelevant for broadcast
+        elif port in self.REQUEST_RESPONSE_SERVICES:
+            name, emoji, description = self.REQUEST_RESPONSE_SERVICES[port]
+            return (name, emoji, description, False, "request-response")  # Tolerant to jitter
+        return ("Unknown", "❓", "Unknown service", False, "unknown")
 
     def _generate_jitter_interpretation(
         self,
@@ -79,6 +114,7 @@ class HTMLReportGenerator:
         severity: str,
         service_name: str,
         expect_high_jitter: bool,
+        service_type: str = "unknown",
     ) -> str:
         """
         Generate natural language interpretation of jitter metrics.
@@ -90,6 +126,7 @@ class HTMLReportGenerator:
             severity: Severity level (critical, high, medium, low)
             service_name: Identified service name
             expect_high_jitter: Whether high jitter is expected for this service
+            service_type: Type of service (async, interactive, request-response, unknown)
 
         Returns:
             HTML string with interpretation
@@ -145,17 +182,67 @@ class HTMLReportGenerator:
                 "for most applications."
             )
 
-        # Impact assessment
-        if expect_high_jitter:
+        # Impact assessment based on service type
+        if service_type == "broadcast":
+            # mDNS, SSDP, NetBIOS - broadcast/multicast protocols
+            impact = (
+                f"<strong>Impact:</strong> <span style='color: #28a745;'>✓ No impact</span>. "
+                f"<strong>{service_name}</strong> is a <strong>broadcast/multicast discovery protocol</strong> (RFC 6762). "
+                "It uses UDP without delivery guarantees - packets are sent periodically for service announcement. "
+                "High jitter is irrelevant as there's no session or reliability requirement. "
+                "Long pauses simply mean services aren't being announced frequently."
+            )
+        elif expect_high_jitter:
             impact = (
                 f"<strong>Impact:</strong> This is <span style='color: #28a745;'>✓ normal behavior</span> "
                 f"for <strong>{service_name}</strong>, which uses async batching, long-polling, or delayed processing. "
                 "High jitter is expected and does not indicate a problem."
             )
-        else:
+        elif service_type == "interactive":
+            # SSH, Telnet, RDP, VNC - interactive terminal services
             if max_jitter_ms > 10000:  # > 10 seconds
                 impact = (
-                    "<strong>Impact:</strong> For <strong>real-time applications</strong> (live streaming, gaming, real-time communications), "
+                    f"<strong>Impact:</strong> For <strong>{service_name}</strong> (interactive terminal), "
+                    "users will experience <span style='color: #dc3545;'>⚠ very noticeable delays</span> "
+                    "when typing commands or receiving output. Long pauses between packets indicate either "
+                    "network congestion or low activity periods (user idle). TCP ensures reliable delivery despite jitter."
+                )
+            elif max_jitter_ms > 1000:  # > 1 second
+                impact = (
+                    f"<strong>Impact:</strong> For <strong>{service_name}</strong>, "
+                    "users will notice <span style='color: #ffc107;'>⚠ delayed echoing of typed characters</span> "
+                    "and slower command responses, but the connection remains functional and reliable (TCP-based)."
+                )
+            elif max_jitter_ms > 100:  # > 100ms
+                impact = (
+                    f"<strong>Impact:</strong> For <strong>{service_name}</strong>, "
+                    "minor delays may be perceptible during fast typing, but overall experience remains good. "
+                    "This is within acceptable range for terminal applications."
+                )
+            else:
+                impact = f"<strong>Impact:</strong> Excellent performance for <strong>{service_name}</strong>. No noticeable impact."
+        elif service_type == "request-response":
+            # HTTP, HTTPS, DNS - request/response protocols
+            if max_jitter_ms > 10000:  # > 10 seconds
+                impact = (
+                    f"<strong>Impact:</strong> For <strong>{service_name}</strong>, "
+                    "users will experience <span style='color: #ffc107;'>⚠ slow page loads or API timeouts</span>. "
+                    "However, TCP buffering and retransmission ensure eventual delivery. "
+                    "Long pauses likely indicate network congestion or low request rate."
+                )
+            elif max_jitter_ms > 1000:  # > 1 second
+                impact = (
+                    f"<strong>Impact:</strong> For <strong>{service_name}</strong>, "
+                    "response times will be inconsistent but functional. "
+                    "TCP handles packet reordering, so reliability is maintained."
+                )
+            else:
+                impact = f"<strong>Impact:</strong> Acceptable performance for <strong>{service_name}</strong>. Minimal user impact."
+        else:
+            # Unknown service - use generic real-time application message
+            if max_jitter_ms > 10000:  # > 10 seconds
+                impact = (
+                    "<strong>Impact:</strong> For <strong>real-time applications</strong> (VoIP, video streaming, gaming), "
                     "this would make communication <span style='color: #dc3545;'>⚠ completely unusable</span>. "
                     "For batch processing or async APIs, this might be normal behavior."
                 )
@@ -197,6 +284,7 @@ class HTMLReportGenerator:
         total_retrans: int,
         rto_count: int,
         fast_retrans: int,
+        generic_retrans: int,
         duration: float,
         retrans_per_second: float,
         flow_confidence: str,
@@ -208,6 +296,7 @@ class HTMLReportGenerator:
             total_retrans: Total number of retransmissions
             rto_count: Number of RTO retransmissions
             fast_retrans: Number of fast retransmissions
+            generic_retrans: Number of generic retransmissions (50-200ms delay)
             duration: Flow duration in seconds
             retrans_per_second: Rate of retransmissions per second
             flow_confidence: Confidence level (confidence-high/medium/low)
@@ -216,15 +305,18 @@ class HTMLReportGenerator:
             HTML string with interpretation
         """
 
-        # Determine dominant mechanism
+        # Determine dominant mechanism (including generic)
         dominant_mechanism = "mixed"
         dominant_count = 0
-        if rto_count > fast_retrans and rto_count > 0:
+        if rto_count > fast_retrans and rto_count > generic_retrans and rto_count > 0:
             dominant_mechanism = "RTO"
             dominant_count = rto_count
-        elif fast_retrans > rto_count and fast_retrans > 0:
+        elif fast_retrans > rto_count and fast_retrans > generic_retrans and fast_retrans > 0:
             dominant_mechanism = "Fast Retransmission"
             dominant_count = fast_retrans
+        elif generic_retrans > rto_count and generic_retrans > fast_retrans and generic_retrans > 0:
+            dominant_mechanism = "Generic"
+            dominant_count = generic_retrans
         elif rto_count == fast_retrans and rto_count > 0:
             dominant_mechanism = "mixed"
             dominant_count = total_retrans
@@ -244,20 +336,35 @@ class HTMLReportGenerator:
                 f"over {self._format_duration(duration)}. <strong>{fast_retrans} ({percentage:.0f}%)</strong> were "
                 f"<strong>Fast Retransmissions</strong>, triggered by duplicate ACKs indicating out-of-order delivery."
             )
+        elif dominant_mechanism == "Generic":
+            percentage = (generic_retrans / total_retrans * 100) if total_retrans > 0 else 0
+            what_happened = (
+                f"This flow experienced <strong>{total_retrans} retransmission{'s' if total_retrans != 1 else ''}</strong> "
+                f"over {self._format_duration(duration)}. <strong>{generic_retrans} ({percentage:.0f}%)</strong> were "
+                f"<strong>Generic Retransmissions</strong> (delay between 50-200ms), likely due to moderate network congestion or packet loss."
+            )
         else:
             what_happened = (
                 f"This flow experienced <strong>{total_retrans} retransmission{'s' if total_retrans != 1 else ''}</strong> "
                 f"over {self._format_duration(duration)}, with a <strong>mix of mechanisms</strong>: "
-                f"{rto_count} RTO events and {fast_retrans} Fast Retransmissions."
+                f"{rto_count} RTO events, {fast_retrans} Fast Retransmissions, and {generic_retrans} Generic Retransmissions."
             )
+
+        # Format retransmission display based on duration
+        # For very short flows (< 1 sec), don't show per-second rate as it's misleading
+        # Instead, show absolute count with actual duration
+        if duration < 1.0:
+            retrans_display = f"<strong>{total_retrans} retransmissions</strong> in {self._format_duration(duration)}"
+        else:
+            retrans_display = f"<strong>{total_retrans} retransmissions</strong> (<strong>{retrans_per_second:.1f} per second</strong>)"
 
         # Why flagged - using absolute counts and rate per second
         if total_retrans > 50 or retrans_per_second > 5:
             severity_level = "HIGH"
             if duration > 0:
                 why_flagged = (
-                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced <strong>{total_retrans} retransmissions</strong> "
-                    f"(<strong>{retrans_per_second:.1f} per second</strong>), indicating <strong>significant packet loss or network congestion</strong>. "
+                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced {retrans_display}, "
+                    "indicating <strong>significant packet loss or network congestion</strong>. "
                     "This high frequency suggests persistent network issues."
                 )
             else:
@@ -269,8 +376,8 @@ class HTMLReportGenerator:
             severity_level = "MODERATE"
             if duration > 0:
                 why_flagged = (
-                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced <strong>{total_retrans} retransmissions</strong> "
-                    f"(<strong>{retrans_per_second:.1f} per second</strong>), suggesting <strong>intermittent packet loss</strong> or network congestion issues."
+                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced {retrans_display}, "
+                    "suggesting <strong>intermittent packet loss</strong> or network congestion issues."
                 )
             else:
                 why_flagged = (
@@ -281,8 +388,8 @@ class HTMLReportGenerator:
             severity_level = "LOW"
             if duration > 0:
                 why_flagged = (
-                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced <strong>{total_retrans} retransmissions</strong> "
-                    f"(<strong>{retrans_per_second:.1f} per second</strong>), which is relatively low and within acceptable range for most networks."
+                    f"<strong>Why flagged {severity_level}:</strong> This flow experienced {retrans_display}, "
+                    "which is relatively low and within acceptable range for most networks."
                 )
             else:
                 why_flagged = (
@@ -2101,16 +2208,27 @@ class HTMLReportGenerator:
 
                 # Parse flow string for IPs, ports, and Wireshark filter
                 # Format: "src_ip:src_port -> dst_ip:dst_port (proto)"
+                # For IPv6: "ipv6_addr:port -> ipv6_addr:port (proto)"
                 src_ip, src_port, dst_ip, dst_port = "0.0.0.0", "0", "0.0.0.0", "0"
                 try:
                     if " -> " in flow_str:
-                        parts = flow_str.replace(" -> ", ":").split(":")
-                        if len(parts) >= 4:
-                            src_ip = parts[0]
-                            src_port = parts[1]
-                            dst_ip = parts[2]
-                            dst_port_str = parts[3].split(" ")[0]  # Remove "(TCP)" or "(UDP)"
-                            dst_port = dst_port_str
+                        # Split by " -> " to get source and destination parts
+                        arrow_parts = flow_str.split(" -> ")
+                        if len(arrow_parts) >= 2:
+                            src_part = arrow_parts[0].strip()
+                            dst_part = arrow_parts[1].split(" ")[0].strip()  # Remove "(TCP)" or "(UDP)"
+
+                            # Extract port from src (last segment after last colon)
+                            src_colon_idx = src_part.rfind(":")
+                            if src_colon_idx > 0:
+                                src_ip = src_part[:src_colon_idx]
+                                src_port = src_part[src_colon_idx + 1:]
+
+                            # Extract port from dst (last segment after last colon)
+                            dst_colon_idx = dst_part.rfind(":")
+                            if dst_colon_idx > 0:
+                                dst_ip = dst_part[:dst_colon_idx]
+                                dst_port = dst_part[dst_colon_idx + 1:]
                 except (IndexError, ValueError):
                     pass  # Keep defaults if parsing fails
 
@@ -2122,7 +2240,7 @@ class HTMLReportGenerator:
                     pass
 
                 # Identify service and adjust severity
-                service_name, service_emoji, service_desc, expect_high_jitter = self._identify_service(dst_port_int)  # noqa: E501
+                service_name, service_emoji, service_desc, expect_high_jitter, service_type = self._identify_service(dst_port_int)  # noqa: E501
 
                 # Adjust severity badge if high jitter is expected for this service
                 adjusted_severity = severity
@@ -2187,6 +2305,7 @@ class HTMLReportGenerator:
                     severity=severity,
                     service_name=service_name,
                     expect_high_jitter=expect_high_jitter,
+                    service_type=service_type,
                 )
                 html += interpretation_html
 
@@ -2810,7 +2929,8 @@ class HTMLReportGenerator:
         # Count mechanisms
         rto_count = sum(1 for r in retrans_list if r.get("retrans_type") == "RTO")
         fast_retrans = sum(1 for r in retrans_list if r.get("retrans_type") == "Fast Retransmission")
-        other_count = total_retrans - rto_count - fast_retrans
+        generic_retrans = sum(1 for r in retrans_list if r.get("retrans_type") == "Retransmission")
+        other_count = total_retrans - rto_count - fast_retrans - generic_retrans
 
         # Determine overall confidence for this flow based on PATTERN CLARITY
         # HIGH confidence = Consistent single mechanism with sufficient sample size
@@ -2823,13 +2943,13 @@ class HTMLReportGenerator:
             if conf in confidence_counts:
                 confidence_counts[conf] += 1
 
-        # Calculate mechanism distribution
-        rto_count = sum(1 for r in retrans_list if r.get("retrans_type") == "RTO")
-        fast_count = sum(1 for r in retrans_list if r.get("retrans_type") == "Fast Retransmission")
+        # Use the corrected counts from validation above (don't recalculate from raw data)
+        # The counts have been adjusted for flow duration constraints
+        fast_count = fast_retrans
         spurious_count = confidence_counts["high"]  # Spurious = high confidence individual
 
-        # Determine which mechanism is dominant
-        max_mechanism_count = max(rto_count, fast_count, spurious_count)
+        # Determine which mechanism is dominant (using corrected counts)
+        max_mechanism_count = max(rto_count, fast_count, generic_retrans, spurious_count)
         mechanism_percentage = (max_mechanism_count / total_retrans * 100) if total_retrans > 0 else 0
         is_uniform = (max_mechanism_count == total_retrans)  # 100% of one mechanism
 
@@ -2872,6 +2992,37 @@ class HTMLReportGenerator:
             duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
         else:
             duration = 0
+
+        # VALIDATION: Fix classification inconsistencies based on flow duration
+        # Physical constraints: retransmission delays cannot exceed flow duration
+        # - Flow < 50ms  → Only Fast Retransmission (≤ 50ms) is possible
+        # - Flow < 200ms → No RTO (≥ 200ms) is possible, only Fast + Generic
+
+        if duration < 0.050:  # Flow < 50ms
+            # Reclassify: ALL → Fast Retransmission
+            if rto_count > 0 or generic_retrans > 0:
+                # Update counters
+                fast_retrans = total_retrans
+                rto_count = 0
+                generic_retrans = 0
+                other_count = 0
+
+                # Update individual events for consistency
+                for r in retrans_list:
+                    if r.get("retrans_type") in ["RTO", "Retransmission"]:
+                        r["retrans_type"] = "Fast Retransmission"
+
+        elif duration < 0.200:  # Flow 50-200ms
+            # Reclassify: RTO → Generic (cannot have 200ms+ delays in <200ms flow)
+            if rto_count > 0:
+                # Move RTO to Generic
+                generic_retrans += rto_count
+                rto_count = 0
+
+                # Update individual events
+                for r in retrans_list:
+                    if r.get("retrans_type") == "RTO":
+                        r["retrans_type"] = "Retransmission"  # Generic
 
         # Determine severity based on absolute count and rate per second
         # Note: We don't have per-flow packet count, so we use absolute thresholds
@@ -2920,6 +3071,10 @@ class HTMLReportGenerator:
               <span class="stat-value">{fast_retrans}</span>
           </div>
           <div class="flow-stat">
+              <span class="stat-label">Generic Retrans</span>
+              <span class="stat-value">{generic_retrans}</span>
+          </div>
+          <div class="flow-stat">
               <span class="stat-label">Duration</span>
               <span class="stat-value">{self._format_duration(duration)}</span>
           </div>
@@ -2931,6 +3086,7 @@ class HTMLReportGenerator:
             total_retrans=total_retrans,
             rto_count=rto_count,
             fast_retrans=fast_retrans,
+            generic_retrans=generic_retrans,
             duration=duration,
             retrans_per_second=retrans_per_second,
             flow_confidence=flow_confidence,

@@ -49,15 +49,21 @@ class DNSTunnelingDetector(BaseAnalyzer):
     """
     Detects DNS tunneling and data exfiltration attempts.
 
-    Detection criteria:
+    Detection criteria (REQUIRES 2+ indicators to flag):
     - Query length > 50 characters
-    - High entropy subdomains (>4.2 bits per character) - tuned to avoid K8s false positives
+    - High entropy subdomains (>4.2 bits per character)
     - High query frequency (>10 queries/min to same domain, min 1s window)
-    - Unusual record types (TXT, NULL, with large payloads)
-    - Base64/Hex encoded subdomains
+    - Unusual record types (TXT, NULL)
+    - Base64/Hex encoded subdomains (min 32 chars + entropy >5.0)
 
-    Fix for Issue #10:
-    - Entropy threshold raised from 3.5 to 4.2 (K8s avg: 3.9, tunneling avg: 4.5+)
+    False positive mitigation (v4.0):
+    - Cloud/CDN TLDs auto-whitelisted (Azure, AWS, GCP, Fastly, Cloudflare, etc.)
+    - Encoding detection stricter: min 32 chars + high entropy (>5.0) for base64
+    - Requires 2+ combined indicators instead of 1 (dramatically reduces false positives)
+    - Removed AAAA/MX from unusual types (too common in legitimate traffic)
+
+    Legacy fixes:
+    - Entropy threshold 4.2 (K8s avg: 3.9, tunneling avg: 4.5+)
     - Query rate requires minimum 1-second window for statistical validity
     - Kubernetes domains whitelisted (*.cluster.local)
     """
@@ -73,21 +79,68 @@ class DNSTunnelingDetector(BaseAnalyzer):
         "apple.com",
         "icloud.com",
         "amazon.com",
-        "amazonaws.com",
-        "cloudfront.net",
         "facebook.com",
-        "fbcdn.net",
-        "akamai.net",
-        "cloudflare.com",
+        "mozilla.org",
+        "firefox.com",
         "ubuntu.com",
         "debian.org",
         "fedoraproject.org",
-        "mozilla.org",
-        "firefox.com",
         # Kubernetes internal domains
         "cluster.local",
         "svc.cluster.local",
         "pod.cluster.local",
+    }
+
+    # Cloud/CDN TLD patterns - automatically whitelist these
+    # Instead of listing every subdomain, we whitelist by TLD pattern
+    CLOUD_CDN_TLDS = {
+        # Amazon/AWS
+        "amazonaws.com",
+        "cloudfront.net",
+        "awsstatic.com",
+        # Microsoft Azure
+        "azure.com",
+        "azurewebsites.net",
+        "cloudapp.net",
+        "trafficmanager.net",
+        "visualstudio.com",
+        "azurefd.net",
+        "azureedge.net",
+        "office365.com",
+        "sharepoint.com",
+        "office.com",
+        "onmicrosoft.com",
+        "microsoftonline.com",
+        # Google Cloud
+        "googleapis.com",
+        "googleusercontent.com",
+        "gstatic.com",
+        "appspot.com",
+        # CDN providers
+        "cloudflare.com",
+        "cloudflare.net",
+        "akamai.net",
+        "akamaized.net",
+        "akamaiedge.net",
+        "fastly.net",
+        "fastlylb.net",
+        "edgecastcdn.net",
+        "cdn77.org",
+        # Other cloud providers
+        "digitalocean.com",
+        "linode.com",
+        "vultr.com",
+        "heroku.com",
+        "herokuapp.com",
+        # Popular SaaS platforms
+        "slack.com",
+        "salesforce.com",
+        "atlassian.net",
+        "zendesk.com",
+        "shopify.com",
+        "stripe.com",
+        "twilio.com",
+        "sendgrid.net",
     }
 
     def __init__(
@@ -183,26 +236,36 @@ class DNSTunnelingDetector(BaseAnalyzer):
 
     @staticmethod
     def _detect_encoding_pattern(subdomain: str) -> list[str]:
-        """Detect encoding patterns in subdomain."""
+        """
+        Detect encoding patterns in subdomain.
+
+        Made more strict to avoid false positives with legitimate cloud services.
+        Base64 requires min 32 chars + high entropy to reduce false positives.
+        """
         patterns = []
 
         # Base64 pattern (alphanumeric + / and =)
-        if re.match(r"^[A-Za-z0-9+/=]{8,}$", subdomain):
-            patterns.append("base64")
+        # Stricter: Require min 32 chars AND check entropy to avoid false positives
+        # Example false positive: "sundry-f-net" matched the old pattern
+        if len(subdomain) >= 32 and re.match(r"^[A-Za-z0-9+/=]+$", subdomain):
+            # Verify high entropy (true base64 has ~6.0 bits/char)
+            entropy = DNSTunnelingDetector._calculate_entropy(subdomain)
+            if entropy > 5.0:  # High entropy confirms encoding
+                patterns.append("base64")
 
-        # Hex encoding pattern
-        if re.match(r"^[0-9a-fA-F]{16,}$", subdomain):
+        # Hex encoding pattern - also stricter (min 32 chars for data exfiltration)
+        if len(subdomain) >= 32 and re.match(r"^[0-9a-fA-F]+$", subdomain):
             patterns.append("hex")
 
-        # UUID pattern (used in some C2)
+        # UUID pattern (used in some C2) - kept as is, specific enough
         if re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", subdomain):
             patterns.append("uuid")
 
-        # Long random alphanumeric
-        if len(subdomain) > 20 and re.match(r"^[a-z0-9]+$", subdomain):
-            # Check if it looks random (few repeated chars)
+        # Long random alphanumeric - increased threshold to 40 chars
+        if len(subdomain) >= 40 and re.match(r"^[a-z0-9]+$", subdomain):
+            # Check if it looks random (high char diversity)
             char_freq = Counter(subdomain)
-            if len(char_freq) > len(subdomain) * 0.5:  # High diversity
+            if len(char_freq) > len(subdomain) * 0.6:  # Very high diversity (60%+)
                 patterns.append("random")
 
         return patterns
@@ -249,8 +312,10 @@ class DNSTunnelingDetector(BaseAnalyzer):
                     else:
                         base_domain = query_name
 
-                    # Skip whitelisted domains
+                    # Skip whitelisted domains (both exact and cloud/CDN TLDs)
                     if self._is_whitelisted(base_domain, self.WHITELIST_DOMAINS):
+                        continue
+                    if self._is_whitelisted(base_domain, self.CLOUD_CDN_TLDS):
                         continue
 
                     # Calculate query characteristics
@@ -340,37 +405,42 @@ class DNSTunnelingDetector(BaseAnalyzer):
             type_name = self._get_record_type_name(rtype)
             record_types[type_name] += 1
 
-        # Determine if suspicious
-        is_suspicious = False
+        # Collect all indicators (require MULTIPLE indicators to reduce false positives)
+        indicators = []
         reasons = []
 
-        # Check long queries
+        # Indicator 1: Long queries
         if avg_length > self.query_length_threshold:
-            is_suspicious = True
+            indicators.append("long_queries")
             reasons.append(f"long_queries (avg: {avg_length:.0f} chars)")
 
-        # Check high entropy
+        # Indicator 2: High entropy (true tunneling data)
         if avg_entropy > self.entropy_threshold:
-            is_suspicious = True
+            indicators.append("high_entropy")
             reasons.append(f"high_entropy (avg: {avg_entropy:.2f} bits/char)")
 
-        # Check high query rate
+        # Indicator 3: High query rate (excessive volume)
         if query_rate > self.query_rate_threshold:
-            is_suspicious = True
+            indicators.append("high_rate")
             reasons.append(f"high_rate ({query_rate:.1f} queries/min)")
 
-        # Check encoding patterns
+        # Indicator 4: Encoding patterns (base64/hex with high entropy)
         if suspicious_patterns:
-            is_suspicious = True
+            indicators.append("encoding")
             reasons.append(f"encoding: {', '.join(suspicious_patterns)}")
 
-        # Check unusual record types (TXT, NULL often used for tunneling)
-        unusual_types = {"TXT", "NULL", "AAAA", "MX"}
+        # Indicator 5: Unusual record types (TXT, NULL often used for tunneling)
+        unusual_types = {"TXT", "NULL"}  # Removed AAAA and MX (too common for legitimate use)
         if any(rtype in unusual_types for rtype in record_types.keys()):
             unusual_count = sum(count for rtype, count in record_types.items() if rtype in unusual_types)
-            if unusual_count > query_count * 0.2:  # >20% unusual
-                is_suspicious = True
+            if unusual_count > query_count * 0.3:  # >30% unusual (stricter)
+                indicators.append("unusual_records")
                 reasons.append(f"unusual_records ({unusual_count} {list(unusual_types & set(record_types.keys()))})")
+
+        # REQUIRE AT LEAST 2 INDICATORS TO FLAG AS SUSPICIOUS
+        # This dramatically reduces false positives from legitimate cloud/CDN services
+        # True tunneling will trigger multiple indicators (e.g., long + high_entropy + encoding)
+        is_suspicious = len(indicators) >= 2
 
         if is_suspicious:
             # Calculate severity

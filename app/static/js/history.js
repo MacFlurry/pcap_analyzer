@@ -11,7 +11,12 @@ class HistoryManager {
         this.historyTbody = document.getElementById('history-tbody');
         this.count = document.getElementById('count');
 
+        this.selectAllCheckbox = document.getElementById('select-all');
+        this.deleteSelectedBtn = document.getElementById('delete-selected');
+        this.selectedCountSpan = document.getElementById('selected-count');
+
         this.currentFilter = 'all';
+        this.selectedTasks = new Set();
 
         this.init();
     }
@@ -29,6 +34,16 @@ class HistoryManager {
         });
         document.getElementById('filter-failed').addEventListener('click', () => {
             this.setFilter('failed');
+        });
+
+        // Select all checkbox
+        this.selectAllCheckbox.addEventListener('change', () => {
+            this.toggleSelectAll();
+        });
+
+        // Delete selected button
+        this.deleteSelectedBtn.addEventListener('click', () => {
+            this.deleteSelected();
         });
     }
 
@@ -58,7 +73,11 @@ class HistoryManager {
             if (data.tasks && data.tasks.length > 0) {
                 // Filter tasks
                 let tasks = data.tasks;
-                if (this.currentFilter !== 'all') {
+
+                // Exclure les tâches expirées par défaut (sauf si filtre spécifique)
+                if (this.currentFilter === 'all') {
+                    tasks = tasks.filter(task => task.status !== 'expired');
+                } else {
                     tasks = tasks.filter(task => task.status === this.currentFilter);
                 }
 
@@ -94,8 +113,11 @@ class HistoryManager {
         this.emptyState.classList.add('hidden');
         this.historyContainer.classList.remove('hidden');
 
-        // Clear existing rows
+        // Clear existing rows and selection
         this.historyTbody.innerHTML = '';
+        this.selectedTasks.clear();
+        this.selectAllCheckbox.checked = false;
+        this.updateSelectionUI();
 
         // Add rows
         tasks.forEach(task => {
@@ -108,19 +130,47 @@ class HistoryManager {
     }
 
     createRow(task) {
-        const tr = document.createElement('tr');
+        // Create a grid row container
+        const gridRow = document.createElement('div');
+        gridRow.className = 'history-grid-row';
+        gridRow.dataset.taskId = task.task_id;
 
-        // Filename
-        const filenameTd = document.createElement('td');
-        filenameTd.innerHTML = `
-            <div class="flex items-center space-x-2">
-                <i class="fas fa-file-alt text-gray-400"></i>
-                <span class="font-medium text-gray-900 dark:text-white">${task.filename}</span>
+        // Checkbox cell (only for deletable tasks)
+        const checkboxCell = document.createElement('div');
+        checkboxCell.className = 'grid-cell grid-cell-checkbox';
+        if (['completed', 'failed', 'expired'].includes(task.status)) {
+            checkboxCell.innerHTML = `
+                <input type="checkbox" class="checkbox-modern task-checkbox" data-task-id="${task.task_id}">
+            `;
+            const checkbox = checkboxCell.querySelector('.task-checkbox');
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    this.selectedTasks.add(task.task_id);
+                } else {
+                    this.selectedTasks.delete(task.task_id);
+                }
+                this.updateSelectionUI();
+            });
+        }
+
+        // Filename cell
+        const filenameCell = document.createElement('div');
+        filenameCell.className = 'grid-cell grid-cell-file';
+        filenameCell.innerHTML = `
+            <div class="flex items-center space-x-3">
+                <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 flex items-center justify-center">
+                    <i class="fas fa-file-alt text-blue-600 dark:text-blue-300"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-900 dark:text-white truncate text-base">${task.filename}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Fichier PCAP</p>
+                </div>
             </div>
         `;
 
-        // Status
-        const statusTd = document.createElement('td');
+        // Status cell
+        const statusCell = document.createElement('div');
+        statusCell.className = 'grid-cell grid-cell-status';
         const statusIcon = window.utils.getStatusIcon(task.status);
         const statusBadge = window.utils.getStatusBadge(task.status);
         const statusText = {
@@ -131,66 +181,75 @@ class HistoryManager {
             expired: 'Expiré'
         }[task.status] || task.status;
 
-        statusTd.innerHTML = `
-            <span class="badge ${statusBadge}">
-                <i class="${statusIcon} mr-1"></i>
-                ${statusText}
+        statusCell.innerHTML = `
+            <span class="badge-modern ${statusBadge}">
+                <i class="${statusIcon}"></i>
+                <span>${statusText}</span>
             </span>
         `;
 
-        // Date
-        const dateTd = document.createElement('td');
-        dateTd.innerHTML = `
+        // Date cell
+        const dateCell = document.createElement('div');
+        dateCell.className = 'grid-cell grid-cell-date';
+        dateCell.innerHTML = `
             <div>
-                <div class="text-sm text-gray-900 dark:text-white">
+                <div class="text-sm font-medium text-gray-900 dark:text-white">
                     ${window.utils.formatDate(task.uploaded_at)}
                 </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                    ${window.utils.formatRelativeTime(task.uploaded_at)}
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <i class="far fa-clock mr-1"></i>${window.utils.formatRelativeTime(task.uploaded_at)}
                 </div>
             </div>
         `;
 
-        // Packets
-        const packetsTd = document.createElement('td');
+        // Packets cell
+        const packetsCell = document.createElement('div');
+        packetsCell.className = 'grid-cell grid-cell-packets';
         if (task.total_packets) {
-            packetsTd.innerHTML = `
-                <span class="text-gray-900 dark:text-white font-medium">
-                    ${task.total_packets.toLocaleString('fr-FR')}
-                </span>
+            packetsCell.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900 dark:to-purple-800 flex items-center justify-center">
+                        <i class="fas fa-network-wired text-xs text-purple-600 dark:text-purple-300"></i>
+                    </div>
+                    <span class="text-gray-900 dark:text-white font-semibold text-base">
+                        ${task.total_packets.toLocaleString('fr-FR')}
+                    </span>
+                </div>
             `;
         } else {
-            packetsTd.innerHTML = `<span class="text-gray-400">-</span>`;
+            packetsCell.innerHTML = `<span class="text-gray-400 text-sm">N/A</span>`;
         }
 
-        // Health Score
-        const scoreTd = document.createElement('td');
+        // Health Score cell
+        const scoreCell = document.createElement('div');
+        scoreCell.className = 'grid-cell grid-cell-score';
         if (task.health_score !== null && task.health_score !== undefined) {
-            const scoreColor = this.getScoreColor(task.health_score);
-            scoreTd.innerHTML = `
-                <div class="flex items-center space-x-2">
-                    <div class="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div class="h-full ${scoreColor}" style="width: ${task.health_score}%"></div>
+            const scoreClass = this.getScoreClass(task.health_score);
+            const scoreColorClass = this.getScoreColorClass(task.health_score);
+            scoreCell.innerHTML = `
+                <div class="score-display">
+                    <div class="score-bar-container">
+                        <div class="score-bar-fill ${scoreClass}" style="width: ${task.health_score}%"></div>
                     </div>
-                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                    <span class="score-value ${scoreColorClass}">
                         ${task.health_score.toFixed(0)}
                     </span>
                 </div>
             `;
         } else {
-            scoreTd.innerHTML = `<span class="text-gray-400">-</span>`;
+            scoreCell.innerHTML = `<span class="text-gray-400 text-sm">N/A</span>`;
         }
 
-        // Actions
-        const actionsTd = document.createElement('td');
-        actionsTd.className = 'text-right';
+        // Actions cell
+        const actionsCell = document.createElement('div');
+        actionsCell.className = 'grid-cell grid-cell-actions';
 
         const actions = [];
 
         // View report (si completed)
         if (task.status === 'completed' && task.report_html_url) {
             actions.push(`
-                <a href="${task.report_html_url}" class="text-primary hover:text-blue-700 transition-colors" title="Voir le rapport">
+                <a href="${task.report_html_url}" target="_blank" rel="noopener noreferrer" class="action-btn btn-view" title="Voir le rapport">
                     <i class="fas fa-eye"></i>
                 </a>
             `);
@@ -199,7 +258,7 @@ class HistoryManager {
         // View progress (si processing)
         if (task.status === 'processing') {
             actions.push(`
-                <a href="/progress/${task.task_id}" class="text-blue-600 hover:text-blue-700 transition-colors" title="Voir la progression">
+                <a href="/progress/${task.task_id}" class="action-btn btn-progress" title="Voir la progression">
                     <i class="fas fa-chart-line"></i>
                 </a>
             `);
@@ -208,7 +267,7 @@ class HistoryManager {
         // Download JSON (si completed)
         if (task.status === 'completed' && task.report_json_url) {
             actions.push(`
-                <a href="${task.report_json_url}" class="text-green-600 hover:text-green-700 transition-colors" title="Télécharger JSON">
+                <a href="${task.report_json_url}" class="action-btn btn-download" title="Télécharger JSON">
                     <i class="fas fa-download"></i>
                 </a>
             `);
@@ -218,28 +277,29 @@ class HistoryManager {
         if (['completed', 'failed', 'expired'].includes(task.status)) {
             actions.push(`
                 <button onclick="window.historyManager.deleteTask('${task.task_id}')"
-                        class="text-red-600 hover:text-red-700 transition-colors"
+                        class="action-btn btn-delete"
                         title="Supprimer">
                     <i class="fas fa-trash"></i>
                 </button>
             `);
         }
 
-        actionsTd.innerHTML = `
-            <div class="flex items-center justify-end space-x-3">
+        actionsCell.innerHTML = `
+            <div class="flex items-center justify-end space-x-2">
                 ${actions.join('')}
             </div>
         `;
 
-        // Append all cells
-        tr.appendChild(filenameTd);
-        tr.appendChild(statusTd);
-        tr.appendChild(dateTd);
-        tr.appendChild(packetsTd);
-        tr.appendChild(scoreTd);
-        tr.appendChild(actionsTd);
+        // Append all cells to grid row
+        gridRow.appendChild(checkboxCell);
+        gridRow.appendChild(filenameCell);
+        gridRow.appendChild(statusCell);
+        gridRow.appendChild(dateCell);
+        gridRow.appendChild(packetsCell);
+        gridRow.appendChild(scoreCell);
+        gridRow.appendChild(actionsCell);
 
-        return tr;
+        return gridRow;
     }
 
     getScoreColor(score) {
@@ -247,6 +307,104 @@ class HistoryManager {
         if (score >= 60) return 'bg-yellow-500';
         if (score >= 40) return 'bg-orange-500';
         return 'bg-red-500';
+    }
+
+    getScoreClass(score) {
+        if (score >= 80) return 'score-excellent';
+        if (score >= 60) return 'score-good';
+        if (score >= 40) return 'score-warning';
+        return 'score-critical';
+    }
+
+    getScoreColorClass(score) {
+        if (score >= 80) return 'score-excellent';
+        if (score >= 60) return 'score-good';
+        if (score >= 40) return 'score-warning';
+        return 'score-critical';
+    }
+
+    toggleSelectAll() {
+        const checkboxes = document.querySelectorAll('.task-checkbox');
+        const isChecked = this.selectAllCheckbox.checked;
+
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+            const taskId = checkbox.dataset.taskId;
+            if (isChecked) {
+                this.selectedTasks.add(taskId);
+            } else {
+                this.selectedTasks.delete(taskId);
+            }
+        });
+
+        this.updateSelectionUI();
+    }
+
+    updateSelectionUI() {
+        const count = this.selectedTasks.size;
+        this.selectedCountSpan.textContent = count;
+
+        if (count > 0) {
+            this.deleteSelectedBtn.classList.remove('hidden');
+        } else {
+            this.deleteSelectedBtn.classList.add('hidden');
+        }
+
+        // Update "select all" checkbox state
+        const checkboxes = document.querySelectorAll('.task-checkbox');
+        const allChecked = checkboxes.length > 0 && count === checkboxes.length;
+        this.selectAllCheckbox.checked = allChecked;
+    }
+
+    async deleteSelected() {
+        const count = this.selectedTasks.size;
+        if (count === 0) return;
+
+        if (!confirm(`Êtes-vous sûr de vouloir supprimer ${count} analyse(s) ?`)) {
+            return;
+        }
+
+        // Show loading overlay
+        window.loadingOverlay.show(
+            `Suppression en cours...`,
+            `Suppression de ${count} analyse(s)`
+        );
+
+        const taskIds = Array.from(this.selectedTasks);
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Delete tasks one by one
+        for (const taskId of taskIds) {
+            try {
+                const response = await fetch(`/api/reports/${taskId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+            } catch (error) {
+                console.error(`Failed to delete task ${taskId}:`, error);
+                errorCount++;
+            }
+        }
+
+        // Hide loading overlay
+        window.loadingOverlay.hide();
+
+        // Show result
+        if (successCount > 0) {
+            window.toast.success(`✓ ${successCount} analyse(s) supprimée(s) avec succès`);
+        }
+        if (errorCount > 0) {
+            window.toast.error(`❌ ${errorCount} analyse(s) n'ont pas pu être supprimée(s)`);
+        }
+
+        // Reload history
+        this.loadHistory();
     }
 
     async deleteTask(taskId) {
@@ -260,7 +418,8 @@ class HistoryManager {
             });
 
             if (response.ok) {
-                window.toast.success('Analyse supprimée');
+                window.toast.success('✓ Analyse supprimée avec succès');
+                // Recharger l'historique pour retirer l'élément de la liste
                 this.loadHistory();
             } else {
                 const data = await response.json();
@@ -268,7 +427,7 @@ class HistoryManager {
             }
         } catch (error) {
             console.error('Delete error:', error);
-            window.toast.error(error.message || 'Erreur lors de la suppression');
+            window.toast.error('❌ ' + (error.message || 'Erreur lors de la suppression'));
         }
     }
 }

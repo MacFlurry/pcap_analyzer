@@ -89,7 +89,7 @@ async def progress_event_generator(task_id: str) -> AsyncGenerator[str, None]:
                     "report_json_url": task_info.report_json_url,
                     "message": "Analyse terminée avec succès"
                     if task_info.status == TaskStatus.COMPLETED
-                    else "Analyse échouée",
+                    else (task_info.error_message or "Analyse échouée"),
                 }
 
                 # Ajouter l'URL du rapport si disponible

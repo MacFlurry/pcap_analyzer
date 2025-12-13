@@ -297,6 +297,50 @@ def analyze_pcap_hybrid(
     console.print("[cyan]Phase 2/2: Analyse approfondie des protocoles complexes...[/cyan]")
     configure_scapy_performance()
 
+    # PCAP-NG Compatibility Fix: Scapy's PcapReader cannot handle PCAP-NG properly
+    # Detect format and convert to standard PCAP if needed
+    pcap_for_scapy = pcap_file
+    temp_pcap_path = None
+
+    try:
+        import subprocess
+
+        # Check file format using tcpdump
+        result = subprocess.run(
+            ["tcpdump", "-r", pcap_file, "-c", "1"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        # If file is PCAP-NG, convert to standard PCAP for Scapy compatibility
+        if "pcap-ng" in result.stderr.lower() or "pcapng" in result.stderr.lower():
+            console.print("[yellow]⚠ PCAP-NG détecté - Conversion en PCAP standard pour Scapy...[/yellow]")
+
+            # Create temporary PCAP file
+            import tempfile
+
+            temp_fd, temp_pcap_path = tempfile.mkstemp(suffix=".pcap", prefix="scapy_")
+            os.close(temp_fd)  # Close file descriptor, we'll use the path
+
+            # Convert using tcpdump (faster and more reliable than editcap)
+            subprocess.run(
+                ["tcpdump", "-r", pcap_file, "-w", temp_pcap_path],
+                capture_output=True,
+                check=True,
+                timeout=60,
+            )
+
+            pcap_for_scapy = temp_pcap_path
+            console.print(f"[green]✓ Conversion réussie: {temp_pcap_path}[/green]")
+
+    except subprocess.TimeoutExpired:
+        console.print("[yellow]⚠ Conversion timeout - Utilisation du fichier original[/yellow]")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[yellow]⚠ Conversion échouée: {e} - Utilisation du fichier original[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]⚠ Erreur détection format: {e} - Utilisation du fichier original[/yellow]")
+
     # Only these analyzers need Scapy's deep packet inspection
     dns_analyzer = analyzer_dict["dns"]
     icmp_analyzer = analyzer_dict["icmp"]
@@ -318,6 +362,11 @@ def analyze_pcap_hybrid(
     lateral_movement_detector = LateralMovementDetector(include_localhost=include_localhost)
 
     # Sprint 10: Use streaming processor for memory efficiency
+    # If PCAP-NG was converted, reinitialize streaming processor with converted file
+    if temp_pcap_path is not None:
+        streaming_processor = StreamingProcessor(pcap_for_scapy)
+        perf_stats = streaming_processor.get_stats()
+
     processing_mode = perf_stats["processing_mode"]
     scapy_packets = []
     complex_packet_count = 0
@@ -336,7 +385,7 @@ def analyze_pcap_hybrid(
             ) as progress:
                 task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
 
-                with PcapReader(pcap_file) as reader:
+                with PcapReader(pcap_for_scapy) as reader:
                     for i, packet in enumerate(reader):
                         # Collect all packets for protocol/jitter analysis
                         scapy_packets.append(packet)
@@ -698,6 +747,14 @@ def analyze_pcap_hybrid(
     console.print(f"  Peak usage: {mem_report['peak_mb']:.2f} MB")
     console.print(f"  GC triggered: {mem_report['gc_triggered_count']} times")
     console.print(f"  Recommendation: {mem_report['recommendation']}")
+
+    # Cleanup temporary PCAP file if it was created for PCAP-NG conversion
+    if temp_pcap_path is not None and os.path.exists(temp_pcap_path):
+        try:
+            os.unlink(temp_pcap_path)
+            console.print(f"[cyan]✓ Fichier temporaire supprimé: {temp_pcap_path}[/cyan]")
+        except Exception as e:
+            console.print(f"[yellow]⚠ Erreur lors de la suppression du fichier temporaire: {e}[/yellow]")
 
     return results
 

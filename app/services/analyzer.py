@@ -17,6 +17,84 @@ from app.models.schemas import TaskStatus
 logger = logging.getLogger(__name__)
 
 
+def translate_error_to_human(error: Exception) -> str:
+    """
+    Traduit une erreur technique en message compréhensible pour l'utilisateur.
+
+    Args:
+        error: Exception à traduire
+
+    Returns:
+        Message d'erreur en français, compréhensible par l'utilisateur
+    """
+    error_msg = str(error).lower()
+    error_type = type(error).__name__
+
+    # Erreurs de fichier PCAP corrompu/tronqué
+    if "got" in error_msg and "needed at least" in error_msg:
+        return (
+            "Le fichier PCAP est corrompu ou tronqué. "
+            "Il semble incomplet et ne peut pas être analysé correctement. "
+            "Veuillez vérifier que la capture s'est terminée correctement."
+        )
+
+    # Erreur de couche réseau manquante (Scapy)
+    if "layer" in error_msg and "not found" in error_msg:
+        layer_name = str(error).split("[")[1].split("]")[0] if "[" in str(error) else "réseau"
+        return (
+            f"Le fichier PCAP contient des paquets sans couche {layer_name}. "
+            "Cela peut arriver avec certains types de captures (IPv6, tunnels, etc.). "
+            "Essayez avec un fichier de capture réseau standard (IPv4)."
+        )
+
+    # IndexError générique (problème de parsing)
+    if error_type == "IndexError":
+        return (
+            "Erreur lors de l'analyse des paquets réseau. "
+            "Le fichier contient probablement des paquets malformés ou des protocoles non supportés."
+        )
+
+    # Erreur de permissions
+    if "permission denied" in error_msg:
+        return (
+            "Erreur de permissions lors de la lecture du fichier. "
+            "Vérifiez que le fichier est accessible."
+        )
+
+    # Fichier vide
+    if "empty" in error_msg or "no packets" in error_msg:
+        return "Le fichier PCAP ne contient aucun paquet. Vérifiez que la capture a bien enregistré du trafic réseau."
+
+    # Fichier non trouvé (vérifier AVANT "not found" générique)
+    if "no such file" in error_msg:
+        return "Le fichier PCAP n'a pas été trouvé. Il a peut-être été supprimé ou déplacé."
+
+    # Erreur de format
+    if "invalid" in error_msg and ("pcap" in error_msg or "format" in error_msg):
+        return (
+            "Le format du fichier n'est pas valide. "
+            "Assurez-vous qu'il s'agit bien d'un fichier PCAP ou PCAP-NG."
+        )
+
+    # Erreur de mémoire
+    if "memory" in error_msg or "memoryerror" in error_type.lower():
+        return (
+            "Le fichier est trop volumineux pour être traité avec les ressources disponibles. "
+            "Essayez avec un fichier plus petit."
+        )
+
+    # Timeout
+    if "timeout" in error_msg:
+        return "L'analyse a pris trop de temps et a été interrompue. Le fichier est peut-être trop volumineux."
+
+    # Erreur générique avec le type d'erreur
+    if error_type in ["ValueError", "TypeError", "AttributeError"]:
+        return f"Erreur de traitement des données : {str(error)}"
+
+    # Par défaut, retourner l'erreur originale mais nettoyée
+    return f"Erreur inattendue : {str(error)}"
+
+
 class ProgressCallback:
     """
     Callback handler pour envoyer les mises à jour de progression via SSE.
@@ -183,14 +261,19 @@ class AnalyzerService:
             }
 
         except Exception as e:
+            # Traduire l'erreur technique en message compréhensible
+            human_error = translate_error_to_human(e)
             logger.error(f"Analysis failed for task {task_id}: {e}", exc_info=True)
+
             if progress_callback:
                 await progress_callback.update(
                     phase="failed",
                     progress_percent=0,
-                    message=f"Erreur: {str(e)}",
+                    message=human_error,
                 )
-            raise
+
+            # Re-raise avec le message traduit pour que le worker puisse le stocker
+            raise Exception(human_error) from e
 
     def _run_analysis_sync(self, pcap_path: str, config) -> dict[str, Any]:
         """

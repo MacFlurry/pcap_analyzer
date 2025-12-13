@@ -30,10 +30,16 @@
                     Échoués
                 </button>
             </div>
-            <button onclick="window.historyManager.loadHistory()" class="btn btn-secondary">
-                <i class="fas fa-sync-alt mr-2"></i>
-                Actualiser
-            </button>
+            <div class="flex space-x-2">
+                <button id="delete-selected" class="hidden btn btn-danger btn-sm">
+                    <i class="fas fa-trash mr-2"></i>
+                    Supprimer <span id="selected-count">0</span> sélection(s)
+                </button>
+                <button onclick="window.historyManager.loadHistory()" class="btn btn-secondary">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    Actualiser
+                </button>
+            </div>
         </div>
     </div>
 
@@ -62,23 +68,26 @@
 
     <!-- History Table -->
     <div id="history-container" class="hidden">
-        <div class="card overflow-hidden">
+        <div class="card overflow-hidden history-card">
             <div class="overflow-x-auto">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Fichier</th>
-                            <th>Statut</th>
-                            <th>Date</th>
-                            <th>Paquets</th>
-                            <th>Score</th>
-                            <th class="text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-tbody">
+                <div class="history-grid">
+                    <!-- Header row -->
+                    <div class="history-grid-header">
+                        <div class="grid-cell grid-cell-checkbox">
+                            <input type="checkbox" id="select-all" class="checkbox-modern" title="Tout sélectionner">
+                        </div>
+                        <div class="grid-cell grid-cell-file">FICHIER</div>
+                        <div class="grid-cell grid-cell-status">STATUT</div>
+                        <div class="grid-cell grid-cell-date">DATE</div>
+                        <div class="grid-cell grid-cell-packets">PAQUETS</div>
+                        <div class="grid-cell grid-cell-score">SCORE SANTÉ</div>
+                        <div class="grid-cell grid-cell-actions">ACTIONS</div>
+                    </div>
+                    <!-- Data rows container -->
+                    <div id="history-tbody" class="history-grid-body">
                         <!-- Rows will be added dynamically -->
-                    </tbody>
-                </table>
+                    </div>
+                </div>
             </div>
         </div>
 

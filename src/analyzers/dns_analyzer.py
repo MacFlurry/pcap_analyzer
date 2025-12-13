@@ -204,12 +204,21 @@ class DNSAnalyzer:
         if not dns.qd:  # Pas de question
             return
 
+        # Vérifier que le paquet a les couches IP et UDP requises
+        if not packet.haslayer(IP) or not packet.haslayer(UDP):
+            return
+
         timestamp = float(packet.time)
         ip = packet[IP]
         udp = packet[UDP]
 
-        query_name = dns.qd.qname.decode("utf-8") if isinstance(dns.qd.qname, bytes) else dns.qd.qname
-        query_type = self.DNS_TYPES.get(dns.qd.qtype, f"TYPE{dns.qd.qtype}")
+        # Extraire qname de manière sécurisée (certains paquets DNS n'ont pas de qname)
+        try:
+            query_name = dns.qd.qname.decode("utf-8") if isinstance(dns.qd.qname, bytes) else dns.qd.qname
+            query_type = self.DNS_TYPES.get(dns.qd.qtype, f"TYPE{dns.qd.qtype}")
+        except (AttributeError, IndexError):
+            # Paquet DNS malformé sans qname, ignorer
+            return
 
         query = DNSQuery(
             packet_num=packet_num,
@@ -259,13 +268,21 @@ class DNSAnalyzer:
 
     def _process_response(self, packet_num: int, packet: Packet, dns: DNS) -> None:
         """Traite une réponse DNS"""
+        # Vérifier que le paquet a la couche IP requise
+        if not packet.haslayer(IP):
+            return
+
         timestamp = float(packet.time)
         ip = packet[IP]
 
         # Extrait le nom de domaine de la question
         query_name = ""
         if dns.qd:
-            query_name = dns.qd.qname.decode("utf-8") if isinstance(dns.qd.qname, bytes) else dns.qd.qname
+            try:
+                query_name = dns.qd.qname.decode("utf-8") if isinstance(dns.qd.qname, bytes) else dns.qd.qname
+            except (AttributeError, IndexError):
+                # Paquet DNS malformé sans qname, utiliser chaîne vide
+                query_name = ""
 
         # Extrait les réponses
         answers = []

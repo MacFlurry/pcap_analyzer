@@ -123,7 +123,7 @@ class DatabaseService:
                 """
                 SELECT task_id, filename, status, uploaded_at, analyzed_at,
                        file_size_bytes, total_packets, health_score,
-                       report_html_path, report_json_path
+                       report_html_path, report_json_path, error_message
                 FROM tasks WHERE task_id = ?
                 """,
                 (task_id,),
@@ -145,6 +145,7 @@ class DatabaseService:
             health_score=row["health_score"],
             report_html_url=f"/api/reports/{task_id}/html" if row["report_html_path"] else None,
             report_json_url=f"/api/reports/{task_id}/json" if row["report_json_path"] else None,
+            error_message=row["error_message"],
         )
 
     async def update_status(self, task_id: str, status: TaskStatus, error_message: Optional[str] = None):
@@ -221,7 +222,7 @@ class DatabaseService:
                 """
                 SELECT task_id, filename, status, uploaded_at, analyzed_at,
                        file_size_bytes, total_packets, health_score,
-                       report_html_path, report_json_path
+                       report_html_path, report_json_path, error_message
                 FROM tasks
                 ORDER BY uploaded_at DESC
                 LIMIT ?
@@ -244,6 +245,7 @@ class DatabaseService:
                     health_score=row["health_score"],
                     report_html_url=f"/api/reports/{row['task_id']}/html" if row["report_html_path"] else None,
                     report_json_url=f"/api/reports/{row['task_id']}/json" if row["report_json_path"] else None,
+                    error_message=row["error_message"],
                 )
             )
 

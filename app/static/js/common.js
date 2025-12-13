@@ -334,7 +334,9 @@ class LoadingOverlay {
         this.overlay.className = 'loading-overlay';
         this.overlay.innerHTML = `
             <div class="loading-content">
-                <div class="loading-spinner"></div>
+                <div class="loading-spinner">
+                    <div class="spinner-dot"></div>
+                </div>
                 <div class="loading-title">${title}</div>
                 <div class="loading-message">${message}</div>
             </div>

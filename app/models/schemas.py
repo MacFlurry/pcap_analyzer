@@ -76,6 +76,7 @@ class TaskInfo(BaseModel):
     health_score: Optional[float] = None
     report_html_url: Optional[str] = None
     report_json_url: Optional[str] = None
+    error_message: Optional[str] = None  # Message d'erreur si échec
     expires_at: Optional[datetime] = None  # Date d'expiration (uploaded_at + 24h)
 
     @validator('expires_at', always=True)
