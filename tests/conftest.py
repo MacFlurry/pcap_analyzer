@@ -7,6 +7,8 @@ import os
 import tempfile
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
+from typing import Any, Optional
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +16,7 @@ from httpx import AsyncClient
 
 # Import app
 from app.main import app
+from app.services.analyzer import ProgressCallback
 from app.services.database import DatabaseService
 from app.services.worker import AnalysisWorker
 
@@ -34,6 +37,82 @@ def test_data_dir() -> Generator[Path, None, None]:
         (data_dir / "uploads").mkdir()
         (data_dir / "reports").mkdir()
         yield data_dir
+
+
+class MockAnalyzerService:
+    """Mock analyzer service that returns dummy results instantly"""
+
+    def __init__(self, data_dir: str):
+        self.data_dir = Path(data_dir)
+        self.reports_dir = self.data_dir / "reports"
+        self.reports_dir.mkdir(parents=True, exist_ok=True)
+
+    async def analyze_pcap(
+        self,
+        task_id: str,
+        pcap_path: str,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> dict[str, Any]:
+        """Mock analyze_pcap that returns dummy results instantly"""
+        # Send progress updates if callback provided
+        if progress_callback:
+            await progress_callback.update("initialization", 0, message="Starting analysis")
+            await progress_callback.update("analysis", 50, message="Analyzing packets")
+            await progress_callback.update("reporting", 100, message="Generating reports")
+
+        # Create dummy report files
+        html_path = self.reports_dir / f"{task_id}.html"
+        json_path = self.reports_dir / f"{task_id}.json"
+
+        html_path.write_text("<html><body>Mock Report</body></html>")
+        json_path.write_text('{"mock": true, "health_score": {"overall_score": 100.0}}')
+
+        return {
+            "results": {
+                "metadata": {"total_packets": 0},
+                "health_score": {"overall_score": 100.0},
+            },
+            "reports": {
+                "html": str(html_path),
+                "json": str(json_path),
+            },
+        }
+
+
+class MockWorker:
+    """Mock worker that doesn't actually process tasks, just accepts them"""
+
+    def __init__(self, data_dir: str):
+        self.data_dir = Path(data_dir)
+        self.is_running = False
+        self._queue_size = 0
+
+    async def start(self):
+        """Mock start - doesn't actually start a worker loop"""
+        self.is_running = True
+
+    async def stop(self):
+        """Mock stop"""
+        self.is_running = False
+
+    async def enqueue(self, task_id: str, pcap_path: str) -> bool:
+        """Mock enqueue - just accepts the task"""
+        self._queue_size += 1
+        return True
+
+    def get_queue_size(self) -> int:
+        """Return mock queue size"""
+        return self._queue_size
+
+    def get_progress_updates(self, task_id: str) -> list:
+        """Return empty progress updates"""
+        return []
+
+
+@pytest.fixture
+def mock_analyzer(test_data_dir: Path) -> MockAnalyzerService:
+    """Create mock analyzer service"""
+    return MockAnalyzerService(data_dir=str(test_data_dir))
 
 
 @pytest.fixture
@@ -77,12 +156,24 @@ def client(test_data_dir: Path, monkeypatch) -> Generator[TestClient, None, None
     from app.services import database
     database._db_service = None
 
-    # Reset Worker singleton as well
+    # Reset Worker singleton
     from app.services import worker
     worker._worker = None
 
+    # Mock get_worker to return a MockWorker that doesn't actually process tasks
+    # This prevents event loop issues and real PCAP analysis from running
+    def mock_get_worker():
+        if worker._worker is None:
+            worker._worker = MockWorker(data_dir=str(test_data_dir))
+        return worker._worker
+
+    monkeypatch.setattr(worker, "get_worker", mock_get_worker)
+
     with TestClient(app) as test_client:
         yield test_client
+
+    # Cleanup: reset worker singleton
+    worker._worker = None
 
 
 @pytest.fixture
