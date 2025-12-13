@@ -13,6 +13,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
         args: [--unsafe]  # Allow custom YAML tags
+        exclude: ^helm-chart/.*/templates/  # Exclude Helm templates (contain Jinja2)
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-json

@@ -84,7 +84,7 @@ def validate_pcap_magic_bytes(file_content: bytes) -> None:
 
 
 @router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
-async def upload_pcap(file: UploadFile = File(...)):
+async def upload_pcap(file: UploadFile = File(...)):  # noqa: B008
     """
     Upload un fichier PCAP et démarre l'analyse en arrière-plan.
 

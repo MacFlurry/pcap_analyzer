@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 async def progress_event_generator(task_id: str) -> AsyncGenerator[str, None]:
-    """
+    r"""
     Générateur d'événements SSE pour la progression d'une tâche.
 
     Format SSE:
