@@ -65,15 +65,23 @@ class ProgressMonitor {
             const taskData = await response.json();
             console.log('Initial task status:', taskData);
 
+            // Update filename if available
+            if (taskData.filename) {
+                this.updateFilename(taskData.filename);
+            }
+
             // Populate UI with initial data
             if (taskData.status) {
                 this.updateStatus(taskData.status);
             }
 
             // Si la tâche est en cours ou terminée, afficher les données disponibles
-            if (taskData.total_packets) {
+            if (taskData.total_packets !== undefined) {
                 const isCompleted = taskData.status === 'completed' || taskData.status === 'expired';
-                const processed = isCompleted ? taskData.total_packets : 0;
+                // Utiliser packets_processed si disponible, sinon total si terminé, sinon 0
+                const processed = taskData.packets_processed !== undefined
+                    ? taskData.packets_processed
+                    : (isCompleted ? taskData.total_packets : 0);
                 this.updatePackets(processed, taskData.total_packets);
             }
 
@@ -102,13 +110,25 @@ class ProgressMonitor {
                 } else if (taskData.status === 'expired') {
                     // Pour les tâches expirées, afficher un message
                     this.actionButtons.innerHTML = `
-                        <div class="alert alert-warning">
-                            <p>Les rapports ont expiré (conservation 24h). Veuillez réanalyser le fichier.</p>
+                        <div class="card glass">
+                            <div class="bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500 p-4 mb-4 rounded">
+                                <div class="flex items-start">
+                                    <i class="fas fa-hourglass-end text-orange-500 mt-1 mr-3"></i>
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-1">
+                                            Rapport expiré
+                                        </h3>
+                                        <p class="text-sm text-orange-700 dark:text-orange-400">
+                                            Les rapports ont expiré (conservation 24h). Veuillez réanalyser le fichier.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <a href="/" class="btn btn-primary w-full">
+                                <i class="fas fa-upload mr-2"></i>
+                                Nouvelle analyse
+                            </a>
                         </div>
-                        <a href="/" class="btn btn-primary">
-                            <i class="fas fa-upload mr-2"></i>
-                            Nouvelle analyse
-                        </a>
                     `;
                     this.actionButtons.classList.remove('hidden');
                 }
@@ -124,38 +144,54 @@ class ProgressMonitor {
                 this.currentAnalyzer.textContent = 'Échec';
                 const errorMsg = taskData.error_message || 'Erreur lors de l\'analyse';
                 this.currentMessage.textContent = errorMsg;
-                this.currentMessage.className = 'text-red-600 dark:text-red-400 font-medium';
+                this.currentMessage.className = 'text-center text-red-600 dark:text-red-400 font-medium';
                 this.addLogEvent(`✗ ${errorMsg}`, 'error');
 
                 // Show error box with detailed message
                 this.actionButtons.innerHTML = `
-                    <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-4 rounded">
-                        <div class="flex items-start">
-                            <i class="fas fa-exclamation-triangle text-red-500 mt-1 mr-3"></i>
-                            <div>
-                                <h3 class="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">
-                                    Analyse échouée
-                                </h3>
-                                <p class="text-sm text-red-700 dark:text-red-400">
-                                    ${errorMsg}
-                                </p>
+                    <div class="card glass">
+                        <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-4 rounded">
+                            <div class="flex items-start">
+                                <i class="fas fa-exclamation-triangle text-red-500 mt-1 mr-3"></i>
+                                <div>
+                                    <h3 class="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">
+                                        Analyse échouée
+                                    </h3>
+                                    <p class="text-sm text-red-700 dark:text-red-400">
+                                        ${errorMsg}
+                                    </p>
+                                </div>
                             </div>
                         </div>
+                        <a href="/" class="btn btn-primary w-full">
+                            <i class="fas fa-upload mr-2"></i>
+                            Réessayer avec un autre fichier
+                        </a>
                     </div>
-                    <a href="/" class="btn btn-primary w-full">
-                        <i class="fas fa-upload mr-2"></i>
-                        Réessayer avec un autre fichier
-                    </a>
                 `;
                 this.actionButtons.classList.remove('hidden');
             } else if (taskData.status === 'processing') {
                 this.updatePhase('analysis');
                 this.currentMessage.textContent = 'Analyse en cours...';
+            } else if (taskData.status === 'pending') {
+                this.updatePhase('metadata');
+                this.currentMessage.textContent = 'En attente de démarrage...';
             }
 
         } catch (error) {
             console.error('Error fetching initial status:', error);
             // Continue anyway - SSE will provide updates
+        }
+    }
+
+    updateFilename(filename) {
+        /**
+         * Met à jour le nom du fichier affiché.
+         * Corrige le bug où "Chargement..." reste affiché.
+         */
+        const filenameElement = document.getElementById('filename-text');
+        if (filenameElement && filename) {
+            filenameElement.textContent = filename;
         }
     }
 
@@ -182,6 +218,11 @@ class ProgressMonitor {
 
     handleProgressUpdate(data) {
         console.log('Progress update:', data);
+
+        // Update filename if provided
+        if (data.filename) {
+            this.updateFilename(data.filename);
+        }
 
         // Update progress circle with smooth animation
         if (data.progress_percent !== undefined) {
@@ -244,8 +285,8 @@ class ProgressMonitor {
         this.progressBarFill.style.width = `${percent}%`;
 
         // Update SVG circle (stroke-dashoffset)
-        // Circle circumference = 2 * PI * radius = 2 * 3.14159 * 90 = 565
-        const circumference = 565;
+        // Circle circumference = 2 * PI * radius = 2 * 3.14159 * 110 = 691
+        const circumference = 691;
         const offset = circumference - (percent / 100) * circumference;
         this.progressCircle.style.strokeDashoffset = offset;
     }
@@ -345,7 +386,8 @@ class ProgressMonitor {
             analysis: 'Analyse des paquets',
             finalize: 'Finalisation',
             completed: 'Terminé',
-            failed: 'Échec'
+            failed: 'Échec',
+            pending: 'En attente'
         };
 
         const phaseName = phases[phase] || phase;
@@ -481,30 +523,32 @@ class ProgressMonitor {
 
         // Update current message with error
         this.currentMessage.textContent = errorMsg;
-        this.currentMessage.className = 'text-red-600 dark:text-red-400 font-medium';
+        this.currentMessage.className = 'text-center text-red-600 dark:text-red-400 font-medium';
 
         // Add error log
         this.addLogEvent(`✗ ${errorMsg}`, 'error');
 
         // Show error box with detailed message
         this.actionButtons.innerHTML = `
-            <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-4 rounded">
-                <div class="flex items-start">
-                    <i class="fas fa-exclamation-triangle text-red-500 mt-1 mr-3"></i>
-                    <div>
-                        <h3 class="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">
-                            Analyse échouée
-                        </h3>
-                        <p class="text-sm text-red-700 dark:text-red-400">
-                            ${errorMsg}
-                        </p>
+            <div class="card glass">
+                <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-4 rounded">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-triangle text-red-500 mt-1 mr-3"></i>
+                        <div>
+                            <h3 class="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">
+                                Analyse échouée
+                            </h3>
+                            <p class="text-sm text-red-700 dark:text-red-400">
+                                ${errorMsg}
+                            </p>
+                        </div>
                     </div>
                 </div>
+                <a href="/" class="btn btn-primary w-full">
+                    <i class="fas fa-upload mr-2"></i>
+                    Réessayer avec un autre fichier
+                </a>
             </div>
-            <a href="/" class="btn btn-primary w-full">
-                <i class="fas fa-upload mr-2"></i>
-                Réessayer avec un autre fichier
-            </a>
         `;
         this.actionButtons.classList.remove('hidden');
     }

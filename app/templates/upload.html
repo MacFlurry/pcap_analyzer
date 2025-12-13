@@ -4,15 +4,19 @@
 {% block nav_upload %}active{% endblock %}
 
 {% block content %}
-<!-- Hero Section -->
+<!-- Hero Section - Modern Glassmorphism -->
 <div class="text-center mb-12">
-    <div class="inline-block bg-gradient-primary p-4 rounded-2xl mb-4 animate-bounce-subtle">
-        <i class="fas fa-network-wired text-white text-5xl"></i>
+    <div class="inline-block relative mb-6">
+        <!-- Animated background blur circles -->
+        <div class="absolute -inset-4 bg-gradient-to-r from-purple-600 to-blue-600 opacity-20 blur-3xl rounded-full animate-pulse-slow"></div>
+        <div class="relative bg-gradient-to-br from-purple-600 via-blue-600 to-purple-700 p-5 rounded-3xl shadow-2xl animate-bounce-subtle">
+            <i class="fas fa-network-wired text-white text-6xl"></i>
+        </div>
     </div>
-    <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+    <h1 class="text-5xl font-bold mb-4 bg-gradient-to-r from-purple-600 via-blue-600 to-purple-700 bg-clip-text text-transparent">
         Analysez vos fichiers PCAP
     </h1>
-    <p class="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+    <p class="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto leading-relaxed">
         Upload un fichier de capture réseau (.pcap ou .pcapng) pour une analyse automatisée complète.
         Détection d'anomalies, statistiques de performance et rapport détaillé.
     </p>
@@ -20,159 +24,310 @@
 
 <!-- Upload Zone -->
 <div class="max-w-4xl mx-auto">
-    <!-- Drag & Drop Area -->
-    <div id="dropzone" class="dropzone">
+    <!-- Drag & Drop Area - Modern Glassmorphism -->
+    <div id="dropzone" class="upload-dropzone">
         <input type="file" id="file-input" class="hidden" accept=".pcap,.pcapng" />
 
         <div id="dropzone-default" class="dropzone-content">
-            <i class="fas fa-cloud-upload-alt dropzone-icon"></i>
-            <h3 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
+            <!-- Animated Upload Icon -->
+            <div class="relative mb-6">
+                <div class="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 opacity-20 blur-2xl rounded-full animate-pulse"></div>
+                <div class="relative">
+                    <i class="fas fa-cloud-upload-alt text-8xl text-transparent bg-gradient-to-br from-purple-600 to-blue-600 bg-clip-text"></i>
+                </div>
+            </div>
+
+            <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-3">
                 Glissez-déposez votre fichier PCAP
             </h3>
-            <p class="text-gray-600 dark:text-gray-400 mb-4">
+            <p class="text-lg text-gray-600 dark:text-gray-400 mb-6">
                 ou cliquez pour parcourir vos fichiers
             </p>
-            <button id="browse-btn" class="btn btn-primary">
-                <i class="fas fa-folder-open mr-2"></i>
-                Parcourir
+
+            <button id="browse-btn" class="upload-browse-btn group">
+                <div class="flex items-center justify-center space-x-3">
+                    <div class="bg-white/20 dark:bg-white/10 p-2 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                        <i class="fas fa-folder-open text-xl"></i>
+                    </div>
+                    <span class="font-bold text-lg">Parcourir les fichiers</span>
+                </div>
             </button>
+
+            <!-- Supported formats hint -->
+            <div class="mt-6 flex items-center justify-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                <i class="fas fa-info-circle"></i>
+                <span>Formats supportés: .pcap, .pcapng (max 500 MB)</span>
+            </div>
         </div>
 
         <div id="dropzone-loading" class="hidden">
-            <div class="spinner-lg mx-auto mb-4"></div>
-            <p class="text-lg font-medium text-gray-700 dark:text-gray-300">
+            <div class="relative mb-6">
+                <div class="loading-spinner-upload mx-auto"></div>
+            </div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
                 Upload en cours...
             </p>
-            <p class="text-sm text-gray-500 dark:text-gray-400" id="upload-progress">
+            <p class="text-lg text-gray-600 dark:text-gray-400" id="upload-progress">
                 0%
             </p>
         </div>
     </div>
 
-    <!-- File Info (shown after selection) -->
-    <div id="file-info" class="hidden mt-6 card">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-                <div class="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
-                    <i class="fas fa-file-alt text-primary text-2xl"></i>
-                </div>
-                <div>
-                    <h4 class="font-semibold text-gray-900 dark:text-white" id="file-name"></h4>
-                    <p class="text-sm text-gray-500 dark:text-gray-400" id="file-size"></p>
+    <!-- File Preview Card (shown after selection) -->
+    <div id="file-info" class="hidden file-preview-card">
+        <!-- Header avec icône et info -->
+        <div class="file-preview-header">
+            <div class="file-icon-container">
+                <div class="file-icon-glow"></div>
+                <div class="file-icon-large">
+                    <i class="fas fa-file-code"></i>
                 </div>
             </div>
-            <button id="cancel-btn" class="text-gray-400 hover:text-danger transition-colors">
-                <i class="fas fa-times text-2xl"></i>
+
+            <div class="file-info-details">
+                <h3 class="file-name" id="file-name">attack_capture.pcap</h3>
+                <p class="file-size" id="file-size">47.67 KB</p>
+            </div>
+
+            <button id="cancel-btn" class="remove-file-btn" title="Supprimer le fichier">
+                <i class="fas fa-times"></i>
             </button>
         </div>
 
-        <div class="mt-4 flex space-x-4">
-            <button id="upload-btn" class="btn btn-primary flex-1">
-                <i class="fas fa-upload mr-2"></i>
-                Lancer l'analyse
+        <!-- Badge de statut -->
+        <div class="file-status-badge">
+            <i class="fas fa-check-circle"></i>
+            <span>Prêt à analyser</span>
+        </div>
+
+        <!-- Metadata supplémentaires -->
+        <div class="file-metadata">
+            <div class="metadata-item">
+                <i class="fas fa-file-alt"></i>
+                <span id="file-extension">PCAP</span>
+            </div>
+            <div class="metadata-item">
+                <i class="fas fa-calendar"></i>
+                <span id="file-date">Aujourd'hui</span>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="file-preview-actions">
+            <button id="upload-btn" class="action-btn-primary">
+                <i class="fas fa-play"></i>
+                <span>Lancer l'analyse</span>
             </button>
-            <button id="clear-btn" class="btn btn-secondary">
-                <i class="fas fa-trash mr-2"></i>
-                Annuler
+            <button id="clear-btn" class="action-btn-tertiary">
+                <i class="fas fa-redo"></i>
+                <span>Choisir un autre fichier</span>
             </button>
         </div>
     </div>
 
-    <!-- Information Cards -->
+    <!-- Information Cards - Modern Glassmorphism -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
         <!-- Formats acceptés -->
-        <div class="card">
+        <div class="info-card info-card-blue group">
             <div class="text-center">
-                <div class="bg-blue-100 dark:bg-blue-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-file-code text-primary text-2xl"></i>
+                <div class="relative mb-5">
+                    <div class="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-600 opacity-20 blur-xl rounded-full"></div>
+                    <div class="relative bg-gradient-to-br from-blue-500 to-blue-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto shadow-xl group-hover:scale-110 transition-transform duration-300">
+                        <i class="fas fa-file-code text-white text-3xl"></i>
+                    </div>
                 </div>
-                <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Formats</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                    .pcap, .pcapng
-                </p>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Formats acceptés</h3>
+                <div class="flex items-center justify-center space-x-2">
+                    <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-semibold">.pcap</span>
+                    <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-semibold">.pcapng</span>
+                </div>
             </div>
         </div>
 
         <!-- Taille max -->
-        <div class="card">
+        <div class="info-card info-card-green group">
             <div class="text-center">
-                <div class="bg-green-100 dark:bg-green-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-database text-success text-2xl"></i>
+                <div class="relative mb-5">
+                    <div class="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600 opacity-20 blur-xl rounded-full"></div>
+                    <div class="relative bg-gradient-to-br from-green-500 to-emerald-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto shadow-xl group-hover:scale-110 transition-transform duration-300">
+                        <i class="fas fa-database text-white text-3xl"></i>
+                    </div>
                 </div>
-                <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Taille max</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                    500 MB par fichier
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Taille maximale</h3>
+                <p class="text-2xl font-bold text-transparent bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text">
+                    500 MB
                 </p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">par fichier</p>
             </div>
         </div>
 
         <!-- Durée -->
-        <div class="card">
+        <div class="info-card info-card-purple group">
             <div class="text-center">
-                <div class="bg-purple-100 dark:bg-purple-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-clock text-purple-600 dark:text-purple-400 text-2xl"></i>
+                <div class="relative mb-5">
+                    <div class="absolute inset-0 bg-gradient-to-br from-purple-500 to-violet-600 opacity-20 blur-xl rounded-full"></div>
+                    <div class="relative bg-gradient-to-br from-purple-500 to-violet-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto shadow-xl group-hover:scale-110 transition-transform duration-300">
+                        <i class="fas fa-clock text-white text-3xl"></i>
+                    </div>
                 </div>
-                <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Analyse</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                    ~1-2 min / 100k paquets
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Durée d'analyse</h3>
+                <p class="text-2xl font-bold text-transparent bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text">
+                    ~1-2 min
                 </p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">pour 100k paquets</p>
             </div>
         </div>
     </div>
 
-    <!-- Recent Uploads (Queue Status) -->
-    <div class="mt-12 card">
-        <div class="card-header">
-            <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
-                <i class="fas fa-server mr-2 text-primary"></i>
+    <!-- Server Status - Modern Glassmorphism Cards -->
+    <div class="mt-16">
+        <div class="text-center mb-8">
+            <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                <i class="fas fa-server text-transparent bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text mr-3"></i>
                 État du serveur
-            </h3>
+            </h2>
+            <p class="text-gray-600 dark:text-gray-400">Statistiques en temps réel</p>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="stat-card">
-                <div class="stat-value" id="queue-size">-</div>
-                <div class="stat-label">Files d'attente</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Queue Size -->
+            <div class="server-stat-card server-stat-blue group">
+                <div class="flex items-center space-x-4">
+                    <div class="relative flex-shrink-0">
+                        <div class="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-600 opacity-20 blur-xl rounded-full"></div>
+                        <div class="relative bg-gradient-to-br from-blue-500 to-blue-600 p-4 rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            <i class="fas fa-layer-group text-white text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Files d'attente</div>
+                        <div class="text-3xl font-bold text-gray-900 dark:text-white" id="queue-size">-</div>
+                    </div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="queue-available">-</div>
-                <div class="stat-label">Slots disponibles</div>
+
+            <!-- Available Slots -->
+            <div class="server-stat-card server-stat-green group">
+                <div class="flex items-center space-x-4">
+                    <div class="relative flex-shrink-0">
+                        <div class="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600 opacity-20 blur-xl rounded-full"></div>
+                        <div class="relative bg-gradient-to-br from-green-500 to-emerald-600 p-4 rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            <i class="fas fa-check-circle text-white text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-green-600 dark:text-green-400 uppercase tracking-wider mb-1">Slots disponibles</div>
+                        <div class="text-3xl font-bold text-gray-900 dark:text-white" id="queue-available">-</div>
+                    </div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="tasks-completed">-</div>
-                <div class="stat-label">Analyses terminées</div>
+
+            <!-- Completed Tasks -->
+            <div class="server-stat-card server-stat-purple group">
+                <div class="flex items-center space-x-4">
+                    <div class="relative flex-shrink-0">
+                        <div class="absolute inset-0 bg-gradient-to-br from-purple-500 to-violet-600 opacity-20 blur-xl rounded-full"></div>
+                        <div class="relative bg-gradient-to-br from-purple-500 to-violet-600 p-4 rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            <i class="fas fa-chart-line text-white text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">Terminées</div>
+                        <div class="text-3xl font-bold text-gray-900 dark:text-white" id="tasks-completed">-</div>
+                    </div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="tasks-processing">-</div>
-                <div class="stat-label">En cours</div>
+
+            <!-- Processing Tasks -->
+            <div class="server-stat-card server-stat-orange group">
+                <div class="flex items-center space-x-4">
+                    <div class="relative flex-shrink-0">
+                        <div class="absolute inset-0 bg-gradient-to-br from-orange-500 to-amber-600 opacity-20 blur-xl rounded-full"></div>
+                        <div class="relative bg-gradient-to-br from-orange-500 to-amber-600 p-4 rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            <i class="fas fa-spinner text-white text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-1">En cours</div>
+                        <div class="text-3xl font-bold text-gray-900 dark:text-white" id="tasks-processing">-</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Help Section -->
-    <div class="mt-12 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-8">
-        <div class="flex items-start space-x-4">
-            <div class="bg-white dark:bg-gray-600 p-3 rounded-lg">
-                <i class="fas fa-info-circle text-primary text-2xl"></i>
+    <!-- Help Section - Modern Glassmorphism -->
+    <div class="mt-16 help-section-card">
+        <div class="flex flex-col lg:flex-row items-start gap-6">
+            <!-- Icon -->
+            <div class="relative flex-shrink-0">
+                <div class="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600 opacity-20 blur-2xl rounded-full"></div>
+                <div class="relative bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-600 p-6 rounded-3xl shadow-2xl">
+                    <i class="fas fa-lightbulb text-white text-4xl"></i>
+                </div>
             </div>
-            <div>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    Comment ça marche ?
+
+            <!-- Content -->
+            <div class="flex-1">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                    <span class="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                        Comment ça marche ?
+                    </span>
                 </h3>
-                <ol class="text-sm text-gray-600 dark:text-gray-300 space-y-2 list-decimal list-inside">
-                    <li>Uploadez votre fichier PCAP (capture Wireshark, tcpdump, etc.)</li>
-                    <li>L'analyse démarre automatiquement en arrière-plan</li>
-                    <li>Suivez la progression en temps réel</li>
-                    <li>Consultez le rapport HTML détaillé avec graphiques et recommandations</li>
-                </ol>
-                <div class="mt-4 flex space-x-4">
-                    <a href="/api/docs" target="_blank" class="text-primary hover:underline text-sm font-medium">
-                        <i class="fas fa-book mr-1"></i>
-                        Documentation API
+
+                <!-- Steps -->
+                <div class="space-y-3 mb-6">
+                    <div class="flex items-start space-x-3 group">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            1
+                        </div>
+                        <p class="text-gray-700 dark:text-gray-300 flex-1 pt-1">
+                            Uploadez votre fichier PCAP (capture Wireshark, tcpdump, etc.)
+                        </p>
+                    </div>
+                    <div class="flex items-start space-x-3 group">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            2
+                        </div>
+                        <p class="text-gray-700 dark:text-gray-300 flex-1 pt-1">
+                            L'analyse démarre automatiquement en arrière-plan
+                        </p>
+                    </div>
+                    <div class="flex items-start space-x-3 group">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            3
+                        </div>
+                        <p class="text-gray-700 dark:text-gray-300 flex-1 pt-1">
+                            Suivez la progression en temps réel avec des métriques détaillées
+                        </p>
+                    </div>
+                    <div class="flex items-start space-x-3 group">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            4
+                        </div>
+                        <p class="text-gray-700 dark:text-gray-300 flex-1 pt-1">
+                            Consultez le rapport HTML détaillé avec graphiques et recommandations
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Quick Links -->
+                <div class="flex flex-wrap gap-3">
+                    <a href="/api/docs" target="_blank" class="help-link-btn group">
+                        <div class="flex items-center space-x-2">
+                            <div class="bg-white/20 dark:bg-white/10 p-2 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                                <i class="fas fa-book"></i>
+                            </div>
+                            <span class="font-semibold">Documentation API</span>
+                        </div>
                     </a>
-                    <a href="/history" class="text-primary hover:underline text-sm font-medium">
-                        <i class="fas fa-history mr-1"></i>
-                        Voir l'historique
+                    <a href="/history" class="help-link-btn group">
+                        <div class="flex items-center space-x-2">
+                            <div class="bg-white/20 dark:bg-white/10 p-2 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                                <i class="fas fa-history"></i>
+                            </div>
+                            <span class="font-semibold">Voir l'historique</span>
+                        </div>
                     </a>
                 </div>
             </div>

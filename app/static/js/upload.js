@@ -102,8 +102,24 @@ class UploadManager {
         document.getElementById('file-name').textContent = file.name;
         document.getElementById('file-size').textContent = window.utils.formatFileSize(file.size);
 
-        // Masquer dropzone par défaut, afficher file info
-        this.dropzoneDefault.classList.add('hidden');
+        // Extraire l'extension et la mettre en majuscules
+        const ext = file.name.split('.').pop().toUpperCase();
+        document.getElementById('file-extension').textContent = ext;
+
+        // Afficher la date de modification ou "Aujourd'hui"
+        const fileDate = new Date(file.lastModified);
+        const today = new Date();
+        const isToday = fileDate.toDateString() === today.toDateString();
+
+        if (isToday) {
+            document.getElementById('file-date').textContent = 'Aujourd\'hui';
+        } else {
+            const options = { day: 'numeric', month: 'short', year: 'numeric' };
+            document.getElementById('file-date').textContent = fileDate.toLocaleDateString('fr-FR', options);
+        }
+
+        // Masquer complètement la dropzone et afficher la preview card avec animation
+        this.dropzone.classList.add('hidden');
         this.fileInfo.classList.remove('hidden');
 
         window.toast.success('Fichier sélectionné. Cliquez sur "Lancer l\'analyse" pour continuer.');
@@ -113,6 +129,7 @@ class UploadManager {
         this.selectedFile = null;
         this.fileInput.value = '';
         this.fileInfo.classList.add('hidden');
+        this.dropzone.classList.remove('hidden');
         this.dropzoneDefault.classList.remove('hidden');
         this.dropzoneLoading.classList.add('hidden');
         this.dropzone.classList.remove('error');

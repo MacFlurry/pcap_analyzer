@@ -44,6 +44,822 @@
 }
 
 /* ========================================
+   2.5. UPLOAD PAGE - FILE PREVIEW CARD
+   ======================================== */
+
+/* File Preview Card - Glassmorphism Design */
+.file-preview-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%);
+    backdrop-filter: blur(16px);
+    border-radius: 24px;
+    padding: 2.5rem;
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.15),
+                0 8px 24px rgba(118, 75, 162, 0.1);
+    border: 2px solid transparent;
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%),
+        linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    animation: fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-top: 1.5rem;
+}
+
+.dark .file-preview-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%),
+        linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.25),
+                0 8px 24px rgba(118, 75, 162, 0.2);
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Preview Header */
+.file-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+/* File Icon Container */
+.file-icon-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.file-icon-glow {
+    position: absolute;
+    inset: -12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    opacity: 0.3;
+    border-radius: 50%;
+    filter: blur(20px);
+    animation: pulse-glow 3s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.1);
+    }
+}
+
+.file-icon-large {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4),
+                0 4px 12px rgba(118, 75, 162, 0.3);
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+.file-icon-large i {
+    font-size: 2.5rem;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* File Info Details */
+.file-info-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+    word-break: break-all;
+    line-height: 1.3;
+}
+
+.dark .file-name {
+    color: #f3f4f6;
+}
+
+.file-size {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.dark .file-size {
+    color: #9ca3af;
+}
+
+/* Remove File Button */
+.remove-file-btn {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+    border: 2px solid rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.dark .remove-file-btn {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+.remove-file-btn:hover {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border-color: #ef4444;
+    color: white;
+    transform: rotate(90deg) scale(1.1);
+    box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+}
+
+.remove-file-btn i {
+    font-size: 1.25rem;
+}
+
+/* Status Badge */
+.file-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: #065f46;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.dark .file-status-badge {
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+    color: #a7f3d0;
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.file-status-badge i {
+    font-size: 1rem;
+    animation: pulse-check 2s ease-in-out infinite;
+}
+
+@keyframes pulse-check {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.15);
+    }
+}
+
+/* File Metadata */
+.file-metadata {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    border-radius: 14px;
+    border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.dark .file-metadata {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border-color: rgba(102, 126, 234, 0.2);
+}
+
+.metadata-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.dark .metadata-item {
+    color: #d1d5db;
+}
+
+.metadata-item i {
+    color: #667eea;
+    font-size: 1rem;
+}
+
+.dark .metadata-item i {
+    color: #a78bfa;
+}
+
+/* Preview Actions */
+.file-preview-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.file-preview-actions button {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-size: 1rem;
+}
+
+.file-preview-actions button i {
+    font-size: 1.125rem;
+}
+
+/* Responsive - Mobile */
+@media (max-width: 640px) {
+    .file-preview-card {
+        padding: 1.75rem 1.25rem;
+    }
+
+    .file-preview-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .file-icon-large {
+        width: 64px;
+        height: 64px;
+    }
+
+    .file-icon-large i {
+        font-size: 2rem;
+    }
+
+    .file-name {
+        font-size: 1.25rem;
+    }
+
+    .remove-file-btn {
+        position: absolute;
+        top: 0;
+        right: 0;
+    }
+
+    .file-preview-actions {
+        flex-direction: column;
+    }
+
+    .file-preview-actions button {
+        min-width: 100%;
+    }
+
+    .file-metadata {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+}
+
+/* ========================================
+   2.6. UPLOAD PAGE - MODERN DROPZONE
+   ======================================== */
+
+/* Modern Upload Dropzone with Glassmorphism */
+.upload-dropzone {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%);
+    backdrop-filter: blur(12px);
+    border: 3px dashed transparent;
+    border-radius: 24px;
+    padding: 4rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.1),
+                0 4px 12px rgba(118, 75, 162, 0.08);
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%),
+        linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    position: relative;
+}
+
+.dark .upload-dropzone {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%),
+        linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2),
+                0 4px 12px rgba(118, 75, 162, 0.15);
+}
+
+.upload-dropzone::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 24px;
+    padding: 3px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.6;
+    transition: opacity 0.4s ease;
+}
+
+.upload-dropzone:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.2),
+                0 8px 24px rgba(118, 75, 162, 0.15);
+}
+
+.dark .upload-dropzone:hover {
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.3),
+                0 8px 24px rgba(118, 75, 162, 0.25);
+}
+
+.upload-dropzone:hover::before {
+    opacity: 1;
+}
+
+/* Dragover state */
+.upload-dropzone.dragover {
+    transform: scale(1.02);
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.3),
+                0 8px 24px rgba(118, 75, 162, 0.2),
+                inset 0 0 60px rgba(102, 126, 234, 0.1);
+}
+
+.dark .upload-dropzone.dragover {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.4),
+                0 8px 24px rgba(118, 75, 162, 0.3),
+                inset 0 0 60px rgba(102, 126, 234, 0.15);
+}
+
+/* Browse Button */
+.upload-browse-btn {
+    position: relative;
+    overflow: hidden;
+    padding: 1rem 2.5rem;
+    border-radius: 1rem;
+    font-weight: 700;
+    color: white;
+    transition: all 0.3s ease-out;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4),
+                0 4px 12px rgba(118, 75, 162, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+}
+
+.upload-browse-btn::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(135deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.1) 45%,
+        rgba(255, 255, 255, 0.3) 50%,
+        rgba(255, 255, 255, 0.1) 55%,
+        transparent 100%);
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+    transition: transform 0.6s ease;
+}
+
+.upload-browse-btn:hover::before {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+}
+
+.upload-browse-btn:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5),
+                0 6px 16px rgba(118, 75, 162, 0.4);
+}
+
+.upload-browse-btn:active {
+    transform: translateY(0) scale(1);
+}
+
+/* Loading Spinner for Upload */
+.loading-spinner-upload {
+    width: 80px;
+    height: 80px;
+    border: 6px solid rgba(102, 126, 234, 0.15);
+    border-top-color: #667eea;
+    border-right-color: #764ba2;
+    border-radius: 50%;
+    animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* ========================================
+   2.7. PROGRESS PAGE - UNIFIED DESIGN SYSTEM
+   ======================================== */
+
+/* Main Progress Card - Glassmorphism */
+.progress-main-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%);
+    backdrop-filter: blur(16px);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.12),
+                0 4px 16px rgba(118, 75, 162, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 2px solid transparent;
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .progress-main-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2),
+                0 4px 16px rgba(118, 75, 162, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Stats Card - Glassmorphism */
+.progress-stats-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%);
+    backdrop-filter: blur(16px);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.12),
+                0 4px 16px rgba(118, 75, 162, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 2px solid transparent;
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .progress-stats-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2),
+                0 4px 16px rgba(118, 75, 162, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Individual Stat Items - Unified Glassmorphism with Color Accents */
+.progress-stat-item {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(249, 250, 251, 0.5) 100%);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .progress-stat-item {
+    background: linear-gradient(135deg, rgba(55, 65, 81, 0.6) 0%, rgba(31, 41, 55, 0.5) 100%);
+    border: 1px solid rgba(75, 85, 99, 0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.progress-stat-item:hover {
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.dark .progress-stat-item:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Color Accent Borders for Stats */
+.progress-stat-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 16px 0 0 16px;
+    transition: width 0.3s ease;
+}
+
+.progress-stat-item:hover::before {
+    width: 6px;
+}
+
+.stat-blue::before {
+    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.stat-green::before {
+    background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+}
+
+.stat-purple::before {
+    background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+.stat-orange::before {
+    background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+}
+
+/* Icon Wrappers - Unified Style */
+.stat-icon-wrapper {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.375rem;
+    flex-shrink: 0;
+    backdrop-filter: blur(8px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.stat-icon-wrapper i {
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.progress-stat-item:hover .stat-icon-wrapper {
+    transform: scale(1.05) rotate(-2deg);
+}
+
+.stat-icon-blue {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #3b82f6;
+}
+
+.dark .stat-icon-blue {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(37, 99, 235, 0.2) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
+}
+
+.stat-icon-green {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #10b981;
+}
+
+.dark .stat-icon-green {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.2) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+}
+
+.stat-icon-purple {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(124, 58, 237, 0.1) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #8b5cf6;
+}
+
+.dark .stat-icon-purple {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(124, 58, 237, 0.2) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #a78bfa;
+}
+
+.stat-icon-orange {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #f59e0b;
+}
+
+.dark .stat-icon-orange {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.2) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+}
+
+/* Stat Labels - Unified Typography */
+.stat-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+}
+
+.dark .stat-label {
+    color: #9ca3af;
+}
+
+.stat-value-text {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.3;
+}
+
+.dark .stat-value-text {
+    color: #f9fafb;
+}
+
+/* Actions Card - Glassmorphism */
+.progress-actions-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%);
+    backdrop-filter: blur(16px);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.12),
+                0 4px 16px rgba(118, 75, 162, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 2px solid transparent;
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .progress-actions-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2),
+                0 4px 16px rgba(118, 75, 162, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Event Log Card - Glassmorphism */
+.progress-log-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%);
+    backdrop-filter: blur(16px);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.12),
+                0 4px 16px rgba(118, 75, 162, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 2px solid transparent;
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .progress-log-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2),
+                0 4px 16px rgba(118, 75, 162, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.progress-log-header {
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 2px solid rgba(102, 126, 234, 0.15);
+}
+
+.dark .progress-log-header {
+    border-bottom: 2px solid rgba(102, 126, 234, 0.25);
+}
+
+/* Task Info Card - Glassmorphism */
+.progress-task-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%);
+    backdrop-filter: blur(16px);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.12),
+                0 4px 16px rgba(118, 75, 162, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 2px solid transparent;
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .progress-task-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%),
+        linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2),
+                0 4px 16px rgba(118, 75, 162, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive Adjustments for Progress Page */
+@media (max-width: 768px) {
+    .progress-main-card,
+    .progress-stats-card,
+    .progress-actions-card,
+    .progress-log-card,
+    .progress-task-card {
+        border-radius: 20px;
+        padding: 1.5rem;
+    }
+
+    .progress-stat-item {
+        border-radius: 14px;
+        padding: 1rem 1.25rem;
+    }
+
+    .stat-icon-wrapper {
+        width: 48px;
+        height: 48px;
+        font-size: 1.125rem;
+        border-radius: 12px;
+    }
+
+    .stat-value-text {
+        font-size: 1rem;
+    }
+}
+
+/* ========================================
    3. PROGRESS COMPONENTS
    ======================================== */
 
@@ -102,6 +918,18 @@
            border border-gray-200/50 dark:border-gray-700/50;
 }
 
+/* Enhanced glass effect for progress page */
+.card.glass {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(249, 250, 251, 0.85) 100%);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.dark .card.glass {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.9) 0%, rgba(17, 24, 39, 0.85) 100%);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
 /* ========================================
    5. BUTTONS
    ======================================== */
@@ -141,6 +969,154 @@
     @apply bg-transparent border-2 border-primary text-primary
            hover:bg-primary hover:text-white
            focus:ring-blue-300;
+}
+
+/* ========================================
+   5.5. ACTION BUTTONS (Progress Page)
+   ======================================== */
+
+/* Primary Action Button - Gradient Purple/Blue avec Glassmorphism */
+.action-btn-primary {
+    @apply relative overflow-hidden px-8 py-4 rounded-xl font-bold
+           transition-all duration-300 ease-out
+           focus:outline-none focus:ring-4 focus:ring-purple-300 dark:focus:ring-purple-600;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff !important;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4),
+                0 4px 12px rgba(118, 75, 162, 0.3);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.action-btn-primary * {
+    color: #ffffff !important;
+}
+
+.action-btn-primary::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(135deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.1) 45%,
+        rgba(255, 255, 255, 0.3) 50%,
+        rgba(255, 255, 255, 0.1) 55%,
+        transparent 100%);
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+    transition: transform 0.6s ease;
+}
+
+.action-btn-primary:hover::before {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+}
+
+.action-btn-primary:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5),
+                0 6px 16px rgba(118, 75, 162, 0.4);
+}
+
+.action-btn-primary:active {
+    transform: translateY(-1px) scale(1);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4),
+                0 3px 8px rgba(118, 75, 162, 0.3);
+}
+
+.dark .action-btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.6),
+                0 4px 12px rgba(118, 75, 162, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.dark .action-btn-primary:hover {
+    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.7),
+                0 6px 16px rgba(118, 75, 162, 0.6);
+}
+
+/* Secondary Action Button - Glass Outline Style */
+.action-btn-secondary {
+    @apply relative overflow-hidden px-6 py-3.5 rounded-xl font-semibold
+           transition-all duration-300 ease-out
+           focus:outline-none focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(102, 126, 234, 0.3);
+    color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.dark .action-btn-secondary {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    border: 2px solid rgba(102, 126, 234, 0.4);
+    color: #a78bfa;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+}
+
+.action-btn-secondary:hover {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    border-color: rgba(102, 126, 234, 0.5);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.25);
+}
+
+.dark .action-btn-secondary:hover {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.25) 0%, rgba(118, 75, 162, 0.25) 100%);
+    border-color: rgba(102, 126, 234, 0.6);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
+}
+
+.action-btn-secondary:active {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+/* Tertiary Action Button - Subtle Glass Style */
+.action-btn-tertiary {
+    @apply relative overflow-hidden px-6 py-3.5 rounded-xl font-semibold
+           transition-all duration-300 ease-out
+           focus:outline-none focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, rgba(107, 114, 128, 0.1) 0%, rgba(75, 85, 99, 0.1) 100%);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(107, 114, 128, 0.2);
+    color: #4b5563;
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.1);
+}
+
+.dark .action-btn-tertiary {
+    background: linear-gradient(135deg, rgba(156, 163, 175, 0.15) 0%, rgba(107, 114, 128, 0.15) 100%);
+    border: 2px solid rgba(156, 163, 175, 0.3);
+    color: #d1d5db;
+    box-shadow: 0 4px 12px rgba(156, 163, 175, 0.15);
+}
+
+.action-btn-tertiary:hover {
+    background: linear-gradient(135deg, rgba(107, 114, 128, 0.2) 0%, rgba(75, 85, 99, 0.2) 100%);
+    border-color: rgba(107, 114, 128, 0.4);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(107, 114, 128, 0.2);
+}
+
+.dark .action-btn-tertiary:hover {
+    background: linear-gradient(135deg, rgba(156, 163, 175, 0.25) 0%, rgba(107, 114, 128, 0.25) 100%);
+    border-color: rgba(156, 163, 175, 0.4);
+    box-shadow: 0 8px 20px rgba(156, 163, 175, 0.25);
+}
+
+.action-btn-tertiary:active {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.15);
 }
 
 /* ========================================
@@ -861,6 +1837,40 @@
     animation: bounce-subtle 2s ease-in-out infinite;
 }
 
+/* Progress page specific animations */
+@keyframes gradient-shift {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+.progress-stat-card {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progress-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes rotate-continuous {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.progress-ring {
+    filter: drop-shadow(0 4px 8px rgba(102, 126, 234, 0.3));
+}
+
 /* ========================================
    11. ACCESSIBILITY
    ======================================== */
@@ -969,4 +1979,206 @@
     to {
         transform: rotate(360deg);
     }
+}
+
+/* ========================================
+   14. UPLOAD PAGE - INFO CARDS
+   ======================================== */
+
+/* Information Cards with Glassmorphism */
+.info-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(249, 250, 251, 0.85) 100%);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .info-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.9) 0%, rgba(17, 24, 39, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.info-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+}
+
+.dark .info-card:hover {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* Blue Card */
+.info-card-blue:hover {
+    box-shadow: 0 20px 60px rgba(59, 130, 246, 0.25);
+}
+
+.dark .info-card-blue:hover {
+    box-shadow: 0 20px 60px rgba(59, 130, 246, 0.35);
+}
+
+/* Green Card */
+.info-card-green:hover {
+    box-shadow: 0 20px 60px rgba(16, 185, 129, 0.25);
+}
+
+.dark .info-card-green:hover {
+    box-shadow: 0 20px 60px rgba(16, 185, 129, 0.35);
+}
+
+/* Purple Card */
+.info-card-purple:hover {
+    box-shadow: 0 20px 60px rgba(139, 92, 246, 0.25);
+}
+
+.dark .info-card-purple:hover {
+    box-shadow: 0 20px 60px rgba(139, 92, 246, 0.35);
+}
+
+/* ========================================
+   15. UPLOAD PAGE - SERVER STATS
+   ======================================== */
+
+/* Server Statistics Cards */
+.server-stat-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(249, 250, 251, 0.85) 100%);
+    backdrop-filter: blur(10px);
+    border-radius: 18px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .server-stat-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.9) 0%, rgba(17, 24, 39, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.server-stat-card:hover {
+    transform: translateY(-4px);
+}
+
+/* Blue Stats Card */
+.server-stat-blue {
+    border-left: 4px solid #3b82f6;
+}
+
+.server-stat-blue:hover {
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
+}
+
+.dark .server-stat-blue:hover {
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+}
+
+/* Green Stats Card */
+.server-stat-green {
+    border-left: 4px solid #10b981;
+}
+
+.server-stat-green:hover {
+    box-shadow: 0 8px 32px rgba(16, 185, 129, 0.2);
+}
+
+.dark .server-stat-green:hover {
+    box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
+}
+
+/* Purple Stats Card */
+.server-stat-purple {
+    border-left: 4px solid #8b5cf6;
+}
+
+.server-stat-purple:hover {
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.2);
+}
+
+.dark .server-stat-purple:hover {
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+}
+
+/* Orange Stats Card */
+.server-stat-orange {
+    border-left: 4px solid #f59e0b;
+}
+
+.server-stat-orange:hover {
+    box-shadow: 0 8px 32px rgba(245, 158, 11, 0.2);
+}
+
+.dark .server-stat-orange:hover {
+    box-shadow: 0 8px 32px rgba(245, 158, 11, 0.3);
+}
+
+/* ========================================
+   16. UPLOAD PAGE - HELP SECTION
+   ======================================== */
+
+/* Help Section Card */
+.help-section-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(249, 250, 251, 0.85) 100%);
+    backdrop-filter: blur(12px);
+    border-radius: 24px;
+    padding: 2.5rem;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.1),
+                0 4px 12px rgba(118, 75, 162, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .help-section-card {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.9) 0%, rgba(17, 24, 39, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.15),
+                0 4px 12px rgba(118, 75, 162, 0.12);
+}
+
+.help-section-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.15),
+                0 8px 24px rgba(118, 75, 162, 0.1);
+}
+
+.dark .help-section-card:hover {
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.25),
+                0 8px 24px rgba(118, 75, 162, 0.2);
+}
+
+/* Help Link Buttons */
+.help-link-btn {
+    position: relative;
+    overflow: hidden;
+    padding: 0.875rem 1.5rem;
+    border-radius: 0.875rem;
+    font-weight: 600;
+    color: white;
+    transition: all 0.3s ease-out;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    display: inline-block;
+}
+
+.dark .help-link-btn {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.8) 100%);
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+}
+
+.help-link-btn:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+}
+
+.dark .help-link-btn:hover {
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5);
+}
+
+.help-link-btn:active {
+    transform: translateY(0) scale(1);
 }

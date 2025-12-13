@@ -4,7 +4,7 @@
 
 {% block content %}
 <!-- Progress Header -->
-<div class="max-w-5xl mx-auto">
+<div class="max-w-6xl mx-auto">
     <!-- Back button -->
     <div class="mb-6">
         <a href="/" class="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">
@@ -13,16 +13,17 @@
         </a>
     </div>
 
-    <!-- Main Progress Card -->
-    <div class="card">
-        <!-- Status Badge -->
-        <div class="flex justify-between items-start mb-6">
+    <!-- Header with Status -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                    Analyse PCAP
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <i class="fas fa-chart-line text-primary mr-2"></i>
+                    Analyse en cours
                 </h1>
                 <p class="text-gray-600 dark:text-gray-400" id="filename">
-                    Chargement...
+                    <i class="fas fa-file-alt mr-1"></i>
+                    <span id="filename-text">En attente des données...</span>
                 </p>
             </div>
             <span id="status-badge" class="badge badge-processing">
@@ -30,129 +31,172 @@
                 En cours
             </span>
         </div>
+    </div>
 
-        <!-- Progress Circle -->
-        <div class="flex flex-col md:flex-row items-center justify-center space-y-8 md:space-y-0 md:space-x-20 my-12">
-            <!-- SVG Circle Progress -->
-            <div class="relative">
-                <svg class="progress-ring" width="200" height="200">
-                    <circle class="text-gray-200 dark:text-gray-700"
-                            stroke="currentColor"
-                            stroke-width="10"
-                            fill="none"
-                            r="90"
-                            cx="100"
-                            cy="100"/>
-                    <circle id="progress-circle"
-                            class="progress-ring-circle text-primary"
-                            stroke="url(#gradient-primary)"
-                            stroke-width="10"
-                            fill="none"
-                            r="90"
-                            cx="100"
-                            cy="100"
-                            style="stroke-dasharray: 565; stroke-dashoffset: 565;"/>
-                    <defs>
-                        <linearGradient id="gradient-primary" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-                        </linearGradient>
-                    </defs>
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center">
-                    <div class="text-center">
-                        <div class="text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent" id="progress-percent">
-                            0%
-                        </div>
-                        <div class="text-sm text-gray-500 dark:text-gray-400 mt-1" id="progress-phase">
-                            Initialisation
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Stats -->
-            <div class="space-y-4 w-full md:w-80">
-                <!-- Phase -->
-                <div class="flex items-center space-x-3">
-                    <div class="bg-blue-100 dark:bg-blue-900 p-2 rounded-lg">
-                        <i class="fas fa-tasks text-primary"></i>
-                    </div>
-                    <div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase">Phase</div>
-                        <div class="font-semibold text-gray-900 dark:text-white" id="current-phase">-</div>
-                    </div>
-                </div>
-
-                <!-- Packets Processed -->
-                <div class="flex items-center space-x-3">
-                    <div class="bg-green-100 dark:bg-green-900 p-2 rounded-lg">
-                        <i class="fas fa-network-wired text-success"></i>
-                    </div>
-                    <div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase">Paquets</div>
-                        <div class="font-semibold text-gray-900 dark:text-white" id="packets-count">
-                            0 / 0
+    <!-- Main Progress Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        <!-- Progress Circle - Large Column -->
+        <div class="lg:col-span-2">
+            <div class="progress-main-card">
+                <div class="flex flex-col items-center justify-center py-12">
+                    <!-- SVG Circle Progress -->
+                    <div class="relative mb-6">
+                        <svg class="progress-ring" width="240" height="240">
+                            <circle class="text-gray-200 dark:text-gray-700"
+                                    stroke="currentColor"
+                                    stroke-width="12"
+                                    fill="none"
+                                    r="110"
+                                    cx="120"
+                                    cy="120"/>
+                            <circle id="progress-circle"
+                                    class="progress-ring-circle text-primary"
+                                    stroke="url(#gradient-primary)"
+                                    stroke-width="12"
+                                    fill="none"
+                                    r="110"
+                                    cx="120"
+                                    cy="120"
+                                    style="stroke-dasharray: 691; stroke-dashoffset: 691;"/>
+                            <defs>
+                                <linearGradient id="gradient-primary" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="text-center">
+                                <div class="text-6xl font-bold bg-gradient-primary bg-clip-text text-transparent" id="progress-percent">
+                                    0%
+                                </div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400 mt-2 font-medium" id="progress-phase">
+                                    Initialisation
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Current Analyzer -->
-                <div class="flex items-center space-x-3">
-                    <div class="bg-purple-100 dark:bg-purple-900 p-2 rounded-lg">
-                        <i class="fas fa-microscope text-purple-600 dark:text-purple-400"></i>
+                    <!-- Linear Progress Bar -->
+                    <div class="w-full max-w-md mb-4">
+                        <div class="progress-bar">
+                            <div id="progress-bar-fill" class="progress-fill" style="width: 0%"></div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase">Analyseur</div>
-                        <div class="font-semibold text-gray-900 dark:text-white text-sm" id="current-analyzer">-</div>
-                    </div>
-                </div>
 
-                <!-- Elapsed Time -->
-                <div class="flex items-center space-x-3">
-                    <div class="bg-orange-100 dark:bg-orange-900 p-2 rounded-lg">
-                        <i class="fas fa-clock text-warning"></i>
-                    </div>
-                    <div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase">Durée</div>
-                        <div class="font-semibold text-gray-900 dark:text-white" id="elapsed-time">0s</div>
+                    <!-- Current Message -->
+                    <div id="current-message" class="text-center text-gray-600 dark:text-gray-400 font-medium">
+                        Connexion au serveur...
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Linear Progress Bar (Alternative) -->
-        <div class="progress-bar mb-4">
-            <div id="progress-bar-fill" class="progress-fill" style="width: 0%"></div>
-        </div>
+        <!-- Stats Column -->
+        <div class="lg:col-span-1">
+            <div class="progress-stats-card h-full">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+                    <i class="fas fa-chart-bar text-primary mr-2"></i>
+                    Statistiques
+                </h3>
+                <div class="space-y-4">
+                    <!-- Phase -->
+                    <div class="progress-stat-item stat-blue">
+                        <div class="flex items-center space-x-4">
+                            <div class="stat-icon-wrapper stat-icon-blue">
+                                <i class="fas fa-tasks"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="stat-label">Phase</div>
+                                <div class="stat-value-text" id="current-phase">En attente</div>
+                            </div>
+                        </div>
+                    </div>
 
-        <!-- Current Message -->
-        <div id="current-message" class="text-center text-gray-600 dark:text-gray-400 mb-6">
-            Connexion au serveur...
-        </div>
+                    <!-- Packets Processed -->
+                    <div class="progress-stat-item stat-green">
+                        <div class="flex items-center space-x-4">
+                            <div class="stat-icon-wrapper stat-icon-green">
+                                <i class="fas fa-network-wired"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="stat-label">Paquets</div>
+                                <div class="stat-value-text" id="packets-count">0 / 0</div>
+                            </div>
+                        </div>
+                    </div>
 
-        <!-- Action Button (hidden until completed) -->
-        <div id="action-buttons" class="hidden flex space-x-4">
-            <a id="view-report-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-success flex-1">
-                <i class="fas fa-file-alt mr-2"></i>
-                Voir le rapport HTML
-            </a>
-            <a id="download-json-btn" href="#" class="btn btn-secondary">
-                <i class="fas fa-download mr-2"></i>
-                JSON
-            </a>
-            <a href="/" class="btn btn-outline">
-                <i class="fas fa-upload mr-2"></i>
-                Nouvelle analyse
-            </a>
+                    <!-- Current Analyzer -->
+                    <div class="progress-stat-item stat-purple">
+                        <div class="flex items-center space-x-4">
+                            <div class="stat-icon-wrapper stat-icon-purple">
+                                <i class="fas fa-microscope"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="stat-label">Analyseur</div>
+                                <div class="stat-value-text truncate" id="current-analyzer">En attente</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Elapsed Time -->
+                    <div class="progress-stat-item stat-orange">
+                        <div class="flex items-center space-x-4">
+                            <div class="stat-icon-wrapper stat-icon-orange">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="stat-label">Durée</div>
+                                <div class="stat-value-text" id="elapsed-time">0s</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons (hidden until completed) -->
+    <div id="action-buttons" class="hidden mb-8">
+        <div class="progress-actions-card">
+            <div class="flex flex-col sm:flex-row gap-4">
+                <!-- Primary CTA - Voir le rapport HTML -->
+                <a id="view-report-btn" href="#" target="_blank" rel="noopener noreferrer"
+                   class="action-btn-primary group flex-1">
+                    <div class="flex items-center justify-center space-x-3">
+                        <div class="bg-white/20 dark:bg-white/10 p-2 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                            <i class="fas fa-file-alt text-lg"></i>
+                        </div>
+                        <span class="font-bold text-base">Voir le rapport HTML</span>
+                    </div>
+                </a>
+
+                <!-- Secondary Button - Télécharger JSON -->
+                <a id="download-json-btn" href="#"
+                   class="action-btn-secondary group">
+                    <div class="flex items-center justify-center space-x-2">
+                        <i class="fas fa-download text-base group-hover:scale-110 transition-transform duration-300"></i>
+                        <span class="font-semibold">Télécharger JSON</span>
+                    </div>
+                </a>
+
+                <!-- Tertiary Button - Nouvelle analyse -->
+                <a href="/"
+                   class="action-btn-tertiary group">
+                    <div class="flex items-center justify-center space-x-2">
+                        <i class="fas fa-upload text-base group-hover:scale-110 transition-transform duration-300"></i>
+                        <span class="font-semibold">Nouvelle analyse</span>
+                    </div>
+                </a>
+            </div>
         </div>
     </div>
 
     <!-- Event Log -->
-    <div class="card mt-8">
-        <div class="card-header">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
-                <i class="fas fa-list mr-2 text-primary"></i>
+    <div class="progress-log-card">
+        <div class="progress-log-header">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                <i class="fas fa-list-ul text-primary mr-2"></i>
                 Journal d'événements
             </h2>
         </div>
@@ -160,27 +204,39 @@
         <div id="event-log" class="space-y-2 max-h-96 overflow-y-auto">
             <!-- Events will be added here dynamically -->
             <div class="text-center text-gray-500 dark:text-gray-400 py-8">
-                <i class="fas fa-info-circle text-2xl mb-2"></i>
-                <p>En attente d'événements...</p>
+                <i class="fas fa-info-circle text-3xl mb-2"></i>
+                <p class="font-medium">En attente d'événements...</p>
             </div>
         </div>
     </div>
 
     <!-- Task Info -->
-    <div class="mt-8 bg-gray-100 dark:bg-gray-800 rounded-lg p-4">
-        <div class="flex items-center justify-between text-sm">
-            <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
-                <i class="fas fa-fingerprint"></i>
-                <span>Task ID:</span>
-                <code class="bg-white dark:bg-gray-700 px-2 py-1 rounded text-primary font-mono" id="task-id"></code>
-                <button onclick="window.utils.copyToClipboard(document.getElementById('task-id').textContent)"
-                        class="text-gray-400 hover:text-primary transition-colors">
-                    <i class="fas fa-copy"></i>
-                </button>
+    <div class="mt-8 progress-task-card">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-primary p-2 rounded-lg">
+                    <i class="fas fa-fingerprint text-white"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Task ID</div>
+                    <div class="flex items-center space-x-2">
+                        <code class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-primary font-mono text-sm" id="task-id"></code>
+                        <button onclick="window.utils.copyToClipboard(document.getElementById('task-id').textContent)"
+                                class="text-gray-400 hover:text-primary transition-colors"
+                                title="Copier">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="text-gray-600 dark:text-gray-400">
-                <i class="fas fa-clock mr-1"></i>
-                <span id="start-time">-</span>
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 p-2 rounded-lg">
+                    <i class="fas fa-calendar-alt text-primary"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Début</div>
+                    <div class="text-gray-900 dark:text-white font-medium" id="start-time">-</div>
+                </div>
             </div>
         </div>
     </div>
