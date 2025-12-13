@@ -48,7 +48,15 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 ```bash
 git clone https://github.com/MacFlurry/pcap_analyzer.git
 cd pcap_analyzer
+
+# Créer et activer un environnement virtuel
+python3 -m venv venv
+source venv/bin/activate  # Sur Windows: venv\Scripts\activate
+
+# Installer les dépendances
 pip install -e .
+
+# Utiliser l'analyseur
 pcap_analyzer analyze capture.pcap
 ```
 
