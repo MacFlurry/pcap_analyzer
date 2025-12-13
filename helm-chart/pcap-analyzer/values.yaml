@@ -1,0 +1,33 @@
+# Default values for pcap-analyzer
+replicaCount: 1
+
+image:
+  repository: pcap-analyzer
+  tag: latest
+  pullPolicy: Never  # Use local image for kind
+
+service:
+  type: NodePort
+  port: 8000
+  nodePort: 30080
+
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  storageClass: standard  # kind default storage class
+
+resources:
+  limits:
+    memory: 4Gi
+    cpu: "2"
+  requests:
+    memory: 1Gi
+    cpu: "1"
+
+env:
+  maxUploadSizeMB: "500"
+  reportTTLHours: "24"
+  dataDir: "/data"
+  logLevel: "INFO"
+  maxQueueSize: "5"

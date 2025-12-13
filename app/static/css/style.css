@@ -1153,28 +1153,181 @@
 
 .toast {
     @apply flex items-center space-x-3 px-6 py-4 rounded-lg shadow-2xl
-           border-l-4 bg-white dark:bg-gray-800
            transform transition-all duration-300
            animate-slide-in-right;
     font-size: 1rem;
     min-width: 320px;
     z-index: 9999;
+    position: relative;
+    backdrop-filter: blur(16px);
+    border: 2px solid transparent;
 }
 
+/* Toast Success - Green Glassmorphism */
 .toast-success {
-    @apply border-success bg-green-50 dark:bg-green-900/20;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 253, 244, 0.95) 100%);
+    border-left: 4px solid #10b981;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25),
+                0 4px 12px rgba(5, 150, 105, 0.15);
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 253, 244, 0.95) 100%),
+        linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
 }
 
+.dark .toast-success {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(6, 78, 59, 0.95) 100%);
+    border-left: 4px solid #10b981;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35),
+                0 4px 12px rgba(5, 150, 105, 0.25);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(6, 78, 59, 0.95) 100%),
+        linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+}
+
+/* Toast Error - Red Glassmorphism */
 .toast-error {
-    @apply border-danger bg-red-50 dark:bg-red-900/20;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 242, 242, 0.95) 100%);
+    border-left: 4px solid #ef4444;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.25),
+                0 4px 12px rgba(220, 38, 38, 0.15);
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 242, 242, 0.95) 100%),
+        linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
 }
 
+.dark .toast-error {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(127, 29, 29, 0.95) 100%);
+    border-left: 4px solid #ef4444;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35),
+                0 4px 12px rgba(220, 38, 38, 0.25);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(127, 29, 29, 0.95) 100%),
+        linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+}
+
+/* Toast Warning - Orange Glassmorphism */
 .toast-warning {
-    @apply border-warning bg-yellow-50 dark:bg-yellow-900/20;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 252, 232, 0.95) 100%);
+    border-left: 4px solid #f59e0b;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25),
+                0 4px 12px rgba(217, 119, 6, 0.15);
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 252, 232, 0.95) 100%),
+        linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.1) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
 }
 
+.dark .toast-warning {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(120, 53, 15, 0.95) 100%);
+    border-left: 4px solid #f59e0b;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.35),
+                0 4px 12px rgba(217, 119, 6, 0.25);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(120, 53, 15, 0.95) 100%),
+        linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+}
+
+/* Toast Info - Blue Glassmorphism */
 .toast-info {
-    @apply border-primary bg-blue-50 dark:bg-blue-900/20;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(239, 246, 255, 0.95) 100%);
+    border-left: 4px solid #3b82f6;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.25),
+                0 4px 12px rgba(37, 99, 235, 0.15);
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(239, 246, 255, 0.95) 100%),
+        linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+}
+
+.dark .toast-info {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(30, 58, 138, 0.95) 100%);
+    border-left: 4px solid #3b82f6;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35),
+                0 4px 12px rgba(37, 99, 235, 0.25);
+    background-image:
+        linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(30, 58, 138, 0.95) 100%),
+        linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+}
+
+/* Toast Text Colors - High Contrast */
+.toast p {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.dark .toast p {
+    color: #f3f4f6;
+    font-weight: 600;
+}
+
+/* Toast Icon Colors - Enhanced Visibility */
+.toast-success .text-success {
+    color: #065f46 !important;
+    font-size: 1.25rem;
+}
+
+.dark .toast-success .text-success {
+    color: #34d399 !important;
+}
+
+.toast-error .text-danger {
+    color: #991b1b !important;
+    font-size: 1.25rem;
+}
+
+.dark .toast-error .text-danger {
+    color: #f87171 !important;
+}
+
+.toast-warning .text-warning {
+    color: #92400e !important;
+    font-size: 1.25rem;
+}
+
+.dark .toast-warning .text-warning {
+    color: #fbbf24 !important;
+}
+
+.toast-info .text-primary {
+    color: #1e40af !important;
+    font-size: 1.25rem;
+}
+
+.dark .toast-info .text-primary {
+    color: #60a5fa !important;
+}
+
+/* Close button styling */
+.toast button {
+    color: #6b7280;
+    transition: all 0.2s ease;
+}
+
+.toast button:hover {
+    color: #1f2937;
+    transform: scale(1.1);
+}
+
+.dark .toast button {
+    color: #9ca3af;
+}
+
+.dark .toast button:hover {
+    color: #f3f4f6;
 }
 
 @keyframes slide-in-right {

@@ -73,7 +73,7 @@ Conforme aux standards RFC 793 (TCP), RFC 2581 (Congestion Control), RFC 6298 (R
 
 ## Installation
 
-### Option 1: Interface Web avec Docker (Recommandé)
+### Option 1: Interface Web avec Docker Compose (Recommandé pour développement)
 
 ```bash
 # Cloner le repository
@@ -99,7 +99,122 @@ docker-compose up -d
 docker-compose down
 ```
 
-### Option 2: Installation CLI (Analyse locale)
+### Option 2: Déploiement Kubernetes avec kind + Helm (Recommandé pour testing/production)
+
+**Prérequis:**
+- Docker installé
+- kubectl installé ([doc officielle](https://kubernetes.io/docs/tasks/tools/))
+- kind installé: `brew install kind` (macOS) ou voir [kind.sigs.k8s.io](https://kind.sigs.k8s.io/docs/user/quick-start/)
+- Helm installé: `brew install helm` (macOS) ou voir [helm.sh](https://helm.sh/docs/intro/install/)
+
+**Installation:**
+
+```bash
+# 1. Cloner le repository
+git clone https://github.com/MacFlurry/pcap_analyzer.git
+cd pcap_analyzer
+
+# 2. Build l'image Docker
+docker build -t pcap-analyzer:latest .
+
+# 3. Créer le cluster kind avec port mapping
+cat <<EOF | kind create cluster --name pcap-analyzer --config -
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraPortMappings:
+  - containerPort: 30080
+    hostPort: 8000
+    protocol: TCP
+EOF
+
+# 4. Charger l'image dans le cluster kind
+kind load docker-image pcap-analyzer:latest --name pcap-analyzer
+
+# 5. Déployer avec Helm
+helm install pcap-analyzer ./helm-chart/pcap-analyzer \
+  --create-namespace \
+  --namespace pcap-analyzer
+
+# 6. Vérifier le déploiement
+kubectl get all -n pcap-analyzer
+
+# Accéder à l'interface web
+# http://localhost:8000
+```
+
+**Configuration Helm:**
+
+Le chart Helm utilise les valeurs par défaut suivantes (`helm-chart/pcap-analyzer/values.yaml`):
+
+```yaml
+replicaCount: 1  # Limité à 1 (SQLite + stockage local)
+
+image:
+  repository: pcap-analyzer
+  tag: latest
+  pullPolicy: Never
+
+service:
+  type: NodePort
+  port: 8000
+  nodePort: 30080
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: standard
+
+resources:
+  limits:
+    memory: 4Gi
+    cpu: "2"
+  requests:
+    memory: 1Gi
+    cpu: "1"
+```
+
+**Personnaliser les valeurs:**
+
+```bash
+# Modifier les ressources, taille du stockage, etc.
+helm install pcap-analyzer ./helm-chart/pcap-analyzer \
+  --set persistence.size=20Gi \
+  --set resources.limits.memory=8Gi \
+  --namespace pcap-analyzer
+```
+
+**Gestion du déploiement:**
+
+```bash
+# Voir les logs
+kubectl logs -n pcap-analyzer deployment/pcap-analyzer -f
+
+# Vérifier la santé de l'application
+kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- curl localhost:8000/api/health
+
+# Mise à jour de l'application
+helm upgrade pcap-analyzer ./helm-chart/pcap-analyzer -n pcap-analyzer
+
+# Désinstaller
+helm uninstall pcap-analyzer -n pcap-analyzer
+
+# Supprimer le cluster
+kind delete cluster --name pcap-analyzer
+```
+
+**Limitations Kubernetes:**
+- **1 replica seulement** : L'application utilise SQLite (base locale) et un stockage fichier local pour les rapports
+- **Pas de load balancing** : Le NodePort expose directement le pod unique
+- **Pas de haute disponibilité** : Si le pod redémarre, les analyses en cours sont perdues
+
+Pour une architecture multi-replicas en production, il faudrait migrer vers:
+- Base de données externe (PostgreSQL)
+- Stockage distribué (S3, MinIO)
+- Queue distribuée (Redis, RabbitMQ)
+
+### Option 3: Installation CLI (Analyse locale)
 
 #### Prérequis
 
@@ -151,7 +266,7 @@ reports:
 
 ## Utilisation
 
-### Interface Web (Docker)
+### Interface Web avec Docker Compose
 
 ```bash
 # Démarrer l'application
@@ -168,6 +283,63 @@ docker-compose down
 ```
 
 **Workflow:**
+1. Glisser-déposer un fichier PCAP
+2. Voir la progression en temps réel (SSE)
+3. Consulter le rapport HTML interactif
+4. Télécharger le rapport JSON si besoin
+5. Accéder à l'historique des analyses
+
+### Interface Web avec Kubernetes (kind + Helm)
+
+```bash
+# Vérifier le statut du cluster
+kubectl get pods -n pcap-analyzer
+kubectl get pvc -n pcap-analyzer
+
+# Accéder à l'application
+open http://localhost:8000
+
+# Voir les logs en temps réel
+kubectl logs -n pcap-analyzer deployment/pcap-analyzer -f
+
+# Vérifier la santé de l'application
+kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- curl localhost:8000/api/health
+
+# Redémarrer le pod
+kubectl rollout restart deployment/pcap-analyzer -n pcap-analyzer
+
+# Mettre à jour l'application
+# 1. Rebuild l'image
+docker build -t pcap-analyzer:latest .
+
+# 2. Recharger l'image dans kind
+kind load docker-image pcap-analyzer:latest --name pcap-analyzer
+
+# 3. Redémarrer le déploiement
+kubectl rollout restart deployment/pcap-analyzer -n pcap-analyzer
+
+# Désinstaller et nettoyer
+helm uninstall pcap-analyzer -n pcap-analyzer
+kind delete cluster --name pcap-analyzer
+```
+
+**Monitoring:**
+
+```bash
+# Utilisation des ressources
+kubectl top pod -n pcap-analyzer
+
+# Événements du namespace
+kubectl get events -n pcap-analyzer --sort-by='.lastTimestamp'
+
+# Décrire le pod pour debug
+kubectl describe pod -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer
+
+# Accéder au shell du pod
+kubectl exec -it -n pcap-analyzer deployment/pcap-analyzer -- /bin/sh
+```
+
+**Workflow (identique à Docker Compose):**
 1. Glisser-déposer un fichier PCAP
 2. Voir la progression en temps réel (SSE)
 3. Consulter le rapport HTML interactif
@@ -224,11 +396,22 @@ pcap_analyzer/
 │   │   ├── database.py          # SQLite avec aiosqlite
 │   │   └── worker.py            # Worker async pour analyses
 │   ├── static/                  # Fichiers statiques
-│   │   ├── css/                 # Styles
-│   │   └── js/                  # JavaScript (progress.js)
+│   │   ├── css/                 # Styles (glassmorphism design)
+│   │   └── js/                  # JavaScript (progress.js, history.js)
 │   └── templates/               # Templates Jinja2
 │       ├── index.html           # Page upload
-│       └── progress.html        # Page progression
+│       ├── progress.html        # Page progression
+│       └── history.html         # Historique des analyses
+│
+├── helm-chart/                  # Déploiement Kubernetes
+│   └── pcap-analyzer/           # Chart Helm
+│       ├── Chart.yaml           # Métadonnées du chart
+│       ├── values.yaml          # Configuration par défaut
+│       └── templates/           # Templates Kubernetes
+│           ├── deployment.yaml  # Deployment avec health probes
+│           ├── service.yaml     # Service NodePort
+│           ├── pvc.yaml         # PersistentVolumeClaim
+│           └── _helpers.tpl     # Helpers Helm
 │
 ├── src/                         # Code source CLI
 │   ├── cli.py                   # Interface en ligne de commande
@@ -268,14 +451,30 @@ pcap_analyzer/
 │   └── static/css/
 │       └── report.css           # Styles avec support mode sombre
 │
-├── docker-compose.yml           # Configuration Docker
-├── Dockerfile                   # Multi-stage build
+├── docker-compose.yml           # Configuration Docker Compose
+├── Dockerfile                   # Multi-stage build (485 MB)
 ├── requirements.txt             # Dépendances Python CLI
 ├── requirements-web.txt         # Dépendances Python Web
 ├── tests/                       # Tests unitaires et d'intégration
 ├── config.yaml                  # Configuration (seuils, SSH optionnel)
 └── reports/                     # Rapports générés (ignoré par git)
 ```
+
+### Options de Déploiement
+
+**Docker Compose (Développement):**
+- Rapide à démarrer (`docker-compose up -d`)
+- Idéal pour le développement local
+- Rebuild facile des images
+- Logs simples (`docker-compose logs -f`)
+
+**Kubernetes + Helm (Testing/Production):**
+- Déploiement standardisé avec chart Helm
+- Health probes (liveness, readiness)
+- Gestion des ressources (CPU, mémoire)
+- PersistentVolumeClaim pour les données
+- Monitoring avec kubectl
+- Limitation: 1 replica (SQLite + stockage local)
 
 ### Flux de Données - Interface Web
 

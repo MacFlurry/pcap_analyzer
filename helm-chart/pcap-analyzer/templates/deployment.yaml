@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pcap-analyzer.fullname" . }}
+  labels:
+    {{- include "pcap-analyzer.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pcap-analyzer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pcap-analyzer.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: pcap-analyzer
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: MAX_UPLOAD_SIZE_MB
+          value: "{{ .Values.env.maxUploadSizeMB }}"
+        - name: REPORT_TTL_HOURS
+          value: "{{ .Values.env.reportTTLHours }}"
+        - name: DATA_DIR
+          value: "{{ .Values.env.dataDir }}"
+        - name: LOG_LEVEL
+          value: "{{ .Values.env.logLevel }}"
+        - name: MAX_QUEUE_SIZE
+          value: "{{ .Values.env.maxQueueSize }}"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: data
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "pcap-analyzer.fullname" . }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}

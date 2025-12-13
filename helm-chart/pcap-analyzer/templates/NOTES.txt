@@ -1,0 +1,66 @@
+PCAP Analyzer a été installé avec succès ! 🎉
+
+📊 Application d'analyse de fichiers PCAP avec interface web moderne
+Version: {{ .Chart.AppVersion }}
+
+{{- if .Values.persistence.enabled }}
+💾 Stockage persistant activé ({{ .Values.persistence.size }})
+{{- else }}
+⚠️  Stockage persistant désactivé - les données seront perdues au redémarrage du pod
+{{- end }}
+
+🚀 Pour accéder à l'application :
+
+{{- if eq .Values.service.type "NodePort" }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "pcap-analyzer.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+
+  URL: http://$NODE_IP:$NODE_PORT
+
+  {{- if .Values.service.nodePort }}
+  Ou directement (si kind avec port mapping): http://localhost:8000
+  {{- end }}
+{{- else if eq .Values.service.type "LoadBalancer" }}
+  NOTE: Le LoadBalancer peut prendre quelques minutes pour obtenir une IP externe.
+
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "pcap-analyzer.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo "URL: http://$SERVICE_IP:{{ .Values.service.port }}"
+{{- else if eq .Values.service.type "ClusterIP" }}
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "pcap-analyzer.fullname" . }} 8000:{{ .Values.service.port }}
+  URL: http://127.0.0.1:8000
+{{- end }}
+
+📋 Commandes utiles :
+
+  # Voir les logs
+  kubectl logs -n {{ .Release.Namespace }} deployment/{{ include "pcap-analyzer.fullname" . }} -f
+
+  # Vérifier le statut
+  kubectl get all -n {{ .Release.Namespace }}
+
+  # Health check
+  kubectl exec -n {{ .Release.Namespace }} deployment/{{ include "pcap-analyzer.fullname" . }} -- curl -s localhost:8000/api/health
+
+  # Redémarrer le pod
+  kubectl rollout restart deployment/{{ include "pcap-analyzer.fullname" . }} -n {{ .Release.Namespace }}
+
+⚙️  Configuration :
+
+  - Replicas: {{ .Values.replicaCount }} (⚠️  Limité à 1 - SQLite + stockage local)
+  - Image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  - Max upload: {{ .Values.env.maxUploadSizeMB }} MB
+  - Rétention rapports: {{ .Values.env.reportTTLHours }} heures
+  - Taille queue: {{ .Values.env.maxQueueSize }}
+  - Log level: {{ .Values.env.logLevel }}
+
+{{- if gt (.Values.replicaCount | int) 1 }}
+⚠️  ATTENTION: L'application ne supporte pas plusieurs replicas !
+   SQLite et le stockage local ne permettent pas le scale horizontal.
+   Pour scale, migrer vers PostgreSQL + S3/MinIO + Redis.
+{{- end }}
+
+📚 Documentation complète :
+  https://github.com/MacFlurry/pcap_analyzer
+
+💡 Besoin d'aide ?
+  Issues: https://github.com/MacFlurry/pcap_analyzer/issues

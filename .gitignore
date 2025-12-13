@@ -63,3 +63,6 @@ NULL_EMPTY_*.md
 RESULT_WRAPPER_*.md
 DELIVERABLES.md
 ISSUE_*.md
+
+# Helm packaged charts
+helm-chart/*.tgz
