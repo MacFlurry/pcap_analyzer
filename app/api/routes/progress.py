@@ -5,7 +5,7 @@ Route pour suivre la progression d'une analyse via Server-Sent Events (SSE).
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -87,9 +87,11 @@ async def progress_event_generator(task_id: str) -> AsyncGenerator[str, None]:
                     "health_score": task_info.health_score,
                     "report_html_url": task_info.report_html_url,
                     "report_json_url": task_info.report_json_url,
-                    "message": "Analyse terminée avec succès"
-                    if task_info.status == TaskStatus.COMPLETED
-                    else (task_info.error_message or "Analyse échouée"),
+                    "message": (
+                        "Analyse terminée avec succès"
+                        if task_info.status == TaskStatus.COMPLETED
+                        else (task_info.error_message or "Analyse échouée")
+                    ),
                 }
 
                 # Ajouter l'URL du rapport si disponible

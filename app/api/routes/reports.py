@@ -57,9 +57,7 @@ async def get_html_report(task_id: str):
     return FileResponse(
         path=html_path,
         media_type="text/html",
-        headers={
-            "Content-Disposition": f'inline; filename="pcap_analysis_{task_id}.html"'
-        }
+        headers={"Content-Disposition": f'inline; filename="pcap_analysis_{task_id}.html"'},
     )
 
 

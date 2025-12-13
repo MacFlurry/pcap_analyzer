@@ -10,17 +10,17 @@ from fastapi.testclient import TestClient
 def test_health_check(client: TestClient):
     """Test health check endpoint"""
     response = client.get("/api/health")
-    
+
     assert response.status_code == 200
     data = response.json()
-    
+
     # Required fields
     assert "status" in data
     assert "version" in data
     assert "uptime_seconds" in data
     assert "memory_usage_percent" in data
     assert "disk_space_gb_available" in data
-    
+
     # Values
     assert data["status"] == "healthy"
     assert data["version"] == "1.0.0"

@@ -9,10 +9,9 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from app.models.schemas import TaskStatus
 from src.cli import analyze_pcap_hybrid as cli_analyze_pcap_hybrid
 from src.config import get_config
-
-from app.models.schemas import TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +55,7 @@ def translate_error_to_human(error: Exception) -> str:
 
     # Erreur de permissions
     if "permission denied" in error_msg:
-        return (
-            "Erreur de permissions lors de la lecture du fichier. "
-            "Vérifiez que le fichier est accessible."
-        )
+        return "Erreur de permissions lors de la lecture du fichier. " "Vérifiez que le fichier est accessible."
 
     # Fichier vide
     if "empty" in error_msg or "no packets" in error_msg:
@@ -71,10 +67,7 @@ def translate_error_to_human(error: Exception) -> str:
 
     # Erreur de format
     if "invalid" in error_msg and ("pcap" in error_msg or "format" in error_msg):
-        return (
-            "Le format du fichier n'est pas valide. "
-            "Assurez-vous qu'il s'agit bien d'un fichier PCAP ou PCAP-NG."
-        )
+        return "Le format du fichier n'est pas valide. " "Assurez-vous qu'il s'agit bien d'un fichier PCAP ou PCAP-NG."
 
     # Erreur de mémoire
     if "memory" in error_msg or "memoryerror" in error_type.lower():

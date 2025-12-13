@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, validator
 
 class TaskStatus(str, Enum):
     """Statut d'une tâche d'analyse"""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -20,14 +21,16 @@ class TaskStatus(str, Enum):
 
 class AnalysisMode(str, Enum):
     """Mode d'analyse (basé sur taille fichier)"""
-    MEMORY = "memory"              # <100MB - Load complet en mémoire
-    CHUNKED = "chunked"            # 100-500MB - Chunked processing
-    STREAMING = "streaming"        # 500MB-2GB - Streaming
+
+    MEMORY = "memory"  # <100MB - Load complet en mémoire
+    CHUNKED = "chunked"  # 100-500MB - Chunked processing
+    STREAMING = "streaming"  # 500MB-2GB - Streaming
     AGGRESSIVE_STREAMING = "aggressive_streaming"  # >2GB
 
 
 class UploadResponse(BaseModel):
     """Réponse après upload de fichier PCAP"""
+
     task_id: str = Field(..., description="ID unique de la tâche d'analyse")
     filename: str = Field(..., description="Nom du fichier uploadé")
     file_size_bytes: int = Field(..., description="Taille du fichier en octets")
@@ -38,6 +41,7 @@ class UploadResponse(BaseModel):
 
 class ProgressUpdate(BaseModel):
     """Mise à jour de progression (envoyé via SSE)"""
+
     task_id: str
     status: TaskStatus
     phase: Optional[str] = None  # "metadata", "analysis", "finalize"
@@ -51,6 +55,7 @@ class ProgressUpdate(BaseModel):
 
 class AnalysisResult(BaseModel):
     """Résultat d'analyse complété"""
+
     task_id: str
     filename: str
     status: TaskStatus
@@ -66,6 +71,7 @@ class AnalysisResult(BaseModel):
 
 class TaskInfo(BaseModel):
     """Informations sur une tâche (pour historique)"""
+
     task_id: str
     filename: str
     status: TaskStatus
@@ -79,17 +85,19 @@ class TaskInfo(BaseModel):
     error_message: Optional[str] = None  # Message d'erreur si échec
     expires_at: Optional[datetime] = None  # Date d'expiration (uploaded_at + 24h)
 
-    @validator('expires_at', always=True)
+    @validator("expires_at", always=True)
     def calculate_expiry(cls, v, values):
         """Calcule la date d'expiration si non fournie"""
-        if v is None and 'uploaded_at' in values:
+        if v is None and "uploaded_at" in values:
             from datetime import timedelta
-            return values['uploaded_at'] + timedelta(hours=24)
+
+            return values["uploaded_at"] + timedelta(hours=24)
         return v
 
 
 class HealthCheck(BaseModel):
     """Réponse du health check endpoint"""
+
     status: str = "healthy"
     version: str = "1.0.0"
     uptime_seconds: float
@@ -103,6 +111,7 @@ class HealthCheck(BaseModel):
 
 class PerformanceMode(BaseModel):
     """Informations sur le mode de performance sélectionné"""
+
     file_size_mb: float
     mode: AnalysisMode
     description: str

@@ -94,7 +94,7 @@ class TCPRetransmission:
     receiver_window_raw: Optional[int] = None
 
     # Suspected mechanisms (NOT definitive cause!)
-    suspected_mechanisms: List[str] = None
+    suspected_mechanisms: list[str] = None
     confidence: str = "low"  # low | medium | high
 
     def __post_init__(self):
@@ -273,7 +273,7 @@ class RetransmissionAnalyzer:
         dup_ack_count: int,
         max_ack_seen: int,
         receiver_window: Optional[int] = None,
-    ) -> Tuple[List[str], str]:
+    ) -> tuple[list[str], str]:
         """
         Phase 1: Diagnose retransmission with evidence-based context.
 

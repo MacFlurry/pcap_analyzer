@@ -292,9 +292,7 @@ class DatabaseService:
             db.row_factory = aiosqlite.Row
 
             # Count by status
-            async with db.execute(
-                "SELECT status, COUNT(*) as count FROM tasks GROUP BY status"
-            ) as cursor:
+            async with db.execute("SELECT status, COUNT(*) as count FROM tasks GROUP BY status") as cursor:
                 rows = await cursor.fetchall()
 
         stats = {

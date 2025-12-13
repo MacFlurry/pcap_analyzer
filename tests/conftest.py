@@ -5,8 +5,8 @@ Pytest fixtures et configuration commune pour les tests
 import asyncio
 import os
 import tempfile
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
-from typing import AsyncGenerator, Generator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -52,7 +52,7 @@ async def test_worker(test_data_dir: Path, test_db: DatabaseService) -> AsyncGen
         max_queue_size=5,
         data_dir=str(test_data_dir),
         db_service=test_db,
-        analyzer_service=None  # Mock analyzer in tests
+        analyzer_service=None,  # Mock analyzer in tests
     )
     await worker.start()
     yield worker
@@ -60,8 +60,10 @@ async def test_worker(test_data_dir: Path, test_db: DatabaseService) -> AsyncGen
 
 
 @pytest.fixture
-def client() -> Generator[TestClient, None, None]:
+def client(test_data_dir: Path, monkeypatch) -> Generator[TestClient, None, None]:
     """Create test client for FastAPI"""
+    # Set DATA_DIR to temporary directory for tests
+    monkeypatch.setenv("DATA_DIR", str(test_data_dir))
     with TestClient(app) as test_client:
         yield test_client
 
@@ -77,7 +79,7 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 def sample_pcap_file(test_data_dir: Path) -> Path:
     """Create a minimal valid PCAP file for testing"""
     pcap_file = test_data_dir / "sample.pcap"
-    
+
     # PCAP global header (little-endian)
     # Magic number: 0xa1b2c3d4
     # Version: 2.4
@@ -87,14 +89,14 @@ def sample_pcap_file(test_data_dir: Path) -> Path:
     # Network: 1 (Ethernet)
     global_header = bytes.fromhex(
         "d4c3b2a1"  # Magic
-        "0200"      # Major version
-        "0400"      # Minor version
+        "0200"  # Major version
+        "0400"  # Minor version
         "00000000"  # Timezone
         "00000000"  # Sigfigs
         "ffff0000"  # Snaplen
         "01000000"  # Network (Ethernet)
     )
-    
+
     pcap_file.write_bytes(global_header)
     return pcap_file
 
@@ -114,5 +116,5 @@ def large_file(test_data_dir: Path) -> Path:
     # Create 501 MB file (over 500 MB limit)
     size = 501 * 1024 * 1024
     with open(large_file, "wb") as f:
-        f.write(b'\x00' * size)
+        f.write(b"\x00" * size)
     return large_file

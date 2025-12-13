@@ -45,8 +45,8 @@ class TestIssue12NegativeDuration:
         """
         # Simulate the bug scenario: list sorted by delay (not timestamp)
         retrans_list = [
-            {"timestamp": 15.0, "delay": 0.5},   # Large delay, arrived 2nd chronologically
-            {"timestamp": 5.0, "delay": 0.05},   # Small delay, arrived 1st chronologically
+            {"timestamp": 15.0, "delay": 0.5},  # Large delay, arrived 2nd chronologically
+            {"timestamp": 5.0, "delay": 0.05},  # Small delay, arrived 1st chronologically
         ]
 
         duration = calculate_duration(retrans_list)
@@ -127,10 +127,10 @@ class TestIssue12NegativeDuration:
         """
         # Multiple retransmissions with various delays
         retrans_list = [
-            {"timestamp": 20.0, "delay": 1.0},    # Largest delay
-            {"timestamp": 15.0, "delay": 0.5},    # Medium delay
-            {"timestamp": 5.0, "delay": 0.1},     # Small delay
-            {"timestamp": 10.0, "delay": 0.05},   # Smallest delay
+            {"timestamp": 20.0, "delay": 1.0},  # Largest delay
+            {"timestamp": 15.0, "delay": 0.5},  # Medium delay
+            {"timestamp": 5.0, "delay": 0.1},  # Small delay
+            {"timestamp": 10.0, "delay": 0.05},  # Smallest delay
         ]
 
         duration = calculate_duration(retrans_list)
@@ -190,7 +190,7 @@ class TestIssue12Integration:
                         {"timestamp": 5.0, "delay": 0.05, "retrans_type": "Fast Retransmission"},
                     ]
                 }
-            }
+            },
         }
 
         generator = HTMLReportGenerator()
@@ -202,8 +202,7 @@ class TestIssue12Integration:
         # Should not contain negative duration (would appear as "-" in HTML)
         # The duration should be 10000ms (10.0s * 1000)
         # Check that negative signs don't appear near "Duration" label
-        assert "-" not in html or "Duration" not in html, \
-            "HTML report should not contain negative durations"
+        assert "-" not in html or "Duration" not in html, "HTML report should not contain negative durations"
 
 
 if __name__ == "__main__":

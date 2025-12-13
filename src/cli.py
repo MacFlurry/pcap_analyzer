@@ -4,6 +4,7 @@ Interface en ligne de commande pour l'analyseur PCAP
 """
 
 import gc
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional

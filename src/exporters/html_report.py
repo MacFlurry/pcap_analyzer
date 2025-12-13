@@ -155,7 +155,9 @@ class HTMLReportGenerator:
         what_happened = f"Packets arrived with delays varying up to <strong>{max_duration}</strong> (max jitter)"
         if mean_jitter_ms > 100:  # Only mention mean if significant
             what_happened += f", with an average variation of <strong>{mean_duration}</strong> (mean jitter)"
-        what_happened += f". This flow captured <strong>{packet_count} packet{'s' if packet_count != 1 else ''}</strong>."
+        what_happened += (
+            f". This flow captured <strong>{packet_count} packet{'s' if packet_count != 1 else ''}</strong>."
+        )
 
         # Why flagged
         severity_upper = severity.upper()
@@ -430,17 +432,11 @@ class HTMLReportGenerator:
 
         # Pattern clarity note
         if "high" in flow_confidence:
-            pattern_note = (
-                "<br><br><em>✓ Pattern Clarity: <strong>High</strong> - Clear, consistent retransmission pattern makes root cause analysis more straightforward.</em>"
-            )
+            pattern_note = "<br><br><em>✓ Pattern Clarity: <strong>High</strong> - Clear, consistent retransmission pattern makes root cause analysis more straightforward.</em>"
         elif "medium" in flow_confidence:
-            pattern_note = (
-                "<br><br><em>~ Pattern Clarity: <strong>Medium</strong> - Mostly consistent pattern, but limited sample size or some variation makes definitive analysis challenging.</em>"
-            )
+            pattern_note = "<br><br><em>~ Pattern Clarity: <strong>Medium</strong> - Mostly consistent pattern, but limited sample size or some variation makes definitive analysis challenging.</em>"
         else:
-            pattern_note = (
-                "<br><br><em>⚠ Pattern Clarity: <strong>Low</strong> - Mixed mechanisms suggest multiple concurrent issues. Detailed packet-level analysis recommended.</em>"
-            )
+            pattern_note = "<br><br><em>⚠ Pattern Clarity: <strong>Low</strong> - Mixed mechanisms suggest multiple concurrent issues. Detailed packet-level analysis recommended.</em>"
 
         # Build HTML
         html = f"""
@@ -2222,13 +2218,13 @@ class HTMLReportGenerator:
                             src_colon_idx = src_part.rfind(":")
                             if src_colon_idx > 0:
                                 src_ip = src_part[:src_colon_idx]
-                                src_port = src_part[src_colon_idx + 1:]
+                                src_port = src_part[src_colon_idx + 1 :]
 
                             # Extract port from dst (last segment after last colon)
                             dst_colon_idx = dst_part.rfind(":")
                             if dst_colon_idx > 0:
                                 dst_ip = dst_part[:dst_colon_idx]
-                                dst_port = dst_part[dst_colon_idx + 1:]
+                                dst_port = dst_part[dst_colon_idx + 1 :]
                 except (IndexError, ValueError):
                     pass  # Keep defaults if parsing fails
 
@@ -2240,7 +2236,9 @@ class HTMLReportGenerator:
                     pass
 
                 # Identify service and adjust severity
-                service_name, service_emoji, service_desc, expect_high_jitter, service_type = self._identify_service(dst_port_int)  # noqa: E501
+                service_name, service_emoji, service_desc, expect_high_jitter, service_type = self._identify_service(
+                    dst_port_int
+                )  # noqa: E501
 
                 # Adjust severity badge if high jitter is expected for this service
                 adjusted_severity = severity
@@ -2256,7 +2254,11 @@ class HTMLReportGenerator:
                 if service_name != "Unknown":
                     service_badge = f'<span class="service-badge">{service_emoji} {service_name}</span>'
                 else:
-                    service_badge = f'<span class="service-badge">🔌 Port {dst_port_int}</span>' if dst_port_int > 0 else '<span class="service-badge">🔌 Unknown</span>'
+                    service_badge = (
+                        f'<span class="service-badge">🔌 Port {dst_port_int}</span>'
+                        if dst_port_int > 0
+                        else '<span class="service-badge">🔌 Unknown</span>'
+                    )
 
                 # Generate Wireshark filter
                 wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"
@@ -2951,7 +2953,7 @@ class HTMLReportGenerator:
         # Determine which mechanism is dominant (using corrected counts)
         max_mechanism_count = max(rto_count, fast_count, generic_retrans, spurious_count)
         mechanism_percentage = (max_mechanism_count / total_retrans * 100) if total_retrans > 0 else 0
-        is_uniform = (max_mechanism_count == total_retrans)  # 100% of one mechanism
+        is_uniform = max_mechanism_count == total_retrans  # 100% of one mechanism
 
         # NEW LOGIC: Pattern Clarity
         if is_uniform and total_retrans >= 3:

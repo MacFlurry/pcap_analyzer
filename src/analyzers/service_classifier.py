@@ -47,7 +47,6 @@ KNOWN_SERVICE_PORTS = {
     9093: ("Kafka SSL", True),
     5672: ("RabbitMQ", True),
     5671: ("RabbitMQ SSL", True),
-
     # Databases
     6379: ("Redis", True),
     27017: ("MongoDB", True),
@@ -55,28 +54,22 @@ KNOWN_SERVICE_PORTS = {
     27019: ("MongoDB Config", True),
     3306: ("MySQL", True),
     5432: ("PostgreSQL", True),
-
     # Search / Analytics
     9200: ("Elasticsearch", True),
     9300: ("Elasticsearch Cluster", True),
-
     # Common Web Services
     80: ("HTTP", False),
     443: ("HTTPS", False),
     8080: ("HTTP Alt", False),
     8443: ("HTTPS Alt", False),
-
     # DNS
     53: ("DNS", False),
-
     # SSH/Telnet
     22: ("SSH", False),
     23: ("Telnet", False),
-
     # FTP
     20: ("FTP Data", False),
     21: ("FTP Control", False),
-
     # Mail
     25: ("SMTP", False),
     110: ("POP3", False),

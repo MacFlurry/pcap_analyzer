@@ -100,10 +100,7 @@ class CleanupScheduler:
                 except Exception as e:
                     logger.error(f"Error deleting file {file_path}: {e}")
 
-        logger.info(
-            f"Cleanup completed: {deleted_count} files deleted, "
-            f"{freed_bytes / (1024**2):.2f} MB freed"
-        )
+        logger.info(f"Cleanup completed: {deleted_count} files deleted, " f"{freed_bytes / (1024**2):.2f} MB freed")
 
         # TODO: Mettre à jour SQLite pour marquer tâches comme 'expired'
 
@@ -119,10 +116,7 @@ class CleanupScheduler:
             if file_path.exists():
                 file_size = file_path.stat().st_size
                 file_path.unlink()
-                logger.info(
-                    f"Deleted file: {file_path.name} "
-                    f"(size: {file_size / (1024**2):.2f} MB)"
-                )
+                logger.info(f"Deleted file: {file_path.name} " f"(size: {file_size / (1024**2):.2f} MB)")
             else:
                 logger.warning(f"File {file_path} does not exist, skipping deletion")
 
