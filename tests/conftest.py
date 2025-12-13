@@ -79,13 +79,17 @@ class MockAnalyzerService:
         }
 
 
-class MockWorker:
+class MockWorker(AnalysisWorker):
     """Mock worker that doesn't actually process tasks, just accepts them"""
 
     def __init__(self, data_dir: str):
+        # Don't call super().__init__() to avoid creating real queue/analyzer
         self.data_dir = Path(data_dir)
         self.is_running = False
         self._queue_size = 0
+        self.queue = asyncio.Queue(maxsize=5)  # Create queue for compatibility
+        self.progress_updates = {}
+        self.worker_task = None
 
     async def start(self):
         """Mock start - doesn't actually start a worker loop"""
@@ -96,8 +100,9 @@ class MockWorker:
         self.is_running = False
 
     async def enqueue(self, task_id: str, pcap_path: str) -> bool:
-        """Mock enqueue - just accepts the task"""
+        """Mock enqueue - just accepts the task without processing"""
         self._queue_size += 1
+        # Don't actually add to queue to avoid processing
         return True
 
     def get_queue_size(self) -> int:
@@ -106,7 +111,7 @@ class MockWorker:
 
     def get_progress_updates(self, task_id: str) -> list:
         """Return empty progress updates"""
-        return []
+        return self.progress_updates.get(task_id, [])
 
 
 @pytest.fixture
