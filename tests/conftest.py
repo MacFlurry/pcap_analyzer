@@ -145,7 +145,8 @@ def client(test_data_dir: Path, monkeypatch) -> Generator[TestClient, None, None
     monkeypatch.setenv("DATA_DIR", str(test_data_dir))
 
     # Patch DATA_DIR in all modules that define it at module level
-    from app.api.routes import upload, reports, health
+    from app.api.routes import health, reports, upload
+
     monkeypatch.setattr(upload, "DATA_DIR", test_data_dir)
     monkeypatch.setattr(upload, "UPLOADS_DIR", test_data_dir / "uploads")
     monkeypatch.setattr(reports, "DATA_DIR", test_data_dir)
@@ -154,10 +155,12 @@ def client(test_data_dir: Path, monkeypatch) -> Generator[TestClient, None, None
 
     # Reset DatabaseService singleton to pick up the new DATA_DIR
     from app.services import database
+
     database._db_service = None
 
     # Reset Worker singleton
     from app.services import worker
+
     worker._worker = None
 
     # Mock get_worker to return a MockWorker that doesn't actually process tasks
