@@ -101,6 +101,7 @@ jobs:
       run: |
         docker run -d --name test-container -p 8000:8000 pcap-analyzer:test
         sleep 10
+        # Test health endpoint from host
         curl -f http://localhost:8000/api/health || exit 1
         docker stop test-container
         docker rm test-container
@@ -164,7 +165,8 @@ jobs:
 
     - name: Test application
       run: |
-        kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- curl -f http://localhost:8000/api/health
+        # Test using Python (available in container) instead of curl (not installed)
+        kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health').read()"
 
     - name: Show logs on failure
       if: failure()
