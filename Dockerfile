@@ -1,6 +1,6 @@
 # ============================================
 # Multi-Stage Dockerfile for PCAP Analyzer
-# Target size: <250 MB
+# Target size: <500 MB
 # Security: Non-root user, minimal attack surface
 # ============================================
 
@@ -22,40 +22,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements and install
+# Copy project files for installation
 WORKDIR /build
-COPY requirements.txt requirements-web.txt ./
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+COPY app/ ./app/
 
-# Install dependencies with no cache to minimize layer size
+# Install package with all dependencies (CLI + Web)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -r requirements-web.txt
+    pip install --no-cache-dir -e .
 
 # ============================================
-# STAGE 2: Runtime dependencies
-# ============================================
-FROM python:3.11-slim-bookworm AS runtime-deps
-
-LABEL stage=runtime-deps
-
-# Install ONLY runtime libraries (no gcc, g++)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpcap0.8 \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Copy virtualenv from builder
-COPY --from=builder /opt/venv /opt/venv
-
-# ============================================
-# STAGE 3: Final (Application)
+# STAGE 2: Final (Application)
 # ============================================
 FROM python:3.11-slim-bookworm
 
 LABEL maintainer="PCAP Analyzer Team"
 LABEL description="PCAP Network Analysis Tool - Web Interface"
-LABEL version="1.0.0"
-LABEL org.opencontainers.image.source="https://github.com/pcap-analyzer/pcap-analyzer"
+LABEL version="4.2.2"
+LABEL org.opencontainers.image.source="https://github.com/MacFlurry/pcap_analyzer"
 
 # Install runtime libs only
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -63,8 +48,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy virtualenv
-COPY --from=runtime-deps /opt/venv /opt/venv
+# Copy virtualenv from builder
+COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
