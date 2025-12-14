@@ -7,6 +7,48 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.2.1] - 2025-12-14
+
+### 🔧 Corrections
+
+- **Fix test_security.py**: Skip obsolete Jinja2 template test after template system removal
+  - Test was trying to use removed `template_dir` parameter
+  - XSS protection still verified by other tests in suite
+
+### 📝 Documentation
+
+- **Add prerequisites section to README**: Clear deployment requirements for each option
+  - Docker Compose: Docker + Docker Compose
+  - Kubernetes: Docker, kind, kubectl, helm
+  - CLI local: Python 3.11+, libpcap
+  - Links to official installation guides
+
+- **Update CONTRIBUTING.md**: Reflect modern architecture and workflow
+  - Modern project structure (app/, helm-chart/, Docker)
+  - Architecture section (CLI vs Web modes)
+  - Docker & Kubernetes testing workflows
+  - Emphasis on venv for CLI usage
+
+### ⚡ Performance & Maintenance
+
+- **Complete project cleanup**: 1.6 GB freed, code modernization
+  - Removed obsolete files: MANIFEST.in, requirements-dev.txt, templates/ (127 KB)
+  - Cleaned reports/ directory: 181 files, 1.6 GB (local only)
+  - Simplified src/report_generator.py: 180 → 41 lines (77% reduction)
+  - Dead code removed: generate_report(), _generate_html(), COMMON_PORTS
+
+- **Modernize packaging**: Full migration to pyproject.toml (PEP 517/518)
+  - Unified dependency management (CLI + Web)
+  - Auto-discovery of packages with `packages = {find = {}}`
+  - Removed setup.py, MANIFEST.in, requirements-dev.txt
+  - All configuration in single pyproject.toml
+
+### ✅ Validation
+
+- **Kubernetes deployment validated**: kind + Ingress + Helm workflow tested
+  - Confirmed README instructions work exactly as written
+  - All deployment steps functional and reproducible
+
 ## [4.0.0] - 2025-12-13
 
 ### 🚀 Changements Majeurs
