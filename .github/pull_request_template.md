@@ -25,9 +25,9 @@ Liste détaillée des modifications :
 
 Description des tests effectués pour valider les changements.
 
-- [ ] Test SSH (`python3 test_ssh.py`)
 - [ ] Test analyse fichier PCAP
-- [ ] Test capture SSH
+- [ ] Test interface web
+- [ ] Tests automatisés (pytest)
 - [ ] Tests manuels additionnels
 
 **Configuration de test :**

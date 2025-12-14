@@ -61,4 +61,3 @@ Toute information supplémentaire utile.
 - [ ] J'ai vérifié que ce bug n'a pas déjà été signalé
 - [ ] J'ai testé avec la dernière version
 - [ ] J'ai consulté le guide TROUBLESHOOTING.md
-- [ ] J'ai exécuté `python3 test_ssh.py` (pour problèmes SSH)
