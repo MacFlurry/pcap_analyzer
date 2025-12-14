@@ -32,6 +32,10 @@ class ProgressMonitor {
     }
 
     async init() {
+        // Set initial message immediately
+        this.currentMessage.textContent = 'Initialisation...';
+        this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
+
         // Fetch initial task status first
         await this.fetchInitialStatus();
 
@@ -177,16 +181,6 @@ class ProgressMonitor {
             } else if (taskData.status === 'pending') {
                 this.updatePhase('metadata');
                 this.currentMessage.textContent = 'En attente de démarrage...';
-                this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
-            }
-
-            // Si aucun message n'a été défini mais qu'on a une phase, mettre un message par défaut
-            if (!this.currentMessage.textContent || this.currentMessage.textContent === 'Connexion au serveur...') {
-                if (taskData.status === 'processing') {
-                    this.currentMessage.textContent = 'Analyse en cours...';
-                } else if (taskData.status === 'pending') {
-                    this.currentMessage.textContent = 'Initialisation...';
-                }
                 this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
             }
 
