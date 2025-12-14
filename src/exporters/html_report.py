@@ -892,7 +892,7 @@ class HTMLReportGenerator:
             border-spacing: 0;
             margin: 20px 0;
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 

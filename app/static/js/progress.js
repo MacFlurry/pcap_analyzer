@@ -279,7 +279,7 @@ class ProgressMonitor {
             this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
             this.addLogEvent(data.message, this.getPhaseType(data.phase));
         } else if (data.phase) {
-            // Si pas de message spécifique, utiliser un message basé sur la phase
+            // Si pas de message spécifique, toujours utiliser un message basé sur la phase
             const phaseMessages = {
                 metadata: 'Extraction des métadonnées...',
                 analysis: 'Analyse des paquets en cours...',
@@ -288,7 +288,7 @@ class ProgressMonitor {
                 failed: 'Analyse échouée'
             };
             const defaultMessage = phaseMessages[data.phase];
-            if (defaultMessage && this.currentMessage.textContent === 'Connexion au serveur...') {
+            if (defaultMessage) {
                 this.currentMessage.textContent = defaultMessage;
                 this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
             }
