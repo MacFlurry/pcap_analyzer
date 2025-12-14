@@ -1334,7 +1334,7 @@ class HTMLReportGenerator:
         .collapsible-section {
             margin: 30px 0;
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible;
         }
 
         /* Hide checkbox (used only for state management) */
