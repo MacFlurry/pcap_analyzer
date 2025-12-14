@@ -32,6 +32,7 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
+    # Core CLI dependencies
     "scapy>=2.5.0,<3.0",
     "dpkt>=1.9.8,<2.0",
     "paramiko>=3.4.0,<4.0",
@@ -40,6 +41,15 @@ dependencies = [
     "rich>=13.7.0,<14.0",
     "click>=8.1.7,<9.0",
     "numpy>=1.24.0",  # NumPy 2.x compatible (tested with 2.0.2)
+    "psutil>=5.9.0,<6.0",  # Sprint 10: Memory monitoring and system resource tracking
+    # Web interface dependencies
+    "fastapi>=0.104.0,<1.0",
+    "uvicorn[standard]>=0.24.0,<1.0",
+    "httpx>=0.25.0",  # Required by TestClient for testing
+    "python-multipart>=0.0.6",  # Upload multipart/form-data
+    "aiofiles>=23.2.1",  # Async file operations
+    "apscheduler>=3.10.0,<4.0",  # Cleanup scheduler
+    "aiosqlite>=0.19.0,<1.0",  # SQLite async wrapper
 ]
 
 [project.optional-dependencies]
@@ -81,8 +91,8 @@ Changelog = "https://github.com/MacFlurry/pcap_analyzer/blob/main/CHANGELOG.md"
 pcap_analyzer = "src.cli:main"
 
 [tool.setuptools]
-packages = ["src", "src.analyzers", "src.parsers", "src.utils"]
-package-data = {"src" = ["templates/*.html", "templates/static/css/*.css"]}
+packages = {find = {}}  # Auto-discover all packages
+package-data = {"src" = ["templates/*.html", "templates/static/css/*.css"], "app" = ["templates/*.html", "static/**/*"]}
 
 [tool.setuptools.dynamic]
 version = {attr = "src.__version__.__version__"}
