@@ -2195,16 +2195,6 @@ class HTMLReportGenerator:
                 html += "</div>"
 
             html += "</div>"
-        else:
-            # If no component scores available, provide guidance
-            html += """
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
-                <p style="margin: 0; font-size: 0.95em; color: #856404;">
-                    <strong>ℹ️ Component Score Details Not Available</strong><br>
-                    The health score is based on overall network metrics. Run analysis with more detailed options to see component breakdowns.
-                </p>
-            </div>
-            """
 
         return html
 
