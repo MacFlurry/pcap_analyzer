@@ -792,8 +792,16 @@ class HTMLReportGenerator:
             opacity: 0.9;
         }
 
+        .health-score-description {
+            font-size: 0.95em;
+            opacity: 0.85;
+            margin-top: 8px;
+            font-weight: 400;
+        }
+
         .severity-excellent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
         .severity-good { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .severity-warning { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
         .severity-fair { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
         .severity-poor { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
         .severity-critical { background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%); }
@@ -2142,7 +2150,33 @@ class HTMLReportGenerator:
             summary = health_data.get("summary", "")
             component_scores = health_data.get("component_scores", {})
 
-        html = "<h2>💚 Network Health Score</h2>"
+        # Dynamic icon and label based on severity
+        severity_config = {
+            "good": {
+                "icon": "💚",
+                "label": "Excellent Network Health",
+                "description": "No significant issues detected"
+            },
+            "warning": {
+                "icon": "⚠️",
+                "label": "Minor Issues Detected",
+                "description": "Some network issues found, review details below"
+            },
+            "critical": {
+                "icon": "🔴",
+                "label": "Critical Issues Detected",
+                "description": "Significant network problems require attention"
+            },
+            "unknown": {
+                "icon": "❓",
+                "label": "Health Status Unknown",
+                "description": "Unable to determine network health"
+            }
+        }
+
+        config = severity_config.get(severity, severity_config["unknown"])
+
+        html = f"<h2>{config['icon']} Network Health Score</h2>"
 
         # Main health score
         severity_class = f"severity-{severity}"
@@ -2150,7 +2184,8 @@ class HTMLReportGenerator:
         <div class="health-score {severity_class}">
             <div class="health-score-label">Overall Health Score</div>
             <div class="health-score-value">{score:.1f}</div>
-            <div class="health-score-label">{severity.upper()}</div>
+            <div class="health-score-label">{config['label']}</div>
+            <div class="health-score-description">{config['description']}</div>
         """
         if summary:
             html += f'<p style="margin-top: 15px; opacity: 0.9;">{summary}</p>'
