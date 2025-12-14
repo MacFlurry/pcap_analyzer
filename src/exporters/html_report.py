@@ -2155,22 +2155,22 @@ class HTMLReportGenerator:
             "good": {
                 "icon": "💚",
                 "label": "Excellent Network Health",
-                "description": "No significant issues detected"
+                "description": "No significant issues detected in the network traffic"
             },
             "warning": {
                 "icon": "⚠️",
                 "label": "Minor Issues Detected",
-                "description": "Some network issues found, review details below"
+                "description": "Check TCP Analysis, Jitter, and RTT sections for details"
             },
             "critical": {
                 "icon": "🔴",
                 "label": "Critical Issues Detected",
-                "description": "Significant network problems require attention"
+                "description": "Review TCP retransmissions, packet loss, and latency metrics"
             },
             "unknown": {
                 "icon": "❓",
                 "label": "Health Status Unknown",
-                "description": "Unable to determine network health"
+                "description": "Insufficient data to calculate network health score"
             }
         }
 
