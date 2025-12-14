@@ -40,19 +40,3 @@ async def history(request: Request):
     Page d'historique des analyses
     """
     return templates.TemplateResponse("history.html", {"request": request})
-
-
-@router.get("/test-loading", response_class=HTMLResponse)
-async def test_loading(request: Request):
-    """
-    Page de test pour l'overlay de chargement
-    """
-    return templates.TemplateResponse("test_loading.html", {"request": request})
-
-
-@router.get("/loading-showcase", response_class=HTMLResponse)
-async def loading_showcase(request: Request):
-    """
-    Showcase du design de l'overlay de chargement
-    """
-    return templates.TemplateResponse("loading_showcase.html", {"request": request})

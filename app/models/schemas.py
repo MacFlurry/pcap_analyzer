@@ -19,15 +19,6 @@ class TaskStatus(str, Enum):
     EXPIRED = "expired"
 
 
-class AnalysisMode(str, Enum):
-    """Mode d'analyse (basé sur taille fichier)"""
-
-    MEMORY = "memory"  # <100MB - Load complet en mémoire
-    CHUNKED = "chunked"  # 100-500MB - Chunked processing
-    STREAMING = "streaming"  # 500MB-2GB - Streaming
-    AGGRESSIVE_STREAMING = "aggressive_streaming"  # >2GB
-
-
 class UploadResponse(BaseModel):
     """Réponse après upload de fichier PCAP"""
 
@@ -51,22 +42,6 @@ class ProgressUpdate(BaseModel):
     current_analyzer: Optional[str] = None
     message: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-
-class AnalysisResult(BaseModel):
-    """Résultat d'analyse complété"""
-
-    task_id: str
-    filename: str
-    status: TaskStatus
-    analysis_started_at: Optional[datetime] = None
-    analysis_completed_at: Optional[datetime] = None
-    analysis_duration_seconds: Optional[float] = None
-    total_packets: Optional[int] = None
-    health_score: Optional[float] = Field(None, ge=0, le=100)
-    report_html_url: Optional[str] = None
-    report_json_url: Optional[str] = None
-    error_message: Optional[str] = None
 
 
 class TaskInfo(BaseModel):
@@ -107,14 +82,3 @@ class HealthCheck(BaseModel):
     memory_usage_percent: float
     total_tasks_completed: int = 0
     total_tasks_failed: int = 0
-
-
-class PerformanceMode(BaseModel):
-    """Informations sur le mode de performance sélectionné"""
-
-    file_size_mb: float
-    mode: AnalysisMode
-    description: str
-    chunk_size: Optional[int] = None
-    memory_available_mb: float
-    memory_usage_percent: float

@@ -11,7 +11,7 @@ from typing import Optional
 
 import aiosqlite
 
-from app.models.schemas import AnalysisResult, TaskInfo, TaskStatus
+from app.models.schemas import TaskInfo, TaskStatus
 
 logger = logging.getLogger(__name__)
 

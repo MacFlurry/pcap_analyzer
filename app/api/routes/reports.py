@@ -151,28 +151,3 @@ async def delete_report(task_id: str):
         "deleted_files": deleted_files,
         "task_id": task_id,
     }
-
-
-@router.get("/reports")
-async def list_reports(limit: int = 20):
-    """
-    Liste les rapports disponibles (tâches complétées).
-
-    Args:
-        limit: Nombre maximum de rapports à retourner
-
-    Returns:
-        Liste des rapports disponibles
-    """
-    db_service = get_db_service()
-    tasks = await db_service.get_recent_tasks(limit=limit)
-
-    # Filtrer uniquement les tâches complétées
-    from app.models.schemas import TaskStatus
-
-    completed_tasks = [task for task in tasks if task.status == TaskStatus.COMPLETED]
-
-    return {
-        "reports": completed_tasks,
-        "count": len(completed_tasks),
-    }

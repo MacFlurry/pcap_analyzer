@@ -28,16 +28,3 @@ def test_delete_report_nonexistent(client: TestClient):
     response = client.delete("/api/reports/nonexistent")
 
     assert response.status_code == 404
-
-
-@pytest.mark.unit
-def test_list_reports(client: TestClient):
-    """Test listing available reports"""
-    response = client.get("/api/reports")
-
-    assert response.status_code == 200
-    data = response.json()
-
-    assert "reports" in data
-    assert "count" in data
-    assert isinstance(data["reports"], list)
