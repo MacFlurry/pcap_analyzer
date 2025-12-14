@@ -22,23 +22,47 @@ Accéder à http://localhost:8000
 
 ### Option 2: Kubernetes (production)
 
+#### Avec Ingress (recommandé)
+
 ```bash
-# Build et charger l'image
+# Build l'image
 docker build -t pcap-analyzer:latest .
-kind create cluster --name pcap-analyzer --config - <<EOF
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-- role: control-plane
-  extraPortMappings:
-  - containerPort: 30080
-    hostPort: 8000
-EOF
+
+# Créer le cluster kind avec ports Ingress
+kind create cluster --name pcap-analyzer --config kind-config.yaml
 kind load docker-image pcap-analyzer:latest --name pcap-analyzer
 
-# Déployer avec Helm
+# Installer l'Ingress controller nginx
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
+# Attendre que l'Ingress soit prêt
+kubectl wait --namespace ingress-nginx \
+  --for=condition=ready pod \
+  --selector=app.kubernetes.io/component=controller \
+  --timeout=90s
+
+# Déployer avec Helm (Ingress activé par défaut)
 helm install pcap-analyzer ./helm-chart/pcap-analyzer \
   --create-namespace --namespace pcap-analyzer
+
+# Ajouter l'entrée dans /etc/hosts
+echo "127.0.0.1 pcap.local" | sudo tee -a /etc/hosts
+
+# Accéder à l'application
+open http://pcap.local
+```
+
+#### Sans Ingress (NodePort)
+
+```bash
+# Modifier values.yaml pour désactiver Ingress
+helm install pcap-analyzer ./helm-chart/pcap-analyzer \
+  --create-namespace --namespace pcap-analyzer \
+  --set ingress.enabled=false \
+  --set service.type=NodePort \
+  --set service.nodePort=30080
+
+# Accéder à http://localhost:8000
 ```
 
 📖 [Guide Kubernetes complet](helm-chart/pcap-analyzer/README.md)
@@ -90,9 +114,13 @@ pcap_analyzer analyze capture.pcap
 docker-compose up -d
 open http://localhost:8000
 
-# Kubernetes
+# Kubernetes avec Ingress
+open http://pcap.local
+
+# Kubernetes - Commandes utiles
 kubectl get pods -n pcap-analyzer
 kubectl logs -n pcap-analyzer deployment/pcap-analyzer -f
+kubectl get ingress -n pcap-analyzer
 ```
 
 **Workflow :** Upload PCAP → Progression temps réel → Rapport HTML → Historique

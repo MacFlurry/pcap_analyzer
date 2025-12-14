@@ -7,9 +7,26 @@ image:
   pullPolicy: Never  # Use local image for kind
 
 service:
-  type: NodePort
+  type: ClusterIP  # Changed from NodePort when using Ingress
   port: 8000
-  nodePort: 30080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "500m"  # Match max upload size
+  hosts:
+    - host: pcap.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # Example TLS configuration:
+  # tls:
+  #   - secretName: pcap-analyzer-tls
+  #     hosts:
+  #       - pcap.local
 
 persistence:
   enabled: true
