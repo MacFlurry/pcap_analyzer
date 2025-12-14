@@ -454,6 +454,103 @@ class HTMLReportGenerator:
 
         return html
 
+    def _generate_rtt_interpretation(
+        self,
+        mean_rtt: float,
+        max_rtt: float,
+        flows_with_high_rtt: int,
+    ) -> str:
+        """
+        Generate natural language interpretation of RTT metrics.
+
+        Args:
+            mean_rtt: Mean RTT in milliseconds
+            max_rtt: Maximum RTT in milliseconds
+            flows_with_high_rtt: Number of flows with high RTT
+
+        Returns:
+            HTML string with interpretation
+        """
+
+        # What happened
+        if mean_rtt < 10:
+            what_happened = (
+                f"<strong>What happened:</strong> Excellent network responsiveness detected "
+                f"with a mean RTT of {mean_rtt:.2f} ms. This indicates a high-quality connection "
+                f"with minimal delay between packets."
+            )
+        elif mean_rtt < 50:
+            what_happened = (
+                f"<strong>What happened:</strong> Good network performance observed "
+                f"with a mean RTT of {mean_rtt:.2f} ms. Most connections are responding quickly."
+            )
+        elif mean_rtt < 100:
+            what_happened = (
+                f"<strong>What happened:</strong> Acceptable network latency detected "
+                f"with a mean RTT of {mean_rtt:.2f} ms. Some delays are present but within normal range."
+            )
+        else:
+            what_happened = (
+                f"<strong>What happened:</strong> Elevated network latency detected "
+                f"with a mean RTT of {mean_rtt:.2f} ms. This indicates potential network congestion "
+                f"or long-distance connections."
+            )
+
+        # Why flagged
+        if max_rtt > 200:
+            why_flagged = (
+                f"<strong>Why flagged:</strong> Maximum RTT of {max_rtt:.2f} ms exceeds the 200ms threshold. "
+                f"{flows_with_high_rtt} flow(s) experienced high latency, which can impact "
+                f"real-time applications and user experience."
+            )
+        elif max_rtt > 100:
+            why_flagged = (
+                f"<strong>Why flagged:</strong> Maximum RTT of {max_rtt:.2f} ms is moderately high. "
+                f"{flows_with_high_rtt} flow(s) showed increased latency that may affect "
+                f"interactive applications."
+            )
+        else:
+            why_flagged = (
+                f"<strong>Why flagged:</strong> {flows_with_high_rtt} flow(s) exceeded the baseline RTT threshold, "
+                f"indicating these connections experienced higher than normal round-trip times."
+            )
+
+        # Impact
+        if max_rtt > 300:
+            impact = (
+                "<strong>Impact:</strong> High impact on performance. "
+                "Real-time applications (VoIP, video conferencing, gaming) will experience "
+                "noticeable delays and poor responsiveness. Web browsing may feel sluggish."
+            )
+        elif max_rtt > 150:
+            impact = (
+                "<strong>Impact:</strong> Moderate impact. "
+                "Interactive applications may experience some lag. Real-time applications "
+                "could have degraded quality. File transfers remain largely unaffected."
+            )
+        else:
+            impact = (
+                "<strong>Impact:</strong> Minor impact. "
+                "Most applications will function normally, though very latency-sensitive "
+                "operations (e.g., gaming, stock trading) might notice slight delays."
+            )
+
+        # Build HTML
+        html = f"""
+                            <div class="jitter-interpretation">
+                                <div class="interpretation-header">
+                                    <strong>📊 What does this mean?</strong>
+                                </div>
+                                <div class="interpretation-body">
+                                    <p style="margin: 8px 0;">{what_happened}</p>
+                                    <p style="margin: 8px 0;">{why_flagged}</p>
+                                    <p style="margin: 8px 0;">{impact}</p>
+                                </div>
+                            </div>
+        """
+
+        return html
+
     def generate(self, results: dict[str, Any]) -> str:
         """
         Generate HTML report from analysis results with tabbed navigation.
@@ -1853,6 +1950,88 @@ class HTMLReportGenerator:
             .flow-detail-card {
                 page-break-inside: avoid;
             }
+        }
+
+        /* Tooltip styles */
+        .data-table th {
+            position: relative;
+        }
+
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+            margin-left: 6px;
+            cursor: help;
+            vertical-align: middle;
+        }
+
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background: #3498db;
+            color: white;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 1;
+            transition: all 0.2s ease;
+        }
+
+        .tooltip-icon:hover {
+            background: #2980b9;
+            transform: scale(1.1);
+        }
+
+        .tooltip-text {
+            visibility: hidden;
+            opacity: 0;
+            width: 380px;
+            background-color: #3a4a5c;
+            color: #ffffff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 18px 24px;
+            position: absolute;
+            z-index: 9999;
+            bottom: 160%;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.5;
+            letter-spacing: 0.3px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            white-space: normal;
+        }
+
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -8px;
+            border-width: 8px;
+            border-style: solid;
+            border-color: #3a4a5c transparent transparent transparent;
+        }
+
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 0.98;
+        }
+
+        .tooltip-text strong {
+            color: #ffffff;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
         }
     </style>
     <script>
@@ -3327,6 +3506,7 @@ class HTMLReportGenerator:
             global_stats = rtt_data.get("global_statistics", {})
             mean_rtt = global_stats.get("mean_rtt", 0) * 1000  # Convert to ms
             max_rtt = global_stats.get("max_rtt", 0) * 1000
+            flows_with_high_rtt = rtt_data.get("flows_with_high_rtt", 0)
 
             html += '<div class="summary-grid">'
             html += f"""
@@ -3340,41 +3520,72 @@ class HTMLReportGenerator:
             </div>
             <div class="metric-card" style="border-left-color: #ffc107;">
                 <div class="metric-label">Flows with High RTT</div>
-                <div class="metric-value">{rtt_data.get("flows_with_high_rtt", 0)}</div>
+                <div class="metric-value">{flows_with_high_rtt}</div>
             </div>
             """
             html += "</div>"
 
-            # Top flows with high RTT
+            # Add interpretation
+            html += self._generate_rtt_interpretation(mean_rtt, max_rtt, flows_with_high_rtt)
+
+            # Top flows with high RTT - Collapsible section
             flow_stats = rtt_data.get("flow_statistics", [])
             if flow_stats:
-                html += "<h4>Flows with High RTT</h4>"
-                html += '<table class="data-table">'
-                html += """
-                <thead>
-                    <tr>
-                        <th>Flow</th>
-                        <th>Mean RTT</th>
-                        <th>Max RTT</th>
-                        <th>Measurements</th>
-                    </tr>
-                </thead>
-                <tbody>
+                # Limit to top 10
+                sorted_flows = sorted(
+                    flow_stats, key=lambda x: x.get("max_rtt", 0), reverse=True
+                )[:10]
+
+                # Collapsible section for flows (Pure CSS with checkbox)
+                html += '<div class="collapsible-section">'
+                html += f"""
+                    <input type="checkbox" id="collapsible-rtt-flows" class="collapsible-checkbox">
+                    <label for="collapsible-rtt-flows" class="collapsible-header">
+                        <span class="toggle-icon">▶</span>
+                        <span class="header-title">Top Flows with High RTT ({len(sorted_flows)})</span>
+                        <span class="header-info">Click to expand flow details</span>
+                    </label>
+                    <div class="collapsible-content">
+                        <div class="content-inner">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Flow</th>
+                                        <th>Mean RTT</th>
+                                        <th>Max RTT</th>
+                                        <th>
+                                            Measurements
+                                            <span class="tooltip-container">
+                                                <span class="tooltip-icon">i</span>
+                                                <span class="tooltip-text">
+                                                    NUMBER OF RTT SAMPLES COLLECTED FOR THIS FLOW. MORE MEASUREMENTS PROVIDE A MORE RELIABLE AVERAGE RTT VALUE.
+                                                </span>
+                                            </span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                 """
 
-                for flow in flow_stats[:15]:
+                for flow in sorted_flows:
                     flow_mean = flow.get("mean_rtt", 0) * 1000
                     flow_max = flow.get("max_rtt", 0) * 1000
                     html += f"""
-                    <tr>
-                        <td><code>{flow.get("flow_key", "N/A")}</code></td>
-                        <td>{flow_mean:.2f} ms</td>
-                        <td>{flow_max:.2f} ms</td>
-                        <td>{flow.get("measurements_count", 0)}</td>
-                    </tr>
+                                    <tr>
+                                        <td><code>{flow.get("flow_key", "N/A")}</code></td>
+                                        <td>{flow_mean:.2f} ms</td>
+                                        <td>{flow_max:.2f} ms</td>
+                                        <td>{flow.get("measurements_count", 0)}</td>
+                                    </tr>
                     """
 
-                html += "</tbody></table>"
+                html += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                """
 
         # TCP Window Analysis
         window_data = results.get("tcp_window", {})

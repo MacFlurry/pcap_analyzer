@@ -2,7 +2,7 @@
 Pydantic schemas pour validation et sérialisation
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -27,7 +27,7 @@ class UploadResponse(BaseModel):
     file_size_bytes: int = Field(..., description="Taille du fichier en octets")
     status: TaskStatus = Field(TaskStatus.PENDING, description="Statut initial")
     progress_url: str = Field(..., description="URL pour suivre la progression (SSE)")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ProgressUpdate(BaseModel):
@@ -41,7 +41,7 @@ class ProgressUpdate(BaseModel):
     total_packets: Optional[int] = None
     current_analyzer: Optional[str] = None
     message: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class TaskInfo(BaseModel):

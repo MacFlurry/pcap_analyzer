@@ -5,7 +5,7 @@ Utilise aiosqlite pour opérations asynchrones.
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -84,7 +84,7 @@ class DatabaseService:
         Returns:
             TaskInfo object
         """
-        uploaded_at = datetime.utcnow()
+        uploaded_at = datetime.now(timezone.utc)
 
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -138,7 +138,7 @@ class DatabaseService:
             task_id=row["task_id"],
             filename=row["filename"],
             status=TaskStatus(row["status"]),
-            uploaded_at=datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.utcnow(),
+            uploaded_at=datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc),
             analyzed_at=datetime.fromisoformat(row["analyzed_at"]) if row["analyzed_at"] else None,
             file_size_bytes=row["file_size_bytes"],
             total_packets=row["total_packets"],
@@ -157,7 +157,7 @@ class DatabaseService:
             status: Nouveau statut
             error_message: Message d'erreur (si status=FAILED)
         """
-        analyzed_at = datetime.utcnow() if status in [TaskStatus.COMPLETED, TaskStatus.FAILED] else None
+        analyzed_at = datetime.now(timezone.utc) if status in [TaskStatus.COMPLETED, TaskStatus.FAILED] else None
 
         async with aiosqlite.connect(self.db_path) as db:
             if analyzed_at:
@@ -238,7 +238,7 @@ class DatabaseService:
                     task_id=row["task_id"],
                     filename=row["filename"],
                     status=TaskStatus(row["status"]),
-                    uploaded_at=datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.utcnow(),
+                    uploaded_at=datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc),
                     analyzed_at=datetime.fromisoformat(row["analyzed_at"]) if row["analyzed_at"] else None,
                     file_size_bytes=row["file_size_bytes"],
                     total_packets=row["total_packets"],
@@ -261,7 +261,7 @@ class DatabaseService:
         Returns:
             Nombre de tâches marquées comme expirées
         """
-        cutoff_time = datetime.utcnow() - timedelta(hours=retention_hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=retention_hours)
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
