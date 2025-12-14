@@ -7,6 +7,32 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.2.2] - 2025-12-14
+
+### 🧹 Code Cleanup & Organization
+
+- **Clean up tests directory**: Remove redundant and obsolete tests
+  - Removed 4 sprint-based test files (test_integration_sprint1-4.py)
+  - Eliminated 17 redundant tests (285 → 268 tests)
+  - All core functionality still tested with better organization
+
+- **Reorganize benchmark scripts**: Move to dedicated directory
+  - Moved benchmark_performance.py to scripts/benchmarks/
+  - Moved compare_performance.py to scripts/benchmarks/
+  - Added scripts/benchmarks/README.md with usage documentation
+  - Better separation: performance tools vs automated tests
+
+- **Improve test naming**: Clearer test file names
+  - Renamed test_issue_12_negative_duration.py → test_duration_calculation_regression.py
+  - More descriptive name for regression test
+
+### 📊 Impact
+
+- **Code reduction**: 1454 lines removed
+- **Better organization**: Tests by functionality, not by sprint
+- **No coverage loss**: All features still tested
+- **Improved structure**: Benchmarks separated from tests
+
 ## [4.2.1] - 2025-12-14
 
 ### 🔧 Corrections

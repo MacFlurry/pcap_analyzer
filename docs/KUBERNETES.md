@@ -73,8 +73,8 @@ apiVersion: v2
 name: pcap-analyzer
 description: Network packet capture analysis tool
 type: application
-version: 1.0.1
-appVersion: "4.2.1"
+version: 1.0.2
+appVersion: "4.2.2"
 ```
 
 **Justification :**
@@ -155,7 +155,7 @@ T+30s+ : Checks périodiques (liveness: 10s, readiness: 5s)
 async def health_check():
     return {
         "status": "healthy",
-        "version": "4.2.1",
+        "version": "4.2.2",
         "uptime_seconds": time.time() - start_time,
         "active_analyses": worker.get_active_count(),
         "queue_size": worker.get_queue_size(),
