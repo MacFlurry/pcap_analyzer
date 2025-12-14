@@ -32,7 +32,7 @@ Merci de votre intérêt pour contribuer à PCAP Analyzer ! 🎉
 
 3. **Installez les outils de développement** :
    ```bash
-   # Créez un environnement virtuel
+   # Créez un environnement virtuel (FORTEMENT RECOMMANDÉ)
    python3 -m venv venv
    source venv/bin/activate  # Sur Windows: venv\Scripts\activate
 
@@ -43,7 +43,9 @@ Merci de votre intérêt pour contribuer à PCAP Analyzer ! 🎉
    pre-commit install
    ```
 
-   Note: Toutes les dépendances (CLI, web, dev) sont maintenant dans `pyproject.toml`
+   **Important**: L'utilisation d'un environnement virtuel est **fortement recommandée**,
+   particulièrement pour l'utilisation du CLI, afin d'éviter les conflits de dépendances
+   avec d'autres projets Python sur votre système.
 
 4. **Faites vos modifications** :
    - Suivez le style de code existant (Black + isort)
@@ -53,6 +55,9 @@ Merci de votre intérêt pour contribuer à PCAP Analyzer ! 🎉
 
 5. **Testez** vos modifications :
    ```bash
+   # Assurez-vous que le venv est activé pour les tests CLI
+   source venv/bin/activate  # Sur Windows: venv\Scripts\activate
+
    # Lancez les tests
    pytest
 
@@ -65,10 +70,10 @@ Merci de votre intérêt pour contribuer à PCAP Analyzer ! 🎉
    # Vérifiez le formatage manuellement
    pre-commit run --all-files
 
-   # Testez l'analyse CLI
+   # Testez l'analyse CLI (dans le venv)
    pcap_analyzer analyze test.pcap
 
-   # Testez l'interface web
+   # Testez l'interface web (Docker recommandé, pas besoin de venv)
    docker-compose up -d
    curl http://localhost:8000/api/health
    docker-compose down
@@ -192,6 +197,7 @@ PCAP Analyzer offre deux modes d'utilisation:
 - Analyse directe de fichiers PCAP locaux
 - Rapports HTML/JSON générés immédiatement
 - Idéal pour analyse ponctuelle ou scripts
+- **Recommandation**: Utilisez un environnement virtuel (`venv`) pour isoler les dépendances
 
 ### Mode Web (FastAPI)
 - Interface moderne avec upload drag & drop
