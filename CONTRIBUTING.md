@@ -32,12 +32,18 @@ Merci de votre intérêt pour contribuer à PCAP Analyzer ! 🎉
 
 3. **Installez les outils de développement** :
    ```bash
+   # Créez un environnement virtuel
+   python3 -m venv venv
+   source venv/bin/activate  # Sur Windows: venv\Scripts\activate
+
    # Installez en mode développement avec toutes les dépendances
    pip install -e ".[dev]"
 
    # Installez pre-commit pour les hooks automatiques
    pre-commit install
    ```
+
+   Note: Toutes les dépendances (CLI, web, dev) sont maintenant dans `pyproject.toml`
 
 4. **Faites vos modifications** :
    - Suivez le style de code existant (Black + isort)
@@ -59,8 +65,13 @@ Merci de votre intérêt pour contribuer à PCAP Analyzer ! 🎉
    # Vérifiez le formatage manuellement
    pre-commit run --all-files
 
-   # Testez l'analyse
+   # Testez l'analyse CLI
    pcap_analyzer analyze test.pcap
+
+   # Testez l'interface web
+   docker-compose up -d
+   curl http://localhost:8000/api/health
+   docker-compose down
    ```
 
 6. **Committez** vos changements :
@@ -149,15 +160,52 @@ docs(readme): mise à jour exemples d'utilisation
 
 ```
 pcap_analyzer/
-├── src/
-│   ├── analyzers/      # Modules d'analyse
-│   ├── cli.py          # Interface CLI
-│   ├── config.py       # Gestion configuration
-│   └── ...
-├── tests/              # Tests unitaires (à créer)
-├── docs/               # Documentation supplémentaire
-└── examples/           # Exemples d'utilisation
+├── app/                    # Interface web FastAPI
+│   ├── api/routes/        # Endpoints REST
+│   ├── services/          # Worker, DB, Analyzer
+│   ├── templates/         # UI (upload, progress, history)
+│   └── static/            # CSS/JS
+├── src/                   # CLI + analyseurs
+│   ├── analyzers/         # 17 analyseurs TCP/DNS/etc
+│   ├── parsers/           # dpkt + Scapy parsers
+│   ├── exporters/         # Générateurs de rapports
+│   ├── utils/             # Utilitaires
+│   └── cli.py             # Interface ligne de commande
+├── helm-chart/            # Déploiement Kubernetes
+│   └── pcap-analyzer/    # Helm chart avec Ingress
+├── tests/                 # Tests pytest
+│   ├── unit/             # Tests unitaires
+│   ├── integration/      # Tests d'intégration
+│   └── conftest.py       # Fixtures communes
+├── scripts/               # Scripts utilitaires
+├── docker-compose.yml     # Dev environment
+├── Dockerfile             # Multi-stage build (485 MB)
+├── pyproject.toml         # Configuration moderne (PEP 517/518)
+└── pytest.ini             # Configuration pytest
 ```
+
+## Architecture
+
+PCAP Analyzer offre deux modes d'utilisation:
+
+### Mode CLI
+- Analyse directe de fichiers PCAP locaux
+- Rapports HTML/JSON générés immédiatement
+- Idéal pour analyse ponctuelle ou scripts
+
+### Mode Web (FastAPI)
+- Interface moderne avec upload drag & drop
+- Progression temps réel via Server-Sent Events (SSE)
+- Historique des analyses (rétention 24h)
+- API REST complète
+- Déploiement Docker/Kubernetes avec Ingress
+
+### Technologies
+- **Parsing**: Architecture hybride dpkt + Scapy (1.7x plus rapide)
+- **Web**: FastAPI + Uvicorn + aiosqlite
+- **Frontend**: HTML/CSS/JS vanilla (pas de framework)
+- **Déploiement**: Docker multi-stage + Helm chart
+- **Tests**: pytest + pytest-asyncio + Hypothesis
 
 ## Ajouter un nouvel analyseur
 
@@ -242,7 +290,11 @@ Le projet utilise **pytest** pour les tests unitaires et d'intégration, et **Hy
 pytest
 
 # Avec couverture
-pytest --cov=src --cov-report=html --cov-report=term-missing
+pytest --cov=src --cov=app --cov-report=html --cov-report=term-missing
+
+# Tests par catégorie
+pytest tests/unit/          # Tests unitaires uniquement
+pytest tests/integration/   # Tests d'intégration web
 
 # Tests spécifiques
 pytest tests/test_tcp_handshake.py -v
@@ -253,6 +305,28 @@ pytest tests/test_property_based.py -v
 # Tests en parallèle (plus rapide)
 pytest -n auto
 ```
+
+### Tests web (FastAPI)
+
+Les tests d'intégration utilisent `TestClient` de Starlette:
+
+```python
+from fastapi.testclient import TestClient
+from app.main import app
+
+def test_upload_endpoint(client: TestClient):
+    """Test l'upload d'un fichier PCAP"""
+    with open("test.pcap", "rb") as f:
+        response = client.post("/api/upload", files={"file": f})
+    assert response.status_code == 200
+    assert "task_id" in response.json()
+```
+
+Les fixtures dans `tests/conftest.py` fournissent:
+- `test_data_dir`: Répertoire temporaire pour les tests
+- `test_db`: Instance de base de données SQLite
+- `client`: TestClient FastAPI configuré
+- `mock_worker`: Worker simulé pour éviter l'analyse réelle
 
 ### Écrire des tests
 
@@ -283,12 +357,53 @@ Objectif: **>80%** de couverture de code
 
 Voir le rapport: `open htmlcov/index.html` après `pytest --cov`
 
+## Docker et Kubernetes
+
+### Tester avec Docker Compose
+
+```bash
+# Démarrer l'application
+docker-compose up -d
+
+# Vérifier les logs
+docker-compose logs -f
+
+# Tester l'API
+curl http://localhost:8000/api/health
+
+# Arrêter
+docker-compose down
+```
+
+### Tester avec Kubernetes (kind)
+
+```bash
+# Build et charger l'image
+docker build -t pcap-analyzer:test .
+kind create cluster --name test --config kind-config.yaml
+kind load docker-image pcap-analyzer:test --name test
+
+# Installer avec Helm
+helm install pcap-analyzer ./helm-chart/pcap-analyzer \
+  --set image.tag=test \
+  --set ingress.enabled=false \
+  --set service.type=NodePort
+
+# Vérifier
+kubectl get all -n pcap-analyzer
+kubectl logs -n pcap-analyzer deployment/pcap-analyzer
+
+# Nettoyer
+kind delete cluster --name test
+```
+
 ## Documentation
 
 - **README.md** : Documentation principale
-- **QUICKSTART.md** : Guide de démarrage rapide
-- **TROUBLESHOOTING.md** : Résolution de problèmes
-- **STRUCTURE.md** : Architecture du projet
+- **helm-chart/pcap-analyzer/README.md** : Guide Kubernetes/Helm
+- **CHANGELOG.md** : Historique des versions
+- **tests/README.md** : Guide des tests
+- **scripts/README.md** : Documentation scripts
 
 Mettez à jour la documentation pertinente pour vos modifications.
 
@@ -296,16 +411,19 @@ Mettez à jour la documentation pertinente pour vos modifications.
 
 - [ ] **Pre-commit hooks** passent (`pre-commit run --all-files`)
 - [ ] **Tests** passent (`pytest`)
-- [ ] **Couverture** maintenue ou améliorée (`pytest --cov=src`)
+- [ ] **Couverture** maintenue ou améliorée (`pytest --cov=src --cov=app`)
 - [ ] **Type hints** ajoutés pour toutes les nouvelles fonctions publiques
 - [ ] **Docstrings** ajoutées/mises à jour
 - [ ] **Documentation** mise à jour (README.md si applicable)
 - [ ] **Tests unitaires** ajoutés pour les nouvelles fonctionnalités
+- [ ] **Tests d'intégration** si modification de l'API web
 - [ ] **Tests property-based** si applicable (Hypothesis)
 - [ ] Le **commit message** suit les conventions (feat/fix/docs/etc.)
+- [ ] **Docker build** réussit (`docker build -t pcap-analyzer:test .`)
+- [ ] **Helm lint** passe si modification du chart (`helm lint ./helm-chart/pcap-analyzer`)
 - [ ] Pas d'informations sensibles dans le code
 - [ ] `config.yaml` ne contient que des exemples génériques
-- [ ] Pas de fichiers inutiles committés (*.pyc, __pycache__, etc.)
+- [ ] Pas de fichiers inutiles committés (*.pyc, __pycache__, .DS_Store, etc.)
 
 ## Questions ?
 
