@@ -46,6 +46,25 @@ async def progress_event_generator(task_id: str) -> AsyncGenerator[str, None]:
     # Index pour tracking des updates déjà envoyés
     last_update_index = 0
 
+    # Envoyer un événement initial immédiatement avec le dernier update disponible
+    initial_updates = worker.get_progress_updates(task_id)
+    if initial_updates:
+        # Envoyer le dernier update disponible
+        latest_update = initial_updates[-1]
+        initial_event = {
+            "task_id": latest_update.task_id,
+            "status": task_info.status.value,
+            "phase": latest_update.phase,
+            "progress_percent": latest_update.progress_percent,
+            "packets_processed": latest_update.packets_processed,
+            "total_packets": latest_update.total_packets,
+            "current_analyzer": latest_update.current_analyzer,
+            "message": latest_update.message,
+            "timestamp": latest_update.timestamp.isoformat(),
+        }
+        yield f"data: {json.dumps(initial_event)}\n\n"
+        last_update_index = len(initial_updates)
+
     try:
         while True:
             # Récupérer le statut actuel

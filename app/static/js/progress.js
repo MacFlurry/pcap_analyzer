@@ -46,12 +46,6 @@ class ProgressMonitor {
 
         // Add initial event
         this.addLogEvent('Connexion au serveur établie', 'info');
-
-        // Update message from default "Connexion au serveur..." if still showing
-        if (this.currentMessage.textContent === 'Connexion au serveur...') {
-            this.currentMessage.textContent = 'Initialisation de l\'analyse...';
-            this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
-        }
     }
 
     async fetchInitialStatus() {
