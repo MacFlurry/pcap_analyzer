@@ -8,6 +8,23 @@ Analyseur automatisé de fichiers PCAP pour diagnostiquer les problèmes de late
 
 **Interface web moderne** • **Rapports HTML interactifs** • **Analyse en temps réel** • **Kubernetes ready**
 
+## 📋 Prérequis
+
+Selon le mode de déploiement choisi :
+
+**Option 1: Docker Compose**
+- [Docker](https://docs.docker.com/get-docker/) et [Docker Compose](https://docs.docker.com/compose/install/)
+
+**Option 2: Kubernetes**
+- [Docker](https://docs.docker.com/get-docker/)
+- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) (Kubernetes in Docker)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) (client Kubernetes)
+- [helm](https://helm.sh/docs/intro/install/) (gestionnaire de packages Kubernetes)
+
+**Option 3: CLI local**
+- [Python 3.11+](https://www.python.org/downloads/)
+- libpcap (installé automatiquement sur macOS/Linux)
+
 ## 🚀 Démarrage rapide
 
 ### Option 1: Docker Compose (recommandé)
