@@ -234,3 +234,53 @@ def large_file(test_data_dir: Path) -> Path:
     with open(large_file, "wb") as f:
         f.write(b"\x00" * size)
     return large_file
+
+
+# =============================================================================
+# TCP Packet Fixtures for TCP Handshake Tests
+# =============================================================================
+
+@pytest.fixture
+def sample_tcp_syn_packet():
+    """Create a sample TCP SYN packet"""
+    from scapy.all import Ether, IP, TCP
+
+    pkt = Ether() / IP(src="192.168.1.1", dst="192.168.1.2") / TCP(sport=12345, dport=80, flags="S", seq=1000)
+    pkt.time = 1.0
+    return pkt
+
+
+@pytest.fixture
+def sample_tcp_synack_packet():
+    """Create a sample TCP SYN-ACK packet"""
+    from scapy.all import Ether, IP, TCP
+
+    pkt = Ether() / IP(src="192.168.1.2", dst="192.168.1.1") / TCP(sport=80, dport=12345, flags="SA", seq=2000, ack=1001)
+    pkt.time = 1.05
+    return pkt
+
+
+@pytest.fixture
+def sample_tcp_ack_packet():
+    """Create a sample TCP ACK packet"""
+    from scapy.all import Ether, IP, TCP
+
+    pkt = Ether() / IP(src="192.168.1.1", dst="192.168.1.2") / TCP(sport=12345, dport=80, flags="A", seq=1001, ack=2001)
+    pkt.time = 1.10
+    return pkt
+
+
+@pytest.fixture
+def tcp_handshake_packets(sample_tcp_syn_packet, sample_tcp_synack_packet, sample_tcp_ack_packet):
+    """Create a complete TCP handshake (SYN, SYN-ACK, ACK)"""
+    return [sample_tcp_syn_packet, sample_tcp_synack_packet, sample_tcp_ack_packet]
+
+
+@pytest.fixture
+def sample_ipv6_packet():
+    """Create a sample IPv6 TCP SYN packet"""
+    from scapy.all import Ether, IPv6, TCP
+
+    pkt = Ether() / IPv6(src="2001:db8::1", dst="2001:db8::2") / TCP(sport=12345, dport=80, flags="S", seq=1000)
+    pkt.time = 1.0
+    return pkt

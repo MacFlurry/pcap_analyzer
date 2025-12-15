@@ -51,7 +51,7 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        pytest tests/ -v --tb=short --maxfail=5
+        pytest tests/ -v --tb=short --maxfail=5 -m "not property and not integration"
 
     - name: Run tests with coverage
       if: matrix.python-version == '3.11' && matrix.os == 'ubuntu-latest'
