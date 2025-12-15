@@ -284,3 +284,43 @@ def sample_ipv6_packet():
     pkt = Ether() / IPv6(src="2001:db8::1", dst="2001:db8::2") / TCP(sport=12345, dport=80, flags="S", seq=1000)
     pkt.time = 1.0
     return pkt
+
+
+@pytest.fixture
+def sample_tcp_packet():
+    """Alias for sample_tcp_syn_packet - generic TCP packet"""
+    from scapy.all import Ether, IP, TCP
+
+    pkt = Ether() / IP(src="192.168.1.1", dst="192.168.1.2") / TCP(sport=12345, dport=80, flags="S", seq=1000)
+    pkt.time = 1.0
+    return pkt
+
+
+@pytest.fixture
+def sample_tcp_fin_packet():
+    """Create a sample TCP FIN packet"""
+    from scapy.all import Ether, IP, TCP
+
+    pkt = Ether() / IP(src="192.168.1.1", dst="192.168.1.2") / TCP(sport=12345, dport=80, flags="F", seq=1000)
+    pkt.time = 1.0
+    return pkt
+
+
+@pytest.fixture
+def sample_tcp_rst_packet():
+    """Create a sample TCP RST packet"""
+    from scapy.all import Ether, IP, TCP
+
+    pkt = Ether() / IP(src="192.168.1.1", dst="192.168.1.2") / TCP(sport=12345, dport=80, flags="R", seq=1000)
+    pkt.time = 1.0
+    return pkt
+
+
+@pytest.fixture
+def sample_tcp_data_packet():
+    """Create a sample TCP packet with data payload"""
+    from scapy.all import Ether, IP, TCP, Raw
+
+    pkt = Ether() / IP(src="192.168.1.1", dst="192.168.1.2") / TCP(sport=12345, dport=80, flags="PA", seq=1000, ack=2000) / Raw(load=b"Test data")
+    pkt.time = 1.0
+    return pkt
