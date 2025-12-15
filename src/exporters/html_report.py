@@ -2155,23 +2155,23 @@ class HTMLReportGenerator:
             "good": {
                 "icon": "💚",
                 "label": "Excellent Network Health",
-                "description": "No significant issues detected in the network traffic"
+                "description": "No significant issues detected in the network traffic",
             },
             "warning": {
                 "icon": "⚠️",
                 "label": "Minor Issues Detected",
-                "description": "Check TCP Analysis, Jitter, and RTT sections for details"
+                "description": "Check TCP Analysis, Jitter, and RTT sections for details",
             },
             "critical": {
                 "icon": "🔴",
                 "label": "Critical Issues Detected",
-                "description": "Review TCP retransmissions, packet loss, and latency metrics"
+                "description": "Review TCP retransmissions, packet loss, and latency metrics",
             },
             "unknown": {
                 "icon": "❓",
                 "label": "Health Status Unknown",
-                "description": "Insufficient data to calculate network health score"
-            }
+                "description": "Insufficient data to calculate network health score",
+            },
         }
 
         config = severity_config.get(severity, severity_config["unknown"])
@@ -3557,9 +3557,7 @@ class HTMLReportGenerator:
             flow_stats = rtt_data.get("flow_statistics", [])
             if flow_stats:
                 # Limit to top 10
-                sorted_flows = sorted(
-                    flow_stats, key=lambda x: x.get("max_rtt", 0), reverse=True
-                )[:10]
+                sorted_flows = sorted(flow_stats, key=lambda x: x.get("max_rtt", 0), reverse=True)[:10]
 
                 # Collapsible section for flows (Pure CSS with checkbox)
                 html += '<div class="collapsible-section">'

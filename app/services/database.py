@@ -138,7 +138,9 @@ class DatabaseService:
             task_id=row["task_id"],
             filename=row["filename"],
             status=TaskStatus(row["status"]),
-            uploaded_at=datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc),
+            uploaded_at=(
+                datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc)
+            ),
             analyzed_at=datetime.fromisoformat(row["analyzed_at"]) if row["analyzed_at"] else None,
             file_size_bytes=row["file_size_bytes"],
             total_packets=row["total_packets"],
@@ -238,7 +240,9 @@ class DatabaseService:
                     task_id=row["task_id"],
                     filename=row["filename"],
                     status=TaskStatus(row["status"]),
-                    uploaded_at=datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc),
+                    uploaded_at=(
+                        datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc)
+                    ),
                     analyzed_at=datetime.fromisoformat(row["analyzed_at"]) if row["analyzed_at"] else None,
                     file_size_bytes=row["file_size_bytes"],
                     total_packets=row["total_packets"],
