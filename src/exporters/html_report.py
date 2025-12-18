@@ -3044,18 +3044,16 @@ class HTMLReportGenerator:
         Returns:
             HTML string for the root cause box
         """
-        # Determine severity color
+        # Use consistent purple gradient (not aggressive red), vary only emoji/text by severity
+        bg_gradient = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
         severity = analysis.get("severity", "low")
         if severity == "high":
-            bg_gradient = "linear-gradient(135deg, #dc3545 0%, #c82333 100%)"
             severity_emoji = "🔴"
             severity_text = "High Severity"
         elif severity == "medium":
-            bg_gradient = "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)"
             severity_emoji = "🟡"
             severity_text = "Medium Severity"
         else:
-            bg_gradient = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
             severity_emoji = "🟢"
             severity_text = "Low Severity"
 
