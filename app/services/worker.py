@@ -69,6 +69,10 @@ class AnalysisWorker:
         # Structure: {task_id: [ProgressUpdate, ...]}
         self.progress_updates: dict[str, list[ProgressUpdate]] = defaultdict(list)
 
+        # Tracking de la dernière progression persistée (pour minimiser les écritures DB)
+        # Structure: {task_id: progress_percent}
+        self._last_persisted_progress: dict[str, int] = {}
+
         # Worker task
         self.worker_task: Optional[asyncio.Task] = None
         self.is_running = False
@@ -178,6 +182,59 @@ class AnalysisWorker:
                 logger.error(f"Unexpected error in worker loop: {e}", exc_info=True)
                 await asyncio.sleep(1)  # Éviter une boucle infinie en cas d'erreur
 
+    def _should_persist_progress(self, task_id: str, progress_percent: int) -> bool:
+        """
+        Détermine si la progression doit être persistée en base de données.
+
+        Stratégie pour minimiser les écritures:
+        - Première mise à jour (0%)
+        - Tous les 5% (5, 10, 15, ..., 95)
+        - Dernière mise à jour (100%)
+
+        Args:
+            task_id: ID de la tâche
+            progress_percent: Pourcentage de progression actuel
+
+        Returns:
+            True si la progression doit être persistée
+        """
+        last_persisted = self._last_persisted_progress.get(task_id)
+
+        # Première mise à jour
+        if last_persisted is None:
+            return True
+
+        # Dernière mise à jour
+        if progress_percent == 100:
+            return True
+
+        # Tous les 5%
+        if progress_percent % 5 == 0 and progress_percent != last_persisted:
+            return True
+
+        return False
+
+    async def _heartbeat_loop(self, task_id: str):
+        """
+        Boucle de heartbeat pour une tâche en cours.
+
+        Envoie un heartbeat toutes les 10 secondes jusqu'à ce que
+        la tâche soit terminée ou annulée.
+
+        Args:
+            task_id: ID de la tâche
+        """
+        logger.debug(f"Heartbeat loop started for task {task_id}")
+
+        try:
+            while True:
+                await asyncio.sleep(10)  # Heartbeat toutes les 10 secondes
+                await self.db_service.update_heartbeat(task_id)
+                logger.debug(f"Heartbeat sent for task {task_id}")
+        except asyncio.CancelledError:
+            logger.debug(f"Heartbeat loop cancelled for task {task_id}")
+            raise
+
     async def _process_task(self, task_id: str, pcap_path: str):
         """
         Traite une tâche d'analyse.
@@ -189,64 +246,98 @@ class AnalysisWorker:
         # Mettre à jour le statut en PROCESSING
         await self.db_service.update_status(task_id, TaskStatus.PROCESSING)
 
-        # Créer le callback de progression
-        async def progress_callback_fn(
-            task_id: str,
-            phase: str,
-            progress_percent: int,
-            packets_processed: Optional[int] = None,
-            total_packets: Optional[int] = None,
-            current_analyzer: Optional[str] = None,
-            message: Optional[str] = None,
-        ):
-            """Callback appelé lors des mises à jour de progression"""
-            update = ProgressUpdate(
-                task_id=task_id,
-                phase=phase,
-                progress_percent=progress_percent,
-                packets_processed=packets_processed,
-                total_packets=total_packets,
-                current_analyzer=current_analyzer,
-                message=message,
-            )
-            self.progress_updates[task_id].append(update)
+        # Envoyer le heartbeat initial
+        await self.db_service.update_heartbeat(task_id)
 
-        progress_callback = ProgressCallback(task_id=task_id, callback_fn=progress_callback_fn)
+        # Lancer la boucle de heartbeat en arrière-plan
+        heartbeat_task = asyncio.create_task(self._heartbeat_loop(task_id))
 
-        # Exécuter l'analyse
-        result = await self.analyzer_service.analyze_pcap(
-            task_id=task_id,
-            pcap_path=pcap_path,
-            progress_callback=progress_callback,
-        )
-
-        # Mettre à jour la base de données avec les résultats
-        analysis_results = result["results"]
-        report_paths = result["reports"]
-
-        total_packets = analysis_results.get("metadata", {}).get("total_packets", 0)
-        # Fix: la clé est "overall_score" pas "score"
-        health_score = analysis_results.get("health_score", {}).get("overall_score", 0.0)
-
-        await self.db_service.update_results(
-            task_id=task_id,
-            total_packets=total_packets,
-            health_score=health_score,
-            report_html_path=report_paths["html"],
-            report_json_path=report_paths["json"],
-        )
-
-        # Mettre à jour le statut en COMPLETED
-        await self.db_service.update_status(task_id, TaskStatus.COMPLETED)
-
-        # Supprimer le fichier PCAP (ne conserver que les rapports)
         try:
-            Path(pcap_path).unlink()
-            logger.info(f"PCAP file deleted: {pcap_path}")
-        except Exception as e:
-            logger.warning(f"Failed to delete PCAP file {pcap_path}: {e}")
+            # Créer le callback de progression
+            async def progress_callback_fn(
+                task_id: str,
+                phase: str,
+                progress_percent: int,
+                packets_processed: Optional[int] = None,
+                total_packets: Optional[int] = None,
+                current_analyzer: Optional[str] = None,
+                message: Optional[str] = None,
+            ):
+                """Callback appelé lors des mises à jour de progression"""
+                # Créer l'update pour SSE
+                update = ProgressUpdate(
+                    task_id=task_id,
+                    phase=phase,
+                    progress_percent=progress_percent,
+                    packets_processed=packets_processed,
+                    total_packets=total_packets,
+                    current_analyzer=current_analyzer,
+                    message=message,
+                )
+                self.progress_updates[task_id].append(update)
 
-        logger.info(f"Task {task_id} completed successfully")
+                # Persister en base de données si nécessaire (tous les 5%)
+                if self._should_persist_progress(task_id, progress_percent):
+                    await self.db_service.create_progress_snapshot(
+                        task_id=task_id,
+                        phase=phase,
+                        progress_percent=progress_percent,
+                        packets_processed=packets_processed,
+                        total_packets=total_packets,
+                        current_analyzer=current_analyzer,
+                        message=message,
+                    )
+                    self._last_persisted_progress[task_id] = progress_percent
+                    logger.debug(f"Progress persisted for task {task_id}: {progress_percent}%")
+
+            progress_callback = ProgressCallback(task_id=task_id, callback_fn=progress_callback_fn)
+
+            # Exécuter l'analyse
+            result = await self.analyzer_service.analyze_pcap(
+                task_id=task_id,
+                pcap_path=pcap_path,
+                progress_callback=progress_callback,
+            )
+
+            # Mettre à jour la base de données avec les résultats
+            analysis_results = result["results"]
+            report_paths = result["reports"]
+
+            total_packets = analysis_results.get("metadata", {}).get("total_packets", 0)
+            # Fix: la clé est "overall_score" pas "score"
+            health_score = analysis_results.get("health_score", {}).get("overall_score", 0.0)
+
+            await self.db_service.update_results(
+                task_id=task_id,
+                total_packets=total_packets,
+                health_score=health_score,
+                report_html_path=report_paths["html"],
+                report_json_path=report_paths["json"],
+            )
+
+            # Mettre à jour le statut en COMPLETED
+            await self.db_service.update_status(task_id, TaskStatus.COMPLETED)
+
+            # Supprimer le fichier PCAP (ne conserver que les rapports)
+            try:
+                Path(pcap_path).unlink()
+                logger.info(f"PCAP file deleted: {pcap_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete PCAP file {pcap_path}: {e}")
+
+            logger.info(f"Task {task_id} completed successfully")
+
+        finally:
+            # Annuler la boucle de heartbeat
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+
+            # Nettoyer le tracking de progression
+            if task_id in self._last_persisted_progress:
+                del self._last_persisted_progress[task_id]
 
     async def _handle_task_error(self, task_id: str, error_message: str):
         """

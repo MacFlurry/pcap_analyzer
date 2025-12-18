@@ -281,6 +281,80 @@ class HTMLReportGenerator:
 
         return html
 
+    def _generate_wireshark_commands(
+        self,
+        src_ip: str,
+        src_port: str,
+        dst_ip: str,
+        dst_port: str,
+        flow_type: str = "general",
+        seq_num: int = None,
+    ) -> dict[str, str]:
+        """
+        Generate Wireshark display filter and tshark extraction command.
+
+        Args:
+            src_ip: Source IP address
+            src_port: Source port
+            dst_ip: Destination IP address
+            dst_port: Destination port
+            flow_type: Type of flow - 'general', 'retransmission', 'window_zero', 'syn'
+            seq_num: TCP sequence number (for retransmission type)
+
+        Returns:
+            Dictionary with 'display_filter' and 'tshark_extract' keys
+        """
+        # Detect IPv6 vs IPv4
+        is_ipv6 = ":" in src_ip and src_ip.count(":") > 1
+
+        # Build base filter
+        if is_ipv6:
+            base_filter = (
+                f"ipv6.src == {src_ip} && ipv6.dst == {dst_ip} && "
+                f"tcp.srcport == {src_port} && tcp.dstport == {dst_port}"
+            )
+        else:
+            base_filter = (
+                f"ip.src == {src_ip} && ip.dst == {dst_ip} && "
+                f"tcp.srcport == {src_port} && tcp.dstport == {dst_port}"
+            )
+
+        # Add flow-type-specific filters
+        if flow_type == "retransmission":
+            if seq_num is not None:
+                display_filter = f"tcp.seq == {seq_num} && {base_filter}"
+                type_filter = f" and tcp.seq == {seq_num}"
+            else:
+                display_filter = f"tcp.analysis.retransmission && {base_filter}"
+                type_filter = " and tcp.analysis.retransmission"
+        elif flow_type == "window_zero":
+            display_filter = f"tcp.window_size == 0 && {base_filter}"
+            type_filter = " and tcp.window_size == 0"
+        elif flow_type == "syn":
+            display_filter = f"tcp.flags.syn == 1 && {base_filter}"
+            type_filter = " and tcp.flags.syn == 1"
+        else:
+            # General flow
+            display_filter = base_filter
+            type_filter = ""
+
+        # Build tshark extraction command
+        # Combine IP and port filters into a single -Y clause
+        if is_ipv6:
+            combined_filter = f"ipv6.src == {src_ip} and ipv6.dst == {dst_ip} and tcp.srcport == {src_port} and tcp.dstport == {dst_port}{type_filter}"
+        else:
+            combined_filter = f"ip.src == {src_ip} and ip.dst == {dst_ip} and tcp.srcport == {src_port} and tcp.dstport == {dst_port}{type_filter}"
+
+        tshark_cmd = (
+            f"tshark -r input.pcap -Y '{combined_filter}' "
+            f"-T fields -e frame.number -e frame.time_relative -e tcp.seq -e tcp.ack -e tcp.len"
+        )
+
+        return {
+            "display_filter": display_filter,
+            "tshark_extract": tshark_cmd,
+        }
+
     def _generate_retransmission_interpretation(
         self,
         total_retrans: int,
@@ -2464,8 +2538,14 @@ class HTMLReportGenerator:
                         else '<span class="service-badge">🔌 Unknown</span>'
                     )
 
-                # Generate Wireshark filter
-                wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"
+                # Generate Wireshark commands
+                ws_commands = self._generate_wireshark_commands(
+                    src_ip=src_ip,
+                    src_port=src_port,
+                    dst_ip=dst_ip,
+                    dst_port=dst_port,
+                    flow_type="general",
+                )
 
                 # Build flow card HTML
                 html += f"""
@@ -2529,12 +2609,21 @@ class HTMLReportGenerator:
                             </div>
                     """
 
-                # Add Wireshark debug section
+                # Add collapsible Wireshark debug section
                 html += f"""
                             <div class="wireshark-section">
-                                <strong>🔍 Debug this flow:</strong>
-                                <code class="copy-code">{wireshark_filter}</code>
-                                <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                                <details>
+                                    <summary><strong>🔍 Debug Commands</strong></summary>
+                                    <div style="margin-top: 10px;">
+                                        <p style="margin: 5px 0;"><strong>Wireshark Display Filter:</strong></p>
+                                        <code class="copy-code">{ws_commands['display_filter']}</code>
+                                        <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+
+                                        <p style="margin: 15px 0 5px 0;"><strong>Tshark Extraction:</strong></p>
+                                        <code class="copy-code">{ws_commands['tshark_extract']}</code>
+                                        <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                                    </div>
+                                </details>
                             </div>
                         </div>
                     </div>
@@ -3386,8 +3475,15 @@ class HTMLReportGenerator:
                 timeline_class = "timeline-success"
                 type_label = "Generic Retransmission" if retrans_type == "Retransmission" else retrans_type
 
-            # Build Wireshark filter
-            wireshark_filter = f"tcp.seq == {seq_num} && ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port}"  # noqa: E501
+            # Generate Wireshark commands
+            ws_commands = self._generate_wireshark_commands(
+                src_ip=src_ip,
+                src_port=src_port,
+                dst_ip=dst_ip,
+                dst_port=dst_port,
+                flow_type="retransmission",
+                seq_num=seq_num,
+            )
 
             html += f"""
                 <div class="timeline-event {timeline_class}">
@@ -3397,9 +3493,18 @@ class HTMLReportGenerator:
                         <span class="timeline-type">{type_label}</span>
                         <span class="timeline-detail">Seq: {seq_num}</span>
                         <div class="wireshark-section">
-                            <strong>🔍 Debug this packet:</strong>
-                            <code class="copy-code">{wireshark_filter}</code>
-                            <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                            <details>
+                                <summary><strong>🔍 Debug Commands</strong></summary>
+                                <div style="margin-top: 10px;">
+                                    <p style="margin: 5px 0;"><strong>Wireshark Display Filter:</strong></p>
+                                    <code class="copy-code">{ws_commands['display_filter']}</code>
+                                    <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+
+                                    <p style="margin: 15px 0 5px 0;"><strong>Tshark Extraction:</strong></p>
+                                    <code class="copy-code">{ws_commands['tshark_extract']}</code>
+                                    <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                                </div>
+                            </details>
                         </div>
                     </div>
                 </div>
@@ -3697,7 +3802,14 @@ class HTMLReportGenerator:
                         else:
                             src_ip, src_port, dst_ip, dst_port = "0.0.0.0", "0", "0.0.0.0", "0"
 
-                        wireshark_filter = f"ip.src == {src_ip} && ip.dst == {dst_ip} && tcp.srcport == {src_port} && tcp.dstport == {dst_port} && tcp.window_size == 0"  # noqa: E501
+                        # Generate Wireshark commands
+                        ws_commands = self._generate_wireshark_commands(
+                            src_ip=src_ip,
+                            src_port=src_port,
+                            dst_ip=dst_ip,
+                            dst_port=dst_port,
+                            flow_type="window_zero",
+                        )
 
                         html += f"""
                             <div class="flow-detail-card">
@@ -3740,9 +3852,18 @@ class HTMLReportGenerator:
                                         </div>
                                     </div>
                                     <div class="wireshark-section">
-                                        <strong>🔍 Debug this flow:</strong>
-                                        <code class="copy-code">{wireshark_filter}</code>
-                                        <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                                        <details>
+                                            <summary><strong>🔍 Debug Commands</strong></summary>
+                                            <div style="margin-top: 10px;">
+                                                <p style="margin: 5px 0;"><strong>Wireshark Display Filter:</strong></p>
+                                                <code class="copy-code">{ws_commands['display_filter']}</code>
+                                                <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+
+                                                <p style="margin: 15px 0 5px 0;"><strong>Tshark Extraction:</strong></p>
+                                                <code class="copy-code">{ws_commands['tshark_extract']}</code>
+                                                <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+                                            </div>
+                                        </details>
                                     </div>
                                 </div>
                             </div>
