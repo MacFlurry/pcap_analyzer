@@ -3264,6 +3264,226 @@ class HTMLReportGenerator:
 
         return html
 
+    def _generate_grouped_retransmission_analysis(self, flows: dict, total_packets: int) -> str:
+        """Generate retransmission analysis grouped by type (SYN, RTO, Fast Retrans, Generic, Mixed)."""
+        # Classify each flow by dominant type
+        flow_groups = {
+            "syn": [],      # SYN retransmissions (connection failures)
+            "rto": [],      # RTO retransmissions (packet loss)
+            "fast": [],     # Fast retransmissions (out-of-order)
+            "generic": [],  # Generic retransmissions
+            "mixed": []     # Mixed types (no clear dominant)
+        }
+
+        for flow_key, retrans_list in flows.items():
+            # Count mechanisms
+            syn_count = sum(1 for r in retrans_list if r.get("is_syn_retrans", False))
+            rto_count = sum(1 for r in retrans_list if r.get("retrans_type") == "RTO" and not r.get("is_syn_retrans", False))
+            fast_count = sum(1 for r in retrans_list if r.get("retrans_type") == "Fast Retransmission")
+            generic_count = sum(1 for r in retrans_list if r.get("retrans_type") == "Retransmission")
+            total = len(retrans_list)
+
+            # Determine dominant type (>= 80% threshold)
+            if syn_count > 0 and syn_count == total:
+                flow_groups["syn"].append((flow_key, retrans_list))
+            elif rto_count >= total * 0.8:
+                flow_groups["rto"].append((flow_key, retrans_list))
+            elif fast_count >= total * 0.8:
+                flow_groups["fast"].append((flow_key, retrans_list))
+            elif generic_count >= total * 0.8:
+                flow_groups["generic"].append((flow_key, retrans_list))
+            else:
+                flow_groups["mixed"].append((flow_key, retrans_list))
+
+        # Sort each group by total retransmissions
+        for group_type in flow_groups:
+            flow_groups[group_type] = sorted(flow_groups[group_type], key=lambda x: len(x[1]), reverse=True)
+
+        html = ""
+
+        # Generate section for each type (only if flows exist)
+        if flow_groups["syn"]:
+            html += self._generate_retrans_type_section(
+                "syn", "SYN Retransmissions (Connection Failures)",
+                flow_groups["syn"], "#dc3545", "🔴"
+            )
+
+        if flow_groups["rto"]:
+            html += self._generate_retrans_type_section(
+                "rto", "RTO Retransmissions (Packet Loss)",
+                flow_groups["rto"], "#ffc107", "🟡"
+            )
+
+        if flow_groups["fast"]:
+            html += self._generate_retrans_type_section(
+                "fast", "Fast Retransmissions (Out-of-Order Delivery)",
+                flow_groups["fast"], "#28a745", "🟢"
+            )
+
+        if flow_groups["generic"]:
+            html += self._generate_retrans_type_section(
+                "generic", "Generic Retransmissions (Moderate Delay)",
+                flow_groups["generic"], "#17a2b8", "🔵"
+            )
+
+        if flow_groups["mixed"]:
+            html += self._generate_retrans_type_section(
+                "mixed", "Mixed Retransmissions (Multiple Mechanisms)",
+                flow_groups["mixed"], "#6c757d", "⚪"
+            )
+
+        return html
+
+    def _generate_retrans_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str) -> str:
+        """Generate a section for one retransmission type with explanation + flow table."""
+        flow_count = len(flows)
+        total_retrans = sum(len(retrans_list) for _, retrans_list in flows)
+
+        html = '<div class="retrans-type-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'.format(color=color)
+        html += f'<div class="retrans-type-header" style="background: {color}; color: white; padding: 15px; font-weight: bold; font-size: 1.1em;">'
+        html += f'{emoji} {title} — {flow_count} flow{"s" if flow_count != 1 else ""} ({total_retrans} retransmissions)'
+        html += '</div>'
+        html += '<div class="retrans-type-body" style="padding: 20px; background: #f8f9fa;">'
+
+        # Add explanation (only once per type)
+        html += self._generate_type_explanation(type_key, flows)
+
+        # Add compact flow table
+        html += self._generate_flow_table(flows, type_key)
+
+        html += '</div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_type_explanation(self, type_key: str, flows: list) -> str:
+        """Generate explanation for a retransmission type."""
+        explanations = {
+            "syn": """
+                <div style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <h4 style="margin: 0 0 10px 0;">⚠️ What does this mean?</h4>
+                    <p style="margin: 8px 0;"><strong>Connection Failed:</strong> These flows never completed the TCP handshake.
+                    The initial SYN packet was retransmitted with no response from the server. This indicates the destination server is
+                    <strong>unreachable</strong>, <strong>not listening on this port</strong>, or <strong>network connectivity issues</strong>
+                    prevented the connection.</p>
+
+                    <p style="margin: 8px 0;"><strong>Why flagged HIGH:</strong> The TCP connection <strong>never established</strong>.
+                    SYN retransmissions indicate the server is unreachable or not accepting connections on this port.
+                    This is a <strong>critical connectivity failure</strong>.</p>
+
+                    <p style="margin: 8px 0;"><strong>Impact & Probable Cause:</strong> <span style='color: #dc3545;'>⚠ CRITICAL - Connection Failed</span>.
+                    SYN retransmissions occur during TCP handshake when the server doesn't respond to connection attempts.
+                    <strong>This is ALWAYS timeout-based (RTO), NEVER fast retransmit</strong> (no ACKs possible during handshake).</p>
+
+                    <p style="margin: 8px 0;"><strong>Typical causes:</strong></p>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        <li><strong>Server unreachable</strong> (host down, wrong IP, routing issues)</li>
+                        <li><strong>Port not listening</strong> (service not running, firewall blocking)</li>
+                        <li><strong>Network connectivity</strong> (firewall dropping SYN, routing black hole)</li>
+                        <li><strong>RFC 6298 Compliance:</strong> Initial RTO should be ≥ 1 second</li>
+                    </ul>
+                </div>
+            """,
+            "rto": """
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <h4 style="margin: 0 0 10px 0;">📊 What does this mean?</h4>
+                    <p style="margin: 8px 0;"><strong>Packet Loss Detected:</strong> These flows experienced RTO (Retransmission Timeout) events,
+                    where TCP waited for acknowledgment but received none. This indicates <strong>packet loss</strong> during the established connection.</p>
+
+                    <p style="margin: 8px 0;"><strong>Impact:</strong> RTO events cause <span style='color: #ffc107;'>⚠ significant delays</span>
+                    (typically 200ms-3s per event) as TCP conservatively backs off.</p>
+
+                    <p style="margin: 8px 0;"><strong>Typical causes:</strong></p>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        <li><strong>Network congestion</strong> (router/switch buffer overflow)</li>
+                        <li><strong>Unreliable network path</strong> (WiFi interference, lossy links)</li>
+                        <li><strong>ACK loss</strong> (acknowledgments not reaching sender)</li>
+                    </ul>
+                </div>
+            """,
+            "fast": """
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <h4 style="margin: 0 0 10px 0;">✅ What does this mean?</h4>
+                    <p style="margin: 8px 0;"><strong>Out-of-Order Delivery:</strong> These flows experienced Fast Retransmissions,
+                    triggered by duplicate ACKs indicating packets arrived out-of-order.</p>
+
+                    <p style="margin: 8px 0;"><strong>Impact:</strong> Fast Retransmissions cause <span style='color: #28a745;'>✓ moderate performance impact</span>
+                    as TCP quickly recovers using duplicate ACKs.</p>
+
+                    <p style="margin: 8px 0;"><strong>Typical causes:</strong></p>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        <li><strong>Network path changes</strong> (load balancing, routing changes)</li>
+                        <li><strong>Packet reordering</strong> (multipath routing, priority queuing)</li>
+                        <li><strong>Selective packet loss</strong> (not entire window dropped)</li>
+                    </ul>
+                </div>
+            """,
+            "generic": """
+                <div style="background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <h4 style="margin: 0 0 10px 0;">ℹ️ What does this mean?</h4>
+                    <p style="margin: 8px 0;"><strong>Moderate Delay Retransmissions:</strong> These flows experienced retransmissions
+                    with delay between 50-200ms, likely due to moderate network congestion or packet loss.</p>
+
+                    <p style="margin: 8px 0;"><strong>Impact:</strong> Moderate performance degradation, not as severe as RTO events.</p>
+                </div>
+            """,
+            "mixed": """
+                <div style="background: #e2e3e5; border-left: 4px solid #6c757d; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <h4 style="margin: 0 0 10px 0;">🔍 What does this mean?</h4>
+                    <p style="margin: 8px 0;"><strong>Mixed Mechanisms:</strong> These flows experienced multiple retransmission types,
+                    indicating complex network behavior. Requires detailed packet-level analysis to understand root causes.</p>
+
+                    <p style="margin: 8px 0;"><strong>Recommendation:</strong> Review individual flow details below for specific patterns.</p>
+                </div>
+            """
+        }
+
+        return explanations.get(type_key, "")
+
+    def _generate_flow_table(self, flows: list, type_key: str) -> str:
+        """Generate compact table of flows for a given type."""
+        # Limit to top 10 flows
+        flows_to_show = flows[:10]
+
+        html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
+        html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
+        html += '<thead style="background: #e9ecef;">'
+        html += '<tr>'
+        html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Total Retrans</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Avg Delay</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Duration</th>'
+        html += '</tr>'
+        html += '</thead>'
+        html += '<tbody>'
+
+        for flow_key, retrans_list in flows_to_show:
+            total_retrans = len(retrans_list)
+            avg_delay = sum(r.get("delay", 0) for r in retrans_list) / total_retrans if total_retrans > 0 else 0
+
+            # Calculate duration
+            if retrans_list:
+                timestamps = [r.get("timestamp", 0) for r in retrans_list]
+                duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
+            else:
+                duration = 0
+
+            html += '<tr style="border-bottom: 1px solid #dee2e6;">'
+            html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_key}</td>'
+            html += f'<td style="padding: 10px; text-align: center;"><strong>{total_retrans}</strong></td>'
+            html += f'<td style="padding: 10px; text-align: center;">{avg_delay*1000:.1f}ms</td>'
+            html += f'<td style="padding: 10px; text-align: center;">{self._format_duration(duration)}</td>'
+            html += '</tr>'
+
+        html += '</tbody>'
+        html += '</table>'
+        html += '</div>'
+
+        if len(flows) > 10:
+            html += f'<p style="color: #6c757d; font-size: 0.9em; font-style: italic; margin-top: 10px;">Showing top 10 of {len(flows)} flows. See JSON report for complete data.</p>'
+
+        return html
+
     def _generate_flow_detail_card(self, flow_key: str, retrans_list: list, index: int, flow_count: int) -> str:
         """Generate individual flow detail card with expandable analysis."""
         flow_label = f"Flow {index + 1}"
@@ -3618,10 +3838,10 @@ class HTMLReportGenerator:
             # Add mechanism reference cards
             html += self._generate_mechanism_cards()
 
-            # Top flows with retransmissions - Enhanced with collapsible cards
+            # Top flows with retransmissions - Grouped by type
             retrans_list = retrans_data.get("retransmissions", [])
             if retrans_list:
-                # Group by flow
+                # Group by flow first
                 flows = {}
                 for r in retrans_list[:200]:  # Increased limit for better coverage
                     flow_key = f"{r.get('src_ip')}:{r.get('src_port')} → {r.get('dst_ip')}:{r.get('dst_port')}"
@@ -3629,29 +3849,8 @@ class HTMLReportGenerator:
                         flows[flow_key] = []
                     flows[flow_key].append(r)
 
-                # Sort flows by retransmission count
-                sorted_flows = sorted(flows.items(), key=lambda x: len(x[1]), reverse=True)[:10]
-
-                # Collapsible section for flows (Pure CSS with checkbox)
-                html += '<div class="collapsible-section">'
-                html += f"""
-                    <input type="checkbox" id="collapsible-retransmissions" class="collapsible-checkbox">
-                    <label for="collapsible-retransmissions" class="collapsible-header">
-                        <span class="toggle-icon">▶</span>
-                        <span class="header-title">Top Flows with Retransmissions ({len(sorted_flows)})</span>
-                        <span class="header-info">Click to expand flow details</span>
-                    </label>
-                    <div class="collapsible-content">
-                        <div class="content-inner">
-                """
-
-                # Generate flow detail cards
-                for idx, (flow_key, retrans) in enumerate(sorted_flows):
-                    html += self._generate_flow_detail_card(flow_key, retrans, idx, total_packets)
-
-                html += "        </div>"
-                html += "    </div>"
-                html += "</div>"
+                # Classify each flow by dominant retransmission type
+                html += self._generate_grouped_retransmission_analysis(flows, total_packets)
 
         # TCP Handshakes
         handshake_data = results.get("tcp_handshake", {})
