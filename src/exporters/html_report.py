@@ -2468,22 +2468,23 @@ class HTMLReportGenerator:
 
         return html
 
-
     def _generate_grouped_retransmission_analysis(self, flows: dict, total_packets: int) -> str:
         """Generate retransmission analysis grouped by type (SYN, RTO, Fast Retrans, Generic, Mixed)."""
         # Classify each flow by dominant type
         flow_groups = {
-            "syn": [],      # SYN retransmissions (connection failures)
-            "rto": [],      # RTO retransmissions (packet loss)
-            "fast": [],     # Fast retransmissions (out-of-order)
+            "syn": [],  # SYN retransmissions (connection failures)
+            "rto": [],  # RTO retransmissions (packet loss)
+            "fast": [],  # Fast retransmissions (out-of-order)
             "generic": [],  # Generic retransmissions
-            "mixed": []     # Mixed types (no clear dominant)
+            "mixed": [],  # Mixed types (no clear dominant)
         }
 
         for flow_key, retrans_list in flows.items():
             # Count mechanisms
             syn_count = sum(1 for r in retrans_list if r.get("is_syn_retrans", False))
-            rto_count = sum(1 for r in retrans_list if r.get("retrans_type") == "RTO" and not r.get("is_syn_retrans", False))
+            rto_count = sum(
+                1 for r in retrans_list if r.get("retrans_type") == "RTO" and not r.get("is_syn_retrans", False)
+            )
             fast_count = sum(1 for r in retrans_list if r.get("retrans_type") == "Fast Retransmission")
             generic_count = sum(1 for r in retrans_list if r.get("retrans_type") == "Retransmission")
             total = len(retrans_list)
@@ -2509,44 +2510,34 @@ class HTMLReportGenerator:
         # Generate section for each type (only if flows exist)
         if flow_groups["syn"]:
             html += self._generate_retrans_type_section(
-                "syn", "SYN Retransmissions (Connection Failures)",
-                flow_groups["syn"], "#dc3545", "🔴"
+                "syn", "SYN Retransmissions (Connection Failures)", flow_groups["syn"], "#dc3545", "🔴"
             )
 
         if flow_groups["rto"]:
             html += self._generate_retrans_type_section(
-                "rto", "RTO Retransmissions (Packet Loss)",
-                flow_groups["rto"], "#ffc107", "🟡"
+                "rto", "RTO Retransmissions (Packet Loss)", flow_groups["rto"], "#ffc107", "🟡"
             )
 
         if flow_groups["fast"]:
             html += self._generate_retrans_type_section(
-                "fast", "Fast Retransmissions (Out-of-Order Delivery)",
-                flow_groups["fast"], "#28a745", "🟢"
+                "fast", "Fast Retransmissions (Out-of-Order Delivery)", flow_groups["fast"], "#28a745", "🟢"
             )
 
         if flow_groups["generic"]:
             html += self._generate_retrans_type_section(
-                "generic", "Generic Retransmissions (Moderate Delay)",
-                flow_groups["generic"], "#17a2b8", "🔵"
+                "generic", "Generic Retransmissions (Moderate Delay)", flow_groups["generic"], "#17a2b8", "🔵"
             )
 
         if flow_groups["mixed"]:
             html += self._generate_retrans_type_section(
-                "mixed", "Mixed Retransmissions (Multiple Mechanisms)",
-                flow_groups["mixed"], "#6c757d", "⚪"
+                "mixed", "Mixed Retransmissions (Multiple Mechanisms)", flow_groups["mixed"], "#6c757d", "⚪"
             )
 
         return html
 
     def _analyze_root_cause(self, flows: list, type_key: str) -> dict:
         """Analyze root cause and patterns for flows."""
-        result = {
-            "root_cause": None,
-            "action": None,
-            "pattern": None,
-            "tshark_filter": None
-        }
+        result = {"root_cause": None, "action": None, "pattern": None, "tshark_filter": None}
 
         if not flows:
             return result
@@ -2579,9 +2570,11 @@ class HTMLReportGenerator:
 
                 if ip_info:
                     result["root_cause"] = f"{most_common_ip[0]} is {ip_info['name']} ({ip_info['rfc']})"
-                    result["action"] = ip_info['action']
+                    result["action"] = ip_info["action"]
                 elif type_key == "syn":
-                    result["root_cause"] = f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
+                    result["root_cause"] = (
+                        f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
+                    )
                     result["action"] = f"Verify server status and port {most_common_port[0]} availability"
 
                 # Generate tshark filter
@@ -2603,15 +2596,51 @@ class HTMLReportGenerator:
 
             # Reserved ranges
             ranges = {
-                "192.0.2.0/24": {"name": "TEST-NET-1 (Documentation/Testing)", "rfc": "RFC 5737", "action": "Remove hardcoded test IP from application config"},
-                "198.51.100.0/24": {"name": "TEST-NET-2 (Documentation/Testing)", "rfc": "RFC 5737", "action": "Remove hardcoded test IP from application config"},
-                "203.0.113.0/24": {"name": "TEST-NET-3 (Documentation/Testing)", "rfc": "RFC 5737", "action": "Remove hardcoded test IP from application config"},
-                "0.0.0.0/8": {"name": "Current Network (invalid destination)", "rfc": "RFC 1122", "action": "Fix application routing logic"},
-                "127.0.0.0/8": {"name": "Loopback", "rfc": "RFC 1122", "action": "Check if service should be local or remote"},
-                "169.254.0.0/16": {"name": "Link-Local (APIPA)", "rfc": "RFC 3927", "action": "Check DHCP configuration"},
-                "10.0.0.0/8": {"name": "Private Network", "rfc": "RFC 1918", "action": "Verify network routing and NAT"},
-                "172.16.0.0/12": {"name": "Private Network", "rfc": "RFC 1918", "action": "Verify network routing and NAT"},
-                "192.168.0.0/16": {"name": "Private Network", "rfc": "RFC 1918", "action": "Verify network routing and NAT"},
+                "192.0.2.0/24": {
+                    "name": "TEST-NET-1 (Documentation/Testing)",
+                    "rfc": "RFC 5737",
+                    "action": "Remove hardcoded test IP from application config",
+                },
+                "198.51.100.0/24": {
+                    "name": "TEST-NET-2 (Documentation/Testing)",
+                    "rfc": "RFC 5737",
+                    "action": "Remove hardcoded test IP from application config",
+                },
+                "203.0.113.0/24": {
+                    "name": "TEST-NET-3 (Documentation/Testing)",
+                    "rfc": "RFC 5737",
+                    "action": "Remove hardcoded test IP from application config",
+                },
+                "0.0.0.0/8": {
+                    "name": "Current Network (invalid destination)",
+                    "rfc": "RFC 1122",
+                    "action": "Fix application routing logic",
+                },
+                "127.0.0.0/8": {
+                    "name": "Loopback",
+                    "rfc": "RFC 1122",
+                    "action": "Check if service should be local or remote",
+                },
+                "169.254.0.0/16": {
+                    "name": "Link-Local (APIPA)",
+                    "rfc": "RFC 3927",
+                    "action": "Check DHCP configuration",
+                },
+                "10.0.0.0/8": {
+                    "name": "Private Network",
+                    "rfc": "RFC 1918",
+                    "action": "Verify network routing and NAT",
+                },
+                "172.16.0.0/12": {
+                    "name": "Private Network",
+                    "rfc": "RFC 1918",
+                    "action": "Verify network routing and NAT",
+                },
+                "192.168.0.0/16": {
+                    "name": "Private Network",
+                    "rfc": "RFC 1918",
+                    "action": "Verify network routing and NAT",
+                },
                 "224.0.0.0/4": {"name": "Multicast", "rfc": "RFC 5771", "action": "Check multicast configuration"},
                 "240.0.0.0/4": {"name": "Reserved (Future Use)", "rfc": "RFC 1112", "action": "Invalid destination IP"},
             }
@@ -2651,7 +2680,7 @@ class HTMLReportGenerator:
                 compliance_icon = "✅" if compliant else "❌"
                 html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>RFC 6298:</strong> {compliance_icon} {"Compliant" if compliant else "Non-compliant"} (RTOs: {min_delay:.3f}s - {max_delay:.3f}s, avg: {avg_delay:.3f}s)</p>'
 
-        html += '</div>'
+        html += "</div>"
         return html
 
     def _generate_type_explanation_concise(self, type_key: str, flows: list) -> str:
@@ -2699,7 +2728,7 @@ class HTMLReportGenerator:
                     <strong>Recommendation:</strong> Review individual flows for specific patterns
                     </p>
                 </div>
-            """
+            """,
         }
 
         return explanations.get(type_key, "")
@@ -2719,15 +2748,15 @@ class HTMLReportGenerator:
         # Type-specific actions
         if type_key == "syn":
             html += '<li>Test connectivity: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">ping &lt;dest_ip&gt;</code> / <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">telnet &lt;dest_ip&gt; &lt;port&gt;</code></li>'
-            html += '<li>Check firewall rules and routing tables</li>'
-            html += '<li>Verify DNS resolution for target hostname</li>'
+            html += "<li>Check firewall rules and routing tables</li>"
+            html += "<li>Verify DNS resolution for target hostname</li>"
         elif type_key == "rto":
             html += '<li>Monitor network congestion with: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">netstat -s</code></li>'
-            html += '<li>Check router/switch buffer utilization</li>'
-            html += '<li>Consider QoS/traffic shaping if congestion persists</li>'
+            html += "<li>Check router/switch buffer utilization</li>"
+            html += "<li>Consider QoS/traffic shaping if congestion persists</li>"
 
-        html += '</ul>'
-        html += '</div>'
+        html += "</ul>"
+        html += "</div>"
 
         return html
 
@@ -2737,7 +2766,7 @@ class HTMLReportGenerator:
         html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
         html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -e frame.number -e frame.time_relative -e tcp.seq -e tcp.ack -e tcp.len -e tcp.flags.str</pre>'
         html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy</div>'
-        html += '</div>'
+        html += "</div>"
 
         return html
 
@@ -2749,10 +2778,12 @@ class HTMLReportGenerator:
         # Analyze root cause
         root_cause_analysis = self._analyze_root_cause(flows, type_key)
 
-        html = '<div class="retrans-type-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'.format(color=color)
+        html = '<div class="retrans-type-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'.format(
+            color=color
+        )
         html += f'<div class="retrans-type-header" style="background: {color}; color: white; padding: 15px; font-weight: bold; font-size: 1.1em;">'
         html += f'{emoji} {title} — {flow_count} flow{"s" if flow_count != 1 else ""} ({total_retrans} retransmissions)'
-        html += '</div>'
+        html += "</div>"
         html += '<div class="retrans-type-body" style="padding: 20px; background: #f8f9fa;">'
 
         # Add root cause analysis (if found)
@@ -2772,8 +2803,8 @@ class HTMLReportGenerator:
         # Add compact flow table
         html += self._generate_flow_table(flows, type_key)
 
-        html += '</div>'
-        html += '</div>'
+        html += "</div>"
+        html += "</div>"
 
         return html
 
@@ -2856,7 +2887,7 @@ class HTMLReportGenerator:
 
                     <p style="margin: 8px 0;"><strong>Recommendation:</strong> Review individual flow details below for specific patterns.</p>
                 </div>
-            """
+            """,
         }
 
         return explanations.get(type_key, "")
@@ -2869,14 +2900,14 @@ class HTMLReportGenerator:
         html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
         html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
         html += '<thead style="background: #e9ecef;">'
-        html += '<tr>'
+        html += "<tr>"
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Total Retrans</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Avg Delay</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Duration</th>'
-        html += '</tr>'
-        html += '</thead>'
-        html += '<tbody>'
+        html += "</tr>"
+        html += "</thead>"
+        html += "<tbody>"
 
         for flow_key, retrans_list in flows_to_show:
             total_retrans = len(retrans_list)
@@ -2894,15 +2925,180 @@ class HTMLReportGenerator:
             html += f'<td style="padding: 10px; text-align: center;"><strong>{total_retrans}</strong></td>'
             html += f'<td style="padding: 10px; text-align: center;">{avg_delay*1000:.1f}ms</td>'
             html += f'<td style="padding: 10px; text-align: center;">{self._format_duration(duration)}</td>'
-            html += '</tr>'
+            html += "</tr>"
 
-        html += '</tbody>'
-        html += '</table>'
-        html += '</div>'
+        html += "</tbody>"
+        html += "</table>"
+        html += "</div>"
 
         if len(flows) > 10:
             html += f'<p style="color: #6c757d; font-size: 0.9em; font-style: italic; margin-top: 10px;">Showing top 10 of {len(flows)} flows. See JSON report for complete data.</p>'
 
+        return html
+
+    def _analyze_window_root_cause(self, flows: list, type_key: str) -> dict:
+        """
+        Analyze root cause and patterns for TCP window issues.
+
+        Args:
+            flows: List of flow statistics dictionaries with zero window events
+            type_key: Type identifier (e.g., 'window_zero')
+
+        Returns:
+            Dictionary containing:
+            - root_cause: Identified root cause or None
+            - action: Recommended action or None
+            - pattern: Detected pattern or None
+            - tshark_filter: tshark filter for investigation or None
+            - severity: Severity level based on count × duration
+        """
+        result = {"root_cause": None, "action": None, "pattern": None, "tshark_filter": None, "severity": "low"}
+
+        if not flows:
+            return result
+
+        # Extract receiver IPs and ports from flows
+        receiver_ips = {}
+        receiver_ports = {}
+        total_events = 0
+        total_duration = 0.0
+
+        for flow in flows:
+            # For window analysis, receiver is the dst_ip (the one with zero window)
+            receiver_ip = flow.get("dst_ip")
+            receiver_port = flow.get("dst_port")
+            zero_count = flow.get("zero_window_count", 0)
+            zero_duration = flow.get("zero_window_total_duration", 0.0)
+
+            if receiver_ip:
+                receiver_ips[receiver_ip] = receiver_ips.get(receiver_ip, 0) + 1
+                total_events += zero_count
+                total_duration += zero_duration
+
+            if receiver_port:
+                receiver_ports[str(receiver_port)] = receiver_ports.get(str(receiver_port), 0) + 1
+
+        # Calculate severity based on count × duration
+        severity_score = total_events * total_duration
+        if severity_score > 100:  # High: many events with long duration
+            result["severity"] = "high"
+        elif severity_score > 20:  # Medium: moderate impact
+            result["severity"] = "medium"
+        else:
+            result["severity"] = "low"
+
+        # Pattern detection: Check if all flows target same receiver
+        if receiver_ips:
+            most_common_ip = max(receiver_ips.items(), key=lambda x: x[1])
+            most_common_port = max(receiver_ports.items(), key=lambda x: x[1]) if receiver_ports else (None, 0)
+
+            # All flows to same receiver IP
+            if most_common_ip[1] == len(flows):
+                result["pattern"] = f"All flows involve receiver {most_common_ip[0]}"
+
+                # Check for reserved/special IPs using existing function
+                receiver_ip = most_common_ip[0]
+                ip_info = self._identify_ip_range(receiver_ip)
+
+                if ip_info:
+                    # Reserved IP range detected
+                    result["root_cause"] = f"Receiver {receiver_ip} is {ip_info['name']} ({ip_info['rfc']})"
+                    result["action"] = ip_info["action"]
+                else:
+                    # Real IP - application bottleneck
+                    result["root_cause"] = f"Receiver {receiver_ip} application cannot process data fast enough"
+                    result["action"] = f"Investigate application performance on {receiver_ip}"
+
+                    # Add port-specific guidance
+                    if most_common_port[0]:
+                        result[
+                            "action"
+                        ] += f" (port {most_common_port[0]}). Check CPU, memory, disk I/O, and application logs"
+
+                # Generate tshark filter for debugging
+                result["tshark_filter"] = f"ip.dst == {receiver_ip} and tcp.window_size == 0"
+
+            elif most_common_ip[1] >= len(flows) * 0.5:
+                # Dominant pattern (50%+ flows to same receiver)
+                result["pattern"] = (
+                    f"{most_common_ip[1]} of {len(flows)} flows involve receiver {most_common_ip[0]} (dominant pattern)"
+                )
+                result["action"] = f"Focus investigation on receiver {most_common_ip[0]}"
+
+        # RFC 7323 compliance note (window scaling)
+        # Note: Window scale info is not in flow_statistics, but we can add a general reminder
+        if not result["action"]:
+            result["action"] = "Check RFC 7323 window scaling configuration and receiver application performance"
+
+        return result
+
+    def _generate_window_root_cause_box(self, analysis: dict, type_key: str, flows: list) -> str:
+        """
+        Generate root cause analysis box for TCP window issues.
+
+        Args:
+            analysis: Analysis results from _analyze_window_root_cause
+            type_key: Type identifier (e.g., 'window_zero')
+            flows: List of flow statistics
+
+        Returns:
+            HTML string for the root cause box
+        """
+        # Determine severity color
+        severity = analysis.get("severity", "low")
+        if severity == "high":
+            bg_gradient = "linear-gradient(135deg, #dc3545 0%, #c82333 100%)"
+            severity_emoji = "🔴"
+            severity_text = "High Severity"
+        elif severity == "medium":
+            bg_gradient = "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)"
+            severity_emoji = "🟡"
+            severity_text = "Medium Severity"
+        else:
+            bg_gradient = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+            severity_emoji = "🟢"
+            severity_text = "Low Severity"
+
+        html = f'<div style="background: {bg_gradient}; color: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">'
+        html += '<h4 style="margin: 0 0 10px 0; font-size: 1.1em;">🎯 Root Cause Analysis</h4>'
+
+        # Severity indicator
+        html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>Severity:</strong> {severity_emoji} {severity_text}</p>'
+
+        # Root cause
+        if analysis["root_cause"]:
+            html += f'<p style="margin: 5px 0; font-size: 1em;"><strong>Cause:</strong> {analysis["root_cause"]}</p>'
+
+        # Pattern
+        if analysis["pattern"]:
+            html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>Pattern:</strong> {analysis["pattern"]}</p>'
+
+        # RFC 7323 Window Scaling compliance note
+        html += '<div style="background: rgba(255,255,255,0.15); padding: 10px; margin: 10px 0; border-radius: 5px; border-left: 3px solid rgba(255,255,255,0.5);">'
+        html += '<p style="margin: 0; font-size: 0.9em;"><strong>📋 RFC 7323 Compliance:</strong></p>'
+        html += '<p style="margin: 5px 0 0 0; font-size: 0.85em;">Window scaling must be negotiated in SYN/SYN-ACK. '
+        html += "Verify both endpoints support RFC 7323 window scaling for optimal throughput on high-bandwidth networks.</p>"
+        html += "</div>"
+
+        # Recommended action
+        if analysis["action"]:
+            html += (
+                '<div style="background: rgba(255,255,255,0.2); padding: 10px; margin-top: 10px; border-radius: 5px;">'
+            )
+            html += f'<p style="margin: 0; font-size: 0.9em;"><strong>💡 Recommended Action:</strong></p>'
+            html += f'<p style="margin: 5px 0 0 0; font-size: 0.85em;">{analysis["action"]}</p>'
+            html += "</div>"
+
+        # Tshark filter
+        if analysis["tshark_filter"]:
+            html += '<div style="margin-top: 10px;">'
+            html += '<p style="margin: 0 0 5px 0; font-size: 0.9em;"><strong>🔍 Tshark Filter:</strong></p>'
+            html += '<div style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 0.85em; overflow-x: auto;">'
+            html += f'<code style="color: #fff;">{analysis["tshark_filter"]}</code>'
+            html += "</div>"
+            html += "</div>"
+
+        html += "</div>"
         return html
 
     def _generate_flow_detail_card(self, flow_key: str, retrans_list: list, index: int, flow_count: int) -> str:
@@ -3414,125 +3610,267 @@ class HTMLReportGenerator:
             """
             html += "</div>"
 
-            flow_stats = window_data.get("flow_statistics", [])
-            if flow_stats:
-                # Filter to only show flows with actual zero windows
-                flows_with_zero_windows = [f for f in flow_stats if f.get("zero_window_count", 0) > 0]
+            # Get total packets for context
+            metadata = results.get("metadata", {})
+            total_packets = metadata.get("total_packets", 0)
 
-                if flows_with_zero_windows:
-                    # Sort by zero window count (descending) to show worst first
-                    sorted_flows = sorted(
-                        flows_with_zero_windows, key=lambda f: f.get("zero_window_count", 0), reverse=True
-                    )[:10]
+            # Generate grouped window analysis by bottleneck type
+            html += self._generate_grouped_window_analysis(window_data, total_packets)
 
-                    # Collapsible section for top 10 flows (Pure CSS with checkbox)
-                    html += '<div class="collapsible-section">'
-                    html += f"""
-                        <input type="checkbox" id="collapsible-window-issues" class="collapsible-checkbox">
-                        <label for="collapsible-window-issues" class="collapsible-header">
-                            <span class="toggle-icon">▶</span>
-                            <span class="header-title">Top Flows with Window Issues ({len(sorted_flows)})</span>
-                            <span class="header-info">Click to expand flow details</span>
-                        </label>
-                        <div class="collapsible-content">
-                            <div class="content-inner">
-                    """
+        return html
 
-                    for idx, flow in enumerate(sorted_flows):
-                        bottleneck = flow.get("suspected_bottleneck", "none")
-                        flow_key = flow.get("flow_key", "N/A")
-                        zero_window_count = flow.get("zero_window_count", 0)
-                        zero_window_duration = flow.get("zero_window_total_duration", 0)
+    def _generate_window_explanation_concise(self, type_key: str, flows: list) -> str:
+        """Generate concise explanation for a TCP window issue type."""
+        explanations = {
+            "application": """
+                <div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Application Bottleneck</strong> - Receiver application not consuming data fast enough<br>
+                    <strong>Type:</strong> Receiver window filled, sender blocked from transmitting<br>
+                    <strong>Impact:</strong> <span style='color: #dc3545;'>CRITICAL</span> - Throughput severely limited by slow consumer
+                    </p>
+                </div>
+            """,
+            "receiver": """
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Receiver Constraint</strong> - Receiver advertised small window (network/buffer limits)<br>
+                    <strong>Impact:</strong> <span style='color: #ffc107;'>HIGH</span> - Flow control limiting throughput<br>
+                    <strong>Causes:</strong> Buffer constraints, receiver tuning, intentional throttling
+                    </p>
+                </div>
+            """,
+            "network": """
+                <div style="background: #ffe5cc; border-left: 4px solid #fd7e14; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Network Bottleneck</strong> - Network congestion causing window reduction<br>
+                    <strong>Impact:</strong> <span style='color: #fd7e14;'>MODERATE</span> - Congestion control reducing throughput<br>
+                    <strong>Causes:</strong> Packet loss, high latency, congestion detected
+                    </p>
+                </div>
+            """,
+            "other": """
+                <div style="background: #e2e3e5; border-left: 4px solid #6c757d; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Other Window Issues</strong> - Various window-related constraints<br>
+                    <strong>Recommendation:</strong> Review flow details for specific patterns
+                    </p>
+                </div>
+            """,
+        }
 
-                        # Determine severity badge
-                        if bottleneck == "application":
-                            badge_class = "badge-danger"
-                            badge_text = "🚫 Critical Window Issue"
-                        elif bottleneck == "network":
-                            badge_class = "badge-warning"
-                            badge_text = "⚠️ Network Bottleneck"
-                        else:
-                            badge_class = "badge-info"
-                            badge_text = "Window Issue"
+        return explanations.get(type_key, "")
 
-                        # Parse flow_key for Wireshark filter
-                        # Window flow_key format: "src_ip:src_port->dst_ip:dst_port" (no spaces)
-                        flow_parts = flow_key.replace("->", ":").split(":")
-                        if len(flow_parts) == 4:
-                            src_ip, src_port, dst_ip, dst_port = flow_parts
-                        else:
-                            src_ip, src_port, dst_ip, dst_port = "0.0.0.0", "0", "0.0.0.0", "0"
+    def _generate_window_quick_actions(self, analysis: dict, type_key: str) -> str:
+        """Generate quick actions box for window analysis."""
+        html = '<div style="background: #e7f3ff; border: 1px solid #2196F3; border-radius: 6px; padding: 15px; margin-bottom: 15px;">'
+        html += '<h5 style="margin: 0 0 10px 0; color: #1976D2;">💡 Suggested Actions</h5>'
+        html += '<ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9em;">'
 
-                        # Generate Wireshark commands
-                        ws_commands = self._generate_wireshark_commands(
-                            src_ip=src_ip,
-                            src_port=src_port,
-                            dst_ip=dst_ip,
-                            dst_port=dst_port,
-                            flow_type="window_zero",
-                        )
+        # Type-specific actions
+        if type_key == "application":
+            html += "<li><strong>Profile receiver application</strong> to identify slow processing</li>"
+            html += '<li>Check CPU/memory usage: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">top -p &lt;pid&gt;</code> or <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">htop</code></li>'
+            html += '<li>Monitor I/O bottlenecks: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">iostat -x 1</code></li>'
+            html += "<li>Review application logs for errors or slow queries</li>"
+            html += "<li>Consider increasing receive buffer size if application is optimized</li>"
+        elif type_key == "receiver":
+            html += "<li><strong>Tune TCP receive buffers</strong> on receiver side</li>"
+            html += '<li>Check current settings: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">sysctl net.ipv4.tcp_rmem</code></li>'
+            html += '<li>Increase buffer size: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">sysctl -w net.ipv4.tcp_rmem="4096 87380 16777216"</code></li>'
+            html += "<li>Enable window scaling if not already enabled</li>"
+            html += "<li>Verify application socket options (SO_RCVBUF)</li>"
+        elif type_key == "network":
+            html += "<li><strong>Investigate network path</strong> for congestion or packet loss</li>"
+            html += '<li>Check for retransmissions: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">netstat -s | grep retrans</code></li>'
+            html += '<li>Monitor congestion window: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">ss -ti</code></li>'
+            html += "<li>Review router/switch metrics for drops or congestion</li>"
+            html += "<li>Consider QoS/traffic shaping if congestion persists</li>"
+        else:
+            html += "<li><strong>Analyze individual flows</strong> for specific bottleneck patterns</li>"
+            html += "<li>Review tshark output for detailed window behavior</li>"
+            html += "<li>Compare window sizes across different flows</li>"
 
-                        html += f"""
-                            <div class="flow-detail-card">
-                                <div class="flow-header">
-                                    <div class="flow-title">
-                                        <span class="flow-label">Flow {idx + 1}</span>
-                                        <code class="flow-key">{flow_key}</code>
-                                    </div>
-                                    <div class="flow-badges">
-                                        <span class="severity-badge {badge_class}">
-                                            {badge_text}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="flow-body">
-                                    <div class="flow-stats-grid">
-                                        <div class="flow-stat">
-                                            <span class="stat-label">Zero Windows</span>
-                                            <span class="stat-value">{zero_window_count}</span>
-                                        </div>
-                                        <div class="flow-stat">
-                                            <span class="stat-label">
-                                                Total Duration
-                                                <span class="tooltip-wrapper">
-                                                    <span class="tooltip-icon">ℹ️</span>
-                                                    <span class="tooltip-text">
-                                                        Time this flow spent in zero-window state. During this period, the sender was blocked and could not transmit data.
-                                                    </span>
-                                                </span>
-                                            </span>
-                                            <span class="stat-value">{self._format_duration(zero_window_duration)}</span>
-                                        </div>
-                                        <div class="flow-stat">
-                                            <span class="stat-label">Suspected Bottleneck</span>
-                                            <span class="stat-value">{bottleneck.upper()}</span>
-                                        </div>
-                                        <div class="flow-stat">
-                                            <span class="stat-label">Service</span>
-                                            <span class="stat-value">Port {dst_port}</span>
-                                        </div>
-                                    </div>
-                                    <div class="wireshark-section">
-                                        <details>
-                                            <summary><strong>🔍 Debug Commands</strong></summary>
-                                            <div style="margin-top: 10px;">
-                                                <p style="margin: 5px 0;"><strong>Wireshark Display Filter:</strong></p>
-                                                <code class="copy-code">{ws_commands['display_filter']}</code>
-                                                <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
+        html += "</ul>"
+        html += "</div>"
 
-                                                <p style="margin: 15px 0 5px 0;"><strong>Tshark Extraction:</strong></p>
-                                                <code class="copy-code">{ws_commands['tshark_extract']}</code>
-                                                <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
-                                            </div>
-                                        </details>
-                                    </div>
-                                </div>
-                            </div>
-                        """
+        return html
 
-                    html += "            </div>"
-                    html += "        </div>"
-                    html += "    </div>"
+    def _generate_window_tshark_box(self, analysis: dict) -> str:
+        """Generate tshark command box for window analysis with one-click copy."""
+        # Build tshark filter for window analysis
+        tshark_filter = "tcp.window_size_value == 0 || tcp.analysis.zero_window"
+
+        html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
+        html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -e frame.number -e frame.time_relative -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport -e tcp.window_size_value -e tcp.window_size</pre>'
+        html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy</div>'
+        html += "</div>"
+
+        return html
+
+    def _generate_window_flow_table(self, flows: list, type_key: str) -> str:
+        """Generate compact table of flows for window analysis."""
+        # Limit to top 10 flows
+        flows_to_show = flows[:10]
+
+        html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
+        html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
+        html += '<thead style="background: #e9ecef;">'
+        html += "<tr>"
+        html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Zero Windows</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Total Duration</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Min Window</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Avg Window</th>'
+        html += "</tr>"
+        html += "</thead>"
+        html += "<tbody>"
+
+        for flow in flows_to_show:
+            flow_key = flow.get("flow_key", "N/A")
+            zero_window_count = flow.get("zero_window_count", 0)
+            zero_window_duration = flow.get("zero_window_total_duration", 0)
+            min_window = flow.get("min_window_size", 0)
+            avg_window = flow.get("avg_window_size", 0)
+
+            html += '<tr style="border-bottom: 1px solid #dee2e6;">'
+            html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_key}</td>'
+            html += f'<td style="padding: 10px; text-align: center;"><strong>{zero_window_count}</strong></td>'
+            html += f'<td style="padding: 10px; text-align: center;">{self._format_duration(zero_window_duration)}</td>'
+            html += f'<td style="padding: 10px; text-align: center;">{min_window:,} bytes</td>'
+            html += f'<td style="padding: 10px; text-align: center;">{avg_window:,} bytes</td>'
+            html += "</tr>"
+
+        html += "</tbody>"
+        html += "</table>"
+        html += "</div>"
+
+        if len(flows) > 10:
+            html += f'<p style="color: #6c757d; font-size: 0.9em; font-style: italic; margin-top: 10px;">Showing top 10 of {len(flows)} flows. See JSON report for complete data.</p>'
+
+        return html
+
+    def _generate_window_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str) -> str:
+        """Generate a section for one window bottleneck type with explanation + flow table."""
+        flow_count = len(flows)
+        total_zero_windows = sum(f.get("zero_window_count", 0) for f in flows)
+        total_duration = sum(f.get("zero_window_total_duration", 0.0) for f in flows)
+
+        # Analyze root cause
+        root_cause_analysis = self._analyze_window_root_cause(flows, type_key)
+
+        html = f'<div class="window-type-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'
+        html += f'<div class="window-type-header" style="background: {color}; color: white; padding: 15px; font-weight: bold; font-size: 1.1em;">'
+        html += f'{emoji} {title} — {flow_count} flow{"s" if flow_count != 1 else ""} ({total_zero_windows} zero windows, {self._format_duration(total_duration)} blocked)'
+        html += "</div>"
+        html += '<div class="window-type-body" style="padding: 20px; background: #f8f9fa;">'
+
+        # Add root cause analysis (if found)
+        if root_cause_analysis["root_cause"] or root_cause_analysis["pattern"]:
+            html += self._generate_window_root_cause_box(root_cause_analysis, type_key, flows)
+
+        # Add concise explanation
+        html += self._generate_window_explanation_concise(type_key, flows)
+
+        # Add quick actions
+        html += self._generate_window_quick_actions(root_cause_analysis, type_key)
+
+        # Add tshark command (one-click copy)
+        html += self._generate_window_tshark_box(root_cause_analysis)
+
+        # Add compact flow table
+        html += self._generate_window_flow_table(flows, type_key)
+
+        html += "</div>"
+        html += "</div>"
+
+        return html
+
+    def _generate_grouped_window_analysis(self, window_data: dict, total_packets: int) -> str:
+        """Generate window analysis grouped by bottleneck type (application, receiver, network, other)."""
+        flow_stats = window_data.get("flow_statistics", [])
+
+        # Filter to only flows with zero windows
+        flows_with_zero_windows = [f for f in flow_stats if f.get("zero_window_count", 0) > 0]
+
+        if not flows_with_zero_windows:
+            return ""
+
+        # Classify flows by bottleneck type
+        flow_groups = {
+            "application": [],  # Application bottleneck (critical)
+            "receiver": [],     # Receiver constraint (high)
+            "network": [],      # Network congestion (moderate)
+            "other": [],        # Other/unknown (low)
+        }
+
+        for flow in flows_with_zero_windows:
+            bottleneck = flow.get("suspected_bottleneck", "none")
+            zero_count = flow.get("zero_window_count", 0)
+            zero_duration = flow.get("zero_window_total_duration", 0.0)
+            low_window_pct = flow.get("low_window_percentage", 0.0)
+
+            # Classify by severity and characteristics
+            # Application: High zero window count OR long duration (receiver not consuming)
+            if bottleneck == "application" or (zero_count > 5 or zero_duration > 1.0):
+                flow_groups["application"].append(flow)
+            # Receiver: Low window percentage with zero windows (buffer constraints)
+            elif bottleneck == "receiver" or (low_window_pct > 30 and zero_count > 0):
+                flow_groups["receiver"].append(flow)
+            # Network: Correlated with retransmissions (congestion)
+            elif bottleneck == "network":
+                flow_groups["network"].append(flow)
+            # Other: Mild issues or unknown
+            else:
+                flow_groups["other"].append(flow)
+
+        # Sort each group by severity (zero window count × duration)
+        for group_type in flow_groups:
+            flow_groups[group_type] = sorted(
+                flow_groups[group_type],
+                key=lambda f: f.get("zero_window_count", 0) * f.get("zero_window_total_duration", 0.0),
+                reverse=True
+            )
+
+        html = ""
+
+        # Generate section for each type (only if flows exist)
+        if flow_groups["application"]:
+            html += self._generate_window_type_section(
+                "application",
+                "Application Bottleneck (Critical)",
+                flow_groups["application"],
+                "#dc3545",
+                "🔴"
+            )
+
+        if flow_groups["receiver"]:
+            html += self._generate_window_type_section(
+                "receiver",
+                "Receiver Buffer Constraint (High)",
+                flow_groups["receiver"],
+                "#ffc107",
+                "🟡"
+            )
+
+        if flow_groups["network"]:
+            html += self._generate_window_type_section(
+                "network",
+                "Network Congestion (Moderate)",
+                flow_groups["network"],
+                "#fd7e14",
+                "🟠"
+            )
+
+        if flow_groups["other"]:
+            html += self._generate_window_type_section(
+                "other",
+                "Other Window Issues (Low)",
+                flow_groups["other"],
+                "#6c757d",
+                "⚪"
+            )
 
         return html
 
