@@ -2114,193 +2114,8 @@ class HTMLReportGenerator:
                 </div>
                 """
 
-        # High jitter flows - modern collapsible card design
-        high_jitter_flows = jitter_data.get("high_jitter_flows", [])
-        if high_jitter_flows:
-            # Limit to top 10 flows sorted by severity/mean jitter
-            top_flows = sorted(
-                high_jitter_flows,
-                key=lambda x: (
-                    {"critical": 3, "high": 2, "medium": 1, "low": 0}.get(x.get("severity", "low"), 0),
-                    x.get("mean_jitter", 0),
-                ),
-                reverse=True,
-            )[:10]
-
-            # Collapsible section for jitter flows (Pure CSS with checkbox)
-            html += '<div class="collapsible-section">'
-            html += f"""
-                <input type="checkbox" id="collapsible-jitter" class="collapsible-checkbox">
-                <label for="collapsible-jitter" class="collapsible-header">
-                    <span class="toggle-icon">▶</span>
-                    <span class="header-title">Top Flows with High Jitter ({len(top_flows)})</span>
-                    <span class="header-info">Click to expand flow details</span>
-                </label>
-                <div class="collapsible-content">
-                    <div class="content-inner">
-            """
-
-            # Generate flow detail cards
-            for idx, flow in enumerate(top_flows):
-                flow_str = flow.get("flow", "N/A")
-                severity = flow.get("severity", "low")
-                mean_jitter = flow.get("mean_jitter", 0) * 1000  # Convert to ms
-                max_jitter = flow.get("max_jitter", 0) * 1000
-                p95_jitter = flow.get("p95_jitter", 0) * 1000
-                packet_count = flow.get("packets", "N/A")
-
-                # Parse flow string for IPs, ports, and Wireshark filter
-                # Format: "src_ip:src_port -> dst_ip:dst_port (proto)"
-                # For IPv6: "ipv6_addr:port -> ipv6_addr:port (proto)"
-                src_ip, src_port, dst_ip, dst_port = "0.0.0.0", "0", "0.0.0.0", "0"
-                try:
-                    if " -> " in flow_str:
-                        # Split by " -> " to get source and destination parts
-                        arrow_parts = flow_str.split(" -> ")
-                        if len(arrow_parts) >= 2:
-                            src_part = arrow_parts[0].strip()
-                            dst_part = arrow_parts[1].split(" ")[0].strip()  # Remove "(TCP)" or "(UDP)"
-
-                            # Extract port from src (last segment after last colon)
-                            src_colon_idx = src_part.rfind(":")
-                            if src_colon_idx > 0:
-                                src_ip = src_part[:src_colon_idx]
-                                src_port = src_part[src_colon_idx + 1 :]
-
-                            # Extract port from dst (last segment after last colon)
-                            dst_colon_idx = dst_part.rfind(":")
-                            if dst_colon_idx > 0:
-                                dst_ip = dst_part[:dst_colon_idx]
-                                dst_port = dst_part[dst_colon_idx + 1 :]
-                except (IndexError, ValueError):
-                    pass  # Keep defaults if parsing fails
-
-                # Parse port as integer for service detection
-                dst_port_int = 0
-                try:
-                    dst_port_int = int(dst_port)
-                except (ValueError, TypeError):
-                    pass
-
-                # Identify service and adjust severity
-                service_name, service_emoji, service_desc, expect_high_jitter, service_type = self._identify_service(
-                    dst_port_int
-                )  # noqa: E501
-
-                # Adjust severity badge if high jitter is expected for this service
-                adjusted_severity = severity
-                severity_note = ""
-                if expect_high_jitter and severity in ["critical", "high"]:
-                    adjusted_severity = "medium"
-                    severity_note = " (Expected)"
-
-                # Determine badge class
-                badge_class = f"badge-{adjusted_severity}"
-
-                # Service badge display
-                if service_name != "Unknown":
-                    service_badge = f'<span class="service-badge">{service_emoji} {service_name}</span>'
-                else:
-                    service_badge = (
-                        f'<span class="service-badge">🔌 Port {dst_port_int}</span>'
-                        if dst_port_int > 0
-                        else '<span class="service-badge">🔌 Unknown</span>'
-                    )
-
-                # Generate Wireshark commands
-                ws_commands = self._generate_wireshark_commands(
-                    src_ip=src_ip,
-                    src_port=src_port,
-                    dst_ip=dst_ip,
-                    dst_port=dst_port,
-                    flow_type="general",
-                )
-
-                # Build flow card HTML
-                html += f"""
-                    <div class="flow-detail-card">
-                        <div class="flow-header">
-                            <div class="flow-title">
-                                <span class="flow-label">Flow {idx + 1}</span>
-                                <code class="flow-key">{flow_str}</code>
-                            </div>
-                            <div class="flow-badges">
-                                {service_badge}
-                                <span class="severity-badge {badge_class}">
-                                    {adjusted_severity.upper()}{severity_note}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="flow-body">
-                            <div class="flow-stats-grid">
-                                <div class="flow-stat">
-                                    <span class="stat-label">Mean Jitter</span>
-                                    <span class="stat-value">{mean_jitter:.2f} ms</span>
-                                </div>
-                                <div class="flow-stat">
-                                    <span class="stat-label">Max Jitter</span>
-                                    <span class="stat-value">{max_jitter:.2f} ms</span>
-                                </div>
-                                <div class="flow-stat">
-                                    <span class="stat-label">P95 Jitter</span>
-                                    <span class="stat-value">{p95_jitter:.2f} ms</span>
-                                </div>
-                                <div class="flow-stat">
-                                    <span class="stat-label">Packets</span>
-                                    <span class="stat-value">{packet_count}</span>
-                                </div>
-                            </div>
-                """
-
-                # Add interpretation section
-                interpretation_html = self._generate_jitter_interpretation(
-                    mean_jitter_ms=mean_jitter,
-                    max_jitter_ms=max_jitter,
-                    packet_count=packet_count if isinstance(packet_count, int) else 0,
-                    severity=severity,
-                    service_name=service_name,
-                    expect_high_jitter=expect_high_jitter,
-                    service_type=service_type,
-                )
-                html += interpretation_html
-
-                # Add service context tooltip for async services
-                if expect_high_jitter:
-                    html += f"""
-                            <div class="service-context">
-                                <span class="tooltip-wrapper">
-                                    <span class="tooltip-icon">ℹ️</span>
-                                    <span class="tooltip-text">
-                                        High jitter is expected for {service_name} due to async batching and long-polling
-                                    </span>
-                                </span>
-                                <span class="context-text">High jitter is normal for this service</span>
-                            </div>
-                    """
-
-                # Add collapsible Wireshark debug section
-                html += f"""
-                            <div class="wireshark-section">
-                                <details>
-                                    <summary><strong>🔍 Debug Commands</strong></summary>
-                                    <div style="margin-top: 10px;">
-                                        <p style="margin: 5px 0;"><strong>Wireshark Display Filter:</strong></p>
-                                        <code class="copy-code">{ws_commands['display_filter']}</code>
-                                        <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
-
-                                        <p style="margin: 15px 0 5px 0;"><strong>Tshark Extraction:</strong></p>
-                                        <code class="copy-code">{ws_commands['tshark_extract']}</code>
-                                        <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
-                                    </div>
-                                </details>
-                            </div>
-                        </div>
-                    </div>
-                """
-
-            html += "            </div>"  # content-inner
-            html += "        </div>"  # collapsible-content
-            html += "    </div>"  # collapsible-section
+        # Generate grouped jitter analysis by severity level
+        html += self._generate_grouped_jitter_analysis(jitter_data)
 
         return html
 
@@ -3866,6 +3681,363 @@ class HTMLReportGenerator:
                 "other",
                 "Other Window Issues (Low)",
                 flow_groups["other"],
+                "#6c757d",
+                "⚪"
+            )
+
+        return html
+
+    def _analyze_jitter_root_cause(self, flows: list, severity_key: str) -> dict:
+        """
+        Analyze root cause and patterns for jitter issues.
+
+        Args:
+            flows: List of flow dicts with jitter statistics
+            severity_key: Severity level (critical/high/medium/low)
+
+        Returns:
+            dict with root_cause, action, pattern, tshark_filter
+        """
+        result = {"root_cause": None, "action": None, "pattern": None, "tshark_filter": None}
+
+        if not flows:
+            return result
+
+        # Extract destination IPs and services
+        dest_ips = {}
+        services = {}
+
+        for flow in flows:
+            flow_str = flow.get("flow", "")
+            # Parse "src_ip:src_port -> dst_ip:dst_port (proto)"
+            if " -> " in flow_str:
+                dst_part = flow_str.split(" -> ")[1].split(" ")[0]
+                if ":" in dst_part:
+                    dst_ip = dst_part.rsplit(":", 1)[0]
+                    dst_port = dst_part.rsplit(":", 1)[1]
+                    dest_ips[dst_ip] = dest_ips.get(dst_ip, 0) + 1
+
+                    # Identify service type
+                    try:
+                        port_int = int(dst_port)
+                        service_name, _, _, _, _ = self._identify_service(port_int)
+                        services[service_name] = services.get(service_name, 0) + 1
+                    except (ValueError, TypeError):
+                        pass
+
+        # Pattern detection: Common destination
+        if dest_ips:
+            most_common_ip = max(dest_ips.items(), key=lambda x: x[1])
+
+            if most_common_ip[1] == len(flows):
+                result["pattern"] = f"All flows target {most_common_ip[0]}"
+
+                # Check for reserved IPs
+                ip_info = self._identify_ip_range(most_common_ip[0])
+                if ip_info:
+                    result["root_cause"] = f"{most_common_ip[0]} is {ip_info['name']} ({ip_info['rfc']})"
+                    result["action"] = ip_info['action']
+                else:
+                    # Real network - suggest investigation
+                    result["root_cause"] = f"High jitter to {most_common_ip[0]} across all flows"
+                    result["action"] = f"Investigate network path to {most_common_ip[0]} for congestion or routing issues"
+
+                # Generate tshark filter
+                result["tshark_filter"] = f"ip.dst == {most_common_ip[0]}"
+
+            elif most_common_ip[1] >= len(flows) * 0.5:
+                result["pattern"] = f"{most_common_ip[1]} flows target {most_common_ip[0]} (dominant pattern)"
+                result["action"] = f"Focus investigation on path to {most_common_ip[0]}"
+
+        # Service-based root cause
+        if services and not result["root_cause"]:
+            most_common_service = max(services.items(), key=lambda x: x[1])
+            if most_common_service[0] != "Unknown":
+                result["root_cause"] = f"High jitter affecting {most_common_service[0]} traffic"
+                result["action"] = f"Check QoS policies and network prioritization for {most_common_service[0]}"
+
+        # Default actions by severity
+        if not result["action"]:
+            if severity_key == "critical":
+                result["action"] = "Investigate network congestion, bandwidth saturation, or routing instability"
+            elif severity_key == "high":
+                result["action"] = "Check for packet reordering, multipath routing, or bursty traffic patterns"
+            else:
+                result["action"] = "Monitor for trends; may be acceptable for non-real-time services"
+
+        # Default tshark filter
+        if not result["tshark_filter"]:
+            result["tshark_filter"] = "frame.time_delta_displayed > 0.1"  # Packets with >100ms gap
+
+        return result
+
+    def _generate_jitter_root_cause_box(self, analysis: dict, severity_key: str, flows: list) -> str:
+        """Generate root cause analysis box for jitter issues (purple gradient)."""
+        # Use consistent purple gradient
+        bg_gradient = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+
+        # Severity indicators
+        severity_emojis = {"critical": "🔴", "high": "🟡", "medium": "🟢", "low": "⚪"}
+        severity_texts = {"critical": "Critical Severity", "high": "High Severity", "medium": "Medium Severity", "low": "Low Severity"}
+
+        severity_emoji = severity_emojis.get(severity_key, "⚪")
+        severity_text = severity_texts.get(severity_key, "Low Severity")
+
+        html = f'<div style="background: {bg_gradient}; color: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">'
+        html += '<h4 style="margin: 0 0 10px 0; font-size: 1.1em;">🎯 Root Cause Analysis</h4>'
+
+        # Severity indicator
+        html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>Severity:</strong> {severity_emoji} {severity_text}</p>'
+
+        # Root cause
+        if analysis["root_cause"]:
+            html += f'<p style="margin: 5px 0; font-size: 1em;"><strong>Cause:</strong> {analysis["root_cause"]}</p>'
+
+        # Pattern
+        if analysis["pattern"]:
+            html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>Pattern:</strong> {analysis["pattern"]}</p>'
+
+        # RFC 3393 note
+        html += '<div style="background: rgba(255,255,255,0.15); padding: 10px; margin: 10px 0; border-radius: 5px; border-left: 3px solid rgba(255,255,255,0.5);">'
+        html += '<p style="margin: 0; font-size: 0.9em;"><strong>📋 RFC 3393 Jitter:</strong></p>'
+        html += '<p style="margin: 5px 0 0 0; font-size: 0.85em;">Inter-Packet Delay Variation (IPDV). Critical for real-time applications (VoIP, gaming, streaming).</p>'
+        html += '</div>'
+
+        # Recommended action
+        if analysis["action"]:
+            html += '<div style="background: rgba(255,255,255,0.2); padding: 10px; margin-top: 10px; border-radius: 5px;">'
+            html += f'<p style="margin: 0; font-size: 0.9em;"><strong>💡 Recommended Action:</strong></p>'
+            html += f'<p style="margin: 5px 0 0 0; font-size: 0.85em;">{analysis["action"]}</p>'
+            html += '</div>'
+
+        html += '</div>'
+        return html
+
+    def _generate_jitter_explanation_concise(self, severity_key: str, flows: list) -> str:
+        """Generate concise explanation for jitter severity level."""
+        explanations = {
+            "critical": """
+                <div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Critical Jitter</strong> - Severe delay variation (>100ms max or >30ms mean)<br>
+                    <strong>Impact:</strong> <span style='color: #dc3545;'>SEVERE</span> - Unusable for real-time applications<br>
+                    <strong>Causes:</strong> Network congestion, bandwidth saturation, routing instability
+                    </p>
+                </div>
+            """,
+            "high": """
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>High Jitter</strong> - Noticeable delay variation (50-100ms)<br>
+                    <strong>Impact:</strong> <span style='color: #ffc107;'>HIGH</span> - Degraded quality for video/audio<br>
+                    <strong>Causes:</strong> Packet reordering, multipath routing, bursty traffic
+                    </p>
+                </div>
+            """,
+            "medium": """
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Medium Jitter</strong> - Moderate delay variation (30-50ms)<br>
+                    <strong>Impact:</strong> <span style='color: #28a745;'>MODERATE</span> - Acceptable for most applications<br>
+                    <strong>Note:</strong> May affect latency-sensitive services
+                    </p>
+                </div>
+            """,
+            "low": """
+                <div style="background: #e2e3e5; border-left: 4px solid #6c757d; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Low Jitter</strong> - Minimal delay variation (<30ms)<br>
+                    <strong>Impact:</strong> <span style='color: #6c757d;'>LOW</span> - Excellent network performance
+                    </p>
+                </div>
+            """,
+        }
+
+        return explanations.get(severity_key, "")
+
+    def _generate_jitter_quick_actions(self, analysis: dict, severity_key: str) -> str:
+        """Generate quick actions box for jitter troubleshooting."""
+        html = '<div style="background: #e7f3ff; border: 1px solid #2196F3; border-radius: 6px; padding: 15px; margin-bottom: 15px;">'
+        html += '<h5 style="margin: 0 0 10px 0; color: #1976D2;">💡 Suggested Actions</h5>'
+        html += '<ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9em;">'
+
+        # Severity-specific actions
+        if severity_key == "critical":
+            html += '<li><strong>Monitor link saturation:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">sar -n DEV 1</code> (Linux)</li>'
+            html += '<li><strong>Check interface errors:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">netstat -i</code> or <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">ip -s link</code></li>'
+            html += '<li>Investigate routing changes or BGP flaps</li>'
+            html += '<li>Consider traffic shaping or QoS prioritization</li>'
+        elif severity_key == "high":
+            html += '<li><strong>Check for packet reordering:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">netstat -s | grep reordering</code></li>'
+            html += '<li><strong>Monitor queue depths:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">tc -s qdisc show</code></li>'
+            html += '<li>Review multipath routing configuration (ECMP)</li>'
+            html += '<li>Analyze traffic patterns for bursts</li>'
+        elif severity_key == "medium":
+            html += '<li><strong>Monitor trends:</strong> Track jitter over time for degradation</li>'
+            html += '<li>Review network topology for suboptimal paths</li>'
+            html += '<li>Consider buffering strategies for applications</li>'
+        else:
+            html += '<li><strong>Baseline established:</strong> Document current jitter levels</li>'
+            html += '<li>Continue monitoring for changes</li>'
+
+        html += '</ul>'
+        html += '</div>'
+
+        return html
+
+    def _generate_jitter_tshark_box(self, analysis: dict) -> str:
+        """Generate tshark command box for jitter debugging."""
+        tshark_filter = analysis.get("tshark_filter", "frame.time_delta_displayed > 0.1")
+
+        html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
+        html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e frame.time_delta_displayed -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport</pre>'
+        html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy | Output: CSV with headers</div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_jitter_flow_table(self, flows: list, severity_key: str) -> str:
+        """Generate compact table of flows for jitter analysis."""
+        # Limit to top 10 flows
+        flows_to_show = flows[:10]
+
+        html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
+        html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
+        html += '<thead style="background: #e9ecef;">'
+        html += '<tr>'
+        html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Mean Jitter</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Max Jitter</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">P95 Jitter</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Packets</th>'
+        html += '</tr>'
+        html += '</thead>'
+        html += '<tbody>'
+
+        for flow in flows_to_show:
+            flow_str = flow.get("flow", "N/A")
+            mean_jitter = flow.get("mean_jitter", 0) * 1000  # Convert to ms
+            max_jitter = flow.get("max_jitter", 0) * 1000
+            p95_jitter = flow.get("p95_jitter", 0) * 1000
+            packets = flow.get("packets", 0)
+
+            html += '<tr style="border-bottom: 1px solid #dee2e6;">'
+            html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_str}</td>'
+            html += f'<td style="padding: 10px; text-align: center;"><strong>{mean_jitter:.2f} ms</strong></td>'
+            html += f'<td style="padding: 10px; text-align: center;">{max_jitter:.2f} ms</td>'
+            html += f'<td style="padding: 10px; text-align: center;">{p95_jitter:.2f} ms</td>'
+            html += f'<td style="padding: 10px; text-align: center;">{packets}</td>'
+            html += '</tr>'
+
+        html += '</tbody>'
+        html += '</table>'
+        html += '</div>'
+
+        if len(flows) > 10:
+            html += f'<p style="color: #6c757d; font-size: 0.9em; font-style: italic; margin-top: 10px;">Showing top 10 of {len(flows)} flows. See JSON report for complete data.</p>'
+
+        return html
+
+    def _generate_jitter_severity_section(self, severity_key: str, title: str, flows: list, color: str, emoji: str) -> str:
+        """Generate a section for one jitter severity level with RCA + flow table."""
+        flow_count = len(flows)
+        total_packets = sum(f.get("packets", 0) for f in flows)
+        avg_mean_jitter = sum(f.get("mean_jitter", 0) for f in flows) / flow_count if flow_count > 0 else 0
+        avg_mean_jitter_ms = avg_mean_jitter * 1000
+
+        # Analyze root cause
+        root_cause_analysis = self._analyze_jitter_root_cause(flows, severity_key)
+
+        html = f'<div class="jitter-severity-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'
+        html += f'<div class="jitter-severity-header" style="background: {color}; color: white; padding: 15px; font-weight: bold; font-size: 1.1em;">'
+        html += f'{emoji} {title} — {flow_count} flow{"s" if flow_count != 1 else ""} ({total_packets:,} packets, avg {avg_mean_jitter_ms:.2f}ms jitter)'
+        html += '</div>'
+        html += '<div class="jitter-severity-body" style="padding: 20px; background: #f8f9fa;">'
+
+        # Add root cause analysis (if found)
+        if root_cause_analysis["root_cause"] or root_cause_analysis["pattern"]:
+            html += self._generate_jitter_root_cause_box(root_cause_analysis, severity_key, flows)
+
+        # Add concise explanation
+        html += self._generate_jitter_explanation_concise(severity_key, flows)
+
+        # Add quick actions
+        html += self._generate_jitter_quick_actions(root_cause_analysis, severity_key)
+
+        # Add tshark command
+        html += self._generate_jitter_tshark_box(root_cause_analysis)
+
+        # Add compact flow table
+        html += self._generate_jitter_flow_table(flows, severity_key)
+
+        html += '</div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_grouped_jitter_analysis(self, jitter_data: dict) -> str:
+        """Generate jitter analysis grouped by severity (critical, high, medium, low)."""
+        high_jitter_flows = jitter_data.get("high_jitter_flows", [])
+
+        if not high_jitter_flows:
+            return ""
+
+        # Classify flows by severity
+        flow_groups = {
+            "critical": [],  # Critical jitter (>100ms max or >30ms mean)
+            "high": [],      # High jitter (50-100ms)
+            "medium": [],    # Medium jitter (30-50ms)
+            "low": [],       # Low jitter (<30ms)
+        }
+
+        for flow in high_jitter_flows:
+            severity = flow.get("severity", "low")
+            flow_groups[severity].append(flow)
+
+        # Sort each group by mean jitter (descending)
+        for group_type in flow_groups:
+            flow_groups[group_type] = sorted(
+                flow_groups[group_type],
+                key=lambda f: f.get("mean_jitter", 0),
+                reverse=True
+            )
+
+        html = ""
+
+        # Generate section for each severity (only if flows exist)
+        if flow_groups["critical"]:
+            html += self._generate_jitter_severity_section(
+                "critical",
+                "Critical Jitter (Severe Delay Variation)",
+                flow_groups["critical"],
+                "#dc3545",
+                "🔴"
+            )
+
+        if flow_groups["high"]:
+            html += self._generate_jitter_severity_section(
+                "high",
+                "High Jitter (Noticeable Delays)",
+                flow_groups["high"],
+                "#ffc107",
+                "🟡"
+            )
+
+        if flow_groups["medium"]:
+            html += self._generate_jitter_severity_section(
+                "medium",
+                "Medium Jitter (Moderate Variation)",
+                flow_groups["medium"],
+                "#28a745",
+                "🟢"
+            )
+
+        if flow_groups["low"]:
+            html += self._generate_jitter_severity_section(
+                "low",
+                "Low Jitter (Excellent Performance)",
+                flow_groups["low"],
                 "#6c757d",
                 "⚪"
             )
