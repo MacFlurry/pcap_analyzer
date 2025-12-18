@@ -3701,8 +3701,8 @@ class HTMLReportGenerator:
 
         html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
         html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
-        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -e frame.number -e frame.time_relative -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport -e tcp.window_size_value -e tcp.window_size</pre>'
-        html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy</div>'
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport -e tcp.window_size_value -e tcp.window_size</pre>'
+        html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy | Output: CSV with headers</div>'
         html += "</div>"
 
         return html
