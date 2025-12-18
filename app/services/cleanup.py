@@ -41,6 +41,15 @@ class CleanupScheduler:
             replace_existing=True,
         )
 
+        # Configurer job de cleanup des tâches orphelines (toutes les 5 minutes)
+        self.scheduler.add_job(
+            self.cleanup_orphaned_tasks,
+            CronTrigger(minute="*/5"),  # Toutes les 5 minutes
+            id="cleanup_orphaned_tasks",
+            name="Cleanup orphaned tasks (OOMKilled detection)",
+            replace_existing=True,
+        )
+
     def start(self):
         """Démarre le scheduler"""
         if not self.scheduler.running:
@@ -103,6 +112,53 @@ class CleanupScheduler:
         logger.info(f"Cleanup completed: {deleted_count} files deleted, " f"{freed_bytes / (1024**2):.2f} MB freed")
 
         # TODO: Mettre à jour SQLite pour marquer tâches comme 'expired'
+
+    async def cleanup_orphaned_tasks(self):
+        """
+        Détecte et nettoie les tâches orphelines (pods OOMKilled).
+
+        Les tâches en status PROCESSING sans heartbeat depuis 2 minutes
+        sont considérées comme orphelines (pod crashé/OOMKilled).
+
+        Recovery Strategy:
+        1. Trouver les tâches avec heartbeat expiré (>120 secondes)
+        2. Marquer comme FAILED avec message d'erreur descriptif
+        3. Logger l'événement pour monitoring
+        """
+        try:
+            # Import dynamique pour éviter circular dependencies
+            from app.services.database import get_db_service
+
+            db_service = get_db_service()
+
+            # Trouver les tâches orphelines (no heartbeat for 120 seconds)
+            orphaned_task_ids = await db_service.find_orphaned_tasks(
+                heartbeat_timeout_seconds=120
+            )
+
+            if not orphaned_task_ids:
+                logger.debug("No orphaned tasks found")
+                return
+
+            logger.warning(
+                f"Found {len(orphaned_task_ids)} orphaned tasks: {orphaned_task_ids}"
+            )
+
+            # Marquer chaque tâche comme FAILED
+            for task_id in orphaned_task_ids:
+                await db_service.mark_task_as_failed_orphan(
+                    task_id=task_id,
+                    error_message=(
+                        "Analysis terminated unexpectedly. "
+                        "Possible causes: pod OOMKilled, pod restart, or network interruption. "
+                        "Please try with a smaller PCAP file or increase pod memory limits."
+                    ),
+                )
+                logger.info(f"Marked orphaned task {task_id} as FAILED")
+
+        except Exception as e:
+            logger.error(f"Error during orphan cleanup: {e}", exc_info=True)
+            # Don't raise - allow scheduler to continue
 
     async def delete_file(self, file_path: Path):
         """

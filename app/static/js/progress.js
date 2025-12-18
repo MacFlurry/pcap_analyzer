@@ -12,8 +12,6 @@ class ProgressMonitor {
         this.smoothProgressTimer = null;
         this.currentProgress = 0;
         this.targetProgress = 0;
-        this.simulatedProgressTimer = null;
-        this.lastRealProgress = 0;
 
         // Elements
         this.progressCircle = document.getElementById('progress-circle');
@@ -178,15 +176,83 @@ class ProgressMonitor {
                 this.updatePhase('analysis');
                 this.currentMessage.textContent = 'Analyse en cours...';
                 this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
+                // Load progress history to show timeline after refresh
+                await this.fetchProgressHistory();
             } else if (taskData.status === 'pending') {
                 this.updatePhase('metadata');
                 this.currentMessage.textContent = 'En attente de démarrage...';
                 this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
+                // Load progress history to show timeline after refresh
+                await this.fetchProgressHistory();
             }
 
         } catch (error) {
             console.error('Error fetching initial status:', error);
             // Continue anyway - SSE will provide updates
+        }
+    }
+
+    async fetchProgressHistory() {
+        /**
+         * Fetches progress history from the backend and replays it.
+         * This allows users to see the progress timeline even after refreshing the page.
+         */
+        try {
+            const response = await fetch(`/api/progress/history/${this.taskId}`);
+
+            if (!response.ok) {
+                console.error('Failed to fetch progress history:', response.status);
+                return;
+            }
+
+            const history = await response.json();
+            console.log('Progress history:', history);
+
+            // If there's no history or empty history, skip
+            if (!history || !Array.isArray(history) || history.length === 0) {
+                console.log('No progress history available');
+                return;
+            }
+
+            // Replay each snapshot in the history
+            for (const snapshot of history) {
+                // Update progress bar
+                if (snapshot.progress_percent !== undefined) {
+                    this.updateProgress(snapshot.progress_percent);
+                    this.currentProgress = snapshot.progress_percent;
+                    this.targetProgress = snapshot.progress_percent;
+                }
+
+                // Update phase
+                if (snapshot.phase) {
+                    this.updatePhase(snapshot.phase);
+                }
+
+                // Update packets count
+                if (snapshot.packets_processed !== undefined && snapshot.total_packets !== undefined) {
+                    this.updatePackets(snapshot.packets_processed, snapshot.total_packets);
+                }
+
+                // Update current analyzer
+                if (snapshot.current_analyzer) {
+                    this.currentAnalyzer.textContent = snapshot.current_analyzer;
+                }
+
+                // Update message
+                if (snapshot.message) {
+                    this.currentMessage.textContent = snapshot.message;
+                    this.currentMessage.className = 'text-center text-gray-600 dark:text-gray-400 font-medium';
+                }
+
+                // Add log event for each snapshot
+                const logMessage = snapshot.message || `${snapshot.phase || 'Progress'}: ${snapshot.progress_percent || 0}%`;
+                this.addLogEvent(logMessage, this.getPhaseType(snapshot.phase));
+            }
+
+            console.log(`Replayed ${history.length} progress snapshots`);
+        } catch (error) {
+            console.error('Error fetching progress history:', error);
+            // Continue anyway - SSE will provide new updates
         }
     }
 
@@ -232,18 +298,7 @@ class ProgressMonitor {
 
         // Update progress circle with smooth animation
         if (data.progress_percent !== undefined) {
-            this.lastRealProgress = data.progress_percent;
             this.setTargetProgress(data.progress_percent);
-
-            // Si on passe à 10%, démarrer la simulation de progrès
-            if (data.progress_percent === 10 && data.phase === 'metadata') {
-                this.startSimulatedProgress();
-            }
-
-            // Si on reçoit 90% ou plus, arrêter la simulation
-            if (data.progress_percent >= 90) {
-                this.stopSimulatedProgress();
-            }
         }
 
         // Update phase
@@ -363,43 +418,6 @@ class ProgressMonitor {
         }
     }
 
-    startSimulatedProgress() {
-        /**
-         * Démarre une simulation de progrès pour donner un retour visuel pendant l'analyse.
-         * Le backend ne renvoie que 10% → 90%, donc on simule 10% → 85% graduellement.
-         * Cela évite que l'utilisateur voie le progrès bloqué à 10% pendant toute l'analyse.
-         */
-        console.log('Starting simulated progress from 10% to 85%');
-
-        // Arrêter toute simulation en cours
-        this.stopSimulatedProgress();
-
-        // Progresser lentement de 10% à 85% (max avant le vrai 90% du serveur)
-        // Incrément de 1% par seconde
-        // Exemples:
-        //   - Analyse rapide (10s) → 10% → 20%
-        //   - Analyse moyenne (30s) → 10% → 40%
-        //   - Analyse longue (60s) → 10% → 70%
-        this.simulatedProgressTimer = setInterval(() => {
-            // Ne progresser que si on est entre 10% et 85%
-            if (this.targetProgress >= 10 && this.targetProgress < 85) {
-                const newTarget = Math.min(this.targetProgress + 1, 85);
-                this.setTargetProgress(newTarget);
-            }
-        }, 1000); // Toutes les secondes
-    }
-
-    stopSimulatedProgress() {
-        /**
-         * Arrête la simulation de progrès.
-         * Appelé quand le serveur envoie une vraie mise à jour (90%, 100%, etc.)
-         */
-        if (this.simulatedProgressTimer) {
-            console.log('Stopping simulated progress');
-            clearInterval(this.simulatedProgressTimer);
-            this.simulatedProgressTimer = null;
-        }
-    }
 
     updatePhase(phase) {
         const phases = {
@@ -475,7 +493,6 @@ class ProgressMonitor {
             clearInterval(this.smoothProgressTimer);
             this.smoothProgressTimer = null;
         }
-        this.stopSimulatedProgress();
 
         // Show success message
         window.toast.success('Analyse terminée avec succès !', 10000);
@@ -530,7 +547,6 @@ class ProgressMonitor {
             clearInterval(this.smoothProgressTimer);
             this.smoothProgressTimer = null;
         }
-        this.stopSimulatedProgress();
 
         // Show error message
         const errorMsg = data.message || 'Erreur lors de l\'analyse';
