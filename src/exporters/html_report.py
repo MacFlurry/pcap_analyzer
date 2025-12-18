@@ -4044,6 +4044,396 @@ class HTMLReportGenerator:
 
         return html
 
+    def _analyze_dns_root_cause(self, transactions: list, issue_type: str) -> dict:
+        """
+        Analyze root cause and patterns for DNS issues.
+
+        Args:
+            transactions: List of DNS transaction dicts
+            issue_type: Issue type (timeout/error/slow/k8s)
+
+        Returns:
+            dict with root_cause, action, pattern, tshark_filter
+        """
+        result = {"root_cause": None, "action": None, "pattern": None, "tshark_filter": None}
+
+        if not transactions:
+            return result
+
+        # Extract domains and servers
+        domains = {}
+        servers = {}
+        error_codes = {}
+
+        for trans in transactions:
+            query = trans.get("query", {})
+            response = trans.get("response", {})
+
+            domain = query.get("query_name", "")
+            server_ip = query.get("dst_ip", "")
+            error_code = response.get("response_code_name", "")
+
+            if domain:
+                domains[domain] = domains.get(domain, 0) + 1
+            if server_ip:
+                servers[server_ip] = servers.get(server_ip, 0) + 1
+            if error_code and error_code != "NOERROR":
+                error_codes[error_code] = error_codes.get(error_code, 0) + 1
+
+        # Pattern detection: Common domain
+        if domains:
+            most_common_domain = max(domains.items(), key=lambda x: x[1])
+
+            if most_common_domain[1] >= len(transactions) * 0.5:
+                result["pattern"] = f"{most_common_domain[1]} queries for {most_common_domain[0]}"
+
+                # Check for K8s domains
+                if ".cluster.local" in most_common_domain[0] or ".svc." in most_common_domain[0]:
+                    result["root_cause"] = f"Kubernetes DNS lookup for {most_common_domain[0]}"
+                    result["action"] = "Normal K8s multi-level DNS resolution (expected behavior)"
+                else:
+                    result["root_cause"] = f"Repeated failures for domain {most_common_domain[0]}"
+                    result["action"] = f"Verify DNS configuration or domain availability for {most_common_domain[0]}"
+
+                result["tshark_filter"] = f'dns.qry.name contains "{most_common_domain[0]}"'
+
+        # Pattern detection: Common server
+        if servers and not result["root_cause"]:
+            most_common_server = max(servers.items(), key=lambda x: x[1])
+
+            if most_common_server[1] >= len(transactions) * 0.5:
+                result["pattern"] = f"{most_common_server[1]} queries to DNS server {most_common_server[0]}"
+                result["root_cause"] = f"DNS server {most_common_server[0]} experiencing issues"
+                result["action"] = f"Check DNS server {most_common_server[0]} health and connectivity"
+                result["tshark_filter"] = f"ip.dst == {most_common_server[0]} and dns"
+
+        # Error code patterns
+        if error_codes and not result["root_cause"]:
+            most_common_error = max(error_codes.items(), key=lambda x: x[1])
+            result["root_cause"] = f"{most_common_error[0]} errors ({most_common_error[1]} occurrences)"
+
+            if most_common_error[0] == "NXDOMAIN":
+                result["action"] = "Verify domain names are correct; check for typos or expired domains"
+            elif most_common_error[0] == "SERVFAIL":
+                result["action"] = "DNS server misconfiguration or upstream resolver failure"
+            elif most_common_error[0] == "REFUSED":
+                result["action"] = "DNS server refusing queries; check ACLs and firewall rules"
+
+        # Default actions by issue type
+        if not result["action"]:
+            if issue_type == "timeout":
+                result["action"] = "Investigate DNS server connectivity, firewall rules, or network congestion"
+            elif issue_type == "error":
+                result["action"] = "Review DNS server logs for configuration issues or upstream failures"
+            elif issue_type == "slow":
+                result["action"] = "Check DNS server load, network latency, or consider local caching"
+            else:
+                result["action"] = "Monitor DNS performance and error rates over time"
+
+        # Default tshark filter
+        if not result["tshark_filter"]:
+            if issue_type == "timeout":
+                result["tshark_filter"] = "dns and not dns.response.in"
+            elif issue_type == "slow":
+                result["tshark_filter"] = "dns and dns.time > 0.5"
+            else:
+                result["tshark_filter"] = "dns and dns.flags.rcode != 0"
+
+        return result
+
+    def _generate_dns_root_cause_box(self, analysis: dict, issue_type: str, transactions: list) -> str:
+        """Generate root cause analysis box for DNS issues (purple gradient)."""
+        bg_gradient = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+
+        # Severity indicators by issue type
+        severity_emojis = {"timeout": "🔴", "error": "🟡", "slow": "🟠", "k8s": "🟢"}
+        severity_texts = {
+            "timeout": "Critical Severity",
+            "error": "High Severity",
+            "slow": "Medium Severity",
+            "k8s": "Informational"
+        }
+
+        severity_emoji = severity_emojis.get(issue_type, "⚪")
+        severity_text = severity_texts.get(issue_type, "Unknown")
+
+        html = f'<div style="background: {bg_gradient}; color: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">'
+        html += '<h4 style="margin: 0 0 10px 0; font-size: 1.1em;">🎯 Root Cause Analysis</h4>'
+
+        # Severity indicator
+        html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>Severity:</strong> {severity_emoji} {severity_text}</p>'
+
+        # Root cause
+        if analysis["root_cause"]:
+            html += f'<p style="margin: 5px 0; font-size: 1em;"><strong>Cause:</strong> {analysis["root_cause"]}</p>'
+
+        # Pattern
+        if analysis["pattern"]:
+            html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>Pattern:</strong> {analysis["pattern"]}</p>'
+
+        # RFC note
+        html += '<div style="background: rgba(255,255,255,0.15); padding: 10px; margin: 10px 0; border-radius: 5px; border-left: 3px solid rgba(255,255,255,0.5);">'
+        html += '<p style="margin: 0; font-size: 0.9em;"><strong>📋 RFC 1035 DNS:</strong></p>'
+        html += '<p style="margin: 5px 0 0 0; font-size: 0.85em;">Domain Name System resolution. Timeouts >5s, errors (NXDOMAIN/SERVFAIL), and slow responses impact application performance.</p>'
+        html += '</div>'
+
+        # Recommended action
+        if analysis["action"]:
+            html += '<div style="background: rgba(255,255,255,0.2); padding: 10px; margin-top: 10px; border-radius: 5px;">'
+            html += f'<p style="margin: 0; font-size: 0.9em;"><strong>💡 Recommended Action:</strong></p>'
+            html += f'<p style="margin: 5px 0 0 0; font-size: 0.85em;">{analysis["action"]}</p>'
+            html += '</div>'
+
+        html += '</div>'
+        return html
+
+    def _generate_dns_explanation_concise(self, issue_type: str, transactions: list) -> str:
+        """Generate concise explanation for DNS issue type."""
+        explanations = {
+            "timeout": """
+                <div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>DNS Timeouts</strong> - No response from DNS server<br>
+                    <strong>Impact:</strong> <span style='color: #dc3545;'>CRITICAL</span> - Application cannot resolve domains, service unavailable<br>
+                    <strong>Causes:</strong> DNS server down, firewall blocking port 53, network congestion
+                    </p>
+                </div>
+            """,
+            "error": """
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>DNS Errors</strong> - NXDOMAIN, SERVFAIL, or REFUSED responses<br>
+                    <strong>Impact:</strong> <span style='color: #ffc107;'>HIGH</span> - Domain resolution failures, connection errors<br>
+                    <strong>Causes:</strong> Invalid domains, misconfigured DNS server, upstream resolver issues
+                    </p>
+                </div>
+            """,
+            "slow": """
+                <div style="background: #ffe5cc; border-left: 4px solid #fd7e14; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Slow DNS Responses</strong> - Response time >500ms<br>
+                    <strong>Impact:</strong> <span style='color: #fd7e14;'>MODERATE</span> - Delayed application startup, user experience degradation<br>
+                    <strong>Causes:</strong> DNS server overload, network latency, missing local cache
+                    </p>
+                </div>
+            """,
+            "k8s": """
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Kubernetes Expected Errors</strong> - Normal multi-level DNS resolution<br>
+                    <strong>Impact:</strong> <span style='color: #28a745;'>NONE</span> - Expected behavior for *.cluster.local domains<br>
+                    <strong>Note:</strong> K8s tries multiple DNS suffixes; NXDOMAIN responses are normal
+                    </p>
+                </div>
+            """,
+        }
+
+        return explanations.get(issue_type, "")
+
+    def _generate_dns_quick_actions(self, analysis: dict, issue_type: str) -> str:
+        """Generate quick actions box for DNS troubleshooting."""
+        html = '<div style="background: #e7f3ff; border: 1px solid #2196F3; border-radius: 6px; padding: 15px; margin-bottom: 15px;">'
+        html += '<h5 style="margin: 0 0 10px 0; color: #1976D2;">💡 Suggested Actions</h5>'
+        html += '<ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9em;">'
+
+        # Issue-specific actions
+        if issue_type == "timeout":
+            html += '<li><strong>Test DNS connectivity:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">dig @&lt;dns_server&gt; example.com</code></li>'
+            html += '<li><strong>Check port 53:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">nc -vz &lt;dns_server&gt; 53</code> or <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">telnet &lt;dns_server&gt; 53</code></li>'
+            html += '<li>Verify firewall rules allow UDP/TCP port 53</li>'
+            html += '<li>Check DNS server status and logs</li>'
+        elif issue_type == "error":
+            html += '<li><strong>Query specific domain:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">nslookup &lt;domain&gt;</code> or <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">dig &lt;domain&gt;</code></li>'
+            html += '<li><strong>Check DNS server logs:</strong> Review for SERVFAIL or configuration errors</li>'
+            html += '<li>Verify upstream resolvers are reachable</li>'
+            html += '<li>Test with alternative DNS servers (8.8.8.8, 1.1.1.1)</li>'
+        elif issue_type == "slow":
+            html += '<li><strong>Measure DNS latency:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">time dig example.com</code></li>'
+            html += '<li><strong>Enable local DNS caching:</strong> dnsmasq, systemd-resolved, or nscd</li>'
+            html += '<li>Check network latency to DNS server: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">ping &lt;dns_server&gt;</code></li>'
+            html += '<li>Consider using closer DNS servers or CDN-based resolvers</li>'
+        else:  # k8s
+            html += '<li><strong>Normal behavior:</strong> No action required</li>'
+            html += '<li>K8s DNS tries multiple search domains (e.g., .svc.cluster.local, .cluster.local)</li>'
+            html += '<li>NXDOMAIN responses are expected during multi-level resolution</li>'
+
+        html += '</ul>'
+        html += '</div>'
+
+        return html
+
+    def _generate_dns_tshark_box(self, analysis: dict) -> str:
+        """Generate tshark command box for DNS debugging."""
+        tshark_filter = analysis.get("tshark_filter", "dns and dns.flags.rcode != 0")
+
+        html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
+        html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e ip.src -e ip.dst -e dns.qry.name -e dns.qry.type -e dns.flags.rcode -e dns.time</pre>'
+        html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy | Output: CSV with headers</div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_dns_transaction_table(self, transactions: list, issue_type: str) -> str:
+        """Generate compact table of DNS transactions."""
+        # Limit to top 10 transactions
+        transactions_to_show = transactions[:10]
+
+        html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
+        html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
+        html += '<thead style="background: #e9ecef;">'
+        html += '<tr>'
+        html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Domain</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Query Type</th>'
+
+        if issue_type != "timeout":
+            html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Response Time</th>'
+
+        if issue_type == "error" or issue_type == "k8s":
+            html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Error Code</th>'
+
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">DNS Server</th>'
+        html += '</tr>'
+        html += '</thead>'
+        html += '<tbody>'
+
+        for trans in transactions_to_show:
+            query = trans.get("query", {})
+            response = trans.get("response", {})
+
+            domain = query.get("query_name", "N/A")
+            query_type = query.get("query_type", "N/A")
+            server = query.get("dst_ip", "N/A")
+            response_time = trans.get("response_time", 0) * 1000  # Convert to ms
+            error_code = response.get("response_code_name", "NOERROR")
+
+            html += '<tr style="border-bottom: 1px solid #dee2e6;">'
+            html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{domain}</td>'
+            html += f'<td style="padding: 10px; text-align: center;">{query_type}</td>'
+
+            if issue_type != "timeout":
+                html += f'<td style="padding: 10px; text-align: center;"><strong>{response_time:.2f} ms</strong></td>'
+
+            if issue_type == "error" or issue_type == "k8s":
+                html += f'<td style="padding: 10px; text-align: center;"><span style="color: #dc3545;">{error_code}</span></td>'
+
+            html += f'<td style="padding: 10px; text-align: center;">{server}</td>'
+            html += '</tr>'
+
+        html += '</tbody>'
+        html += '</table>'
+        html += '</div>'
+
+        if len(transactions) > 10:
+            html += f'<p style="color: #6c757d; font-size: 0.9em; font-style: italic; margin-top: 10px;">Showing top 10 of {len(transactions)} transactions. See JSON report for complete data.</p>'
+
+        return html
+
+    def _generate_dns_issue_section(self, issue_type: str, title: str, transactions: list, color: str, emoji: str) -> str:
+        """Generate a section for one DNS issue type with RCA + transaction table."""
+        transaction_count = len(transactions)
+
+        # Analyze root cause
+        root_cause_analysis = self._analyze_dns_root_cause(transactions, issue_type)
+
+        html = f'<div class="dns-issue-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'
+        html += f'<div class="dns-issue-header" style="background: {color}; color: white; padding: 15px; font-weight: bold; font-size: 1.1em;">'
+        html += f'{emoji} {title} — {transaction_count} transaction{"s" if transaction_count != 1 else ""}'
+        html += '</div>'
+        html += '<div class="dns-issue-body" style="padding: 20px; background: #f8f9fa;">'
+
+        # Add root cause analysis (if found)
+        if root_cause_analysis["root_cause"] or root_cause_analysis["pattern"]:
+            html += self._generate_dns_root_cause_box(root_cause_analysis, issue_type, transactions)
+
+        # Add concise explanation
+        html += self._generate_dns_explanation_concise(issue_type, transactions)
+
+        # Add quick actions
+        html += self._generate_dns_quick_actions(root_cause_analysis, issue_type)
+
+        # Add tshark command
+        html += self._generate_dns_tshark_box(root_cause_analysis)
+
+        # Add compact transaction table
+        html += self._generate_dns_transaction_table(transactions, issue_type)
+
+        html += '</div>'
+        html += '</div>'
+
+        return html
+
+    def _generate_grouped_dns_analysis(self, dns_data: dict) -> str:
+        """Generate DNS analysis grouped by issue type (timeout, error, slow, k8s)."""
+        # Get transaction details
+        timeout_details = dns_data.get("timeout_details", [])
+        slow_details = dns_data.get("slow_transactions_details", [])
+        k8s_errors_details = dns_data.get("k8s_expected_errors_details", [])
+
+        # Get error transactions (excluding K8s)
+        all_error_types = dns_data.get("error_types_breakdown", {})
+        error_transactions = []
+
+        # Collect error transactions from problematic domains
+        problematic_domains = dns_data.get("top_problematic_domains", [])
+        for domain_info in problematic_domains:
+            main_error = domain_info.get("main_error", "")
+            if main_error not in ["Timeout", "Slow Response"]:
+                # This is a real DNS error (NXDOMAIN, SERVFAIL, etc.)
+                # We'll need to fetch details from the analyzer, but for now we'll show the domain
+                error_transactions.append({
+                    "query": {
+                        "query_name": domain_info.get("domain", "N/A"),
+                        "query_type": "A",  # Default
+                        "dst_ip": "N/A"
+                    },
+                    "response": {
+                        "response_code_name": main_error
+                    },
+                    "response_time": 0
+                })
+
+        html = ""
+
+        # Generate section for each issue type (only if transactions exist)
+        if timeout_details:
+            html += self._generate_dns_issue_section(
+                "timeout",
+                "DNS Timeouts (Critical)",
+                timeout_details,
+                "#dc3545",
+                "🔴"
+            )
+
+        if error_transactions:
+            html += self._generate_dns_issue_section(
+                "error",
+                "DNS Errors (High)",
+                error_transactions[:10],  # Limit to top 10
+                "#ffc107",
+                "🟡"
+            )
+
+        if slow_details:
+            html += self._generate_dns_issue_section(
+                "slow",
+                "Slow DNS Responses (Moderate)",
+                slow_details,
+                "#fd7e14",
+                "🟠"
+            )
+
+        if k8s_errors_details:
+            html += self._generate_dns_issue_section(
+                "k8s",
+                "Kubernetes Expected Errors (Informational)",
+                k8s_errors_details,
+                "#28a745",
+                "🟢"
+            )
+
+        return html
+
     def _generate_dns_section(self, results: dict[str, Any]) -> str:
         """Generate DNS analysis section."""
         html = "<h2>🌐 DNS Analysis</h2>"
@@ -4057,13 +4447,10 @@ class HTMLReportGenerator:
         html += "<h3>📊 DNS Overview</h3>"
 
         total_queries = dns_data.get("total_queries", 0)
-        _total_transactions = dns_data.get("total_transactions", 0)  # noqa: F841
         successful = dns_data.get("successful_transactions", 0)
         timeouts = dns_data.get("timeout_transactions", 0)
         errors = dns_data.get("error_transactions", 0)
         slow = dns_data.get("slow_transactions", 0)
-
-        # Fix for Issue #10: Separate K8s expected errors from real errors
         k8s_expected_errors = dns_data.get("k8s_expected_errors", 0)
         real_errors = dns_data.get("real_errors", 0)
 
@@ -4089,7 +4476,6 @@ class HTMLReportGenerator:
 
         # Errors metric - show breakdown if K8s errors detected
         if k8s_expected_errors > 0 and real_errors >= 0:
-            # Show detailed breakdown: K8s expected vs real errors
             error_color = "#dc3545" if real_errors > 0 else "#ffc107"
             html += f"""
         <div class="metric-card" style="border-left-color: {error_color};">
@@ -4102,7 +4488,6 @@ class HTMLReportGenerator:
         </div>
             """
         else:
-            # Standard error display (no K8s breakdown)
             html += f"""
         <div class="metric-card" style="border-left-color: {'#dc3545' if errors > 0 else '#28a745'};">
             <div class="metric-label">Errors</div>
@@ -4112,219 +4497,8 @@ class HTMLReportGenerator:
 
         html += "</div>"
 
-        # Response Time Statistics
-        response_stats = dns_data.get("response_time_statistics", {})
-        if response_stats:
-            html += "<h3>⏱️ Response Time Statistics</h3>"
-
-            mean_time = response_stats.get("mean_response_time", 0) * 1000
-            min_time = response_stats.get("min_response_time", 0) * 1000
-            max_time = response_stats.get("max_response_time", 0) * 1000
-
-            html += '<div class="summary-grid">'
-            html += f"""
-            <div class="metric-card">
-                <div class="metric-label">Mean Response Time</div>
-                <div class="metric-value">{mean_time:.2f} ms</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">Min Response Time</div>
-                <div class="metric-value">{min_time:.2f} ms</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">Max Response Time</div>
-                <div class="metric-value">{max_time:.2f} ms</div>
-            </div>
-            """
-            html += "</div>"
-
-        # DNS Error Types Breakdown
-        error_types_breakdown = dns_data.get("error_types_breakdown", {})
-        if error_types_breakdown:
-            html += "<h3>🔍 DNS Error Types Breakdown</h3>"
-            html += '<table class="data-table">'
-            html += """
-            <thead>
-                <tr>
-                    <th>Error Type</th>
-                    <th>Count</th>
-                    <th>Percentage</th>
-                </tr>
-            </thead>
-            <tbody>
-            """
-
-            total_errors = sum(error_types_breakdown.values())
-            for error_type, count in list(error_types_breakdown.items())[:10]:
-                percentage = (count / total_errors * 100) if total_errors > 0 else 0
-
-                # Color code based on error type severity
-                badge_class = "badge-danger"
-                if error_type == "Slow Response":
-                    badge_class = "badge-warning"
-                elif error_type == "Timeout":
-                    badge_class = "badge-critical"
-                elif error_type in ["NXDOMAIN", "SERVFAIL", "REFUSED"]:
-                    badge_class = "badge-danger"
-
-                html += f"""
-                <tr>
-                    <td><span class="badge {badge_class}">{error_type}</span></td>
-                    <td>{count:,}</td>
-                    <td>{percentage:.1f}%</td>
-                </tr>
-                """
-
-            html += "</tbody></table>"
-
-        # Problematic Domains
-        top_problematic = dns_data.get("top_problematic_domains", [])
-        if top_problematic:
-            html += "<h3>⚠️ Problematic Domains</h3>"
-            html += '<table class="data-table">'
-            html += """
-            <thead>
-                <tr>
-                    <th>Domain</th>
-                    <th>Issue Count</th>
-                    <th>Main Error Type</th>
-                </tr>
-            </thead>
-            <tbody>
-            """
-
-            for domain_info in top_problematic[:20]:
-                domain = domain_info.get("domain", "N/A")
-                count = domain_info.get("count", 0)
-                main_error = domain_info.get("main_error", "Unknown")
-
-                # Color code based on error type
-                badge_class = "badge-danger"
-                if main_error == "Slow Response":
-                    badge_class = "badge-warning"
-                elif main_error == "Timeout":
-                    badge_class = "badge-critical"
-
-                html += f"""
-                <tr>
-                    <td style="font-family: monospace; font-size: 0.9em;">{domain}</td>
-                    <td>{count}</td>
-                    <td><span class="badge {badge_class}">{main_error}</span></td>
-                </tr>
-                """
-
-            html += "</tbody></table>"
-
-        # Fix for Issue #10: Show K8s Expected Errors (informational)
-        k8s_errors_details = dns_data.get("k8s_expected_errors_details", [])
-        if k8s_errors_details:
-            html += f"""
-            <div style="margin-top: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">
-                <h4 style="margin: 0 0 0.5rem 0; color: #28a745;">
-                    ℹ️ Kubernetes Expected DNS Errors ({k8s_expected_errors} total)
-                </h4>
-                <p style="margin: 0 0 1rem 0; font-size: 0.9em; color: #666;">
-                    These NXDOMAIN responses for *.cluster.local domains are normal in Kubernetes multi-level DNS resolution.
-                    They are excluded from problematic domains analysis.
-                </p>
-                <details style="cursor: pointer;">
-                    <summary style="font-weight: 500; padding: 0.5rem; background: white; border-radius: 4px;">
-                        Show Details ({len(k8s_errors_details)} samples)
-                    </summary>
-                    <table class="data-table" style="margin-top: 1rem;">
-                        <thead>
-                            <tr>
-                                <th>Domain</th>
-                                <th>Error Code</th>
-                                <th>Timestamp</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            """
-            for trans in k8s_errors_details[:15]:
-                query = trans.get("query", {})
-                response = trans.get("response", {})
-                domain = query.get("query_name", "N/A")
-                error_code = response.get("response_code_name", "N/A")
-                timestamp = trans.get("timestamp", 0)
-
-                html += f"""
-                        <tr>
-                            <td style="font-family: monospace; font-size: 0.85em;">{domain}</td>
-                            <td><span class="badge badge-info">{error_code}</span></td>
-                            <td style="font-size: 0.85em;">{timestamp:.3f}s</td>
-                        </tr>
-                """
-
-            html += """
-                        </tbody>
-                    </table>
-                </details>
-            </div>
-            """
-
-        # Slow Transactions Details
-        slow_details = dns_data.get("slow_transactions_details", [])
-        if slow_details:
-            html += "<h3>🐌 Slow DNS Transactions</h3>"
-            html += '<table class="data-table">'
-            html += """
-            <thead>
-                <tr>
-                    <th>Domain</th>
-                    <th>Query Type</th>
-                    <th>Response Time</th>
-                    <th>Server</th>
-                </tr>
-            </thead>
-            <tbody>
-            """
-
-            for trans in slow_details[:15]:
-                query = trans.get("query", {})
-                response_time = trans.get("response_time", 0) * 1000
-
-                html += f"""
-                <tr>
-                    <td style="font-family: monospace; font-size: 0.9em;">{query.get("query_name", "N/A")}</td>
-                    <td>{query.get("query_type", "N/A")}</td>
-                    <td><strong>{response_time:.2f} ms</strong></td>
-                    <td>{query.get("dst_ip", "N/A")}</td>
-                </tr>
-                """
-
-            html += "</tbody></table>"
-
-        # Timeout Details
-        timeout_details = dns_data.get("timeout_details", [])
-        if timeout_details:
-            html += "<h3>⏰ DNS Timeouts</h3>"
-            html += '<table class="data-table">'
-            html += """
-            <thead>
-                <tr>
-                    <th>Domain</th>
-                    <th>Query Type</th>
-                    <th>Client IP</th>
-                    <th>Server IP</th>
-                </tr>
-            </thead>
-            <tbody>
-            """
-
-            for trans in timeout_details[:15]:
-                query = trans.get("query", {})
-
-                html += f"""
-                <tr>
-                    <td style="font-family: monospace; font-size: 0.9em;">{query.get("query_name", "N/A")}</td>
-                    <td>{query.get("query_type", "N/A")}</td>
-                    <td>{query.get("src_ip", "N/A")}</td>
-                    <td>{query.get("dst_ip", "N/A")}</td>
-                </tr>
-                """
-
-            html += "</tbody></table>"
+        # Generate grouped DNS analysis by issue type
+        html += self._generate_grouped_dns_analysis(dns_data)
 
         return html
 
