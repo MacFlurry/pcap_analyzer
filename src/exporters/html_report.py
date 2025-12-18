@@ -361,6 +361,7 @@ class HTMLReportGenerator:
         rto_count: int,
         fast_retrans: int,
         generic_retrans: int,
+        syn_retrans_count: int,
         duration: float,
         retrans_per_second: float,
         flow_confidence: str,
@@ -373,6 +374,7 @@ class HTMLReportGenerator:
             rto_count: Number of RTO retransmissions
             fast_retrans: Number of fast retransmissions
             generic_retrans: Number of generic retransmissions (50-200ms delay)
+            syn_retrans_count: Number of SYN retransmissions (handshake failures)
             duration: Flow duration in seconds
             retrans_per_second: Rate of retransmissions per second
             flow_confidence: Confidence level (confidence-high/medium/low)
@@ -381,10 +383,16 @@ class HTMLReportGenerator:
             HTML string with interpretation
         """
 
-        # Determine dominant mechanism (including generic)
+        # Determine dominant mechanism (including generic and SYN retransmissions)
+        # Priority: SYN retransmissions (handshake failures) are handled separately
         dominant_mechanism = "mixed"
         dominant_count = 0
-        if rto_count > fast_retrans and rto_count > generic_retrans and rto_count > 0:
+
+        # Special case: If ALL retransmissions are SYN retransmissions (connection failures)
+        if syn_retrans_count > 0 and syn_retrans_count == total_retrans:
+            dominant_mechanism = "SYN Retransmission"
+            dominant_count = syn_retrans_count
+        elif rto_count > fast_retrans and rto_count > generic_retrans and rto_count > 0:
             dominant_mechanism = "RTO"
             dominant_count = rto_count
         elif fast_retrans > rto_count and fast_retrans > generic_retrans and fast_retrans > 0:
@@ -398,7 +406,15 @@ class HTMLReportGenerator:
             dominant_count = total_retrans
 
         # What happened
-        if dominant_mechanism == "RTO":
+        if dominant_mechanism == "SYN Retransmission":
+            # SYN retransmissions indicate connection establishment failures
+            what_happened = (
+                f"<strong>⚠️ Connection Failed:</strong> This flow never completed the TCP handshake. "
+                f"The initial SYN packet was retransmitted <strong>{syn_retrans_count} time{'s' if syn_retrans_count != 1 else ''}</strong> "
+                f"with no response from the server. This indicates the destination server is <strong>unreachable</strong>, "
+                f"<strong>not listening on this port</strong>, or <strong>network connectivity issues</strong> prevented the connection."
+            )
+        elif dominant_mechanism == "RTO":
             percentage = (rto_count / total_retrans * 100) if total_retrans > 0 else 0
             what_happened = (
                 f"This flow experienced <strong>{total_retrans} retransmission{'s' if total_retrans != 1 else ''}</strong> "
@@ -420,10 +436,21 @@ class HTMLReportGenerator:
                 f"<strong>Generic Retransmissions</strong> (delay between 50-200ms), likely due to moderate network congestion or packet loss."
             )
         else:
+            # Build mixed mechanism message including SYN retransmissions if present
+            mechanisms_list = []
+            if syn_retrans_count > 0:
+                mechanisms_list.append(f"{syn_retrans_count} SYN retransmission{'s' if syn_retrans_count != 1 else ''}")
+            if rto_count > 0:
+                mechanisms_list.append(f"{rto_count} RTO event{'s' if rto_count != 1 else ''}")
+            if fast_retrans > 0:
+                mechanisms_list.append(f"{fast_retrans} Fast Retransmission{'s' if fast_retrans != 1 else ''}")
+            if generic_retrans > 0:
+                mechanisms_list.append(f"{generic_retrans} Generic Retransmission{'s' if generic_retrans != 1 else ''}")
+
+            mechanisms_str = ", ".join(mechanisms_list)
             what_happened = (
                 f"This flow experienced <strong>{total_retrans} retransmission{'s' if total_retrans != 1 else ''}</strong> "
-                f"over {self._format_duration(duration)}, with a <strong>mix of mechanisms</strong>: "
-                f"{rto_count} RTO events, {fast_retrans} Fast Retransmissions, and {generic_retrans} Generic Retransmissions."
+                f"over {self._format_duration(duration)}, with a <strong>mix of mechanisms</strong>: {mechanisms_str}."
             )
 
         # Format retransmission display based on duration
@@ -435,7 +462,15 @@ class HTMLReportGenerator:
             retrans_display = f"<strong>{total_retrans} retransmissions</strong> (<strong>{retrans_per_second:.1f} per second</strong>)"
 
         # Why flagged - using absolute counts and rate per second
-        if total_retrans > 50 or retrans_per_second > 5:
+        # Special case: SYN retransmissions (connection failures) are always HIGH severity
+        if dominant_mechanism == "SYN Retransmission":
+            severity_level = "HIGH"
+            why_flagged = (
+                f"<strong>Why flagged {severity_level}:</strong> The TCP connection <strong>never established</strong>. "
+                f"SYN retransmissions indicate the server is unreachable or not accepting connections on this port. "
+                f"This is a <strong>critical connectivity failure</strong>."
+            )
+        elif total_retrans > 50 or retrans_per_second > 5:
             severity_level = "HIGH"
             if duration > 0:
                 why_flagged = (
@@ -474,7 +509,20 @@ class HTMLReportGenerator:
                 )
 
         # Impact and probable cause based on mechanism
-        if dominant_mechanism == "RTO":
+        if dominant_mechanism == "SYN Retransmission":
+            impact = (
+                "<strong>Impact & Probable Cause:</strong> "
+                "<span style='color: #dc3545;'>⚠ CRITICAL - Connection Failed</span>. "
+                "SYN retransmissions occur during TCP handshake when the server doesn't respond to connection attempts. "
+                "<strong>This is ALWAYS timeout-based (RTO), NEVER fast retransmit</strong> "
+                "(no ACKs possible during handshake). "
+                "<strong>Typical causes:</strong>"
+                "<br>• <strong>Server unreachable</strong> (host down, wrong IP, routing issues)"
+                "<br>• <strong>Port not listening</strong> (service not running, firewall blocking)"
+                "<br>• <strong>Network connectivity</strong> (firewall dropping SYN, routing black hole)"
+                "<br>• <strong>RFC 6298 Compliance:</strong> Initial RTO should be ≥ 1 second"
+            )
+        elif dominant_mechanism == "RTO":
             impact = (
                 "<strong>Impact & Probable Cause:</strong> "
                 "RTO events cause <span style='color: #dc3545;'>⚠ significant delays</span> "
@@ -3222,6 +3270,7 @@ class HTMLReportGenerator:
         total_retrans = len(retrans_list)
 
         # Count mechanisms
+        syn_retrans_count = sum(1 for r in retrans_list if r.get("is_syn_retrans", False))
         rto_count = sum(1 for r in retrans_list if r.get("retrans_type") == "RTO")
         fast_retrans = sum(1 for r in retrans_list if r.get("retrans_type") == "Fast Retransmission")
         generic_retrans = sum(1 for r in retrans_list if r.get("retrans_type") == "Retransmission")
@@ -3382,6 +3431,7 @@ class HTMLReportGenerator:
             rto_count=rto_count,
             fast_retrans=fast_retrans,
             generic_retrans=generic_retrans,
+            syn_retrans_count=syn_retrans_count,
             duration=duration,
             retrans_per_second=retrans_per_second,
             flow_confidence=flow_confidence,
