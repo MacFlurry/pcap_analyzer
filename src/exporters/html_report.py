@@ -116,166 +116,26 @@ class HTMLReportGenerator:
         expect_high_jitter: bool,
         service_type: str = "unknown",
     ) -> str:
-        """
-        Generate natural language interpretation of jitter metrics.
+        """Generate concise jitter interpretation (v4.5.0 style)."""
 
-        Args:
-            mean_jitter_ms: Mean jitter in milliseconds
-            max_jitter_ms: Max jitter in milliseconds
-            packet_count: Number of packets in flow
-            severity: Severity level (critical, high, medium, low)
-            service_name: Identified service name
-            expect_high_jitter: Whether high jitter is expected for this service
-            service_type: Type of service (async, interactive, request-response, unknown)
-
-        Returns:
-            HTML string with interpretation
-        """
-
-        def format_jitter_duration(ms: float) -> str:
-            """Format jitter duration in human-readable form."""
-            if ms < 1000:
-                return f"{ms:.0f} milliseconds"
-            elif ms < 60000:
-                return f"{ms / 1000:.1f} seconds"
-            elif ms < 3600000:
-                minutes = int(ms / 60000)
-                seconds = (ms % 60000) / 1000
-                return f"{minutes} minute{' ' if minutes == 1 else 's '}{seconds:.0f} seconds"
-            else:
-                hours = int(ms / 3600000)
-                minutes = int((ms % 3600000) / 60000)
-                return f"{hours} hour{' ' if hours == 1 else 's '}{minutes} minutes"
-
-        # Format durations
-        max_duration = format_jitter_duration(max_jitter_ms)
-        mean_duration = format_jitter_duration(mean_jitter_ms)
-
-        # Build interpretation sections
-        what_happened = f"Packets arrived with delays varying up to <strong>{max_duration}</strong> (max jitter)"
-        if mean_jitter_ms > 100:  # Only mention mean if significant
-            what_happened += f", with an average variation of <strong>{mean_duration}</strong> (mean jitter)"
-        what_happened += (
-            f". This flow captured <strong>{packet_count} packet{'s' if packet_count != 1 else ''}</strong>."
-        )
-
-        # Why flagged
-        severity_upper = severity.upper()
-        if severity in ["critical", "high"]:
-            if packet_count < 10:
-                why_flagged = (
-                    f"<strong>Why flagged {severity_upper}:</strong> These extreme variations with few packets "
-                    "indicate either <strong>intermittent traffic with long pauses</strong> between transmissions, "
-                    "or severe network congestion."
-                )
-            else:
-                why_flagged = (
-                    f"<strong>Why flagged {severity_upper}:</strong> These extreme variations indicate "
-                    "either <strong>long pauses in communication</strong> or <strong>severe network congestion</strong>."
-                )
-        elif severity == "medium":
-            why_flagged = (
-                f"<strong>Why flagged {severity_upper}:</strong> Moderate variations that could affect "
-                "time-sensitive applications or indicate network instability."
-            )
+        # Concise impact based on service type
+        if service_type == "broadcast" or expect_high_jitter:
+            impact_text = "Normal behavior (no impact)"
+        elif max_jitter_ms > 10000:
+            impact_text = "Severe delays (unusable for real-time)"
+        elif max_jitter_ms > 1000:
+            impact_text = "Noticeable delays (degraded UX)"
+        elif max_jitter_ms > 100:
+            impact_text = "Minor delays (acceptable for most apps)"
         else:
-            why_flagged = (
-                f"<strong>Why flagged {severity_upper}:</strong> Minor variations within acceptable range "
-                "for most applications."
-            )
+            impact_text = "Minimal impact"
 
-        # Impact assessment based on service type
-        if service_type == "broadcast":
-            # mDNS, SSDP, NetBIOS - broadcast/multicast protocols
-            impact = (
-                f"<strong>Impact:</strong> <span style='color: #28a745;'>✓ No impact</span>. "
-                f"<strong>{service_name}</strong> is a <strong>broadcast/multicast discovery protocol</strong> (RFC 6762). "
-                "It uses UDP without delivery guarantees - packets are sent periodically for service announcement. "
-                "High jitter is irrelevant as there's no session or reliability requirement. "
-                "Long pauses simply mean services aren't being announced frequently."
-            )
-        elif expect_high_jitter:
-            impact = (
-                f"<strong>Impact:</strong> This is <span style='color: #28a745;'>✓ normal behavior</span> "
-                f"for <strong>{service_name}</strong>, which uses async batching, long-polling, or delayed processing. "
-                "High jitter is expected and does not indicate a problem."
-            )
-        elif service_type == "interactive":
-            # SSH, Telnet, RDP, VNC - interactive terminal services
-            if max_jitter_ms > 10000:  # > 10 seconds
-                impact = (
-                    f"<strong>Impact:</strong> For <strong>{service_name}</strong> (interactive terminal), "
-                    "users will experience <span style='color: #dc3545;'>⚠ very noticeable delays</span> "
-                    "when typing commands or receiving output. Long pauses between packets indicate either "
-                    "network congestion or low activity periods (user idle). TCP ensures reliable delivery despite jitter."
-                )
-            elif max_jitter_ms > 1000:  # > 1 second
-                impact = (
-                    f"<strong>Impact:</strong> For <strong>{service_name}</strong>, "
-                    "users will notice <span style='color: #ffc107;'>⚠ delayed echoing of typed characters</span> "
-                    "and slower command responses, but the connection remains functional and reliable (TCP-based)."
-                )
-            elif max_jitter_ms > 100:  # > 100ms
-                impact = (
-                    f"<strong>Impact:</strong> For <strong>{service_name}</strong>, "
-                    "minor delays may be perceptible during fast typing, but overall experience remains good. "
-                    "This is within acceptable range for terminal applications."
-                )
-            else:
-                impact = f"<strong>Impact:</strong> Excellent performance for <strong>{service_name}</strong>. No noticeable impact."
-        elif service_type == "request-response":
-            # HTTP, HTTPS, DNS - request/response protocols
-            if max_jitter_ms > 10000:  # > 10 seconds
-                impact = (
-                    f"<strong>Impact:</strong> For <strong>{service_name}</strong>, "
-                    "users will experience <span style='color: #ffc107;'>⚠ slow page loads or API timeouts</span>. "
-                    "However, TCP buffering and retransmission ensure eventual delivery. "
-                    "Long pauses likely indicate network congestion or low request rate."
-                )
-            elif max_jitter_ms > 1000:  # > 1 second
-                impact = (
-                    f"<strong>Impact:</strong> For <strong>{service_name}</strong>, "
-                    "response times will be inconsistent but functional. "
-                    "TCP handles packet reordering, so reliability is maintained."
-                )
-            else:
-                impact = f"<strong>Impact:</strong> Acceptable performance for <strong>{service_name}</strong>. Minimal user impact."
-        else:
-            # Unknown service - use generic real-time application message
-            if max_jitter_ms > 10000:  # > 10 seconds
-                impact = (
-                    "<strong>Impact:</strong> For <strong>real-time applications</strong> (VoIP, video streaming, gaming), "
-                    "this would make communication <span style='color: #dc3545;'>⚠ completely unusable</span>. "
-                    "For batch processing or async APIs, this might be normal behavior."
-                )
-            elif max_jitter_ms > 1000:  # > 1 second
-                impact = (
-                    "<strong>Impact:</strong> For <strong>interactive applications</strong> (web APIs, databases), "
-                    "users would experience <span style='color: #ffc107;'>⚠ noticeable delays and inconsistent performance</span>."
-                )
-            elif max_jitter_ms > 100:  # > 100ms
-                impact = (
-                    "<strong>Impact:</strong> For <strong>streaming or gaming</strong>, "
-                    "this would cause <span style='color: #ffc107;'>⚠ stuttering or lag</span>. "
-                    "For web browsing, it may go unnoticed."
-                )
-            else:
-                impact = (
-                    "<strong>Impact:</strong> Minor impact. "
-                    "Most applications would handle this variation without issues."
-                )
-
-        # Build HTML
+        # Build concise HTML (3 lines)
         html = f"""
                             <div class="jitter-interpretation">
-                                <div class="interpretation-header">
-                                    <strong>📊 What does this mean?</strong>
-                                </div>
-                                <div class="interpretation-body">
-                                    <p style="margin: 8px 0;">{what_happened}</p>
-                                    <p style="margin: 8px 0;">{why_flagged}</p>
-                                    <p style="margin: 8px 0;">{impact}</p>
-                                </div>
+                                <p style="margin: 4px 0;">Jitter: {max_jitter_ms:.1f}ms max, {mean_jitter_ms:.1f}ms avg ({packet_count} packets)</p>
+                                <p style="margin: 4px 0;">Service: {service_name} ({service_type})</p>
+                                <p style="margin: 4px 0;">Impact: {impact_text}</p>
                             </div>
         """
 
@@ -582,92 +442,24 @@ class HTMLReportGenerator:
         max_rtt: float,
         flows_with_high_rtt: int,
     ) -> str:
-        """
-        Generate natural language interpretation of RTT metrics.
+        """Generate concise RTT interpretation (v4.5.0 style)."""
 
-        Args:
-            mean_rtt: Mean RTT in milliseconds
-            max_rtt: Maximum RTT in milliseconds
-            flows_with_high_rtt: Number of flows with high RTT
-
-        Returns:
-            HTML string with interpretation
-        """
-
-        # What happened
-        if mean_rtt < 10:
-            what_happened = (
-                f"<strong>What happened:</strong> Excellent network responsiveness detected "
-                f"with a mean RTT of {mean_rtt:.2f} ms. This indicates a high-quality connection "
-                f"with minimal delay between packets."
-            )
-        elif mean_rtt < 50:
-            what_happened = (
-                f"<strong>What happened:</strong> Good network performance observed "
-                f"with a mean RTT of {mean_rtt:.2f} ms. Most connections are responding quickly."
-            )
-        elif mean_rtt < 100:
-            what_happened = (
-                f"<strong>What happened:</strong> Acceptable network latency detected "
-                f"with a mean RTT of {mean_rtt:.2f} ms. Some delays are present but within normal range."
-            )
-        else:
-            what_happened = (
-                f"<strong>What happened:</strong> Elevated network latency detected "
-                f"with a mean RTT of {mean_rtt:.2f} ms. This indicates potential network congestion "
-                f"or long-distance connections."
-            )
-
-        # Why flagged
-        if max_rtt > 200:
-            why_flagged = (
-                f"<strong>Why flagged:</strong> Maximum RTT of {max_rtt:.2f} ms exceeds the 200ms threshold. "
-                f"{flows_with_high_rtt} flow(s) experienced high latency, which can impact "
-                f"real-time applications and user experience."
-            )
-        elif max_rtt > 100:
-            why_flagged = (
-                f"<strong>Why flagged:</strong> Maximum RTT of {max_rtt:.2f} ms is moderately high. "
-                f"{flows_with_high_rtt} flow(s) showed increased latency that may affect "
-                f"interactive applications."
-            )
-        else:
-            why_flagged = (
-                f"<strong>Why flagged:</strong> {flows_with_high_rtt} flow(s) exceeded the baseline RTT threshold, "
-                f"indicating these connections experienced higher than normal round-trip times."
-            )
-
-        # Impact
+        # Concise impact
         if max_rtt > 300:
-            impact = (
-                "<strong>Impact:</strong> High impact on performance. "
-                "Real-time applications (VoIP, video conferencing, gaming) will experience "
-                "noticeable delays and poor responsiveness. Web browsing may feel sluggish."
-            )
+            impact_text = "High impact (real-time apps unusable)"
         elif max_rtt > 150:
-            impact = (
-                "<strong>Impact:</strong> Moderate impact. "
-                "Interactive applications may experience some lag. Real-time applications "
-                "could have degraded quality. File transfers remain largely unaffected."
-            )
+            impact_text = "Moderate impact (degraded UX)"
+        elif max_rtt > 100:
+            impact_text = "Minor impact (acceptable)"
         else:
-            impact = (
-                "<strong>Impact:</strong> Minor impact. "
-                "Most applications will function normally, though very latency-sensitive "
-                "operations (e.g., gaming, stock trading) might notice slight delays."
-            )
+            impact_text = "Minimal impact"
 
-        # Build HTML
+        # Build concise HTML (3 lines)
         html = f"""
                             <div class="jitter-interpretation">
-                                <div class="interpretation-header">
-                                    <strong>📊 What does this mean?</strong>
-                                </div>
-                                <div class="interpretation-body">
-                                    <p style="margin: 8px 0;">{what_happened}</p>
-                                    <p style="margin: 8px 0;">{why_flagged}</p>
-                                    <p style="margin: 8px 0;">{impact}</p>
-                                </div>
+                                <p style="margin: 4px 0;">RTT: {max_rtt:.1f}ms max, {mean_rtt:.1f}ms avg</p>
+                                <p style="margin: 4px 0;">Flows affected: {flows_with_high_rtt}</p>
+                                <p style="margin: 4px 0;">Impact: {impact_text}</p>
                             </div>
         """
 
@@ -1319,147 +1111,6 @@ class HTMLReportGenerator:
         }
 
         /* Mechanisms Reference Box */
-        .mechanisms-reference-box {
-            margin: 30px 0;
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 8px;
-            border: 1px solid #e0e0e0;
-        }
-
-        .mechanisms-reference-box h4 {
-            margin-top: 0;
-            margin-bottom: 20px;
-            color: #2c3e50;
-            font-size: 1.2em;
-        }
-
-        .mechanisms-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-        }
-
-        .mechanism-card {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            overflow: hidden;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
-        .mechanism-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
-        }
-
-        .mechanism-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 16px;
-            background: #f8f9fa;
-            border-bottom: 2px solid #e0e0e0;
-        }
-
-        .mechanism-icon {
-            font-size: 1.5em;
-        }
-
-        .mechanism-name {
-            font-weight: 600;
-            color: #2c3e50;
-            font-size: 1em;
-        }
-
-        .mechanism-body {
-            padding: 16px;
-        }
-
-        .mechanism-description {
-            margin: 0 0 12px 0;
-            color: #555;
-            font-size: 0.95em;
-            line-height: 1.4;
-        }
-
-        .mechanism-details {
-            margin-bottom: 12px;
-        }
-
-        .expand-btn {
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            padding: 8px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9em;
-            color: #3498db;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            width: 100%;
-            text-align: left;
-        }
-
-        .expand-btn:hover {
-            background: #e8e8e8;
-            border-color: #3498db;
-            color: #2980b9;
-        }
-
-        .expand-btn:focus {
-            outline: 2px solid #3498db;
-            outline-offset: 2px;
-        }
-
-        .expand-btn.expanded {
-            background: #e8f8f5;
-            border-color: #1abc9c;
-            color: #1abc9c;
-        }
-
-        /* Pure CSS Mechanism Expand (No JavaScript Required) */
-        .mechanism-expand-checkbox {
-            display: none;
-        }
-
-        /* Default: details hidden */
-        .mechanism-details-expanded {
-            display: none;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #e0e0e0;
-        }
-
-        /* When checkbox is checked: show details and update button style */
-        .mechanism-expand-checkbox:checked ~ .mechanism-details-expanded {
-            display: block;
-        }
-
-        .mechanism-expand-checkbox:checked + .expand-btn {
-            background: #e8f8f5;
-            border-color: #1abc9c;
-            color: #1abc9c;
-        }
-
-        .mechanism-details-expanded p {
-            margin: 10px 0;
-            color: #333;
-            font-size: 0.9em;
-        }
-
-        .mechanism-details-expanded ul {
-            margin: 10px 0;
-            padding-left: 20px;
-            color: #333;
-            font-size: 0.9em;
-        }
-
-        .mechanism-details-expanded li {
-            margin: 6px 0;
-        }
-
         /* Collapsible Section Enhancements (Pure CSS - No JavaScript) */
         .collapsible-section {
             margin: 30px 0;
@@ -2014,10 +1665,6 @@ class HTMLReportGenerator:
                 width: 100%;
             }
 
-            .mechanisms-grid {
-                grid-template-columns: 1fr;
-            }
-
             .flow-stats-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
@@ -2047,8 +1694,6 @@ class HTMLReportGenerator:
         @media (prefers-reduced-motion: reduce) {
             .collapsible-content,
             .flow-expand-btn,
-            .mechanism-card,
-            .expand-btn,
             .flow-expand-btn .expand-icon {
                 transition: none;
             }
@@ -2067,14 +1712,6 @@ class HTMLReportGenerator:
             .flow-details {
                 display: block !important;
                 margin: 0;
-            }
-
-            .expand-btn {
-                display: none;
-            }
-
-            .mechanism-details-expanded {
-                display: block !important;
             }
 
             .flow-detail-card {
@@ -2431,22 +2068,6 @@ class HTMLReportGenerator:
 
         html = "<h2>📡 Jitter Analysis</h2>"
 
-        # Add explanation box
-        html += """
-        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">
-            <p style="margin: 0 0 10px 0;"><strong>ℹ️ What is Jitter (RFC 3393 IPDV)?</strong></p>
-            <p style="margin: 0 0 8px 0; font-size: 0.95em;">
-                Jitter measures the <strong>variation in packet delay</strong>. High jitter causes choppy audio/video in real-time applications.
-            </p>
-            <p style="margin: 0; font-size: 0.9em; color: #555;">
-                <strong>Typical thresholds:</strong>
-                Video: &lt;100ms |
-                Streaming: &lt;200ms |
-                Web/Data: &lt;500ms
-            </p>
-        </div>
-        """
-
         # Global statistics
         global_stats = jitter_data.get("global_statistics", {})
         if global_stats:
@@ -2689,31 +2310,6 @@ class HTMLReportGenerator:
 
         html = "<h2>🧠 Service Classification</h2>"
 
-        # Add explanation box
-        html += """
-        <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px;">
-            <p style="margin: 0 0 10px 0;"><strong>ℹ️ What is Service Classification?</strong></p>
-            <p style="margin: 0 0 12px 0; font-size: 0.95em;">
-                Intelligent traffic classification based on <strong>behavioral patterns</strong>, not just port numbers.
-                Identifies application types by analyzing packet sizes, timing, and flow characteristics.
-            </p>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.9em;">
-                <div>
-                    <strong>📹 Streaming:</strong> Large packets (>1000B), sustained throughput (>1Mbps)
-                </div>
-                <div>
-                    <strong>💬 Interactive:</strong> Variable sizes, request/response pattern (web, SSH)
-                </div>
-                <div>
-                    <strong>📦 Bulk:</strong> Large persistent flows (>1200B, >5s, file transfers)
-                </div>
-                <div>
-                    <strong>🎛️ Control:</strong> Small sporadic packets (<512B, DNS, mDNS, NTP)
-                </div>
-            </div>
-        </div>
-        """
-
         # Classification summary
         summary = service_data.get("classification_summary", {})
         if summary:
@@ -2845,424 +2441,33 @@ class HTMLReportGenerator:
         return html
 
     def _generate_confidence_overview(self, retrans_data: dict) -> str:
-        """Generate confidence overview box for retransmission analysis."""
+        """Generate simplified confidence overview (v4.5.0 style)."""
         total_retrans = retrans_data.get("total_retransmissions", 0)
         retrans_list = retrans_data.get("retransmissions", [])
 
-        # Determine overall confidence based on data quality
+        # Determine overall confidence
         high_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "high")
         medium_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "medium")
-        _low_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "low")  # noqa: F841
 
-        # Overall confidence is based on majority
         if high_confidence_count > len(retrans_list) * 0.6:
-            _overall_confidence = "high"  # noqa: F841
-            confidence_class = "confidence-high"
             confidence_emoji = "🟢"
             confidence_text = "High"
         elif high_confidence_count + medium_confidence_count > len(retrans_list) * 0.5:
-            _overall_confidence = "medium"  # noqa: F841
-            confidence_class = "confidence-medium"
             confidence_emoji = "🟡"
             confidence_text = "Medium"
         else:
-            _overall_confidence = "low"  # noqa: F841
-            confidence_class = "confidence-low"
             confidence_emoji = "🟠"
             confidence_text = "Low"
 
-        html = '<div class="confidence-overview-box">'
-        html += '  <div class="confidence-header">'
-        html += "    <h4>Analysis Confidence</h4>"
-        html += f"""
-        <span class="confidence-badge {confidence_class}">
-            <span class="badge-icon">{confidence_emoji}</span> {confidence_text}
-        </span>
-        """
-        html += "  </div>"
-
-        # Add explanation box for confidence levels
-        html += """
-        <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 12px; margin: 15px 0; border-radius: 4px;">
-            <p style="margin: 0 0 10px 0; font-size: 0.95em;"><strong>ℹ️ Understanding Confidence Levels (Pattern Clarity)</strong></p>
-            <div style="font-size: 0.9em; color: #555; line-height: 1.6;">
-                <p style="margin: 5px 0;"><em>Note: Confidence reflects how clear the retransmission pattern is, not certainty of the root cause.</em></p>
-                <p style="margin: 5px 0;"><strong>🟢 High Confidence:</strong> Clear, consistent pattern - 100% of one mechanism (RTO, Fast Retransmission, or Spurious) with sufficient sample size (3+ events). Pattern is unambiguous.</p>
-                <p style="margin: 5px 0;"><strong>🟡 Medium Confidence:</strong> Dominant pattern - Either 100% uniform with small sample (2 events), or dominant mechanism (80%+). Pattern is mostly clear with minor ambiguity.</p>
-                <p style="margin: 5px 0;"><strong>🟠 Low Confidence:</strong> Mixed mechanisms - Multiple retransmission types present (<80% dominant). Requires detailed packet-level analysis to understand root causes.</p>
-            </div>
+        # Concise HTML (no verbose explanations)
+        html = f"""
+        <div style="background: #f5f5f5; padding: 10px; margin: 15px 0; border-radius: 4px;">
+            <p style="margin: 0;"><strong>Analysis Confidence:</strong> {confidence_emoji} {confidence_text} ({total_retrans:,} events, {high_confidence_count} high-confidence)</p>
         </div>
         """
 
-        html += '  <div class="confidence-details">'
-        html += (
-            f'    <p class="confidence-reason">Detection confidence is <strong>{confidence_text}</strong> based on:</p>'
-        )
-        html += '    <ul class="confidence-factors">'
-
-        # Add confidence factors
-        if total_retrans > 100:
-            html += (
-                f'      <li><span class="factor-icon">✓</span> Sufficient sample size ({total_retrans:,} events)</li>'
-            )
-        elif total_retrans > 10:
-            html += f'      <li><span class="factor-icon">✓</span> Adequate sample size ({total_retrans:,} events)</li>'
-        else:
-            html += f'      <li><span class="factor-icon">⚠</span> Limited sample size ({total_retrans:,} events)</li>'
-
-        if high_confidence_count > 0:
-            html += (
-                f'      <li><span class="factor-icon">✓</span> {high_confidence_count} high-confidence detections</li>'
-            )
-
-        # Check for consistent patterns
-        rto_count = retrans_data.get("rto_count", 0)
-        fast_retrans = retrans_data.get("fast_retrans_count", 0)
-        if rto_count > 0 or fast_retrans > 0:
-            html += '      <li><span class="factor-icon">✓</span> Clear retransmission patterns identified</li>'
-
-        html += "    </ul>"
-        html += "  </div>"
-        html += "</div>"
-
         return html
 
-    def _generate_mechanism_cards(self) -> str:
-        """Generate retransmission mechanism reference cards."""
-        mechanisms = [
-            {
-                "icon": "⏱️",
-                "name": "RTO Timeout",
-                "description": "ACK not received within the Retransmission Timeout window.",
-                "severity": "badge-danger",
-                "severity_text": "High",
-                "id": "rto-details",
-                "details": [
-                    "Packet loss on network path",
-                    "Sustained high latency",
-                    "Network congestion",
-                    "Router buffer overflow",
-                ],
-                "impact": "Significant connection slowdown, reduced throughput",
-                "action": "Check network stability, investigate packet loss",
-            },
-            {
-                "icon": "⚡",
-                "name": "Fast Retransmission",
-                "description": "Three or more duplicate ACKs received (RFC 5681).",
-                "severity": "badge-warning",
-                "severity_text": "Medium",
-                "id": "fast-retrans-details",
-                "details": [
-                    "Packet loss causing out-of-order delivery",
-                    "TCP window reordering",
-                    "Network reordering (normal in Internet paths)",
-                    "Congestion window reduction",
-                ],
-                "impact": "Brief latency spike, usually recoverable quickly",
-                "action": "Monitor patterns, usually not critical",
-            },
-            {
-                "icon": "📋",
-                "name": "Duplicate ACK",
-                "description": "Same ACK number received multiple times.",
-                "severity": "badge-info",
-                "severity_text": "Low",
-                "id": "dup-ack-details",
-                "details": [
-                    "Packet reordering on network",
-                    "Receiver retransmitting ACKs",
-                    "Common in WAN environments",
-                    "Out-of-order segment arrival",
-                ],
-                "impact": "Usually minimal, normal TCP behavior",
-                "action": "Not critical, monitor patterns over time",
-            },
-            {
-                "icon": "💓",
-                "name": "Keep-Alive",
-                "description": "Connection maintenance packet to prevent NAT timeout.",
-                "severity": "badge-success",
-                "severity_text": "Low",
-                "id": "keepalive-details",
-                "details": [
-                    "Idle connection state",
-                    "NAT/Firewall timeout prevention",
-                    "Session persistence",
-                    "Connection health check",
-                ],
-                "impact": "None, normal TCP behavior",
-                "action": "No action needed, expected behavior",
-            },
-        ]
-
-        html = '<div class="mechanisms-reference-box">'
-        html += "  <h4>Retransmission Mechanisms</h4>"
-        html += '  <div class="mechanisms-grid">'
-
-        for mech in mechanisms:
-            html += f"""
-            <div class="mechanism-card">
-                <div class="mechanism-header">
-                    <span class="mechanism-icon">{mech["icon"]}</span>
-                    <span class="mechanism-name">{mech["name"]}</span>
-                </div>
-                <div class="mechanism-body">
-                    <p class="mechanism-description">{mech["description"]}</p>
-                    <div class="mechanism-details">
-                        <strong>Severity:</strong>
-                        <span class="badge {mech["severity"]}">{mech["severity_text"]}</span>
-                    </div>
-                    <input type="checkbox" id="{mech["id"]}" class="mechanism-expand-checkbox">
-                    <label for="{mech["id"]}" class="expand-btn">
-                        Learn More ↓
-                    </label>
-                    <div class="mechanism-details-expanded">
-                        <p><strong>Why it occurs:</strong></p>
-                        <ul>
-            """
-            for detail in mech["details"]:
-                html += f"                            <li>{detail}</li>"
-            html += f"""
-                        </ul>
-                        <p><strong>Impact:</strong> {mech["impact"]}</p>
-                        <p><strong>User Action:</strong> {mech["action"]}</p>
-                    </div>
-                </div>
-            </div>
-            """
-
-        html += "  </div>"
-        html += "</div>"
-
-        return html
-
-    def _generate_handshake_mechanisms(self) -> str:
-        """Generate TCP handshake mechanism reference cards."""
-        mechanisms = [
-            {
-                "icon": "✅",
-                "name": "Normal Handshake",
-                "description": "Standard 3-way handshake completing within expected time.",
-                "severity": "badge-success",
-                "severity_text": "Normal",
-                "id": "normal-handshake-details",
-                "details": [
-                    "Client sends SYN",
-                    "Server responds with SYN-ACK",
-                    "Client confirms with ACK",
-                    "Typical completion time < 100ms for LAN",
-                ],
-                "impact": "None, normal TCP operation",
-                "action": "No action needed",
-                "timing": "< 100ms",
-            },
-            {
-                "icon": "🐌",
-                "name": "Slow Handshake",
-                "description": "Handshake taking longer than expected (> 100ms).",
-                "severity": "badge-warning",
-                "severity_text": "Medium",
-                "id": "slow-handshake-details",
-                "details": [
-                    "Network latency (WAN, satellite)",
-                    "Server under heavy load",
-                    "Firewall/IDS inspection delay",
-                    "Geographic distance",
-                ],
-                "impact": "Increased connection establishment time, user-perceived delay",
-                "action": "Check network path, server load, firewall rules",
-                "timing": "> 100ms",
-            },
-            {
-                "icon": "❌",
-                "name": "Incomplete Handshake",
-                "description": "Handshake not completed (missing SYN-ACK or ACK).",
-                "severity": "badge-danger",
-                "severity_text": "High",
-                "id": "incomplete-handshake-details",
-                "details": [
-                    "Server not listening (port closed)",
-                    "Firewall blocking connection",
-                    "Packet loss on network",
-                    "Server overloaded (SYN flood)",
-                ],
-                "impact": "Connection failure, application cannot communicate",
-                "action": "Verify service availability, check firewall rules",
-                "timing": "Never completes",
-            },
-            {
-                "icon": "🔁",
-                "name": "SYN Retransmission",
-                "description": "Client retrying SYN packet (no SYN-ACK received).",
-                "severity": "badge-warning",
-                "severity_text": "Medium",
-                "id": "syn-retrans-details",
-                "details": [
-                    "Original SYN packet lost",
-                    "SYN-ACK response lost",
-                    "Server slow to respond",
-                    "Asymmetric routing issues",
-                ],
-                "impact": "Delayed connection, exponential backoff (1s, 2s, 4s...)",
-                "action": "Investigate packet loss, check server responsiveness",
-                "timing": "Retry delays",
-            },
-        ]
-
-        html = '<div class="mechanisms-reference-box">'
-        html += "  <h4>Handshake Types & Timing</h4>"
-        html += '  <div class="mechanisms-grid">'
-
-        for mech in mechanisms:
-            html += f"""
-            <div class="mechanism-card">
-                <div class="mechanism-header">
-                    <span class="mechanism-icon">{mech["icon"]}</span>
-                    <span class="mechanism-name">{mech["name"]}</span>
-                </div>
-                <div class="mechanism-body">
-                    <p class="mechanism-description">{mech["description"]}</p>
-                    <div class="mechanism-details">
-                        <strong>Timing:</strong>
-                        <span class="badge {mech["severity"]}">{mech["timing"]}</span>
-                    </div>
-                    <input type="checkbox" id="{mech["id"]}" class="mechanism-expand-checkbox">
-                    <label for="{mech["id"]}" class="expand-btn">
-                        Learn More ↓
-                    </label>
-                    <div class="mechanism-details-expanded">
-                        <p><strong>Why it occurs:</strong></p>
-                        <ul>
-            """
-            for detail in mech["details"]:
-                html += f"                            <li>{detail}</li>"
-            html += f"""
-                        </ul>
-                        <p><strong>Impact:</strong> {mech["impact"]}</p>
-                        <p><strong>User Action:</strong> {mech["action"]}</p>
-                    </div>
-                </div>
-            </div>
-            """
-
-        html += "  </div>"
-        html += "</div>"
-
-        return html
-
-    def _generate_window_mechanisms(self) -> str:
-        """Generate TCP window mechanism reference cards."""
-        mechanisms = [
-            {
-                "icon": "🚫",
-                "name": "Zero Window",
-                "description": "Receiver advertises window size of 0 (cannot accept more data).",
-                "severity": "badge-danger",
-                "severity_text": "High",
-                "id": "zero-window-details",
-                "details": [
-                    "Receiver's buffer full (application not reading fast enough)",
-                    "Slow application processing",
-                    "Resource exhaustion (memory, CPU)",
-                    "Flow control mechanism (intentional throttling)",
-                ],
-                "impact": "Sender pauses, throughput drops to zero, increased latency",
-                "action": "Investigate receiver-side application, check buffer sizes",
-                "reference": "RFC 793 (Section 3.7 - Flow Control)",
-            },
-            {
-                "icon": "📈",
-                "name": "Window Update",
-                "description": "Receiver advertises increased window size (ready for more data).",
-                "severity": "badge-success",
-                "severity_text": "Low",
-                "id": "window-update-details",
-                "details": [
-                    "Application consumed data from buffer",
-                    "Recovery from zero window condition",
-                    "Normal flow control operation",
-                ],
-                "impact": "Normal operation, allows sender to resume transmission",
-                "action": "None (normal behavior)",
-                "reference": "RFC 793",
-            },
-            {
-                "icon": "🔍",
-                "name": "Zero Window Probe",
-                "description": "Sender probes receiver to check if window has opened.",
-                "severity": "badge-warning",
-                "severity_text": "Medium",
-                "id": "window-probe-details",
-                "details": [
-                    "Sender received zero window advertisement",
-                    "Periodic check (typically every 5-60 seconds)",
-                    "Prevents indefinite stall",
-                ],
-                "impact": "Minimal (1 byte probes), ensures connection recovery",
-                "action": "Monitor duration, investigate if prolonged",
-                "reference": "RFC 1122 (Section 4.2.2.17)",
-            },
-            {
-                "icon": "📉",
-                "name": "Receiver Bottleneck",
-                "description": "Receiver consistently advertises small window sizes.",
-                "severity": "badge-warning",
-                "severity_text": "Medium",
-                "id": "receiver-bottleneck-details",
-                "details": [
-                    "Limited receiver buffer size",
-                    "Slow application processing",
-                    "CPU/memory constraints",
-                    "Intentional rate limiting",
-                ],
-                "impact": "Reduced throughput, sender cannot fully utilize bandwidth",
-                "action": "Tune receiver buffers (SO_RCVBUF), optimize application",
-                "reference": "RFC 793",
-            },
-        ]
-
-        html = '<div class="mechanisms-reference-box">'
-        html += "  <h4>TCP Window Mechanisms</h4>"
-        html += '  <div class="mechanisms-grid">'
-
-        for mech in mechanisms:
-            html += f"""
-            <div class="mechanism-card">
-                <div class="mechanism-header">
-                    <span class="mechanism-icon">{mech["icon"]}</span>
-                    <span class="mechanism-name">{mech["name"]}</span>
-                </div>
-                <div class="mechanism-body">
-                    <p class="mechanism-description">{mech["description"]}</p>
-                    <div class="mechanism-details">
-                        <strong>Severity:</strong>
-                        <span class="badge {mech["severity"]}">{mech["severity_text"]}</span>
-                    </div>
-                    <input type="checkbox" id="{mech["id"]}" class="mechanism-expand-checkbox">
-                    <label for="{mech["id"]}" class="expand-btn">
-                        Learn More ↓
-                    </label>
-                    <div class="mechanism-details-expanded">
-                        <p><strong>Why it occurs:</strong></p>
-                        <ul>
-            """
-            for detail in mech["details"]:
-                html += f"                            <li>{detail}</li>"
-            html += f"""
-                        </ul>
-                        <p><strong>Impact:</strong> {mech["impact"]}</p>
-                        <p><strong>User Action:</strong> {mech["action"]}</p>
-                        <p><strong>RFC Reference:</strong> {mech["reference"]}</p>
-                    </div>
-                </div>
-            </div>
-            """
-
-        html += "  </div>"
-        html += "</div>"
-
-        return html
 
     def _generate_grouped_retransmission_analysis(self, flows: dict, total_packets: int) -> str:
         """Generate retransmission analysis grouped by type (SYN, RTO, Fast Retrans, Generic, Mixed)."""
@@ -4051,9 +3256,6 @@ class HTMLReportGenerator:
             # Add confidence overview
             html += self._generate_confidence_overview(retrans_data)
 
-            # Add mechanism reference cards
-            html += self._generate_mechanism_cards()
-
             # Top flows with retransmissions - Grouped by type
             retrans_list = retrans_data.get("retransmissions", [])
             if retrans_list:
@@ -4089,9 +3291,6 @@ class HTMLReportGenerator:
                 </div>
                 """
                 html += "</div>"
-
-                # Add handshake mechanism cards
-                html += self._generate_handshake_mechanisms()
 
         # RTT Analysis
         rtt_data = results.get("rtt", {})
@@ -4214,9 +3413,6 @@ class HTMLReportGenerator:
             </div>
             """
             html += "</div>"
-
-            # Add window mechanism cards
-            html += self._generate_window_mechanisms()
 
             flow_stats = window_data.get("flow_statistics", [])
             if flow_stats:
