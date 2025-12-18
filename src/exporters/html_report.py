@@ -3334,10 +3334,215 @@ class HTMLReportGenerator:
 
         return html
 
+    def _analyze_root_cause(self, flows: list, type_key: str) -> dict:
+        """Analyze root cause and patterns for flows."""
+        result = {
+            "root_cause": None,
+            "action": None,
+            "pattern": None,
+            "tshark_filter": None
+        }
+
+        if not flows:
+            return result
+
+        # Extract all dest IPs and ports
+        dest_ips = {}
+        dest_ports = {}
+        for flow_key, retrans_list in flows:
+            # Parse flow_key: "src_ip:src_port → dst_ip:dst_port"
+            parts = flow_key.split(" → ")
+            if len(parts) == 2:
+                dst_part = parts[1].strip()
+                if ":" in dst_part:
+                    dst_ip, dst_port = dst_part.rsplit(":", 1)
+                    dest_ips[dst_ip] = dest_ips.get(dst_ip, 0) + 1
+                    dest_ports[dst_port] = dest_ports.get(dst_port, 0) + 1
+
+        # Check for common destination
+        if dest_ips:
+            most_common_ip = max(dest_ips.items(), key=lambda x: x[1])
+            most_common_port = max(dest_ports.items(), key=lambda x: x[1]) if dest_ports else (None, 0)
+
+            # Pattern detection
+            if most_common_ip[1] == len(flows):
+                result["pattern"] = f"All flows target {most_common_ip[0]}"
+
+                # Check for reserved/special IPs
+                ip = most_common_ip[0]
+                ip_info = self._identify_ip_range(ip)
+
+                if ip_info:
+                    result["root_cause"] = f"{most_common_ip[0]} is {ip_info['name']} ({ip_info['rfc']})"
+                    result["action"] = ip_info['action']
+                elif type_key == "syn":
+                    result["root_cause"] = f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
+                    result["action"] = f"Verify server status and port {most_common_port[0]} availability"
+
+                # Generate tshark filter
+                result["tshark_filter"] = f"ip.dst == {most_common_ip[0]}"
+                if type_key == "syn":
+                    result["tshark_filter"] += " and tcp.flags.syn == 1"
+
+            elif most_common_ip[1] >= len(flows) * 0.5:
+                result["pattern"] = f"{most_common_ip[1]} flows target {most_common_ip[0]} (dominant pattern)"
+
+        return result
+
+    def _identify_ip_range(self, ip: str) -> dict:
+        """Identify if IP is in a reserved/special range."""
+        import ipaddress
+
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+
+            # Reserved ranges
+            ranges = {
+                "192.0.2.0/24": {"name": "TEST-NET-1 (Documentation/Testing)", "rfc": "RFC 5737", "action": "Remove hardcoded test IP from application config"},
+                "198.51.100.0/24": {"name": "TEST-NET-2 (Documentation/Testing)", "rfc": "RFC 5737", "action": "Remove hardcoded test IP from application config"},
+                "203.0.113.0/24": {"name": "TEST-NET-3 (Documentation/Testing)", "rfc": "RFC 5737", "action": "Remove hardcoded test IP from application config"},
+                "0.0.0.0/8": {"name": "Current Network (invalid destination)", "rfc": "RFC 1122", "action": "Fix application routing logic"},
+                "127.0.0.0/8": {"name": "Loopback", "rfc": "RFC 1122", "action": "Check if service should be local or remote"},
+                "169.254.0.0/16": {"name": "Link-Local (APIPA)", "rfc": "RFC 3927", "action": "Check DHCP configuration"},
+                "10.0.0.0/8": {"name": "Private Network", "rfc": "RFC 1918", "action": "Verify network routing and NAT"},
+                "172.16.0.0/12": {"name": "Private Network", "rfc": "RFC 1918", "action": "Verify network routing and NAT"},
+                "192.168.0.0/16": {"name": "Private Network", "rfc": "RFC 1918", "action": "Verify network routing and NAT"},
+                "224.0.0.0/4": {"name": "Multicast", "rfc": "RFC 5771", "action": "Check multicast configuration"},
+                "240.0.0.0/4": {"name": "Reserved (Future Use)", "rfc": "RFC 1112", "action": "Invalid destination IP"},
+            }
+
+            for range_str, info in ranges.items():
+                network = ipaddress.ip_network(range_str)
+                if ip_obj in network:
+                    return info
+
+        except ValueError:
+            pass
+
+        return None
+
+    def _generate_root_cause_box(self, analysis: dict, type_key: str, flows: list) -> str:
+        """Generate root cause analysis box."""
+        html = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">'
+        html += '<h4 style="margin: 0 0 10px 0; font-size: 1.1em;">🎯 Root Cause Analysis</h4>'
+
+        if analysis["root_cause"]:
+            html += f'<p style="margin: 5px 0; font-size: 1em;"><strong>Cause:</strong> {analysis["root_cause"]}</p>'
+
+        if analysis["pattern"]:
+            html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>Pattern:</strong> {analysis["pattern"]}</p>'
+
+        # Add RFC 6298 compliance for SYN
+        if type_key == "syn":
+            delays = []
+            for _, retrans_list in flows:
+                for r in retrans_list:
+                    delays.append(r.get("delay", 0))
+            if delays:
+                min_delay = min(delays)
+                max_delay = max(delays)
+                avg_delay = sum(delays) / len(delays)
+                compliant = all(d >= 1.0 for d in delays)
+                compliance_icon = "✅" if compliant else "❌"
+                html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>RFC 6298:</strong> {compliance_icon} {"Compliant" if compliant else "Non-compliant"} (RTOs: {min_delay:.3f}s - {max_delay:.3f}s, avg: {avg_delay:.3f}s)</p>'
+
+        html += '</div>'
+        return html
+
+    def _generate_type_explanation_concise(self, type_key: str, flows: list) -> str:
+        """Generate concise explanation for a retransmission type."""
+        explanations = {
+            "syn": """
+                <div style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>SYN retrans = Connection failed</strong> (server unreachable)<br>
+                    <strong>Type:</strong> RTO-based (no ACKs during handshake, never fast retransmit)<br>
+                    <strong>Impact:</strong> <span style='color: #dc3545;'>CRITICAL</span> - Application cannot establish TCP connection
+                    </p>
+                </div>
+            """,
+            "rto": """
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>RTO = Packet loss detected</strong> (no ACK received, timeout)<br>
+                    <strong>Impact:</strong> <span style='color: #ffc107;'>HIGH</span> - Significant delays (200ms-3s per event)<br>
+                    <strong>Causes:</strong> Network congestion, unreliable path, ACK loss
+                    </p>
+                </div>
+            """,
+            "fast": """
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Fast Retrans = Out-of-order delivery</strong> (duplicate ACKs)<br>
+                    <strong>Impact:</strong> <span style='color: #28a745;'>MODERATE</span> - Quick recovery via duplicate ACKs<br>
+                    <strong>Causes:</strong> Load balancing, multipath routing, packet reordering
+                    </p>
+                </div>
+            """,
+            "generic": """
+                <div style="background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Generic Retrans = Moderate delay</strong> (50-200ms)<br>
+                    <strong>Impact:</strong> <span style='color: #17a2b8;'>LOW</span> - Minor performance degradation
+                    </p>
+                </div>
+            """,
+            "mixed": """
+                <div style="background: #e2e3e5; border-left: 4px solid #6c757d; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Mixed mechanisms</strong> - Complex network behavior<br>
+                    <strong>Recommendation:</strong> Review individual flows for specific patterns
+                    </p>
+                </div>
+            """
+        }
+
+        return explanations.get(type_key, "")
+
+    def _generate_quick_actions(self, analysis: dict, type_key: str) -> str:
+        """Generate quick actions box."""
+        if not analysis["action"] and type_key not in ["syn", "rto"]:
+            return ""
+
+        html = '<div style="background: #e7f3ff; border: 1px solid #2196F3; border-radius: 6px; padding: 15px; margin-bottom: 15px;">'
+        html += '<h5 style="margin: 0 0 10px 0; color: #1976D2;">💡 Suggested Actions</h5>'
+        html += '<ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9em;">'
+
+        if analysis["action"]:
+            html += f'<li><strong>{analysis["action"]}</strong></li>'
+
+        # Type-specific actions
+        if type_key == "syn":
+            html += '<li>Test connectivity: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">ping &lt;dest_ip&gt;</code> / <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">telnet &lt;dest_ip&gt; &lt;port&gt;</code></li>'
+            html += '<li>Check firewall rules and routing tables</li>'
+            html += '<li>Verify DNS resolution for target hostname</li>'
+        elif type_key == "rto":
+            html += '<li>Monitor network congestion with: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">netstat -s</code></li>'
+            html += '<li>Check router/switch buffer utilization</li>'
+            html += '<li>Consider QoS/traffic shaping if congestion persists</li>'
+
+        html += '</ul>'
+        html += '</div>'
+
+        return html
+
+    def _generate_tshark_command_box(self, tshark_filter: str) -> str:
+        """Generate tshark command box with one-click copy."""
+        html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
+        html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -e frame.number -e frame.time_relative -e tcp.seq -e tcp.ack -e tcp.len -e tcp.flags.str</pre>'
+        html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy</div>'
+        html += '</div>'
+
+        return html
+
     def _generate_retrans_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str) -> str:
         """Generate a section for one retransmission type with explanation + flow table."""
         flow_count = len(flows)
         total_retrans = sum(len(retrans_list) for _, retrans_list in flows)
+
+        # Analyze root cause
+        root_cause_analysis = self._analyze_root_cause(flows, type_key)
 
         html = '<div class="retrans-type-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'.format(color=color)
         html += f'<div class="retrans-type-header" style="background: {color}; color: white; padding: 15px; font-weight: bold; font-size: 1.1em;">'
@@ -3345,8 +3550,19 @@ class HTMLReportGenerator:
         html += '</div>'
         html += '<div class="retrans-type-body" style="padding: 20px; background: #f8f9fa;">'
 
-        # Add explanation (only once per type)
-        html += self._generate_type_explanation(type_key, flows)
+        # Add root cause analysis (if found)
+        if root_cause_analysis["root_cause"] or root_cause_analysis["pattern"]:
+            html += self._generate_root_cause_box(root_cause_analysis, type_key, flows)
+
+        # Add concise explanation
+        html += self._generate_type_explanation_concise(type_key, flows)
+
+        # Add quick actions
+        html += self._generate_quick_actions(root_cause_analysis, type_key)
+
+        # Add tshark command (one-click copy)
+        if root_cause_analysis["tshark_filter"]:
+            html += self._generate_tshark_command_box(root_cause_analysis["tshark_filter"])
 
         # Add compact flow table
         html += self._generate_flow_table(flows, type_key)
