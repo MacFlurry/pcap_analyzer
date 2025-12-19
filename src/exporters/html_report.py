@@ -3413,10 +3413,12 @@ class HTMLReportGenerator:
                 html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy</div>'
                 html += '<div style="color: #ffeb3b; margin-top: 10px; padding-top: 10px; border-top: 1px solid #455a64; font-size: 0.8em;">'
                 html += "<strong>Example Output:</strong><br>"
-                html += '<span style="color: #b0bec5;">Frame | Time      | Src IP      | Dst IP      | SPort | DPort | Flags | Seq    | Ack    | Win   | Len | Analysis</span><br>'
-                html += '<span style="color: #b0bec5;">1     | 0.000000  | 192.168.1.2 | 10.0.0.5    | 51234 | 80    | S     | 0      | 0      | 65535 | 0   |          </span><br>'
-                html += '<span style="color: #b0bec5;">2     | 0.100000  | 10.0.0.5    | 192.168.1.2 | 80    | 51234 | SA    | 0      | 1      | 29200 | 0   |          </span><br>'
-                html += '<span style="color: #ffab40;">5     | 0.250000  | 192.168.1.2 | 10.0.0.5    | 51234 | 80    | PA    | 1      | 1      | 65535 | 512 | Retrans  </span><br>'
+                html += '<pre style="color: #b0bec5; margin: 5px 0 0 0; font-family: monospace; font-size: 0.9em; line-height: 1.4;">'
+                html += 'Frame | Time     | Src IP        | Dst IP        | SPort | DPort | Flags | Seq    | Ack    | Win   | Len | Analysis\n'
+                html += '1     | 0.000000 | 192.168.1.2   | 10.0.0.5      | 51234 | 80    | S     | 0      | 0      | 65535 | 0   |         \n'
+                html += '2     | 0.100000 | 10.0.0.5      | 192.168.1.2   | 80    | 51234 | SA    | 0      | 1      | 29200 | 0   |         \n'
+                html += '<span style="color: #ffab40;">5     | 0.250000 | 192.168.1.2   | 10.0.0.5      | 51234 | 80    | PA    | 1      | 1      | 65535 | 512 | Retrans </span>'
+                html += '</pre>'
                 html += "</div>"
                 html += "</div>"
                 html += "</details>"
