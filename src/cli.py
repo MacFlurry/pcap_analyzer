@@ -74,6 +74,7 @@ def _generate_critical_findings(results: dict, health_result: dict) -> list[str]
         if all_retrans:
             # Group by flow and count
             from collections import defaultdict
+
             flow_retrans = defaultdict(int)
             for r in all_retrans:
                 flow_key = f"{r.get('src_ip')}:{r.get('src_port')} → {r.get('dst_ip')}:{r.get('dst_port')}"
@@ -101,6 +102,7 @@ def _generate_critical_findings(results: dict, health_result: dict) -> list[str]
     if len(gaps_data) > 10000:
         # Aggregate gap sources
         from collections import Counter
+
         gap_vectors = []
         for gap in gaps_data[:1000]:  # Sample first 1k for performance
             src = gap.get("src_ip", "unknown")
@@ -109,7 +111,7 @@ def _generate_critical_findings(results: dict, health_result: dict) -> list[str]
 
         if gap_vectors:
             top_vector = Counter(gap_vectors).most_common(1)[0]
-            vector_pct = (top_vector[1] / len(gap_vectors) * 100)
+            vector_pct = top_vector[1] / len(gap_vectors) * 100
             findings.append(
                 f"[yellow]Anomalous temporal gaps:[/yellow] {len(gaps_data):,} detected. "
                 f"Primary vector: {top_vector[0]} ({vector_pct:.0f}% of sampled gaps)"
@@ -675,12 +677,14 @@ def analyze_pcap_hybrid(
     critical_findings = _generate_critical_findings(results, health_result)
     if critical_findings:
         console.print("\n")
-        console.print(Panel(
-            "\n".join([f"  • {f}" for f in critical_findings]),
-            title="[bold red]🔥 CRITICAL FINDINGS[/bold red]",
-            border_style="red",
-            padding=(0, 1)
-        ))
+        console.print(
+            Panel(
+                "\n".join([f"  • {f}" for f in critical_findings]),
+                title="[bold red]🔥 CRITICAL FINDINGS[/bold red]",
+                border_style="red",
+                padding=(0, 1),
+            )
+        )
 
     console.print("")  # Separator
     console.print("\n" + timestamp_analyzer.get_gaps_summary())
@@ -738,17 +742,36 @@ def analyze_pcap_hybrid(
                         dominant_flags = "UNKNOWN"
 
                     table.add_row(
-                        src_ip,
-                        str(src_port),
-                        dst_ip,
-                        str(dst_port),
-                        dominant_flags,
-                        str(stats["count"]),
-                        stats["type"]
+                        src_ip, str(src_port), dst_ip, str(dst_port), dominant_flags, str(stats["count"]), stats["type"]
                     )
 
                 console.print("\n")
                 console.print(table)
+
+                # Add CLI suggestion for worst flow (top offender)
+                if top_flows:
+                    worst_flow = top_flows[0]
+                    (worst_src_ip, worst_src_port, worst_dst_ip, worst_dst_port), worst_stats = worst_flow
+                    worst_count = worst_stats["count"]
+
+                    # Only show suggestion if the worst flow has >= 3 retransmissions
+                    if worst_count >= 3:
+                        # Build flow_key for the tshark command
+                        flow_key = f"{worst_src_ip}:{worst_src_port} → {worst_dst_ip}:{worst_dst_port}"
+
+                        # SECURITY: Use HTMLReportGenerator's secure method to generate tshark command
+                        # This ensures input validation and command escaping are applied consistently
+                        html_generator = HTMLReportGenerator()
+                        tshark_cmd = html_generator._generate_flow_trace_command(flow_key)
+
+                        # Replace generic "input.pcap" with <pcap_file> placeholder for CLI
+                        tshark_cmd = tshark_cmd.replace("input.pcap", "<pcap_file>")
+
+                        console.print("\n[bold cyan]💡 Detailed Flow Analysis Suggestion:[/bold cyan]")
+                        console.print(
+                            f"[dim]For detailed packet trace of worst flow ({worst_count} retrans), run:[/dim]"
+                        )
+                        console.print(f"[green]{tshark_cmd}[/green]")
 
     console.print("\n" + rtt_analyzer.get_summary())
     console.print("\n" + window_analyzer.get_summary())
@@ -805,13 +828,7 @@ def analyze_pcap_hybrid(
             p99_jitter = flow.get("p99_jitter", 0) * 1000
             severity = flow.get("severity", "unknown").upper()
 
-            table.add_row(
-                flow_str,
-                f"{mean_jitter:.1f}ms",
-                f"{p95_jitter:.1f}ms",
-                f"{p99_jitter:.1f}ms",
-                severity
-            )
+            table.add_row(flow_str, f"{mean_jitter:.1f}ms", f"{p95_jitter:.1f}ms", f"{p99_jitter:.1f}ms", severity)
 
         console.print("\n")
         console.print(table)

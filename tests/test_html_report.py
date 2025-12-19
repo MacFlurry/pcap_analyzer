@@ -370,5 +370,147 @@ class TestEdgeCases:
         assert "test.pcap" in html
 
 
+class TestFlowTraceCommand:
+    """Test flow trace command generation for retransmission debugging."""
+
+    def test_ipv4_flow_trace_command(self):
+        """Test tshark command generation for IPv4 flow."""
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flow_key = "192.168.1.100:51234 → 10.0.0.5:80"
+
+        cmd = generator._generate_flow_trace_command(flow_key)
+
+        # Should contain bidirectional filter
+        assert "ip.src == 192.168.1.100" in cmd
+        assert "ip.dst == 10.0.0.5" in cmd
+        assert "tcp.srcport == 51234" in cmd
+        assert "tcp.dstport == 80" in cmd
+
+        # Should have reverse direction
+        assert "ip.src == 10.0.0.5" in cmd
+        assert "ip.dst == 192.168.1.100" in cmd
+        assert "tcp.srcport == 80" in cmd
+        assert "tcp.dstport == 51234" in cmd
+
+        # Should include TCP diagnostic fields
+        assert "frame.number" in cmd
+        assert "frame.time_relative" in cmd
+        assert "tcp.flags.str" in cmd
+        assert "tcp.seq" in cmd
+        assert "tcp.ack" in cmd
+        assert "tcp.window_size" in cmd
+        assert "tcp.len" in cmd
+        assert "tcp.analysis.flags" in cmd
+
+        # Should use column formatting
+        assert "column -t -s '|'" in cmd
+
+    def test_ipv6_flow_trace_command(self):
+        """Test tshark command generation for IPv6 flow."""
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flow_key = "2001:db8::1:443 → 2001:db8::2:51234"
+
+        cmd = generator._generate_flow_trace_command(flow_key)
+
+        # Should use IPv6 filters
+        assert "ipv6.src == 2001:db8::1" in cmd
+        assert "ipv6.dst == 2001:db8::2" in cmd
+        assert "tcp.srcport == 443" in cmd
+        assert "tcp.dstport == 51234" in cmd
+
+        # Should have reverse direction
+        assert "ipv6.src == 2001:db8::2" in cmd
+        assert "ipv6.dst == 2001:db8::1" in cmd
+        assert "tcp.srcport == 51234" in cmd
+        assert "tcp.dstport == 443" in cmd
+
+    def test_ipv6_bracket_notation(self):
+        """Test IPv6 with bracket notation [addr]:port."""
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flow_key = "[2001:db8::1]:443 → [2001:db8::2]:51234"
+
+        cmd = generator._generate_flow_trace_command(flow_key)
+
+        # Should parse correctly
+        assert "ipv6.src == 2001:db8::1" in cmd
+        assert "ipv6.dst == 2001:db8::2" in cmd
+
+    def test_invalid_flow_key_format(self):
+        """Test handling of invalid flow_key format."""
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flow_key = "invalid_format"
+
+        cmd = generator._generate_flow_trace_command(flow_key)
+
+        # Should return error message
+        assert "Error" in cmd or "error" in cmd
+
+    def test_bidirectional_filter(self):
+        """Test that filter captures both directions of flow."""
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flow_key = "192.168.1.2:12345 → 10.0.0.1:443"
+
+        cmd = generator._generate_flow_trace_command(flow_key)
+
+        # Should have OR condition for bidirectional
+        assert " or " in cmd
+
+        # Check both directions are properly formed
+        assert (
+            "((ip.src == 192.168.1.2 and ip.dst == 10.0.0.1 and tcp.srcport == 12345 and tcp.dstport == 443) or" in cmd
+        )
+        assert "(ip.src == 10.0.0.1 and ip.dst == 192.168.1.2 and tcp.srcport == 443 and tcp.dstport == 12345))" in cmd
+
+    def test_tcp_diagnostic_fields_present(self):
+        """Test that all required TCP diagnostic fields are included."""
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flow_key = "10.1.1.1:5000 → 10.2.2.2:6000"
+
+        cmd = generator._generate_flow_trace_command(flow_key)
+
+        # Required diagnostic fields per specification
+        required_fields = [
+            "frame.number",
+            "frame.time_relative",
+            "tcp.flags.str",
+            "tcp.seq",
+            "tcp.ack",
+            "tcp.window_size",
+            "tcp.len",
+            "tcp.analysis.flags",
+        ]
+
+        for field in required_fields:
+            assert field in cmd, f"Missing required field: {field}"
+
+    def test_shell_safety(self):
+        """Test that generated commands are shell-safe."""
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flow_key = "192.168.1.1:1234 → 192.168.1.2:5678"
+
+        cmd = generator._generate_flow_trace_command(flow_key)
+
+        # Should use proper quoting for BPF filter
+        assert "'" in cmd  # Single quotes around filter
+
+        # Should not contain dangerous characters unescaped
+        assert ";" not in cmd or ";" in cmd.split("'")[1]  # Semicolons only inside quotes
+        assert "`" not in cmd  # No backticks for command substitution
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
