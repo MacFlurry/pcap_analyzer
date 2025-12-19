@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Packet Timeline Mockup - TCP Connection Analysis</title>
+    <link rel="stylesheet" href="packet-timeline-styles.css">
+    <style>
+        /* Demo page wrapper */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .page-header {
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #3498db;
+        }
+
+        .page-header h1 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 2em;
+        }
+
+        .page-header p {
+            margin: 0;
+            color: #666;
+            font-size: 1.05em;
+        }
+
+        .flow-card {
+            margin-bottom: 40px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .flow-header {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .flow-title {
+            margin: 0 0 10px 0;
+            font-size: 1.3em;
+            color: #2c3e50;
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+        }
+
+        .flow-meta {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .flow-body {
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <!-- Page Header -->
+        <header class="page-header">
+            <h1>Packet Timeline Visual Interface - Mockup</h1>
+            <p>Interactive demo of TCP packet timeline rendering for HTML reports</p>
+        </header>
+
+        <!-- Skip Link (Accessibility) -->
+        <a href="#timeline-content" class="skip-link">Skip to packet timeline</a>
+
+        <!-- Example 1: TCP Connection with Retransmissions -->
+        <div class="flow-card">
+            <div class="flow-header">
+                <h2 class="flow-title">192.168.1.10:52341 → 93.184.216.34:443</h2>
+                <div class="flow-meta">
+                    <span><strong>Protocol:</strong> HTTPS</span>
+                    <span><strong>Duration:</strong> 45.7s</span>
+                    <span><strong>Packets:</strong> 127</span>
+                    <span><strong>Retransmissions:</strong> 12 (RTO: 8, Fast: 3, Generic: 1)</span>
+                </div>
+            </div>
+
+            <div class="flow-body">
+                <!-- Collapsible Timeline -->
+                <input type="checkbox" id="flow-expand-1" class="flow-expand-checkbox" aria-controls="flow-details-1" aria-expanded="false">
+
+                <!-- Summary (Visible when collapsed) -->
+                <div class="flow-summary">
+                    <div class="flow-summary-stat">
+                        <span class="label">Retransmissions:</span>
+                        <span class="value">12</span>
+                    </div>
+                    <div class="flow-summary-stat">
+                        <span class="label">RTO:</span>
+                        <span class="value">8</span>
+                    </div>
+                    <div class="flow-summary-stat">
+                        <span class="label">Fast:</span>
+                        <span class="value">3</span>
+                    </div>
+                    <div class="flow-summary-stat">
+                        <span class="label">Generic:</span>
+                        <span class="value">1</span>
+                    </div>
+                </div>
+
+                <!-- Expand Button -->
+                <label for="flow-expand-1" class="flow-expand-btn" role="button" aria-label="Expand packet timeline details">
+                    <span class="expand-icon" aria-hidden="true">➕</span>
+                    <span>Expand Packet Timeline</span>
+                </label>
+
+                <!-- Timeline Details (Hidden by default) -->
+                <div id="flow-details-1" class="flow-details" aria-hidden="true">
+
+                    <!-- Timestamp Toggle -->
+                    <div class="timestamp-toggle-wrapper">
+                        <label class="timestamp-toggle">
+                            <input type="checkbox" id="show-absolute-time">
+                            <span>Show Absolute Timestamps</span>
+                        </label>
+                    </div>
+
+                    <!-- Section 1: TCP Handshake -->
+                    <section class="timeline-section handshake-section" aria-labelledby="handshake-section-title">
+                        <h5 id="handshake-section-title" class="timeline-section-header">
+                            <span class="icon" aria-hidden="true">🤝</span>
+                            <span>TCP Handshake</span>
+                            <span class="duration">(0.000s - 0.024s)</span>
+                        </h5>
+
+                        <div class="packet-table-wrapper">
+                            <table class="packet-table" role="table" aria-label="TCP Handshake Packets">
+                                <caption class="sr-only">TCP handshake packets showing 3-way connection establishment</caption>
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="col-number" aria-label="Packet number">#</th>
+                                        <th scope="col" class="col-time" aria-label="Relative timestamp">Time</th>
+                                        <th scope="col" class="col-direction" aria-label="Packet direction">Dir</th>
+                                        <th scope="col" class="col-flags" aria-label="TCP flags">Flags</th>
+                                        <th scope="col" class="col-seq" aria-label="Sequence number">Seq</th>
+                                        <th scope="col" class="col-ack" aria-label="Acknowledgment number">Ack</th>
+                                        <th scope="col" class="col-length" aria-label="Payload length">Len</th>
+                                        <th scope="col" class="col-type" aria-label="Packet type">Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="packet-handshake" tabindex="0" aria-label="Packet 1: SYN handshake packet at 0.000 seconds">
+                                        <td class="col-number">1</td>
+                                        <td class="col-time time-relative mono">0.000s</td>
+                                        <td class="col-time time-absolute mono" style="display:none;">15:34:22.000</td>
+                                        <td class="col-direction">
+                                            <span class="direction direction-outbound" aria-label="Outbound packet"></span>
+                                        </td>
+                                        <td class="col-flags">
+                                            <span class="tcp-flag flag-syn" aria-label="SYN flag">
+                                                <span class="icon" aria-hidden="true">🤝</span>
+                                                <span class="flag-text">SYN</span>
+                                            </span>
+                                        </td>
+                                        <td class="col-seq mono">1234567890</td>
+                                        <td class="col-ack mono">0</td>
+                                        <td class="col-length mono">0</td>
+                                        <td class="col-type">
+                                            <span class="badge badge-success" aria-label="Handshake packet">
+                                                <span class="icon" aria-hidden="true">🤝</span>
+                                                <span>Handshake</span>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr class="packet-handshake" tabindex="0" aria-label="Packet 2: SYN-ACK handshake packet at 0.023 seconds">
+                                        <td class="col-number">2</td>
+                                        <td class="col-time time-relative mono">0.023s</td>
+                                        <td class="col-time time-absolute mono" style="display:none;">15:34:22.023</td>
+                                        <td class="col-direction">
+                                            <span class="direction direction-inbound" aria-label="Inbound packet"></span>
+                                        </td>
+                                        <td class="col-flags">
+                                            <span class="tcp-flag flag-syn" aria-label="SYN-ACK flags">
+                                                <span class="icon" aria-hidden="true">🤝</span>
+                                                <span class="flag-text">SYN/ACK</span>
+                                            </span>
+                                        </td>
+                                        <td class="col-seq mono">9876543210</td>
+                                        <td class="col-ack mono">1234567891</td>
+                                        <td class="col-length mono">0</td>
+                                        <td class="col-type">
+                                            <span class="badge badge-success">
+                                                <span class="icon" aria-hidden="true">🤝</span>
+                                                <span>Handshake</span>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr class="packet-handshake" tabindex="0" aria-label="Packet 3: ACK handshake packet at 0.024 seconds">
+                                        <td class="col-number">3</td>
+                                        <td class="col-time time-relative mono">0.024s</td>
+                                        <td class="col-time time-absolute mono" style="display:none;">15:34:22.024</td>
+                                        <td class="col-direction">
+                                            <span class="direction direction-outbound" aria-label="Outbound packet"></span>
+                                        </td>
+                                        <td class="col-flags">
+                                            <span class="tcp-flag flag-ack" aria-label="ACK flag">
+                                                <span class="icon" aria-hidden="true">✅</span>
+                                                <span class="flag-text">ACK</span>
+                                            </span>
+                                        </td>
+                                        <td class="col-seq mono">1234567891</td>
+                                        <td class="col-ack mono">9876543211</td>
+                                        <td class="col-length mono">0</td>
+                                        <td class="col-type">
+                                            <span class="badge badge-success">
+                                                <span class="icon" aria-hidden="true">🤝</span>
+                                                <span>Handshake</span>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p class="text-success text-bold mt-3">✅ Handshake RTT: 24ms (Excellent)</p>
+                    </section>
+
+                    <!-- Section 2: Retransmission Event -->
+                    <section class="timeline-section retransmission-section" aria-labelledby="retrans-section-title">
+                        <h5 id="retrans-section-title" class="timeline-section-header">
+                            <span class="icon" aria-hidden="true">🔴</span>
+                            <span>Retransmission Event #1</span>
+                            <span class="duration">(1.248s)</span>
+                        </h5>
+
+                        <!-- Context Before -->
+                        <div class="packet-context-group">
+                            <span class="context-label">Context (Before):</span>
+                            <div class="packet-table-wrapper">
+                                <table class="packet-table" role="table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" class="col-number">#</th>
+                                            <th scope="col" class="col-time">Time</th>
+                                            <th scope="col" class="col-direction">Dir</th>
+                                            <th scope="col" class="col-flags">Flags</th>
+                                            <th scope="col" class="col-seq">Seq</th>
+                                            <th scope="col" class="col-ack">Ack</th>
+                                            <th scope="col" class="col-length">Len</th>
+                                            <th scope="col" class="col-type">Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="packet-normal" tabindex="0">
+                                            <td class="col-number">4</td>
+                                            <td class="col-time time-relative mono">0.125s</td>
+                                            <td class="col-time time-absolute mono" style="display:none;">15:34:22.125</td>
+                                            <td class="col-direction">
+                                                <span class="direction direction-outbound"></span>
+                                            </td>
+                                            <td class="col-flags">
+                                                <span class="tcp-flag flag-psh">
+                                                    <span class="icon">📤✅</span>
+                                                    <span class="flag-text">PSH/ACK</span>
+                                                </span>
+                                            </td>
+                                            <td class="col-seq mono">1234567891</td>
+                                            <td class="col-ack mono">9876543211</td>
+                                            <td class="col-length mono">512</td>
+                                            <td class="col-type">
+                                                <span class="badge badge-info">
+                                                    <span class="icon">📤</span>
+                                                    <span>Data</span>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <tr class="packet-normal" tabindex="0">
+                                            <td class="col-number">5</td>
+                                            <td class="col-time time-relative mono">0.150s</td>
+                                            <td class="col-time time-absolute mono" style="display:none;">15:34:22.150</td>
+                                            <td class="col-direction">
+                                                <span class="direction direction-inbound"></span>
+                                            </td>
+                                            <td class="col-flags">
+                                                <span class="tcp-flag flag-ack">
+                                                    <span class="icon">✅</span>
+                                                    <span class="flag-text">ACK</span>
+                                                </span>
+                                            </td>
+                                            <td class="col-seq mono">9876543211</td>
+                                            <td class="col-ack mono">1234568403</td>
+                                            <td class="col-length mono">0</td>
+                                            <td class="col-type">
+                                                <span class="badge badge-success">
+                                                    <span class="icon">✅</span>
+                                                    <span>ACK</span>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Retransmitted Packet -->
+                        <div class="packet-context-group retransmission-highlight">
+                            <span class="context-label text-danger">⚠️ Retransmitted Packet:</span>
+                            <div class="packet-table-wrapper">
+                                <table class="packet-table" role="table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" class="col-number">#</th>
+                                            <th scope="col" class="col-time">Time</th>
+                                            <th scope="col" class="col-direction">Dir</th>
+                                            <th scope="col" class="col-flags">Flags</th>
+                                            <th scope="col" class="col-seq">Seq</th>
+                                            <th scope="col" class="col-ack">Ack</th>
+                                            <th scope="col" class="col-length">Len</th>
+                                            <th scope="col" class="col-type">Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="packet-rto" tabindex="0">
+                                            <td class="col-number">6</td>
+                                            <td class="col-time time-relative mono text-bold">1.248s</td>
+                                            <td class="col-time time-absolute mono text-bold" style="display:none;">15:34:23.248</td>
+                                            <td class="col-direction">
+                                                <span class="direction direction-outbound"></span>
+                                            </td>
+                                            <td class="col-flags">
+                                                <span class="tcp-flag flag-psh">
+                                                    <span class="icon">📤✅</span>
+                                                    <span class="flag-text">PSH/ACK</span>
+                                                </span>
+                                            </td>
+                                            <td class="col-seq mono text-bold">1234567891</td>
+                                            <td class="col-ack mono">9876543211</td>
+                                            <td class="col-length mono">512</td>
+                                            <td class="col-type">
+                                                <span class="badge badge-danger">
+                                                    <span class="icon">🔴</span>
+                                                    <span>RTO</span>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="gap-indicator">
+                                <span>⏱️</span>
+                                <span>Gap from original: <strong>1.123s</strong> (RTO threshold: ~1000ms)</span>
+                            </div>
+                            <p class="text-muted mt-2" style="font-size: 0.85em;">
+                                <strong>Cause:</strong> No ACK received (packet loss or timeout)
+                            </p>
+                        </div>
+
+                        <!-- Context After -->
+                        <div class="packet-context-group">
+                            <span class="context-label">Recovery (After):</span>
+                            <div class="packet-table-wrapper">
+                                <table class="packet-table" role="table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" class="col-number">#</th>
+                                            <th scope="col" class="col-time">Time</th>
+                                            <th scope="col" class="col-direction">Dir</th>
+                                            <th scope="col" class="col-flags">Flags</th>
+                                            <th scope="col" class="col-seq">Seq</th>
+                                            <th scope="col" class="col-ack">Ack</th>
+                                            <th scope="col" class="col-length">Len</th>
+                                            <th scope="col" class="col-type">Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="packet-normal" tabindex="0">
+                                            <td class="col-number">7</td>
+                                            <td class="col-time time-relative mono">1.273s</td>
+                                            <td class="col-time time-absolute mono" style="display:none;">15:34:23.273</td>
+                                            <td class="col-direction">
+                                                <span class="direction direction-inbound"></span>
+                                            </td>
+                                            <td class="col-flags">
+                                                <span class="tcp-flag flag-ack">
+                                                    <span class="icon">✅</span>
+                                                    <span class="flag-text">ACK</span>
+                                                </span>
+                                            </td>
+                                            <td class="col-seq mono">9876543211</td>
+                                            <td class="col-ack mono">1234568403</td>
+                                            <td class="col-length mono">0</td>
+                                            <td class="col-type">
+                                                <span class="badge badge-success">
+                                                    <span class="icon">✅</span>
+                                                    <span>ACK</span>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Section 3: Connection Teardown -->
+                    <section class="timeline-section teardown-section" aria-labelledby="teardown-section-title">
+                        <h5 id="teardown-section-title" class="timeline-section-header">
+                            <span class="icon" aria-hidden="true">👋</span>
+                            <span>Connection Teardown</span>
+                            <span class="duration">(45.678s - 45.702s)</span>
+                        </h5>
+
+                        <div class="packet-table-wrapper">
+                            <table class="packet-table" role="table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="col-number">#</th>
+                                        <th scope="col" class="col-time">Time</th>
+                                        <th scope="col" class="col-direction">Dir</th>
+                                        <th scope="col" class="col-flags">Flags</th>
+                                        <th scope="col" class="col-seq">Seq</th>
+                                        <th scope="col" class="col-ack">Ack</th>
+                                        <th scope="col" class="col-length">Len</th>
+                                        <th scope="col" class="col-type">Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="packet-teardown-clean" tabindex="0">
+                                        <td class="col-number">125</td>
+                                        <td class="col-time time-relative mono">45.678s</td>
+                                        <td class="col-time time-absolute mono" style="display:none;">15:35:07.678</td>
+                                        <td class="col-direction">
+                                            <span class="direction direction-outbound"></span>
+                                        </td>
+                                        <td class="col-flags">
+                                            <span class="tcp-flag flag-fin">
+                                                <span class="icon">📭</span>
+                                                <span class="flag-text">FIN/ACK</span>
+                                            </span>
+                                        </td>
+                                        <td class="col-seq mono">1234999999</td>
+                                        <td class="col-ack mono">9876999999</td>
+                                        <td class="col-length mono">0</td>
+                                        <td class="col-type">
+                                            <span class="badge badge-info">
+                                                <span class="icon">📭</span>
+                                                <span>Close</span>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr class="packet-teardown-clean" tabindex="0">
+                                        <td class="col-number">126</td>
+                                        <td class="col-time time-relative mono">45.690s</td>
+                                        <td class="col-time time-absolute mono" style="display:none;">15:35:07.690</td>
+                                        <td class="col-direction">
+                                            <span class="direction direction-inbound"></span>
+                                        </td>
+                                        <td class="col-flags">
+                                            <span class="tcp-flag flag-fin">
+                                                <span class="icon">📭</span>
+                                                <span class="flag-text">FIN/ACK</span>
+                                            </span>
+                                        </td>
+                                        <td class="col-seq mono">9876999999</td>
+                                        <td class="col-ack mono">1235000000</td>
+                                        <td class="col-length mono">0</td>
+                                        <td class="col-type">
+                                            <span class="badge badge-info">
+                                                <span class="icon">📭</span>
+                                                <span>Close</span>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr class="packet-teardown-clean" tabindex="0">
+                                        <td class="col-number">127</td>
+                                        <td class="col-time time-relative mono">45.702s</td>
+                                        <td class="col-time time-absolute mono" style="display:none;">15:35:07.702</td>
+                                        <td class="col-direction">
+                                            <span class="direction direction-outbound"></span>
+                                        </td>
+                                        <td class="col-flags">
+                                            <span class="tcp-flag flag-ack">
+                                                <span class="icon">✅</span>
+                                                <span class="flag-text">ACK</span>
+                                            </span>
+                                        </td>
+                                        <td class="col-seq mono">1235000000</td>
+                                        <td class="col-ack mono">9877000000</td>
+                                        <td class="col-length mono">0</td>
+                                        <td class="col-type">
+                                            <span class="badge badge-success">
+                                                <span class="icon">✅</span>
+                                                <span>ACK</span>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p class="text-success text-bold mt-3">✅ Clean shutdown (4-way handshake)</p>
+                    </section>
+
+                </div> <!-- End flow-details -->
+            </div> <!-- End flow-body -->
+        </div> <!-- End flow-card -->
+
+        <!-- Example 2: Fast Retransmission Event -->
+        <div class="flow-card">
+            <div class="flow-header">
+                <h2 class="flow-title">10.0.1.5:49872 → 172.16.0.10:80</h2>
+                <div class="flow-meta">
+                    <span><strong>Protocol:</strong> HTTP</span>
+                    <span><strong>Duration:</strong> 2.3s</span>
+                    <span><strong>Packets:</strong> 45</span>
+                    <span><strong>Retransmissions:</strong> 3 (Fast: 3)</span>
+                </div>
+            </div>
+
+            <div class="flow-body">
+                <input type="checkbox" id="flow-expand-2" class="flow-expand-checkbox" aria-controls="flow-details-2">
+
+                <div class="flow-summary">
+                    <div class="flow-summary-stat">
+                        <span class="label">Fast Retransmissions:</span>
+                        <span class="value">3</span>
+                    </div>
+                    <div class="flow-summary-stat">
+                        <span class="label">Network Congestion Detected:</span>
+                        <span class="value text-warning">Yes</span>
+                    </div>
+                </div>
+
+                <label for="flow-expand-2" class="flow-expand-btn">
+                    <span class="expand-icon">➕</span>
+                    <span>Expand Packet Timeline</span>
+                </label>
+
+                <div id="flow-details-2" class="flow-details">
+                    <section class="timeline-section retransmission-section">
+                        <h5 class="timeline-section-header">
+                            <span class="icon">⚡</span>
+                            <span>Fast Retransmission Event</span>
+                            <span class="duration">(0.156s)</span>
+                        </h5>
+
+                        <div class="packet-table-wrapper">
+                            <table class="packet-table" role="table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="col-number">#</th>
+                                        <th scope="col" class="col-time">Time</th>
+                                        <th scope="col" class="col-direction">Dir</th>
+                                        <th scope="col" class="col-flags">Flags</th>
+                                        <th scope="col" class="col-seq">Seq</th>
+                                        <th scope="col" class="col-ack">Ack</th>
+                                        <th scope="col" class="col-length">Len</th>
+                                        <th scope="col" class="col-type">Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="packet-fast-retrans" tabindex="0">
+                                        <td class="col-number">12</td>
+                                        <td class="col-time time-relative mono text-bold">0.156s</td>
+                                        <td class="col-time time-absolute mono text-bold" style="display:none;">10:23:15.156</td>
+                                        <td class="col-direction">
+                                            <span class="direction direction-outbound"></span>
+                                        </td>
+                                        <td class="col-flags">
+                                            <span class="tcp-flag flag-psh">
+                                                <span class="icon">📤✅</span>
+                                                <span class="flag-text">PSH/ACK</span>
+                                            </span>
+                                        </td>
+                                        <td class="col-seq mono text-bold">5551234500</td>
+                                        <td class="col-ack mono">8889876543</td>
+                                        <td class="col-length mono">1460</td>
+                                        <td class="col-type">
+                                            <span class="badge badge-warning">
+                                                <span class="icon">⚡</span>
+                                                <span>Fast Retrans</span>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="gap-indicator" style="background: rgba(243, 156, 18, 0.1); border-left-color: #f39c12;">
+                            <span>⚡</span>
+                            <span>Triggered by: <strong>3 duplicate ACKs</strong> (fast recovery mechanism)</span>
+                        </div>
+                        <p class="text-muted mt-2" style="font-size: 0.85em;">
+                            <strong>Cause:</strong> Network congestion or packet reordering
+                        </p>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- Accessibility Features Demo -->
+        <section class="flow-card" style="margin-top: 60px;">
+            <div class="flow-header">
+                <h2 class="flow-title" style="font-family: inherit;">Accessibility Features</h2>
+            </div>
+            <div class="flow-body">
+                <h3 style="margin-bottom: 16px;">WCAG 2.1 AAA Compliance</h3>
+
+                <ul style="list-style: none; padding: 0;">
+                    <li style="padding: 8px; margin: 8px 0; background: #f0f9f4; border-left: 3px solid #28a745; border-radius: 4px;">
+                        ✅ <strong>Color Contrast:</strong> All text meets 4.5:1 minimum ratio
+                    </li>
+                    <li style="padding: 8px; margin: 8px 0; background: #f0f9f4; border-left: 3px solid #28a745; border-radius: 4px;">
+                        ✅ <strong>Keyboard Navigation:</strong> Tab through all interactive elements
+                    </li>
+                    <li style="padding: 8px; margin: 8px 0; background: #f0f9f4; border-left: 3px solid #28a745; border-radius: 4px;">
+                        ✅ <strong>Screen Readers:</strong> Comprehensive ARIA labels and semantic HTML
+                    </li>
+                    <li style="padding: 8px; margin: 8px 0; background: #f0f9f4; border-left: 3px solid #28a745; border-radius: 4px;">
+                        ✅ <strong>No Color Alone:</strong> Icons + text + border patterns
+                    </li>
+                    <li style="padding: 8px; margin: 8px 0; background: #f0f9f4; border-left: 3px solid #28a745; border-radius: 4px;">
+                        ✅ <strong>Touch Targets:</strong> Minimum 44px × 44px tap areas
+                    </li>
+                    <li style="padding: 8px; margin: 8px 0; background: #f0f9f4; border-left: 3px solid #28a745; border-radius: 4px;">
+                        ✅ <strong>Responsive:</strong> Works on mobile, tablet, desktop
+                    </li>
+                    <li style="padding: 8px; margin: 8px 0; background: #f0f9f4; border-left: 3px solid #28a745; border-radius: 4px;">
+                        ✅ <strong>Print-Friendly:</strong> Optimized for printing reports
+                    </li>
+                </ul>
+
+                <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                    <h4 style="margin-bottom: 12px;">Try Keyboard Navigation</h4>
+                    <ol style="line-height: 2;">
+                        <li>Press <kbd style="background: #e0e0e0; padding: 2px 6px; border-radius: 3px;">Tab</kbd> to navigate between elements</li>
+                        <li>Press <kbd style="background: #e0e0e0; padding: 2px 6px; border-radius: 3px;">Enter</kbd> or <kbd style="background: #e0e0e0; padding: 2px 6px; border-radius: 3px;">Space</kbd> to expand/collapse timelines</li>
+                        <li>All interactive elements have visible focus indicators (blue outline)</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+    </div> <!-- End demo-container -->
+</body>
+</html>

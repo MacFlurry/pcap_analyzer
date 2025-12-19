@@ -2060,6 +2060,84 @@ class HTMLReportGenerator:
             font-weight: 600;
             letter-spacing: 0.5px;
         }
+
+        /* v4.15.0: Packet Timeline Styles */
+        .packet-timeline {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            font-size: 0.85em;
+            margin: 10px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .packet-timeline thead {
+            background: #e9ecef;
+        }
+
+        .packet-timeline th {
+            padding: 8px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+            font-size: 0.9em;
+        }
+
+        .packet-timeline td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #f1f3f5;
+        }
+
+        .packet-timeline tr:hover {
+            background: #f8f9fa;
+        }
+
+        .retransmission-packet {
+            background: #ffe6e6 !important;
+            font-weight: 500;
+        }
+
+        .retransmission-packet:hover {
+            background: #fdd !important;
+        }
+
+        .timeline-collapsible {
+            margin: 15px 0;
+        }
+
+        .timeline-summary {
+            cursor: pointer;
+            padding: 12px 15px;
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            border-radius: 4px;
+            transition: background 0.2s ease;
+            user-select: none;
+        }
+
+        .timeline-summary:hover {
+            background: #bbdefb;
+        }
+
+        .timeline-content {
+            padding: 15px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+        }
+
+        /* Mobile responsive adjustments for timeline */
+        @media (max-width: 768px) {
+            .packet-timeline {
+                font-size: 0.75em;
+            }
+
+            .packet-timeline th,
+            .packet-timeline td {
+                padding: 4px;
+            }
+        }
     </style>
     <script>
         /* ==========================================
@@ -3153,8 +3231,8 @@ class HTMLReportGenerator:
         if root_cause_analysis["tshark_filter"]:
             html += self._generate_tshark_command_box(root_cause_analysis["tshark_filter"])
 
-        # Add compact flow table
-        html += self._generate_flow_table(flows, type_key)
+        # Add compact flow table (v4.15.0: pass results for sampled timeline rendering)
+        html += self._generate_flow_table(flows, type_key, results)
 
         html += "</div>"
         html += "</div>"
@@ -3245,12 +3323,25 @@ class HTMLReportGenerator:
 
         return explanations.get(type_key, "")
 
-    def _generate_flow_table(self, flows: list, type_key: str) -> str:
-        """Generate compact table of flows for a given type."""
+    def _generate_flow_table(self, flows: list, type_key: str, results: dict = None) -> str:
+        """
+        Generate compact table of flows for a given type.
+
+        Args:
+            flows: List of (flow_key, retrans_list) tuples
+            type_key: Type of retransmissions (syn, rto, fast, generic, mixed)
+            results: Full analysis results (for sampled timelines - v4.15.0)
+        """
         from datetime import datetime
 
         # Limit to top 10 flows
         flows_to_show = flows[:10]
+
+        # v4.15.0: Get sampled timelines from results
+        sampled_timelines = {}
+        if results:
+            retrans_data = results.get("retransmission", {})
+            sampled_timelines = retrans_data.get("sampled_timelines", {})
 
         html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
         html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
@@ -3322,6 +3413,14 @@ class HTMLReportGenerator:
                 html += "</div>"
                 html += "</div>"
                 html += "</details>"
+                html += "</td>"
+                html += "</tr>"
+
+            # v4.15.0: Add sampled timeline if available for this flow
+            if flow_key in sampled_timelines:
+                html += '<tr style="border-bottom: 1px solid #dee2e6;">'
+                html += '<td colspan="6" style="padding: 10px; background: #f0f8ff;">'
+                html += self._render_sampled_timeline(flow_key, sampled_timelines[flow_key], results)
                 html += "</td>"
                 html += "</tr>"
 
@@ -3495,6 +3594,167 @@ class HTMLReportGenerator:
             html += "</div>"
 
         html += "</div>"
+        return html
+
+    def _render_packet_table(self, packets: list[dict], section_title: str = "Packets") -> str:
+        """
+        Render packet metadata as HTML table.
+
+        v4.15.0: Helper method for sampled timeline rendering.
+
+        Args:
+            packets: List of packet dictionaries with fields:
+                - frame: packet number
+                - timestamp: relative timestamp
+                - src_ip, src_port, dst_ip, dst_port
+                - flags: TCP flags string
+                - seq, ack, win, length
+                - is_retransmission: bool
+            section_title: Section title for the table
+
+        Returns:
+            HTML string with packet table
+        """
+        if not packets:
+            return f"<p><em>No {section_title.lower()} captured</em></p>"
+
+        html = f'<h5>{escape_html(section_title)}</h5>'
+        html += '<table class="packet-timeline">'
+        html += """
+            <thead>
+                <tr>
+                    <th>Frame</th>
+                    <th>Time (s)</th>
+                    <th>Src IP</th>
+                    <th>Src Port</th>
+                    <th></th>
+                    <th>Dst IP</th>
+                    <th>Dst Port</th>
+                    <th>Flags</th>
+                    <th>Seq</th>
+                    <th>Ack</th>
+                    <th>Win</th>
+                    <th>Len</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+
+        for pkt in packets:
+            # SECURITY: Escape all packet data to prevent XSS
+            frame = escape_html(str(pkt.get("frame", "N/A")))
+            timestamp = f"{pkt.get('timestamp', 0):.3f}"
+            src_ip = escape_html(validate_ip_address(pkt.get("src_ip", "0.0.0.0")))
+            src_port = escape_html(validate_port(str(pkt.get("src_port", "0"))))
+            dst_ip = escape_html(validate_ip_address(pkt.get("dst_ip", "0.0.0.0")))
+            dst_port = escape_html(validate_port(str(pkt.get("dst_port", "0"))))
+            flags = escape_html(str(pkt.get("flags", "")))
+            seq = escape_html(str(pkt.get("seq", 0)))
+            ack = escape_html(str(pkt.get("ack", 0)))
+            win = escape_html(str(pkt.get("win", 0)))
+            length = escape_html(str(pkt.get("length", 0)))
+
+            # Highlight retransmission packets
+            row_class = "retransmission-packet" if pkt.get("is_retransmission", False) else ""
+
+            html += f"""
+                <tr class="{row_class}">
+                    <td>{frame}</td>
+                    <td>{timestamp}</td>
+                    <td>{src_ip}</td>
+                    <td>{src_port}</td>
+                    <td>→</td>
+                    <td>{dst_ip}</td>
+                    <td>{dst_port}</td>
+                    <td><code>{flags}</code></td>
+                    <td>{seq}</td>
+                    <td>{ack}</td>
+                    <td>{win}</td>
+                    <td>{length}</td>
+                </tr>
+            """
+
+        html += """
+            </tbody>
+        </table>
+        """
+
+        return html
+
+    def _render_sampled_timeline(self, flow_key: str, timeline: dict, results: dict) -> str:
+        """
+        Render sampled timeline for a problematic flow.
+
+        v4.15.0: Hybrid Sampled Timeline (Option C)
+        - Renders handshake, retransmission contexts, and teardown packets
+        - Collapsible <details> element for space efficiency
+        - Includes tshark fallback command for full timeline
+
+        Args:
+            flow_key: Flow identifier (e.g., "10.0.0.1:80 → 10.0.0.2:443")
+            timeline: Dictionary with 'handshake', 'retrans_context', 'teardown' keys
+            results: Full analysis results (for metadata)
+
+        Returns:
+            HTML string with collapsible timeline
+        """
+        handshake = timeline.get("handshake", [])
+        retrans_context = timeline.get("retrans_context", [])
+        teardown = timeline.get("teardown", [])
+
+        # Calculate total sampled packets
+        total_sampled = len(handshake) + sum(len(ctx) for ctx in retrans_context) + len(teardown)
+
+        # Generate tshark fallback command for full timeline
+        tshark_cmd = self._generate_flow_trace_command(flow_key)
+
+        html = '<div class="timeline-collapsible">'
+        html += f"""
+            <details>
+                <summary class="timeline-summary">
+                    <strong>📋 Packet Timeline ({total_sampled} sampled) - Click to expand</strong>
+                </summary>
+                <div class="timeline-content">
+                    <p style="margin-bottom: 15px;">
+                        <em>This timeline shows sampled packets from the connection: handshake, retransmission contexts, and teardown.</em>
+                    </p>
+        """
+
+        # Handshake section
+        if handshake:
+            html += self._render_packet_table(handshake, "Handshake (First 10 Packets)")
+
+        # Retransmission contexts
+        if retrans_context:
+            html += '<div style="margin-top: 20px;">'
+            html += f'<h5>Retransmission Contexts ({len(retrans_context)} events)</h5>'
+            for idx, context in enumerate(retrans_context, 1):
+                html += f'<div style="margin-left: 20px; margin-bottom: 15px;">'
+                html += f'<h6>Context #{idx} (±5 packets around retransmission)</h6>'
+                html += self._render_packet_table(context, f"Context {idx}")
+                html += '</div>'
+            html += '</div>'
+
+        # Teardown section
+        if teardown:
+            html += '<div style="margin-top: 20px;">'
+            html += self._render_packet_table(teardown, "Teardown (Last 10 Packets)")
+            html += '</div>'
+
+        # Tshark fallback command
+        html += '<div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #3498db;">'
+        html += '<h6>📊 Full Timeline (tshark command)</h6>'
+        html += '<p style="margin: 5px 0;"><em>For complete packet-by-packet analysis:</em></p>'
+        html += f'<code class="copy-code" style="display: block; padding: 10px; background: white; overflow-x: auto;">{escape_html(tshark_cmd)}</code>'
+        html += '<button class="copy-btn" onclick="copyToClipboard(this)" style="margin-top: 10px;">📋 Copy</button>'
+        html += '</div>'
+
+        html += """
+                </div>
+            </details>
+        </div>
+        """
+
         return html
 
     def _generate_flow_detail_card(self, flow_key: str, retrans_list: list, index: int, flow_count: int) -> str:
@@ -3795,6 +4055,11 @@ class HTMLReportGenerator:
 
         html += "          </div>"
         html += "        </div>"
+
+        # v4.15.0: Add sampled timeline if available for this flow
+        # Get sampled timelines from results
+        retrans_data = {}  # Will be injected via method parameter in future refactor
+        # For now, we'll add timeline in _generate_grouped_retransmission_analysis where results are available
 
         html += "      </div>"  # flow-details
         html += "    </div>"  # flow-details-collapsible

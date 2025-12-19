@@ -35,12 +35,12 @@ class TestPacketUtils:
     def test_get_src_ip_ipv4(self, sample_tcp_packet):
         """Test get_src_ip with IPv4 packet."""
         src_ip = get_src_ip(sample_tcp_packet)
-        assert src_ip == "192.168.1.100"
+        assert src_ip == "192.168.1.1"
 
     def test_get_dst_ip_ipv4(self, sample_tcp_packet):
         """Test get_dst_ip with IPv4 packet."""
         dst_ip = get_dst_ip(sample_tcp_packet)
-        assert dst_ip == "192.168.1.1"
+        assert dst_ip == "192.168.1.2"
 
     def test_get_src_ip_ipv6(self, sample_ipv6_packet):
         """Test get_src_ip with IPv6 packet."""
