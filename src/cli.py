@@ -51,6 +51,94 @@ MEMORY_CLEANUP_INTERVAL = 50_000  # packets - periodic memory cleanup interval
 PROGRESS_UPDATE_INTERVAL = 1_000  # packets - progress bar update frequency
 
 
+def _generate_critical_findings(results: dict, health_result: dict) -> list[str]:
+    """
+    Generate list of critical findings from analysis results.
+
+    Returns top 3-5 most critical issues for immediate admin attention.
+    """
+    findings = []
+
+    # Check retransmissions (> 2% rate = critical per industry standards)
+    retrans_data = results.get("retransmission", {})
+    total_retrans = retrans_data.get("total_retransmissions", 0)
+    # Get total packets from protocol_distribution (set before this function is called)
+    protocol_data = results.get("protocol_distribution", {})
+    total_packets = protocol_data.get("total_packets", 1)
+    retrans_rate = (total_retrans / total_packets * 100) if total_packets > 0 else 0
+
+    if retrans_rate >= 2.0:  # Critical threshold
+        # Find top offender flow
+        all_retrans = retrans_data.get("retransmissions", [])
+        if all_retrans:
+            # Group by flow and count
+            from collections import defaultdict
+            flow_retrans = defaultdict(int)
+            for r in all_retrans:
+                flow_key = f"{r.get('src_ip')}:{r.get('src_port')} → {r.get('dst_ip')}:{r.get('dst_port')}"
+                flow_retrans[flow_key] += 1
+
+            top_flow = max(flow_retrans.items(), key=lambda x: x[1])
+            findings.append(
+                f"[red]High retransmission rate:[/red] {retrans_rate:.1f}% "
+                f"({total_retrans:,} packets). Top offender: {top_flow[0]} ({top_flow[1]} retrans)"
+            )
+
+    # Check jitter (P95 > 50ms = critical for VoIP per Cisco/ITU-T)
+    jitter_data = results.get("jitter", {})
+    high_jitter_flows = jitter_data.get("high_jitter_flows", [])
+    critical_jitter = [f for f in high_jitter_flows if f.get("severity") == "critical"]
+
+    if critical_jitter:
+        findings.append(
+            f"[red]Critical jitter detected:[/red] {len(critical_jitter)} flows with P95 > 50ms "
+            f"(VoIP/real-time apps degraded)"
+        )
+
+    # Check temporal gaps (> 10k gaps = anomalous)
+    gaps_data = results.get("temporal", {}).get("gaps", [])
+    if len(gaps_data) > 10000:
+        # Aggregate gap sources
+        from collections import Counter
+        gap_vectors = []
+        for gap in gaps_data[:1000]:  # Sample first 1k for performance
+            src = gap.get("src_ip", "unknown")
+            dst = gap.get("dst_ip", "unknown")
+            gap_vectors.append(f"{src} ↔ {dst}")
+
+        if gap_vectors:
+            top_vector = Counter(gap_vectors).most_common(1)[0]
+            vector_pct = (top_vector[1] / len(gap_vectors) * 100)
+            findings.append(
+                f"[yellow]Anomalous temporal gaps:[/yellow] {len(gaps_data):,} detected. "
+                f"Primary vector: {top_vector[0]} ({vector_pct:.0f}% of sampled gaps)"
+            )
+
+    # Check SYN retransmissions (connection failures)
+    syn_data = results.get("syn_retransmissions", {})
+    syn_count = syn_data.get("total_syn_retransmissions", 0)
+    if syn_count > 10:
+        findings.append(
+            f"[yellow]Connection failures:[/yellow] {syn_count} flows with SYN retransmissions "
+            f"(servers unreachable or rejecting connections)"
+        )
+
+    # Check DNS issues
+    dns_data = results.get("dns", {})
+    dns_timeouts = dns_data.get("timeouts", 0)
+    dns_errors = dns_data.get("errors", 0)
+    total_dns = dns_data.get("total_queries", 1)
+    dns_failure_rate = ((dns_timeouts + dns_errors) / total_dns * 100) if total_dns > 0 else 0
+
+    if dns_failure_rate > 5:  # > 5% DNS failures
+        findings.append(
+            f"[yellow]DNS issues:[/yellow] {dns_failure_rate:.1f}% failure rate "
+            f"({dns_timeouts} timeouts, {dns_errors} errors)"
+        )
+
+    return findings
+
+
 def _generate_reports(results: dict[str, Any], pcap_file: str, output: Optional[str], cfg: Config) -> dict[str, str]:
     """
     Generate JSON and HTML reports.
@@ -582,10 +670,70 @@ def analyze_pcap_hybrid(
         for i, rec in enumerate(health_result.recommendations[:3], 1):
             console.print(f"  {i}. {rec}")
 
+    # Display Critical Findings (if any)
+    critical_findings = _generate_critical_findings(results, health_result)
+    if critical_findings:
+        console.print("\n")
+        console.print(Panel(
+            "\n".join([f"  • {f}" for f in critical_findings]),
+            title="[bold red]🔥 CRITICAL FINDINGS[/bold red]",
+            border_style="red",
+            padding=(0, 1)
+        ))
+
     console.print("")  # Separator
     console.print("\n" + timestamp_analyzer.get_gaps_summary())
     console.print("\n" + handshake_analyzer.get_summary())
     console.print("\n" + retrans_analyzer.get_summary())
+
+    # Add Top Retransmission Offenders Table
+    retrans_data = results.get("retransmission", {})
+    total_retrans = retrans_data.get("total_retransmissions", 0)
+    if total_retrans > 0:
+        from collections import defaultdict
+
+        all_retrans = retrans_data.get("retransmissions", [])
+
+        if all_retrans:
+            # Group by flow
+            flow_stats = defaultdict(lambda: {"count": 0, "type": "Unknown"})
+
+            for r in all_retrans:
+                src_ip = r.get("src_ip", "N/A")
+                src_port = r.get("src_port", 0)
+                dst_ip = r.get("dst_ip", "N/A")
+                dst_port = r.get("dst_port", 0)
+                retrans_type = r.get("retrans_type", "Unknown")
+
+                flow_key = (src_ip, src_port, dst_ip, dst_port)
+                flow_stats[flow_key]["count"] += 1
+                flow_stats[flow_key]["type"] = retrans_type
+
+            # Sort by count and take top 10
+            top_flows = sorted(flow_stats.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
+
+            if top_flows:
+                table = Table(title="📊 Top 10 Retransmission Offenders", show_header=True, header_style="bold cyan")
+                table.add_column("Source IP", style="cyan")
+                table.add_column("Src Port", justify="right")
+                table.add_column("Dest IP", style="magenta")
+                table.add_column("Dst Port", justify="right")
+                table.add_column("Retrans", justify="right", style="red")
+                table.add_column("Type", style="yellow")
+
+                for (src_ip, src_port, dst_ip, dst_port), stats in top_flows:
+                    table.add_row(
+                        src_ip,
+                        str(src_port),
+                        dst_ip,
+                        str(dst_port),
+                        str(stats["count"]),
+                        stats["type"]
+                    )
+
+                console.print("\n")
+                console.print(table)
+
     console.print("\n" + rtt_analyzer.get_summary())
     console.print("\n" + window_analyzer.get_summary())
     console.print("\n" + reset_analyzer.get_summary())
@@ -620,6 +768,37 @@ def analyze_pcap_hybrid(
             console.print(f"  Max Jitter: {stats.get('max_jitter', 0)*1000:.2f}ms")
         if jitter_results.get("high_jitter_flows"):
             console.print(f"  [yellow]High Jitter Flows: {len(jitter_results['high_jitter_flows'])}[/yellow]")
+
+    # Add Top Jitter Offenders Table
+    high_jitter_flows = jitter_results.get("high_jitter_flows", [])
+    if high_jitter_flows:
+        # Sort by P95 jitter (highest first)
+        top_jitter = sorted(high_jitter_flows, key=lambda x: x.get("p95_jitter", 0), reverse=True)[:10]
+
+        table = Table(title="📊 Top 10 Jitter Offenders (P95-based)", show_header=True, header_style="bold cyan")
+        table.add_column("Flow", style="cyan", width=40)
+        table.add_column("Mean", justify="right")
+        table.add_column("P95", justify="right", style="yellow")
+        table.add_column("P99", justify="right")
+        table.add_column("Severity", style="red")
+
+        for flow in top_jitter:
+            flow_str = flow.get("flow", "N/A")
+            mean_jitter = flow.get("mean_jitter", 0) * 1000  # to ms
+            p95_jitter = flow.get("p95_jitter", 0) * 1000
+            p99_jitter = flow.get("p99_jitter", 0) * 1000
+            severity = flow.get("severity", "unknown").upper()
+
+            table.add_row(
+                flow_str,
+                f"{mean_jitter:.1f}ms",
+                f"{p95_jitter:.1f}ms",
+                f"{p99_jitter:.1f}ms",
+                severity
+            )
+
+        console.print("\n")
+        console.print(table)
 
     # Sprint 3: Display service classification summary
     console.print("\n🧠 Intelligent Service Classification:")

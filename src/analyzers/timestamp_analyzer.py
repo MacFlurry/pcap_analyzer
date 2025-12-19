@@ -471,58 +471,74 @@ class TimestampAnalyzer:
                 return f"ℹ️ {len(self.gaps)} gap(s) périodique(s) détecté(s) (comportement normal)."
             return "Aucun gap temporel anormal détecté."
 
-        summary = f"🔴 {len(abnormal_gaps)} gap(s) temporel(s) anormal(aux) détecté(s)"
-        if len(self.gaps) > len(abnormal_gaps):
-            summary += f" (sur {len(self.gaps)} total)"
+        # Aggregate gap statistics
+        from collections import Counter
+        import statistics
 
-        # Limiter l'affichage aux N premiers gaps
-        gaps_to_display = abnormal_gaps[:max_display]
+        durations = [gap.gap_duration for gap in abnormal_gaps]
+        avg_duration = statistics.mean(durations) if durations else 0
+        max_duration = max(durations) if durations else 0
 
-        if len(abnormal_gaps) > max_display:
-            summary += f" - Affichage des {max_display} premiers:\n"
+        # Identify primary vector (top flow causing gaps)
+        gap_vectors = []
+        for gap in abnormal_gaps[:1000]:  # Sample for performance
+            gap_vectors.append(f"{gap.src_ip} ↔ {gap.dst_ip}")
+
+        top_vector = Counter(gap_vectors).most_common(1)[0] if gap_vectors else ("N/A", 0)
+        vector_pct = (top_vector[1] / len(gap_vectors) * 100) if gap_vectors else 0
+
+        # Check for periodic pattern
+        if len(durations) > 10:
+            # Simple periodic detection: check if durations cluster around a value
+            median_duration = statistics.median(durations)
+            within_10pct = sum(1 for d in durations if abs(d - median_duration) / median_duration < 0.1) if median_duration > 0 else 0
+            is_periodic = (within_10pct / len(durations)) > 0.5 if durations else False
+            pattern = f"Periodic (~{median_duration:.0f}s interval)" if is_periodic else "Random"
         else:
-            summary += ":\n"
+            pattern = "N/A"
 
-        for i, gap in enumerate(gaps_to_display, 1):
-            summary += f"\n  Gap #{i}:\n"
-            summary += f"    - Entre paquets {gap.packet_num_before} et {gap.packet_num_after}\n"
-            summary += f"    - Durée: {gap.gap_duration:.3f}s\n"
-            summary += f"    - Direction: {gap.src_ip} → {gap.dst_ip}\n"
-            summary += f"    - Protocole: {gap.protocol}\n"
+        summary = f"🔴 {len(abnormal_gaps):,} gap(s) temporel(s) anormal(aux) détecté(s)\n"
+        if len(self.gaps) > len(abnormal_gaps):
+            summary += f"   (sur {len(self.gaps):,} total)\n"
 
-        # Si plus de gaps que max_display, ajouter des commandes pour les retrouver
-        if len(abnormal_gaps) > max_display:
-            summary += f"\n  ... et {len(abnormal_gaps) - max_display} autre(s) gap(s)\n"
-            summary += "\n  💡 Pour visualiser tous les gaps:\n"
+        # Display aggregated statistics panel
+        summary += f"\n📊 Temporal Gaps Summary:\n"
+        summary += f"  Count: {len(abnormal_gaps):,}\n"
+        summary += f"  Avg Duration: {avg_duration:.1f}s | Max: {max_duration:.1f}s\n"
+        summary += f"  Pattern: {pattern}\n"
+        summary += f"  Primary Vector: {top_vector[0]} ({vector_pct:.0f}% of gaps)\n"
+        summary += f"\n  💡 Use --verbose to see individual gap details\n"
 
-            # Construire un filtre avec les numéros de paquets de tous les gaps
-            packet_numbers = []
-            for gap in abnormal_gaps:
-                packet_numbers.append(str(gap.packet_num_before))
-                packet_numbers.append(str(gap.packet_num_after))
+        # Keep tshark commands at the end for manual investigation
+        summary += "\n  💡 Pour visualiser tous les gaps:\n"
 
-            # Commande tcpdump (affiche les paquets autour des gaps)
-            # Note: tcpdump n'a pas de filtre par numéro de frame, on utilise les IPs
-            unique_ips = set()
-            for gap in abnormal_gaps[:10]:  # Limiter aux 10 premiers gaps
-                unique_ips.add(gap.src_ip)
-                unique_ips.add(gap.dst_ip)
+        # Construire un filtre avec les numéros de paquets de tous les gaps
+        packet_numbers = []
+        for gap in abnormal_gaps[:20]:  # Limit to first 20
+            packet_numbers.append(str(gap.packet_num_before))
+            packet_numbers.append(str(gap.packet_num_after))
 
-            if len(unique_ips) <= 20:  # Si pas trop d'IPs différentes
-                ip_filter = " or ".join([f"host {ip}" for ip in list(unique_ips)[:10]])
-                summary += f"\n  📌 tcpdump (paquets des connexions avec gaps):\n"
-                summary += f"     tcpdump -r <fichier.pcap> -nn '{ip_filter}'\n"
-            else:
-                summary += f"\n  📌 tcpdump (exemple pour le premier gap):\n"
-                first_gap = abnormal_gaps[0]
-                summary += f"     tcpdump -r <fichier.pcap> -nn 'host {first_gap.src_ip} and host {first_gap.dst_ip}'\n"
+        # Commande tcpdump (affiche les paquets autour des gaps)
+        unique_ips = set()
+        for gap in abnormal_gaps[:10]:  # Limiter aux 10 premiers gaps
+            unique_ips.add(gap.src_ip)
+            unique_ips.add(gap.dst_ip)
 
-            # Commande Wireshark
-            summary += f"\n  📌 Wireshark filter (numéros de frames):\n"
-            summary += f"     frame.number in {{{','.join(packet_numbers[:20])}}}\n"
+        if len(unique_ips) <= 20:  # Si pas trop d'IPs différentes
+            ip_filter = " or ".join([f"host {ip}" for ip in list(unique_ips)[:10]])
+            summary += f"\n  📌 tcpdump (paquets des connexions avec gaps):\n"
+            summary += f"     tcpdump -r <fichier.pcap> -nn '{ip_filter}'\n"
+        else:
+            summary += f"\n  📌 tcpdump (exemple pour le premier gap):\n"
+            first_gap = abnormal_gaps[0]
+            summary += f"     tcpdump -r <fichier.pcap> -nn 'host {first_gap.src_ip} and host {first_gap.dst_ip}'\n"
 
-            # Info pour le rapport complet
-            summary += f"\n  ℹ️  Consultez le rapport HTML pour la liste complète des gaps\n"
+        # Commande Wireshark
+        summary += f"\n  📌 Wireshark filter (numéros de frames):\n"
+        summary += f"     frame.number in {{{','.join(packet_numbers[:20])}}}\n"
+
+        # Info pour le rapport complet
+        summary += f"\n  ℹ️  Consultez le rapport HTML pour la liste complète des gaps\n"
 
         return summary
 
