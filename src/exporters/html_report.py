@@ -2306,8 +2306,15 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_grouped_retransmission_analysis(self, flows: dict, total_packets: int) -> str:
-        """Generate retransmission analysis grouped by type (SYN, RTO, Fast Retrans, Generic, Mixed)."""
+    def _generate_grouped_retransmission_analysis(self, flows: dict, total_packets: int, results: dict = None) -> str:
+        """
+        Generate retransmission analysis grouped by type (SYN, RTO, Fast Retrans, Generic, Mixed).
+
+        Args:
+            flows: Dictionary of flow_key -> retrans_list
+            total_packets: Total packets in capture
+            results: Full analysis results (for behavioral correlation)
+        """
         # Classify each flow by dominant type
         flow_groups = {
             "syn": [],  # SYN retransmissions (connection failures)
@@ -2348,38 +2355,103 @@ class HTMLReportGenerator:
         # Generate section for each type (only if flows exist)
         if flow_groups["syn"]:
             html += self._generate_retrans_type_section(
-                "syn", "SYN Retransmissions (Connection Failures)", flow_groups["syn"], "#dc3545", "🔴"
+                "syn", "SYN Retransmissions (Connection Failures)", flow_groups["syn"], "#dc3545", "🔴", results
             )
 
         if flow_groups["rto"]:
             html += self._generate_retrans_type_section(
-                "rto", "RTO Retransmissions (Packet Loss)", flow_groups["rto"], "#ffc107", "🟡"
+                "rto", "RTO Retransmissions (Packet Loss)", flow_groups["rto"], "#ffc107", "🟡", results
             )
 
         if flow_groups["fast"]:
             html += self._generate_retrans_type_section(
-                "fast", "Fast Retransmissions (Out-of-Order Delivery)", flow_groups["fast"], "#28a745", "🟢"
+                "fast", "Fast Retransmissions (Out-of-Order Delivery)", flow_groups["fast"], "#28a745", "🟢", results
             )
 
         if flow_groups["generic"]:
             html += self._generate_retrans_type_section(
-                "generic", "Generic Retransmissions (Moderate Delay)", flow_groups["generic"], "#17a2b8", "🔵"
+                "generic", "Generic Retransmissions (Moderate Delay)", flow_groups["generic"], "#17a2b8", "🔵", results
             )
 
         if flow_groups["mixed"]:
             html += self._generate_retrans_type_section(
-                "mixed", "Mixed Retransmissions (Multiple Mechanisms)", flow_groups["mixed"], "#6c757d", "⚪"
+                "mixed", "Mixed Retransmissions (Multiple Mechanisms)", flow_groups["mixed"], "#6c757d", "⚪", results
             )
 
         return html
 
-    def _analyze_root_cause(self, flows: list, type_key: str) -> dict:
-        """Analyze root cause and patterns for flows."""
+    def _analyze_root_cause(self, flows: list, type_key: str, results: dict = None) -> dict:
+        """
+        Analyze root cause and patterns for flows using behavioral correlation.
+
+        Args:
+            flows: List of (flow_key, retrans_list) tuples
+            type_key: Type of retransmissions (syn, rto, fast, generic, mixed)
+            results: Full analysis results for behavioral correlation
+
+        Returns:
+            Dictionary with root_cause, action, pattern, tshark_filter
+        """
         result = {"root_cause": None, "action": None, "pattern": None, "tshark_filter": None}
 
         if not flows:
             return result
 
+        # BEHAVIORAL DIAGNOSTICS (Priority over topological analysis)
+        # Check for micro-burst correlation (HIGH priority - datacenter issue)
+        if results:
+            micro_burst_diagnosis = self._detect_micro_bursts(flows, results, type_key)
+            if micro_burst_diagnosis:
+                result.update(micro_burst_diagnosis)
+                # Continue to generate tshark filter below
+                # Don't return early - we want the tshark filter
+
+        # Check for traffic shaping pattern (MEDIUM priority - QoS issue)
+        if not result["root_cause"] and type_key == "rto":
+            # Aggregate all retrans from all flows for pattern analysis
+            all_retrans = []
+            for _, retrans_list in flows:
+                all_retrans.extend(retrans_list)
+
+            if self._detect_traffic_shaping(all_retrans):
+                result["root_cause"] = (
+                    "Traffic Shaping/Rate Limiting detected (constant retransmission rate pattern)"
+                )
+                result["action"] = (
+                    "Review QoS policies (Linux TC: tc-tbf/tc-htb, Cisco policing), "
+                    "increase rate limit if appropriate, or adjust application send rate"
+                )
+
+        # Check for firewall stealth behavior (SYN-specific)
+        if type_key == "syn" and not result["root_cause"]:
+            if self._detect_firewall_stealth(flows):
+                # Get common destination for detailed message
+                dest_ips = {}
+                dest_ports = {}
+                for flow_key, _ in flows:
+                    parts = flow_key.split(" → ")
+                    if len(parts) == 2:
+                        dst_part = parts[1].strip()
+                        if ":" in dst_part:
+                            dst_ip, dst_port = dst_part.rsplit(":", 1)
+                            dest_ips[dst_ip] = dest_ips.get(dst_ip, 0) + 1
+                            dest_ports[dst_port] = dest_ports.get(dst_port, 0) + 1
+
+                if dest_ips:
+                    most_common_ip = max(dest_ips.items(), key=lambda x: x[1])
+                    most_common_port = max(dest_ports.items(), key=lambda x: x[1]) if dest_ports else (None, 0)
+
+                    result["root_cause"] = (
+                        f"Firewall Drop/Stealth Port at {most_common_ip[0]}:{most_common_port[0]} "
+                        f"(100% SYN retransmissions, 0 responses - port is filtered)"
+                    )
+                    result["action"] = (
+                        "Firewall is silently dropping SYN packets (stealth mode). "
+                        "Verify firewall rules allow traffic, or confirm port is intentionally blocked. "
+                        "Unlike 'closed' ports (send RST), filtered ports give no response."
+                    )
+
+        # TOPOLOGICAL ANALYSIS (Fallback if no behavioral diagnosis found)
         # Extract all dest IPs and ports
         dest_ips = {}
         dest_ports = {}
@@ -2534,6 +2606,134 @@ class HTMLReportGenerator:
 
         return None
 
+    def _detect_traffic_shaping(self, retrans_list: list) -> bool:
+        """
+        Detect traffic shaping/rate limiting by analyzing retransmission uniformity.
+
+        Traffic shaping (Linux TC, Cisco policing) causes constant-rate packet drops,
+        resulting in uniform retransmission intervals (low coefficient of variation).
+
+        Args:
+            retrans_list: List of retransmission events for a flow
+
+        Returns:
+            True if retransmissions show constant-rate pattern (CV < 0.3)
+
+        References:
+            - Linux TC: tc-tbf(8), tc-htb(8) man pages
+            - RFC 2474: DiffServ Field in IPv4/IPv6 Headers
+            - Cisco QoS: Policing vs Shaping documentation
+        """
+        if len(retrans_list) < 10:
+            return False
+
+        timestamps = sorted([r.get("timestamp", 0) for r in retrans_list])
+        intervals = [timestamps[i+1] - timestamps[i] for i in range(len(timestamps)-1)]
+
+        if not intervals:
+            return False
+
+        mean_interval = sum(intervals) / len(intervals)
+        if mean_interval == 0:
+            return False
+
+        variance = sum((x - mean_interval)**2 for x in intervals) / len(intervals)
+        cv = (variance**0.5) / mean_interval  # Coefficient of variation
+
+        # Low CV (< 0.3) indicates uniform spacing = traffic shaping
+        return cv < 0.3
+
+    def _detect_micro_bursts(self, flows: list, results: dict, type_key: str) -> dict:
+        """
+        Detect micro-bursts causing buffer overflow by correlating burst events with retransmissions.
+
+        Micro-bursts occur when applications send traffic spikes that exceed buffer capacity,
+        causing packet drops and retransmissions. Common in datacenters with bursty workloads.
+
+        Args:
+            flows: List of (flow_key, retrans_list) tuples
+            results: Full analysis results containing burst_analyzer data
+            type_key: Type of retransmissions being analyzed
+
+        Returns:
+            Dictionary with root_cause and action if micro-burst detected, else empty dict
+
+        References:
+            - RFC 7567: Active Queue Management Recommendations
+            - RFC 3168: Explicit Congestion Notification (ECN)
+            - Cisco: "Understanding Micro-bursts in Data Center Networks"
+        """
+        if type_key != "rto" or "burst" not in results:
+            return {}
+
+        burst_results = results.get("burst", {})
+        bursts = burst_results.get("bursts", [])
+
+        if not bursts:
+            return {}
+
+        # Correlate retransmissions with burst events
+        for burst in bursts:
+            burst_start = burst.get("start_time", 0)
+            burst_end = burst.get("end_time", 0)
+            peak_ratio = burst.get("peak_ratio", 0)
+
+            # Check temporal overlap
+            retrans_in_burst = []
+            for _, retrans_list in flows:
+                for r in retrans_list:
+                    ts = r.get("timestamp", 0)
+                    if burst_start <= ts <= burst_end:
+                        retrans_in_burst.append(r)
+
+            # Significant burst causing retransmissions
+            if len(retrans_in_burst) > 5 and peak_ratio > 5.0:
+                pps = burst.get("packets_per_second", 0)
+                bps = burst.get("bytes_per_second", 0)
+
+                return {
+                    "root_cause": (
+                        f"Micro-bursts causing buffer overflow "
+                        f"({pps:.0f} pkt/s spike, {peak_ratio:.1f}x average rate, "
+                        f"{len(retrans_in_burst)} retrans during burst)"
+                    ),
+                    "action": (
+                        "Increase switch/router buffer size, enable ECN (RFC 3168), "
+                        "implement AQM (RFC 7567), or optimize application send patterns"
+                    ),
+                }
+
+        return {}
+
+    def _detect_firewall_stealth(self, flows: list) -> bool:
+        """
+        Detect firewall stealth port behavior (silently dropping SYN packets).
+
+        Firewalls in stealth mode drop SYN packets without sending RST responses,
+        making ports appear "filtered" rather than "closed" (Nmap terminology).
+
+        Args:
+            flows: List of (flow_key, retrans_list) tuples for SYN retransmissions
+
+        Returns:
+            True if 100% SYN retransmissions with no ACK/RST responses
+
+        References:
+            - RFC 793 Section 3.4: Connection establishment
+            - Nmap: Port scanning techniques (filtered vs closed states)
+            - Firewall stealth scanning defense mechanisms
+        """
+        # Check if ANY retransmission received a response (ACK or RST)
+        for _, retrans_list in flows:
+            for r in retrans_list:
+                # If we saw ANY ACK from the receiver, it means server responded
+                if r.get("last_ack_seen") is not None:
+                    return False
+                # Note: RST would prevent retransmissions, so absence of retrans = RST sent
+
+        # All SYN retransmissions, zero responses = firewall stealth
+        return True
+
     def _generate_root_cause_box(self, analysis: dict, type_key: str, flows: list) -> str:
         """Generate root cause analysis box."""
         html = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">'
@@ -2665,13 +2865,23 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_retrans_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str) -> str:
-        """Generate a section for one retransmission type with explanation + flow table."""
+    def _generate_retrans_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str, results: dict = None) -> str:
+        """
+        Generate a section for one retransmission type with explanation + flow table.
+
+        Args:
+            type_key: Type identifier (syn, rto, fast, generic, mixed)
+            title: Display title for this section
+            flows: List of (flow_key, retrans_list) tuples
+            color: CSS color for section header
+            emoji: Emoji for section header
+            results: Full analysis results for behavioral correlation
+        """
         flow_count = len(flows)
         total_retrans = sum(len(retrans_list) for _, retrans_list in flows)
 
-        # Analyze root cause
-        root_cause_analysis = self._analyze_root_cause(flows, type_key)
+        # Analyze root cause with behavioral correlation
+        root_cause_analysis = self._analyze_root_cause(flows, type_key, results)
 
         html = '<div class="retrans-type-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'.format(
             color=color
@@ -3398,8 +3608,8 @@ class HTMLReportGenerator:
                         flows[flow_key] = []
                     flows[flow_key].append(r)
 
-                # Classify each flow by dominant retransmission type
-                html += self._generate_grouped_retransmission_analysis(flows, total_packets)
+                # Classify each flow by dominant retransmission type (with behavioral correlation)
+                html += self._generate_grouped_retransmission_analysis(flows, total_packets, results)
 
         # TCP Handshakes
         handshake_data = results.get("tcp_handshake", {})
