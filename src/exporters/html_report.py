@@ -2411,10 +2411,24 @@ class HTMLReportGenerator:
                     result["root_cause"] = f"{most_common_ip[0]} is {ip_info['name']} ({ip_info['rfc']})"
                     result["action"] = ip_info["action"]
 
-                # Generate tshark filter
+                # Generate tshark filter (STATEFUL - uses tcp.analysis per RFC 793)
+                # All filters use Wireshark's stateful analysis engine, not stateless flag filtering
                 result["tshark_filter"] = f"ip.dst == {most_common_ip[0]}"
                 if type_key == "syn":
-                    result["tshark_filter"] += " and tcp.flags.syn == 1"
+                    # SYN retransmissions: Use tcp.analysis.retransmission + SYN flag
+                    # This shows ONLY true retransmissions detected by Wireshark's stateful engine
+                    # Avoids false positives from port reuse (different ISN = new connection)
+                    result["tshark_filter"] += " and tcp.analysis.retransmission and tcp.flags.syn == 1"
+                elif type_key == "fast":
+                    # Fast Retransmissions: Use Wireshark's specific fast retransmit detector
+                    result["tshark_filter"] += " and tcp.analysis.fast_retransmission"
+                elif type_key == "rto":
+                    # RTO: Use tcp.analysis.retransmission (stateful detection)
+                    # Exclude fast retransmits and SYN packets
+                    result["tshark_filter"] += " and tcp.analysis.retransmission and not tcp.analysis.fast_retransmission and not tcp.flags.syn == 1"
+                elif type_key == "generic" or type_key == "mixed":
+                    # Generic/Mixed: Use tcp.analysis.retransmission (stateful detection)
+                    result["tshark_filter"] += " and tcp.analysis.retransmission"
 
             elif most_common_ip[1] >= len(flows) * 0.5:
                 result["pattern"] = f"{most_common_ip[1]} flows target {most_common_ip[0]} (dominant pattern)"
