@@ -100,6 +100,9 @@ class TCPRetransmission:
     # SYN retransmission flag
     is_syn_retrans: bool = False  # True if this is a retransmitted SYN packet
 
+    # TCP flags string (e.g., "SYN", "PSH,ACK", "FIN,ACK")
+    tcp_flags: Optional[str] = None
+
     def __post_init__(self):
         """Initialize default list for suspected_mechanisms."""
         if self.suspected_mechanisms is None:
@@ -136,6 +139,38 @@ class FlowStats:
     zero_windows: int
     severity: str = "none"
     retransmission_rate: float = 0.0
+
+
+def _tcp_flags_to_string(metadata=None, tcp=None) -> str:
+    """
+    Convert TCP flags to string representation (e.g., "SYN", "PSH,ACK", "FIN,ACK").
+
+    Args:
+        metadata: PacketMetadata object (hybrid mode)
+        tcp: Scapy TCP layer (scapy mode)
+
+    Returns:
+        String representation of TCP flags
+    """
+    flags = []
+
+    if metadata:
+        # Hybrid mode: use boolean flags from PacketMetadata
+        if metadata.is_syn:
+            flags.append("SYN")
+        if metadata.is_fin:
+            flags.append("FIN")
+        if metadata.is_rst:
+            flags.append("RST")
+        if metadata.is_psh:
+            flags.append("PSH")
+        if metadata.is_ack:
+            flags.append("ACK")
+    elif tcp:
+        # Scapy mode: use sprintf to get flags string
+        return tcp.sprintf("%TCP.flags%")
+
+    return ",".join(flags) if flags else "NONE"
 
 
 class RetransmissionAnalyzer:
@@ -648,6 +683,7 @@ class RetransmissionAnalyzer:
                     suspected_mechanisms=suspected_mechanisms,
                     confidence=confidence,
                     is_syn_retrans=is_syn_retrans,
+                    tcp_flags=_tcp_flags_to_string(metadata=metadata),
                 )
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]["retransmissions"] += 1
@@ -916,6 +952,8 @@ class RetransmissionAnalyzer:
                     receiver_window_raw=tcp.window,
                     suspected_mechanisms=suspected_mechanisms,
                     confidence=confidence,
+                    is_syn_retrans=(tcp.flags & 0x02) != 0,  # SYN flag check
+                    tcp_flags=_tcp_flags_to_string(tcp=tcp),
                 )
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]["retransmissions"] += 1
@@ -1181,8 +1219,21 @@ class RetransmissionAnalyzer:
         fast_retrans_count = sum(1 for r in self.retransmissions if r.retrans_type == "Fast Retransmission")
         other_retrans_count = total_retrans - rto_count - fast_retrans_count
 
+        # Calculate global retransmission rate for contextual alerting
+        # Industry standards: <1% normal, 1-3% moderate, >3% severe (NetCraftsmen, arXiv research)
+        total_packets = sum(f.total_packets for f in self.flow_stats.values())
+        retrans_rate = (total_retrans / total_packets * 100) if total_packets > 0 else 0
+
         if rto_count > 0:
-            summary += f"    dont RTOs: {rto_count} 🔴 (Congestion Sévère)\n"
+            # Contextual severity based on rate AND absolute count
+            # Prevents false alarms like "1 RTO in 800K packets = severe congestion"
+            if retrans_rate > 3.0 or rto_count > 500:
+                severity_label = "🔴 (Congestion Sévère)"
+            elif retrans_rate > 1.0 or rto_count > 100:
+                severity_label = "🟠 (Modérée)"
+            else:
+                severity_label = "⚪ (Négligeable)"
+            summary += f"    dont RTOs: {rto_count} {severity_label}\n"
         if fast_retrans_count > 0:
             summary += f"    dont Fast Retransmissions: {fast_retrans_count} 🟠 (Pertes Légères / Désordre)\n"
         if other_retrans_count > 0:
