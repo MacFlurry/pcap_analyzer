@@ -1384,12 +1384,47 @@ class RetransmissionAnalyzer:
         other_retrans_count = total_retrans - rto_count - fast_retrans_count
 
         # v4.15.0: Serialize sampled timelines for HTML report
+        # v4.15.3: Merge bidirectional packets for complete handshake view
         sampled_timelines_dict = {}
         for flow_key, timeline in self.sampled_timelines.items():
+            # Calculate reverse flow key to get packets from opposite direction
+            # flow_key format: "10.0.0.1:80->10.0.0.2:443"
+            if "->" in flow_key:
+                parts = flow_key.split("->")
+                if len(parts) == 2:
+                    reverse_key = f"{parts[1]}->{parts[0]}"
+                else:
+                    reverse_key = None
+            else:
+                reverse_key = None
+
+            # Merge handshake packets from both directions
+            handshake_packets = list(timeline.handshake)  # Copy original direction
+            if reverse_key and reverse_key in self._packet_buffer:
+                # Add packets from reverse direction buffer
+                handshake_packets.extend(self._packet_buffer[reverse_key])
+
+            # Sort by timestamp for chronological order
+            handshake_packets.sort(key=lambda p: p.timestamp)
+
+            # Limit to first 10 packets total (from both directions)
+            handshake_packets = handshake_packets[:10]
+
+            # Merge teardown packets from both directions
+            teardown_packets = list(timeline.teardown)
+            if reverse_key and reverse_key in self._packet_buffer:
+                # Get teardown from reverse direction if it exists
+                if reverse_key in self.sampled_timelines:
+                    teardown_packets.extend(self.sampled_timelines[reverse_key].teardown)
+
+            # Sort by timestamp and take last 10
+            teardown_packets.sort(key=lambda p: p.timestamp)
+            teardown_packets = teardown_packets[-10:] if len(teardown_packets) > 10 else teardown_packets
+
             sampled_timelines_dict[flow_key] = {
-                "handshake": [asdict(p) for p in timeline.handshake],
+                "handshake": [asdict(p) for p in handshake_packets],
                 "retrans_context": [[asdict(p) for p in context] for context in timeline.retrans_context],
-                "teardown": [asdict(p) for p in timeline.teardown],
+                "teardown": [asdict(p) for p in teardown_packets],
             }
 
         return {

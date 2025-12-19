@@ -3654,7 +3654,17 @@ class HTMLReportGenerator:
         for pkt in packets:
             # SECURITY: Escape all packet data to prevent XSS
             frame = escape_html(str(pkt.get("frame", "N/A")))
-            timestamp = f"{pkt.get('timestamp', 0):.3f}"
+
+            # Format timestamp in ISO 8601 format (like tshark -tttt)
+            # Convert epoch timestamp to YYYY-MM-DD HH:MM:SS.mmm
+            raw_timestamp = pkt.get('timestamp', 0)
+            if raw_timestamp > 0:
+                from datetime import datetime
+                dt = datetime.fromtimestamp(raw_timestamp)
+                timestamp = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Keep milliseconds
+            else:
+                timestamp = "N/A"
+
             src_ip = escape_html(validate_ip_address(pkt.get("src_ip", "0.0.0.0")))
             src_port = escape_html(validate_port(str(pkt.get("src_port", "0"))))
             dst_ip = escape_html(validate_ip_address(pkt.get("dst_ip", "0.0.0.0")))
