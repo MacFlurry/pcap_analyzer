@@ -757,6 +757,19 @@ def analyze_pcap_hybrid(
         except Exception as e:
             console.print(f"[yellow]⚠ Erreur lors de la suppression du fichier temporaire: {e}[/yellow]")
 
+    # Add metadata if not present (Fix for Executive Summary showing 0 packets)
+    if "metadata" not in results:
+        results["metadata"] = {}
+    results["metadata"]["pcap_file"] = Path(pcap_file).name
+
+    # Extract total packets from protocol_distribution if available
+    if "protocol_distribution" in results:
+        results["metadata"]["total_packets"] = results["protocol_distribution"].get("total_packets", 0)
+
+    # Extract capture duration from timestamps if available
+    if "timestamps" in results:
+        results["metadata"]["capture_duration"] = results["timestamps"].get("capture_duration", 0)
+
     return results
 
 

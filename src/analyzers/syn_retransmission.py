@@ -324,14 +324,31 @@ class SYNRetransmissionAnalyzer:
                 "avg_retrans": sum(retrans_counts) / len(retrans_counts),
             }
 
+        # RFC 6298 compliance analysis for all retransmissions
+        rfc_6298_analysis = self._calculate_retransmission_statistics()
+
+        # Add RFC analysis to each retransmission in the report
+        top_connections_with_rfc = []
+        for retrans in sorted_retrans[:10]:
+            conn_data = retrans.to_human_readable()
+            conn_data["rfc_analysis"] = self._analyze_rfc_compliance(retrans)
+            top_connections_with_rfc.append(conn_data)
+
+        all_retrans_with_rfc = []
+        for retrans in self.retransmissions:
+            conn_data = retrans.to_human_readable()
+            conn_data["rfc_analysis"] = self._analyze_rfc_compliance(retrans)
+            all_retrans_with_rfc.append(conn_data)
+
         return {
             "total_syn_retransmissions": len(self.retransmissions),
             "threshold_seconds": self.threshold,
             "issue_distribution": dict(issue_counts),
             "delay_statistics": stats,
             "retransmission_statistics": retrans_stats,
-            "top_problematic_connections": [r.to_human_readable() for r in sorted_retrans[:10]],
-            "all_retransmissions": [r.to_human_readable() for r in self.retransmissions],
+            "rfc_6298_analysis": rfc_6298_analysis,
+            "top_problematic_connections": top_connections_with_rfc,
+            "all_retransmissions": all_retrans_with_rfc,
         }
 
     def get_summary(self) -> str:
@@ -396,3 +413,139 @@ class SYNRetransmissionAnalyzer:
             if retrans.src_ip == src_ip and retrans.src_port == src_port:
                 return retrans.to_human_readable()
         return None
+
+    def _analyze_rfc_compliance(self, retrans: SYNRetransmission) -> dict[str, Any]:
+        """
+        Analyze RFC 6298 compliance for a SYN retransmission sequence.
+
+        RFC 6298 Requirements:
+        - Initial RTO MUST be >= 1 second
+        - Exponential backoff: double RTO after each timeout
+        - Expected pattern: [1.0, 2.0, 4.0, 8.0] seconds
+
+        Args:
+            retrans: SYNRetransmission object to analyze
+
+        Returns:
+            Dictionary containing RFC compliance analysis
+        """
+        # Calculate intervals between SYN attempts
+        intervals = []
+        for i in range(1, len(retrans.syn_attempts)):
+            interval = retrans.syn_attempts[i] - retrans.syn_attempts[i - 1]
+            intervals.append(interval)
+
+        # Check if we have retransmissions to analyze
+        if not intervals:
+            return {
+                "compliant": True,
+                "initial_rto": None,
+                "observed_pattern": [],
+                "expected_pattern": [],
+                "backoff_compliant": True,
+                "severity": "normal",
+                "recommendations": [],
+            }
+
+        # Check RFC 6298 compliance: initial RTO >= 1s
+        initial_rto = intervals[0] if intervals else None
+        rfc_compliant = initial_rto is None or initial_rto >= 1.0
+
+        # Expected exponential backoff pattern
+        expected_pattern = [1.0, 2.0, 4.0, 8.0][: len(intervals)]
+
+        # Check if backoff follows exponential pattern (with 10% tolerance)
+        backoff_compliant = True
+        if len(intervals) > 1:
+            for i in range(1, len(intervals)):
+                # Allow 10% tolerance for timing variations
+                expected_ratio = 2.0
+                actual_ratio = intervals[i] / intervals[i - 1] if intervals[i - 1] > 0 else 0
+                if not (1.8 <= actual_ratio <= 2.2):  # 10% tolerance
+                    backoff_compliant = False
+                    break
+
+        # Determine severity based on retransmission rate
+        # RFC 6298 considers >1% SYN retransmission rate as problematic
+        severity = "normal"
+        if retrans.retransmission_count > 0:
+            # If no SYN-ACK received, it's always problematic
+            if not retrans.synack_received:
+                severity = "critical"
+            # If we have retransmissions but got a response, check the pattern
+            elif retrans.retransmission_count >= 3:
+                severity = "high"
+            elif retrans.retransmission_count >= 2:
+                severity = "medium"
+            else:
+                severity = "low"
+
+        # Generate recommendations
+        recommendations = []
+        if initial_rto and initial_rto < 1.0:
+            recommendations.append("Increase initial RTO to >= 1s per RFC 6298")
+        if not backoff_compliant and len(intervals) > 1:
+            recommendations.append("Implement exponential backoff (double RTO after each timeout)")
+        if not retrans.synack_received:
+            recommendations.append("Consider IW10 optimization per RFC 6928 to reduce handshake latency")
+            recommendations.append("Check firewall rules or server availability")
+        elif retrans.retransmission_count >= 2:
+            recommendations.append("Investigate network latency or packet loss")
+
+        return {
+            "compliant": rfc_compliant and backoff_compliant,
+            "initial_rto": initial_rto,
+            "observed_pattern": intervals,
+            "expected_pattern": expected_pattern,
+            "backoff_compliant": backoff_compliant,
+            "severity": severity,
+            "recommendations": recommendations,
+        }
+
+    def _calculate_retransmission_statistics(self) -> dict[str, Any]:
+        """
+        Calculate RFC 6298 compliance statistics across all connections.
+
+        Returns:
+            Dictionary containing aggregate RFC compliance statistics
+        """
+        if not self.retransmissions:
+            return {
+                "total_analyzed": 0,
+                "rfc_compliant_count": 0,
+                "rfc_compliant_rate": 0.0,
+                "avg_initial_rto": 0.0,
+                "backoff_compliant_count": 0,
+                "backoff_compliant_rate": 0.0,
+                "severity_distribution": {},
+            }
+
+        compliant_count = 0
+        backoff_compliant_count = 0
+        initial_rtos = []
+        severity_counts = defaultdict(int)
+
+        for retrans in self.retransmissions:
+            rfc_analysis = self._analyze_rfc_compliance(retrans)
+
+            if rfc_analysis["compliant"]:
+                compliant_count += 1
+            if rfc_analysis["backoff_compliant"]:
+                backoff_compliant_count += 1
+            if rfc_analysis["initial_rto"] is not None:
+                initial_rtos.append(rfc_analysis["initial_rto"])
+
+            severity_counts[rfc_analysis["severity"]] += 1
+
+        total = len(self.retransmissions)
+        avg_rto = sum(initial_rtos) / len(initial_rtos) if initial_rtos else 0.0
+
+        return {
+            "total_analyzed": total,
+            "rfc_compliant_count": compliant_count,
+            "rfc_compliant_rate": compliant_count / total if total > 0 else 0.0,
+            "avg_initial_rto": avg_rto,
+            "backoff_compliant_count": backoff_compliant_count,
+            "backoff_compliant_rate": backoff_compliant_count / total if total > 0 else 0.0,
+            "severity_distribution": dict(severity_counts),
+        }

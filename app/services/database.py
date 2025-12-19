@@ -29,11 +29,31 @@ CREATE TABLE IF NOT EXISTS tasks (
     report_html_path TEXT,
     report_json_path TEXT,
     error_message TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_heartbeat TIMESTAMP,
+    progress_percent INTEGER DEFAULT 0,
+    current_phase TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_uploaded_at ON tasks(uploaded_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_heartbeat ON tasks(last_heartbeat);
+
+CREATE TABLE IF NOT EXISTS progress_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    progress_percent INTEGER NOT NULL,
+    packets_processed INTEGER,
+    total_packets INTEGER,
+    current_analyzer TEXT,
+    message TEXT,
+    timestamp TIMESTAMP NOT NULL,
+    FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_progress_task_id ON progress_snapshots(task_id);
+CREATE INDEX IF NOT EXISTS idx_progress_timestamp ON progress_snapshots(timestamp);
 """
 
 
@@ -138,7 +158,9 @@ class DatabaseService:
             task_id=row["task_id"],
             filename=row["filename"],
             status=TaskStatus(row["status"]),
-            uploaded_at=datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc),
+            uploaded_at=(
+                datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc)
+            ),
             analyzed_at=datetime.fromisoformat(row["analyzed_at"]) if row["analyzed_at"] else None,
             file_size_bytes=row["file_size_bytes"],
             total_packets=row["total_packets"],
@@ -238,7 +260,9 @@ class DatabaseService:
                     task_id=row["task_id"],
                     filename=row["filename"],
                     status=TaskStatus(row["status"]),
-                    uploaded_at=datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc),
+                    uploaded_at=(
+                        datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc)
+                    ),
                     analyzed_at=datetime.fromisoformat(row["analyzed_at"]) if row["analyzed_at"] else None,
                     file_size_bytes=row["file_size_bytes"],
                     total_packets=row["total_packets"],
@@ -312,6 +336,217 @@ class DatabaseService:
                 stats[status] = count
 
         return stats
+
+    async def update_heartbeat(
+        self,
+        task_id: str,
+        progress_percent: Optional[int] = None,
+        current_phase: Optional[str] = None,
+    ):
+        """
+        Met à jour le timestamp de heartbeat pour une tâche.
+
+        Args:
+            task_id: ID de la tâche
+            progress_percent: Pourcentage de progression à mettre à jour (optionnel)
+            current_phase: Phase actuelle à mettre à jour (optionnel)
+        """
+        timestamp = datetime.now(timezone.utc)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            if progress_percent is not None and current_phase is not None:
+                await db.execute(
+                    """
+                    UPDATE tasks
+                    SET last_heartbeat = ?, progress_percent = ?, current_phase = ?
+                    WHERE task_id = ?
+                    """,
+                    (timestamp, progress_percent, current_phase, task_id),
+                )
+            elif progress_percent is not None:
+                await db.execute(
+                    """
+                    UPDATE tasks
+                    SET last_heartbeat = ?, progress_percent = ?
+                    WHERE task_id = ?
+                    """,
+                    (timestamp, progress_percent, task_id),
+                )
+            elif current_phase is not None:
+                await db.execute(
+                    """
+                    UPDATE tasks
+                    SET last_heartbeat = ?, current_phase = ?
+                    WHERE task_id = ?
+                    """,
+                    (timestamp, current_phase, task_id),
+                )
+            else:
+                await db.execute(
+                    "UPDATE tasks SET last_heartbeat = ? WHERE task_id = ?",
+                    (timestamp, task_id),
+                )
+            await db.commit()
+
+        logger.debug(f"Heartbeat updated for task {task_id}")
+
+    async def create_progress_snapshot(
+        self,
+        task_id: str,
+        phase: str,
+        progress_percent: int,
+        packets_processed: Optional[int] = None,
+        total_packets: Optional[int] = None,
+        current_analyzer: Optional[str] = None,
+        message: Optional[str] = None,
+    ):
+        """
+        Crée un snapshot de progression pour une tâche.
+
+        Args:
+            task_id: ID de la tâche
+            phase: Phase actuelle (parsing, analysis, report)
+            progress_percent: Pourcentage de progression (0-100)
+            packets_processed: Nombre de paquets traités
+            total_packets: Nombre total de paquets
+            current_analyzer: Nom de l'analyseur en cours
+            message: Message additionnel
+        """
+        timestamp = datetime.now(timezone.utc)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Sauvegarder dans progress_snapshots
+            await db.execute(
+                """
+                INSERT INTO progress_snapshots (
+                    task_id, phase, progress_percent, packets_processed,
+                    total_packets, current_analyzer, message, timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    phase,
+                    progress_percent,
+                    packets_processed,
+                    total_packets,
+                    current_analyzer,
+                    message,
+                    timestamp,
+                ),
+            )
+
+            # Mettre à jour les champs de progression dans tasks
+            await db.execute(
+                """
+                UPDATE tasks
+                SET progress_percent = ?, current_phase = ?
+                WHERE task_id = ?
+                """,
+                (progress_percent, phase, task_id),
+            )
+
+            await db.commit()
+
+        logger.debug(f"Progress snapshot created for task {task_id}: {phase} {progress_percent}%")
+
+    async def get_progress_history(self, task_id: str, limit: int = 50) -> list[dict]:
+        """
+        Récupère l'historique des snapshots de progression pour une tâche.
+
+        Args:
+            task_id: ID de la tâche
+            limit: Nombre maximum de snapshots à retourner
+
+        Returns:
+            Liste de dictionnaires contenant les snapshots de progression
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT id, task_id, phase, progress_percent, packets_processed,
+                       total_packets, current_analyzer, message, timestamp
+                FROM progress_snapshots
+                WHERE task_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (task_id, limit),
+            ) as cursor:
+                rows = await cursor.fetchall()
+
+        snapshots = []
+        for row in rows:
+            snapshots.append(
+                {
+                    "id": row["id"],
+                    "task_id": row["task_id"],
+                    "phase": row["phase"],
+                    "progress_percent": row["progress_percent"],
+                    "packets_processed": row["packets_processed"],
+                    "total_packets": row["total_packets"],
+                    "current_analyzer": row["current_analyzer"],
+                    "message": row["message"],
+                    "timestamp": datetime.fromisoformat(row["timestamp"]) if row["timestamp"] else None,
+                }
+            )
+
+        return snapshots
+
+    async def find_orphaned_tasks(self, heartbeat_timeout_minutes: int = 5) -> list[str]:
+        """
+        Trouve les tâches marquées PROCESSING mais avec un heartbeat ancien.
+
+        Args:
+            heartbeat_timeout_minutes: Minutes depuis le dernier heartbeat pour considérer une tâche orpheline
+
+        Returns:
+            Liste des task_ids orphelins
+        """
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=heartbeat_timeout_minutes)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT task_id
+                FROM tasks
+                WHERE status = ?
+                  AND (last_heartbeat IS NULL OR last_heartbeat < ?)
+                """,
+                (TaskStatus.PROCESSING.value, cutoff_time),
+            ) as cursor:
+                rows = await cursor.fetchall()
+
+        orphaned_task_ids = [row["task_id"] for row in rows]
+
+        if orphaned_task_ids:
+            logger.warning(f"Found {len(orphaned_task_ids)} orphaned tasks: {orphaned_task_ids}")
+
+        return orphaned_task_ids
+
+    async def mark_task_as_failed_orphan(self, task_id: str):
+        """
+        Marque une tâche orpheline comme FAILED avec un message d'erreur approprié.
+
+        Args:
+            task_id: ID de la tâche à marquer comme orpheline
+        """
+        error_message = "Task processing failed: worker died or was killed (orphaned task)"
+        analyzed_at = datetime.now(timezone.utc)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                UPDATE tasks
+                SET status = ?, analyzed_at = ?, error_message = ?
+                WHERE task_id = ?
+                """,
+                (TaskStatus.FAILED.value, analyzed_at, error_message, task_id),
+            )
+            await db.commit()
+
+        logger.info(f"Marked orphaned task {task_id} as FAILED")
 
 
 # Singleton instance

@@ -47,6 +47,7 @@ class FlowWindowStats:
     low_window_count: int
     zero_window_total_duration: float
     suspected_bottleneck: str  # 'receiver', 'application', 'none'
+    first_zero_window_time: float = None  # Timestamp du premier zero window
 
 
 class TCPWindowAnalyzer:
@@ -89,6 +90,7 @@ class TCPWindowAnalyzer:
                 "low_window_count": 0,
                 "zero_window_count": 0,
                 "zero_duration": 0.0,
+                "first_zero_window_time": None,
             }
         )
 
@@ -183,7 +185,13 @@ class TCPWindowAnalyzer:
 
         # Détection Zero Window
         if actual_window == 0:
-            stats["zero_window_count"] += 1
+            # Only increment when starting a NEW zero window period
+            if flow_key not in self._zero_window_start:
+                stats["zero_window_count"] += 1
+
+            # Capture le timestamp du premier zero window
+            if stats["first_zero_window_time"] is None:
+                stats["first_zero_window_time"] = timestamp
 
             # Démarre le tracking de la durée si pas déjà en cours
             if flow_key not in self._zero_window_start:
@@ -241,6 +249,10 @@ class TCPWindowAnalyzer:
                 event.duration = duration
                 self._flow_aggregates[flow_key]["zero_duration"] += duration
 
+                # FIX #3: Also append to window_events if significant
+                if duration >= self.zero_window_duration_threshold:
+                    self.window_events.append(event)
+
         # Calcule les statistiques par flux
         self._calculate_flow_statistics()
 
@@ -280,7 +292,13 @@ class TCPWindowAnalyzer:
 
         # Détection Zero Window
         if actual_window == 0:
-            stats["zero_window_count"] += 1
+            # Only increment when starting a NEW zero window period
+            if flow_key not in self._zero_window_start:
+                stats["zero_window_count"] += 1
+
+            # Capture le timestamp du premier zero window
+            if stats["first_zero_window_time"] is None:
+                stats["first_zero_window_time"] = timestamp
 
             # Démarre le tracking de la durée si pas déjà en cours
             if flow_key not in self._zero_window_start:
@@ -438,6 +456,7 @@ class TCPWindowAnalyzer:
                     low_window_count=stats["low_window_count"],
                     zero_window_total_duration=zero_duration,
                     suspected_bottleneck=suspected,
+                    first_zero_window_time=stats["first_zero_window_time"],
                 )
 
                 self.flow_stats[flow_key] = flow_stats

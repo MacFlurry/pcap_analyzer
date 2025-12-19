@@ -97,6 +97,9 @@ class TCPRetransmission:
     suspected_mechanisms: list[str] = None
     confidence: str = "low"  # low | medium | high
 
+    # SYN retransmission flag
+    is_syn_retrans: bool = False  # True if this is a retransmitted SYN packet
+
     def __post_init__(self):
         """Initialize default list for suspected_mechanisms."""
         if self.suspected_mechanisms is None:
@@ -487,8 +490,17 @@ class RetransmissionAnalyzer:
                 delay = timestamp - original_time
 
                 # Determine retransmission type based on delay heuristics
+                # IMPORTANT: SYN retransmissions are ALWAYS RTO-based (timeout),
+                # never Fast Retransmission (no duplicate ACKs possible during handshake)
+                is_syn_retrans = metadata.is_syn
                 retrans_type = "Retransmission"
-                if delay >= self.rto_threshold:
+                if is_syn_retrans:
+                    # SYN retransmissions are always timeout-based
+                    if delay >= 0.5:  # Typical SYN RTO is >= 1s, but allow some margin
+                        retrans_type = "RTO"
+                    else:
+                        retrans_type = "Retransmission"  # Generic if unusually fast
+                elif delay >= self.rto_threshold:
                     retrans_type = "RTO"
                 elif delay <= self.fast_retrans_delay_max:
                     retrans_type = "Fast Retransmission"
@@ -536,6 +548,7 @@ class RetransmissionAnalyzer:
                     receiver_window_raw=metadata.tcp_window,
                     suspected_mechanisms=suspected_mechanisms,
                     confidence=confidence,
+                    is_syn_retrans=is_syn_retrans,
                 )
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]["retransmissions"] += 1
