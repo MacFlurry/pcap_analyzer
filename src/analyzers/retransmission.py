@@ -907,10 +907,13 @@ class RetransmissionAnalyzer:
             self._flow_counters[flow_key]["zero_windows"] += 1
 
         # v4.15.0: Capture teardown packets (FIN/RST) for sampled timeline
+        # v4.15.7: Only capture FIRST teardown (RFC 793 compliant - teardown begins at first FIN/RST)
+        # Do NOT overwrite if already captured (e.g., retransmitted FIN 14 minutes later)
         # Only for flows that have sampled timeline (i.e., flows with retransmissions)
         if flow_key in self.sampled_timelines and (metadata.is_fin or metadata.is_rst):
-            # Update teardown packets (keep last 10)
-            self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
+            # Capture only if not already captured (first FIN/RST wins)
+            if not self.sampled_timelines[flow_key].teardown:
+                self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
 
     def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
@@ -1238,9 +1241,12 @@ class RetransmissionAnalyzer:
             self._flow_counters[flow_key]["zero_windows"] += 1
 
         # v4.15.0: Capture teardown packets (FIN/RST) for sampled timeline (Scapy path)
+        # v4.15.7: Only capture FIRST teardown (RFC 793 compliant - teardown begins at first FIN/RST)
+        # Do NOT overwrite if already captured (e.g., retransmitted FIN 14 minutes later)
         if flow_key in self.sampled_timelines and (tcp.flags & 0x01 or tcp.flags & 0x04):  # FIN or RST
-            # Update teardown packets (keep last 10)
-            self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
+            # Capture only if not already captured (first FIN/RST wins)
+            if not self.sampled_timelines[flow_key].teardown:
+                self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
 
     def _get_flow_key(self, packet: Packet) -> str:
         """Génère une clé de flux unidirectionnelle"""
