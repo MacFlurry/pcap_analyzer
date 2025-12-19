@@ -2100,16 +2100,20 @@ class HTMLReportGenerator:
 
             html += "</div>"
 
-            # Add warning if jitter is extremely high
-            mean_jitter_ms = global_stats.get("mean_jitter", 0) * 1000
-            if mean_jitter_ms > 1000:  # > 1 second
-                html += """
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
-                    <p style="margin: 0 0 8px 0;"><strong>⚠️ High Jitter Detected</strong></p>
-                    <p style="margin: 0; font-size: 0.95em; color: #856404;">
-                        The extremely high jitter values (> 1 second) typically indicate a <strong>long-duration capture with significant gaps</strong>
-                        between packets, rather than continuous real-time traffic. This is normal for passive monitoring or captures
-                        spanning hours/days. For real-time application analysis, use shorter capture windows (5-10 minutes).
+            # Add contextual note only for very high jitter (> 10 seconds)
+            # This indicates non-real-time capture with long gaps between packets
+            mean_jitter_s = global_stats.get("mean_jitter", 0)
+            if mean_jitter_s > 10.0:  # > 10 seconds
+                metadata = results.get("metadata", {})
+                duration = metadata.get("capture_duration", 0)
+                duration_formatted = self._format_duration(duration)
+
+                html += f"""
+                <div style="background: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                    <p style="margin: 0 0 8px 0;"><strong>ℹ️ Capture Context</strong></p>
+                    <p style="margin: 0; font-size: 0.95em; color: #1565C0;">
+                        Note: Capture spans <strong>{duration_formatted}</strong>. Jitter includes packet gaps between sessions.
+                        For real-time application analysis, use shorter capture windows (5-10 minutes).
                     </p>
                 </div>
                 """
@@ -2491,9 +2495,25 @@ class HTMLReportGenerator:
                 min_delay = min(delays)
                 max_delay = max(delays)
                 avg_delay = sum(delays) / len(delays)
-                compliant = all(d >= 1.0 for d in delays)
-                compliance_icon = "✅" if compliant else "❌"
-                html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>RFC 6298:</strong> {compliance_icon} {"Compliant" if compliant else "Non-compliant"} (RTOs: {min_delay:.3f}s - {max_delay:.3f}s, avg: {avg_delay:.3f}s)</p>'
+                num_samples = len(delays)
+
+                # Only show RFC compliance check if we have enough samples (>= 5)
+                if num_samples >= 5:
+                    compliant = all(d >= 1.0 for d in delays)
+                    if compliant:
+                        compliance_icon = "✅"
+                        compliance_msg = "Compliant"
+                    else:
+                        compliance_icon = "⚠️"
+                        # Better messaging for non-compliance
+                        if min_delay < 1.0:
+                            compliance_msg = f"Short RTO detected ({min_delay:.3f}s < 1s RFC 6298 minimum)"
+                        else:
+                            compliance_msg = "Non-compliant"
+                    html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>RFC 6298:</strong> {compliance_icon} {compliance_msg} (RTOs: {min_delay:.3f}s - {max_delay:.3f}s, avg: {avg_delay:.3f}s, n={num_samples})</p>'
+                else:
+                    # Limited data - don't assess compliance
+                    html += f'<p style="margin: 5px 0; font-size: 0.95em;"><strong>RFC 6298:</strong> ⚠️ Limited data ({num_samples} sample{"s" if num_samples != 1 else ""}) - RFC compliance not assessed (RTOs: {min_delay:.3f}s - {max_delay:.3f}s, avg: {avg_delay:.3f}s)</p>'
 
         html += "</div>"
         return html
@@ -3406,6 +3426,8 @@ class HTMLReportGenerator:
             # Calculate total zero windows and duration
             flow_stats = window_data.get("flow_statistics", [])
             total_zero_windows = sum(f.get("zero_window_count", 0) for f in flow_stats)
+            # NOTE: This is the SUM of all flows' blocked time, which can exceed capture duration
+            # if multiple flows are blocked simultaneously. This represents the cumulative impact.
             total_duration = sum(f.get("zero_window_total_duration", 0) for f in flow_stats)
 
             html += '<div class="summary-grid">'
@@ -3420,11 +3442,11 @@ class HTMLReportGenerator:
             </div>
             <div class="metric-card" style="border-left-color: #dc3545;">
                 <div class="metric-label">
-                    Total Duration
+                    Cumulative Blocked Time
                     <span class="tooltip-wrapper">
                         <span class="tooltip-icon">ℹ️</span>
                         <span class="tooltip-text">
-                            Cumulative time all flows spent in zero-window state (sender blocked, unable to transmit). Longer durations indicate more severe throughput impact.
+                            Sum of blocked time across all flows. Each flow's zero-window duration is added together, so this metric can exceed capture duration if multiple flows are blocked simultaneously. For example, if 10 flows are each blocked for 1 hour in a 1-hour capture, the cumulative blocked time is 10 hours. This represents the total throughput impact across the network.
                         </span>
                     </span>
                 </div>
@@ -3432,6 +3454,30 @@ class HTMLReportGenerator:
             </div>
             """
             html += "</div>"
+
+            # Add contextual explanation if cumulative time significantly exceeds capture duration
+            metadata = results.get("metadata", {})
+            capture_duration = metadata.get("capture_duration", 0)
+            if capture_duration > 0 and total_duration > capture_duration:
+                multiplier = total_duration / capture_duration
+                flows_with_issues_count = window_data.get("flows_with_issues", 0)
+                html += f"""
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                    <p style="margin: 0 0 10px 0; font-weight: bold; color: #856404;">
+                        ℹ️ Understanding Cumulative Blocked Time
+                    </p>
+                    <p style="margin: 0; font-size: 0.95em; color: #856404;">
+                        The cumulative blocked time ({self._format_duration(total_duration)}) exceeds the capture duration
+                        ({self._format_duration(capture_duration)}) by {multiplier:.1f}x. This is normal when multiple flows
+                        are blocked simultaneously. In this capture, <strong>{flows_with_issues_count} flow(s)</strong> experienced
+                        zero-window conditions, and their blocked times are summed together to show the total throughput impact.
+                    </p>
+                    <p style="margin: 10px 0 0 0; font-size: 0.95em; color: #856404;">
+                        <strong>Example:</strong> If 10 flows are each blocked for 1 hour during the same 1-hour capture window,
+                        the cumulative blocked time is 10 hours, representing the aggregate impact across all affected connections.
+                    </p>
+                </div>
+                """
 
             # Get total packets for context
             metadata = results.get("metadata", {})
@@ -3546,7 +3592,7 @@ class HTMLReportGenerator:
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">First Zero Win</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Zero Windows</th>'
-        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Total Duration</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Blocked Time</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Min Window</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Avg Window</th>'
         html += "</tr>"
@@ -4415,29 +4461,7 @@ class HTMLReportGenerator:
         timeout_details = dns_data.get("timeout_details", [])
         slow_details = dns_data.get("slow_transactions_details", [])
         k8s_errors_details = dns_data.get("k8s_expected_errors_details", [])
-
-        # Get error transactions (excluding K8s)
-        all_error_types = dns_data.get("error_types_breakdown", {})
-        error_transactions = []
-
-        # Collect error transactions from problematic domains
-        problematic_domains = dns_data.get("top_problematic_domains", [])
-        for domain_info in problematic_domains:
-            main_error = domain_info.get("main_error", "")
-            if main_error not in ["Timeout", "Slow Response"]:
-                # This is a real DNS error (NXDOMAIN, SERVFAIL, etc.)
-                # We'll need to fetch details from the analyzer, but for now we'll show the domain
-                error_transactions.append({
-                    "query": {
-                        "query_name": domain_info.get("domain", "N/A"),
-                        "query_type": "A",  # Default
-                        "dst_ip": "N/A"
-                    },
-                    "response": {
-                        "response_code_name": main_error
-                    },
-                    "response_time": 0
-                })
+        error_transactions = dns_data.get("error_transactions_details", [])
 
         html = ""
 

@@ -453,6 +453,7 @@ class DNSAnalyzer:
             "k8s_expected_errors": len(k8s_expected_errors),
             "real_errors": len(real_errors),
             "k8s_expected_errors_details": [self._transaction_to_dict(t) for t in k8s_expected_errors[:20]],
+            "error_transactions_details": [self._transaction_to_dict(t) for t in real_errors[:20]],
             "response_time_statistics": stats,
             "thresholds": {
                 "warning_seconds": self.response_warning,
