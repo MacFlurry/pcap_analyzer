@@ -3945,40 +3945,51 @@ class HTMLReportGenerator:
         return html
 
     def _generate_jitter_explanation_concise(self, severity_key: str, flows: list) -> str:
-        """Generate concise explanation for jitter severity level."""
+        """Generate concise explanation for jitter severity level (P95-based per RFC 5481)."""
         explanations = {
-            "critical": """
-                <div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+            "excellent": """
+                <div style="background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.95em;">
-                    <strong>Critical Jitter</strong> - Severe delay variation (>100ms max or >30ms mean)<br>
-                    <strong>Impact:</strong> <span style='color: #dc3545;'>SEVERE</span> - Unusable for real-time applications<br>
-                    <strong>Causes:</strong> Network congestion, bandwidth saturation, routing instability
-                    </p>
-                </div>
-            """,
-            "high": """
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
-                    <p style="margin: 0; font-size: 0.95em;">
-                    <strong>High Jitter</strong> - Noticeable delay variation (50-100ms)<br>
-                    <strong>Impact:</strong> <span style='color: #ffc107;'>HIGH</span> - Degraded quality for video/audio<br>
-                    <strong>Causes:</strong> Packet reordering, multipath routing, bursty traffic
-                    </p>
-                </div>
-            """,
-            "medium": """
-                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
-                    <p style="margin: 0; font-size: 0.95em;">
-                    <strong>Medium Jitter</strong> - Moderate delay variation (30-50ms)<br>
-                    <strong>Impact:</strong> <span style='color: #28a745;'>MODERATE</span> - Acceptable for most applications<br>
-                    <strong>Note:</strong> May affect latency-sensitive services
+                    <strong>Excellent Jitter</strong> - P95 jitter &lt; 20ms<br>
+                    <strong>Impact:</strong> <span style='color: #17a2b8;'>NONE</span> - Ideal for all applications<br>
+                    <strong>Interpretation:</strong> 95% of packets have jitter &lt; 20ms (Cisco target)
                     </p>
                 </div>
             """,
             "low": """
                 <div style="background: #e2e3e5; border-left: 4px solid #6c757d; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.95em;">
-                    <strong>Low Jitter</strong> - Minimal delay variation (<30ms)<br>
-                    <strong>Impact:</strong> <span style='color: #6c757d;'>LOW</span> - Excellent network performance
+                    <strong>Low Jitter</strong> - P95 jitter 20-30ms<br>
+                    <strong>Impact:</strong> <span style='color: #6c757d;'>MINIMAL</span> - Excellent for VoIP<br>
+                    <strong>Interpretation:</strong> 95% of packets have jitter &lt; 30ms (Cisco acceptable threshold)
+                    </p>
+                </div>
+            """,
+            "medium": """
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Moderate Jitter</strong> - P95 jitter 30-50ms<br>
+                    <strong>Impact:</strong> <span style='color: #ffc107;'>MODERATE</span> - Acceptable for most applications<br>
+                    <strong>Interpretation:</strong> 95% of packets have jitter &lt; 50ms (ITU-T Y.1541 Class 1)
+                    </p>
+                </div>
+            """,
+            "high": """
+                <div style="background: #fff3cd; border-left: 4px solid #ff9800; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>High Jitter</strong> - P95 jitter 50-100ms (UDP) or 100-200ms (TCP)<br>
+                    <strong>Impact:</strong> <span style='color: #ff9800;'>HIGH</span> - Degraded real-time quality<br>
+                    <strong>Interpretation:</strong> 5% of packets exceed critical threshold (VoIP quality affected)
+                    </p>
+                </div>
+            """,
+            "critical": """
+                <div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>Critical Jitter</strong> - P95 jitter &gt; 50ms (UDP) or &gt; 200ms (TCP)<br>
+                    <strong>Impact:</strong> <span style='color: #dc3545;'>SEVERE</span> - Real-time applications degraded/unusable<br>
+                    <strong>Interpretation:</strong> 5% of packets severely affected. For VoIP, &gt; 50ms exceeds Cisco critical threshold<br>
+                    <strong>Sources:</strong> RFC 5481 (P95-based), ITU-T Y.1541 (≤50ms Class 1), Cisco (30-50ms VoIP limit)
                     </p>
                 </div>
             """,
@@ -4120,39 +4131,41 @@ class HTMLReportGenerator:
         return html
 
     def _generate_grouped_jitter_analysis(self, jitter_data: dict) -> str:
-        """Generate jitter analysis grouped by severity (critical, high, medium, low)."""
+        """Generate jitter analysis grouped by severity (critical, high, medium, low, excellent)."""
         high_jitter_flows = jitter_data.get("high_jitter_flows", [])
 
         if not high_jitter_flows:
             return ""
 
-        # Classify flows by severity
+        # Classify flows by severity (P95-based per RFC 5481)
         flow_groups = {
-            "critical": [],  # Critical jitter (>100ms max or >30ms mean)
-            "high": [],      # High jitter (50-100ms)
-            "medium": [],    # Medium jitter (30-50ms)
-            "low": [],       # Low jitter (<30ms)
+            "critical": [],  # Critical jitter: P95 > 50ms (UDP) or > 200ms (TCP)
+            "high": [],      # High jitter: P95 50-100ms (UDP) or 100-200ms (TCP)
+            "medium": [],    # Medium jitter: P95 30-50ms
+            "low": [],       # Low jitter: P95 20-30ms
+            "excellent": [], # Excellent jitter: P95 < 20ms
         }
 
         for flow in high_jitter_flows:
             severity = flow.get("severity", "low")
             flow_groups[severity].append(flow)
 
-        # Sort each group by mean jitter (descending)
+        # Sort each group by P95 jitter (descending) - primary metric per RFC 5481
         for group_type in flow_groups:
             flow_groups[group_type] = sorted(
                 flow_groups[group_type],
-                key=lambda f: f.get("mean_jitter", 0),
+                key=lambda f: f.get("p95_jitter", 0),
                 reverse=True
             )
 
         html = ""
 
         # Generate section for each severity (only if flows exist)
+        # Order: Critical -> High -> Medium -> Low -> Excellent
         if flow_groups["critical"]:
             html += self._generate_jitter_severity_section(
                 "critical",
-                "Critical Jitter (Severe Delay Variation)",
+                "Critical Jitter (P95 > 50ms UDP or > 200ms TCP)",
                 flow_groups["critical"],
                 "#dc3545",
                 "🔴"
@@ -4161,28 +4174,37 @@ class HTMLReportGenerator:
         if flow_groups["high"]:
             html += self._generate_jitter_severity_section(
                 "high",
-                "High Jitter (Noticeable Delays)",
+                "High Jitter (P95 50-100ms UDP or 100-200ms TCP)",
                 flow_groups["high"],
-                "#ffc107",
+                "#ff9800",
                 "🟡"
             )
 
         if flow_groups["medium"]:
             html += self._generate_jitter_severity_section(
                 "medium",
-                "Medium Jitter (Moderate Variation)",
+                "Moderate Jitter (P95 30-50ms)",
                 flow_groups["medium"],
-                "#28a745",
-                "🟢"
+                "#ffc107",
+                "🟠"
             )
 
         if flow_groups["low"]:
             html += self._generate_jitter_severity_section(
                 "low",
-                "Low Jitter (Excellent Performance)",
+                "Low Jitter (P95 20-30ms)",
                 flow_groups["low"],
                 "#6c757d",
                 "⚪"
+            )
+
+        if flow_groups["excellent"]:
+            html += self._generate_jitter_severity_section(
+                "excellent",
+                "Excellent Jitter (P95 < 20ms)",
+                flow_groups["excellent"],
+                "#17a2b8",
+                "💎"
             )
 
         return html
