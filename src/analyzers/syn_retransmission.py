@@ -1,5 +1,72 @@
 """
 Analyseur des retransmissions SYN - Détection détaillée des problèmes de handshake TCP
+
+METHODOLOGY: Stateful TCP Analysis per RFC 793
+==============================================
+
+This analyzer implements STATEFUL retransmission detection, which differs from
+naive stateless filtering:
+
+WRONG Approach (Stateless):
+  Filter: tcp.flags.syn == 1
+  Logic: Duplicate (IP, Port) = Retransmission
+  Problem: Port reuse (rapid connection recycling) creates FALSE POSITIVES
+
+  Example False Positive:
+    - Connection A: SYN (src_port=50000, seq=1000) -> Completes
+    - Connection B: SYN (src_port=50000, seq=2000) -> 10ms later
+    - Stateless sees "two SYNs on port 50000" and incorrectly flags as retransmission
+
+CORRECT Approach (Stateful - THIS IMPLEMENTATION):
+  RFC 793 Requirement: Retransmission MUST have SAME Initial Sequence Number (ISN)
+
+  Logic:
+    if tcp.seq == previous_syn.initial_seq:
+        -> TRUE retransmission (network/server issue)
+    else:
+        -> NEW connection (port reuse, legitimate)
+
+  Alignment:
+    - Matches Wireshark's tcp.analysis.retransmission behavior
+    - Follows RFC 793 TCP state machine
+    - Handles high-traffic scenarios (Kubernetes, load balancers)
+
+VALIDATION:
+  Use `tshark -Y "tcp.analysis.retransmission"` as ground truth, NOT tcp.flags filters.
+  This analyzer's results should align with Wireshark's stateful analysis engine.
+
+Technical Background:
+=====================
+
+RFC 793 - Sequence Numbers and Retransmission:
+  - Every octet of data sent over TCP has a sequence number
+  - When TCP transmits a segment, it puts a copy on the retransmission queue and starts a timer
+  - If acknowledgment is received, the segment is deleted from the queue
+  - If timer expires before acknowledgment, the segment is retransmitted WITH THE SAME SEQUENCE NUMBER
+  - The acknowledgment mechanism is cumulative, allowing straightforward duplicate detection
+
+Wireshark tcp.analysis.retransmission:
+  - Wireshark tracks all TCP sessions with sliding window monitoring
+  - Requires extra state information and memory for accurate detection
+  - No TCP flag indicates retransmission on the wire - it's inferred by sequence number analysis
+  - Detects retransmissions when: segment length > 0 or SYN/FIN flag set, and next expected
+    sequence number is greater than current sequence number
+
+Port Reuse in High-Traffic Environments:
+  - Kubernetes/Docker: Rapid pod recycling can reuse ephemeral ports within milliseconds
+  - Load balancers: Multiple connections to same backend with port reuse
+  - Ephemeral port exhaustion: Linux TIME_WAIT (2 minutes) can limit to ~471 conn/sec per host
+  - Stateless filtering falsely flags rapid port reuse as retransmissions
+
+References:
+  - RFC 793: Transmission Control Protocol (https://datatracker.ietf.org/doc/html/rfc793)
+  - Wireshark TCP Analysis: https://wiki.wireshark.org/TCP_Analyze_Sequence_Numbers
+  - Wireshark tcp.analysis.retransmission: https://osqa-ask.wireshark.org/questions/64019/
+  - Port exhaustion in Kubernetes: https://github.com/nforgeio/neonKUBE/issues/275
+
+Author: PCAP Analyzer Team
+Sprint: 11 (Advanced Threat Detection) + Performance Fix Sprint
+Version: 4.12.2 (Documentation and validation enhancement)
 """
 
 from collections import defaultdict
@@ -120,15 +187,27 @@ class SYNRetransmissionAnalyzer:
                 retrans = self.pending_syns[base_flow_key]
 
                 # RFC 793: TRUE retransmission MUST have SAME Initial Sequence Number (ISN)
+                # This implements STATEFUL analysis (like Wireshark's tcp.analysis.retransmission)
+                # and correctly handles port reuse scenarios:
+                #
+                # Port Reuse Example (Common in Kubernetes/high-traffic):
+                #   - Connection A: SYN (port 50000, seq=1000) -> ESTABLISHED
+                #   - Connection A: FIN/RST -> CLOSED
+                #   - Connection B: SYN (port 50000, seq=2000) -> 10ms later (NEW CONNECTION)
+                #
+                # Stateless filter would see "two SYNs on same port" and flag as retransmission.
+                # Stateful analysis (this code) sees different ISN (2000 != 1000) -> NEW connection.
                 if retrans.initial_seq is not None and tcp.seq == retrans.initial_seq:
-                    # Same seq = TRUE retransmission
+                    # Same seq = TRUE retransmission (server not responding, network loss)
+                    # This indicates a genuine network or server problem requiring investigation
                     if retrans.syn_attempts and packet_time - retrans.syn_attempts[-1] < 10.0:
                         retrans.syn_attempts.append(packet_time)
                         retrans.syn_packet_nums.append(packet_num)
                         retrans.retransmission_count += 1
                 else:
-                    # Different seq = NEW connection (port reuse)
+                    # Different seq = NEW connection (port reuse is LEGITIMATE)
                     # Replace old entry with new connection
+                    # This is normal behavior in high-traffic environments and NOT a problem
                     retrans = SYNRetransmission(
                         src_ip=ip.src,
                         dst_ip=ip.dst,
@@ -230,15 +309,27 @@ class SYNRetransmissionAnalyzer:
                 retrans = self.pending_syns[base_flow_key]
 
                 # RFC 793: TRUE retransmission MUST have SAME Initial Sequence Number (ISN)
+                # This implements STATEFUL analysis (like Wireshark's tcp.analysis.retransmission)
+                # and correctly handles port reuse scenarios:
+                #
+                # Port Reuse Example (Common in Kubernetes/high-traffic):
+                #   - Connection A: SYN (port 50000, seq=1000) -> ESTABLISHED
+                #   - Connection A: FIN/RST -> CLOSED
+                #   - Connection B: SYN (port 50000, seq=2000) -> 10ms later (NEW CONNECTION)
+                #
+                # Stateless filter would see "two SYNs on same port" and flag as retransmission.
+                # Stateful analysis (this code) sees different ISN (2000 != 1000) -> NEW connection.
                 if retrans.initial_seq is not None and metadata.tcp_seq == retrans.initial_seq:
-                    # Same seq = TRUE retransmission
+                    # Same seq = TRUE retransmission (server not responding, network loss)
+                    # This indicates a genuine network or server problem requiring investigation
                     if retrans.syn_attempts and packet_time - retrans.syn_attempts[-1] < 10.0:
                         retrans.syn_attempts.append(packet_time)
                         retrans.syn_packet_nums.append(packet_num)
                         retrans.retransmission_count += 1
                 else:
-                    # Different seq = NEW connection (port reuse)
+                    # Different seq = NEW connection (port reuse is LEGITIMATE)
                     # Replace old entry with new connection
+                    # This is normal behavior in high-traffic environments and NOT a problem
                     retrans = SYNRetransmission(
                         src_ip=metadata.src_ip,
                         dst_ip=metadata.dst_ip,
