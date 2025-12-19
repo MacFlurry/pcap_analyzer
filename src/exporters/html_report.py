@@ -3605,11 +3605,12 @@ class HTMLReportGenerator:
         html += "</div>"
         return html
 
-    def _render_packet_table(self, packets: list[dict], section_title: str = "Packets") -> str:
+    def _render_packet_table(self, packets: list[dict], section_title: str = "Packets", flow_key: str = None) -> str:
         """
         Render packet metadata as HTML table.
 
         v4.15.0: Helper method for sampled timeline rendering.
+        v4.15.2: Added flow_key parameter for direction detection
 
         Args:
             packets: List of packet dictionaries with fields:
@@ -3620,6 +3621,7 @@ class HTMLReportGenerator:
                 - seq, ack, win, length
                 - is_retransmission: bool
             section_title: Section title for the table
+            flow_key: Optional flow key (e.g., "10.0.0.1:80->10.0.0.2:443") to determine packet direction
 
         Returns:
             HTML string with packet table
@@ -3636,7 +3638,7 @@ class HTMLReportGenerator:
                     <th>Time (s)</th>
                     <th>Src IP</th>
                     <th>Src Port</th>
-                    <th></th>
+                    <th>Dir</th>
                     <th>Dst IP</th>
                     <th>Dst Port</th>
                     <th>Flags</th>
@@ -3666,13 +3668,36 @@ class HTMLReportGenerator:
             # Highlight retransmission packets
             row_class = "retransmission-packet" if pkt.get("is_retransmission", False) else ""
 
+            # Determine packet direction (inspired by mockup: → blue outgoing, ← green incoming)
+            # If flow_key provided, compare packet direction with flow direction
+            if flow_key and "->" in flow_key:
+                # Parse flow_key to get original src:dst
+                parts = flow_key.split("->")
+                if len(parts) == 2:
+                    flow_src = parts[0].strip()  # e.g., "10.0.0.1:80"
+                    pkt_src = f"{src_ip}:{src_port}"
+
+                    # Check if packet is in same direction as flow
+                    if pkt_src == flow_src:
+                        # Outgoing packet (same direction as flow)
+                        direction_arrow = '<span style="color: #3498db; font-size: 1.2em; font-weight: bold;">→</span>'
+                    else:
+                        # Return packet (opposite direction)
+                        direction_arrow = '<span style="color: #27ae60; font-size: 1.2em; font-weight: bold;">←</span>'
+                else:
+                    # Fallback: default blue arrow
+                    direction_arrow = '<span style="color: #3498db; font-size: 1.2em; font-weight: bold;">→</span>'
+            else:
+                # No flow_key provided: default blue arrow
+                direction_arrow = '<span style="color: #3498db; font-size: 1.2em; font-weight: bold;">→</span>'
+
             html += f"""
                 <tr class="{row_class}">
                     <td>{frame}</td>
                     <td>{timestamp}</td>
                     <td>{src_ip}</td>
                     <td>{src_port}</td>
-                    <td>→</td>
+                    <td style="text-align: center;">{direction_arrow}</td>
                     <td>{dst_ip}</td>
                     <td>{dst_port}</td>
                     <td><code>{flags}</code></td>
@@ -3731,7 +3756,7 @@ class HTMLReportGenerator:
 
         # Handshake section
         if handshake:
-            html += self._render_packet_table(handshake, "Handshake (First 10 Packets)")
+            html += self._render_packet_table(handshake, "Handshake (First 10 Packets)", flow_key)
 
         # Retransmission contexts
         if retrans_context:
@@ -3740,14 +3765,14 @@ class HTMLReportGenerator:
             for idx, context in enumerate(retrans_context, 1):
                 html += f'<div style="margin-left: 20px; margin-bottom: 15px;">'
                 html += f'<h6>Context #{idx} (±5 packets around retransmission)</h6>'
-                html += self._render_packet_table(context, f"Context {idx}")
+                html += self._render_packet_table(context, f"Context {idx}", flow_key)
                 html += '</div>'
             html += '</div>'
 
         # Teardown section
         if teardown:
             html += '<div style="margin-top: 20px;">'
-            html += self._render_packet_table(teardown, "Teardown (Last 10 Packets)")
+            html += self._render_packet_table(teardown, "Teardown (Last 10 Packets)", flow_key)
             html += '</div>'
 
         # Tshark fallback command
