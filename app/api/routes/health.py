@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from app.models.schemas import HealthCheck
 from app.services.database import get_db_service
 from app.services.worker import get_worker
+from src.__version__ import __version__
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,7 +58,7 @@ async def health_check():
 
         return HealthCheck(
             status="healthy",
-            version="1.0.0",
+            version=__version__,
             uptime_seconds=uptime,
             active_analyses=stats.get("processing", 0),
             queue_size=worker.get_queue_size(),
@@ -71,7 +72,7 @@ async def health_check():
         logger.error(f"Health check failed: {e}")
         return HealthCheck(
             status="unhealthy",
-            version="1.0.0",
+            version=__version__,
             uptime_seconds=time.time() - start_time,
             active_analyses=0,
             queue_size=0,
