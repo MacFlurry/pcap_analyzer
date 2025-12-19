@@ -2387,14 +2387,17 @@ class HTMLReportGenerator:
                 ip = most_common_ip[0]
                 ip_info = self._identify_ip_range(ip)
 
-                if ip_info:
-                    result["root_cause"] = f"{most_common_ip[0]} is {ip_info['name']} ({ip_info['rfc']})"
-                    result["action"] = ip_info["action"]
-                elif type_key == "syn":
+                # For SYN retransmissions, the root cause is ALWAYS "server unreachable"
+                # regardless of IP type (private/public doesn't matter for connection failures)
+                if type_key == "syn":
                     result["root_cause"] = (
                         f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
                     )
-                    result["action"] = f"Verify server status and port {most_common_port[0]} availability"
+                    result["action"] = "Verify server is running, port is open, and firewall allows traffic"
+                elif ip_info:
+                    # For other retransmission types, IP range can be relevant
+                    result["root_cause"] = f"{most_common_ip[0]} is {ip_info['name']} ({ip_info['rfc']})"
+                    result["action"] = ip_info["action"]
 
                 # Generate tshark filter
                 result["tshark_filter"] = f"ip.dst == {most_common_ip[0]}"
