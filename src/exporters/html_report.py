@@ -2709,6 +2709,8 @@ class HTMLReportGenerator:
 
     def _generate_flow_table(self, flows: list, type_key: str) -> str:
         """Generate compact table of flows for a given type."""
+        from datetime import datetime
+
         # Limit to top 10 flows
         flows_to_show = flows[:10]
 
@@ -2717,6 +2719,7 @@ class HTMLReportGenerator:
         html += '<thead style="background: #e9ecef;">'
         html += "<tr>"
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">First Retrans</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Total Retrans</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Avg Delay</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Duration</th>'
@@ -2728,15 +2731,22 @@ class HTMLReportGenerator:
             total_retrans = len(retrans_list)
             avg_delay = sum(r.get("delay", 0) for r in retrans_list) / total_retrans if total_retrans > 0 else 0
 
-            # Calculate duration
+            # Calculate duration and first retransmission timestamp
             if retrans_list:
                 timestamps = [r.get("timestamp", 0) for r in retrans_list]
+                first_timestamp = min(timestamps)
                 duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
+
+                # Format timestamp in ISO 8601 (YYYY-MM-DD HH:MM:SS.mmm)
+                dt = datetime.fromtimestamp(first_timestamp)
+                timestamp_iso = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Keep milliseconds
             else:
                 duration = 0
+                timestamp_iso = "N/A"
 
             html += '<tr style="border-bottom: 1px solid #dee2e6;">'
             html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_key}</td>'
+            html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #555;">{timestamp_iso}</td>'
             html += f'<td style="padding: 10px; text-align: center;"><strong>{total_retrans}</strong></td>'
             html += f'<td style="padding: 10px; text-align: center;">{avg_delay*1000:.1f}ms</td>'
             html += f'<td style="padding: 10px; text-align: center;">{self._format_duration(duration)}</td>'
