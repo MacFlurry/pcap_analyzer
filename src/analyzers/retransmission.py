@@ -272,7 +272,32 @@ class RetransmissionAnalyzer:
         if flow_key in self._seen_segments:
             del self._seen_segments[flow_key]
 
-        # Duplicate ACK tracking (per RFC 2581, indexed by reverse_key)
+        # BIDIRECTIONAL CLEANUP FIX (v4.13.1):
+        # TCP connections have TWO independent sequence spaces (client→server, server→client)
+        # Port reuse requires cleaning BOTH directions to prevent false positives
+        # Audit Report: "Il ne réinitialisait pas l'état du sens inverse (ACKs du serveur)"
+
+        # Reverse direction: Sequence tracking
+        if reverse_key in self._highest_seq:
+            del self._highest_seq[reverse_key]
+        if reverse_key in self._expected_seq:
+            del self._expected_seq[reverse_key]
+
+        # Reverse direction: ACK tracking
+        if reverse_key in self._max_ack_seen:
+            del self._max_ack_seen[reverse_key]
+        if reverse_key in self._expected_ack:
+            del self._expected_ack[reverse_key]
+
+        # Reverse direction: Retransmission detection state
+        if reverse_key in self._seen_segments:
+            del self._seen_segments[reverse_key]
+
+        # Reverse direction: ISN tracking
+        if reverse_key in self._initial_seq:
+            del self._initial_seq[reverse_key]
+
+        # Reverse direction: Duplicate ACK tracking (per RFC 2581)
         if reverse_key in self._dup_ack_count:
             del self._dup_ack_count[reverse_key]
         if reverse_key in self._last_ack:

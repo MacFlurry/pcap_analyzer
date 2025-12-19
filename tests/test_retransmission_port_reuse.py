@@ -287,3 +287,153 @@ class TestRetransmissionPortReuse:
             f"Got {results['total_retransmissions']} instead"
         )
         assert results["rto_count"] == 2, "Both should be classified as RTO (300ms delay)"
+
+    def test_bidirectional_port_reuse_with_server_data(self):
+        """
+        BIDIRECTIONAL TEST: Port reuse with server sending data.
+
+        This tests the CRITICAL gap identified in the audit report:
+        "Il ne réinitialisait pas l'état du sens inverse (ACKs du serveur)"
+
+        Scenario:
+          1. Connection 1: Full 3-way handshake + bidirectional data (client AND server)
+          2. Server sends data (seq=5001, len=200) creating reverse flow state
+          3. Connection closes
+          4. Connection 2: Port reuse with different ISNs
+          5. Server sends data with LOWER seq than Connection 1 (seq=4001)
+
+        Without bidirectional cleanup:
+          - _highest_seq[reverse_key] = 5201 (from Connection 1)
+          - Server packet seq=4001 < 5201 → FALSE POSITIVE
+
+        Expected: 0 retransmissions (different ISN = new connection)
+        """
+        analyzer = RetransmissionAnalyzer()
+
+        # ========== CONNECTION 1: Bidirectional traffic ==========
+
+        # Client SYN (ISN = 1000)
+        pkt1 = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="S", seq=1000)
+        pkt1.time = 1.0
+
+        # Server SYN-ACK (ISN = 5000)
+        pkt2 = Ether() / IP(src="10.0.2.10", dst="10.0.1.5") / TCP(sport=80, dport=50000, flags="SA", seq=5000, ack=1001)
+        pkt2.time = 1.01
+
+        # Client ACK
+        pkt3 = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="A", seq=1001, ack=5001)
+        pkt3.time = 1.02
+
+        # Client sends data
+        pkt4 = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="A", seq=1001, ack=5001) / Raw(load=b"C" * 100)
+        pkt4.time = 1.03
+
+        # Server ACKs client data
+        pkt5 = Ether() / IP(src="10.0.2.10", dst="10.0.1.5") / TCP(sport=80, dport=50000, flags="A", seq=5001, ack=1101)
+        pkt5.time = 1.04
+
+        # Server sends data (CREATES REVERSE FLOW STATE)
+        pkt6 = Ether() / IP(src="10.0.2.10", dst="10.0.1.5") / TCP(sport=80, dport=50000, flags="A", seq=5001, ack=1101) / Raw(load=b"S" * 200)
+        pkt6.time = 1.05
+
+        # Client ACKs server data
+        pkt7 = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="A", seq=1101, ack=5201)
+        pkt7.time = 1.06
+
+        # Connection 1 FIN
+        pkt8 = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="FA", seq=1101, ack=5201)
+        pkt8.time = 1.1
+
+        # ========== CONNECTION 2: Port reuse with DIFFERENT ISNs ==========
+
+        # Client SYN (NEW ISN = 2000, different from 1000)
+        pkt9 = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="S", seq=2000)
+        pkt9.time = 1.15
+
+        # Server SYN-ACK (NEW ISN = 4000, LOWER than old 5000!)
+        pkt10 = Ether() / IP(src="10.0.2.10", dst="10.0.1.5") / TCP(sport=80, dport=50000, flags="SA", seq=4000, ack=2001)
+        pkt10.time = 1.16
+
+        # Client ACK
+        pkt11 = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="A", seq=2001, ack=4001)
+        pkt11.time = 1.17
+
+        # Server sends data (seq=4001, LOWER than old highest_seq=5201)
+        # Without bidirectional cleanup: seq=4001 < highest_seq[reverse_key]=5201 → FALSE POSITIVE
+        pkt12 = Ether() / IP(src="10.0.2.10", dst="10.0.1.5") / TCP(sport=80, dport=50000, flags="A", seq=4001, ack=2001) / Raw(load=b"T" * 200)
+        pkt12.time = 1.18
+
+        results = analyzer.analyze([pkt1, pkt2, pkt3, pkt4, pkt5, pkt6, pkt7, pkt8, pkt9, pkt10, pkt11, pkt12])
+
+        # Should detect NO retransmissions (different ISNs = new connection)
+        # Before fix: Would detect 1 false positive (pkt12 flagged due to stale reverse state)
+        # After fix: 0 retransmissions (bidirectional cleanup clears reverse state)
+        assert results["total_retransmissions"] == 0, (
+            f"Bidirectional port reuse should not create false positives. "
+            f"Got {results['total_retransmissions']} retransmissions instead of 0. "
+            f"This indicates stale reverse flow state was not cleaned."
+        )
+
+    def test_bidirectional_rapid_connections(self):
+        """
+        BIDIRECTIONAL TEST: Rapid bidirectional connections with port reuse.
+
+        Scenario:
+          - 5 rapid connections on same port
+          - Each connection has FULL bidirectional traffic
+          - Server sends different amounts of data each time
+          - Validates complete state cleanup between connections
+
+        Expected: 0 retransmissions across all 5 connections
+        """
+        analyzer = RetransmissionAnalyzer()
+
+        packets = []
+        base_time = 1.0
+
+        for i in range(5):
+            conn_time = base_time + (i * 0.1)  # 100ms apart
+            client_isn = 1000 + (i * 1000)     # Different client ISN each time
+            server_isn = 5000 + (i * 500)      # Different server ISN each time
+
+            # 3-way handshake
+            syn = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="S", seq=client_isn)
+            syn.time = conn_time
+            packets.append(syn)
+
+            synack = Ether() / IP(src="10.0.2.10", dst="10.0.1.5") / TCP(sport=80, dport=50000, flags="SA", seq=server_isn, ack=client_isn + 1)
+            synack.time = conn_time + 0.01
+            packets.append(synack)
+
+            ack = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="A", seq=client_isn + 1, ack=server_isn + 1)
+            ack.time = conn_time + 0.02
+            packets.append(ack)
+
+            # Client data
+            client_data = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="A", seq=client_isn + 1, ack=server_isn + 1) / Raw(load=b"C" * 100)
+            client_data.time = conn_time + 0.03
+            packets.append(client_data)
+
+            # Server ACK
+            server_ack = Ether() / IP(src="10.0.2.10", dst="10.0.1.5") / TCP(sport=80, dport=50000, flags="A", seq=server_isn + 1, ack=client_isn + 101)
+            server_ack.time = conn_time + 0.04
+            packets.append(server_ack)
+
+            # Server data (different length each time)
+            server_data_len = 150 + (i * 50)  # 150, 200, 250, 300, 350
+            server_data = Ether() / IP(src="10.0.2.10", dst="10.0.1.5") / TCP(sport=80, dport=50000, flags="A", seq=server_isn + 1, ack=client_isn + 101) / Raw(load=b"S" * server_data_len)
+            server_data.time = conn_time + 0.05
+            packets.append(server_data)
+
+            # Client final ACK
+            client_final_ack = Ether() / IP(src="10.0.1.5", dst="10.0.2.10") / TCP(sport=50000, dport=80, flags="A", seq=client_isn + 101, ack=server_isn + 1 + server_data_len)
+            client_final_ack.time = conn_time + 0.06
+            packets.append(client_final_ack)
+
+        results = analyzer.analyze(packets)
+
+        # Should detect NO retransmissions across all 5 bidirectional connections
+        assert results["total_retransmissions"] == 0, (
+            f"Rapid bidirectional connections should not create false positives. "
+            f"Got {results['total_retransmissions']} retransmissions instead of 0"
+        )
