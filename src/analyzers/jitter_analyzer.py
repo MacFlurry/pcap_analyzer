@@ -317,6 +317,7 @@ class JitterAnalyzer:
                         "p95_jitter": p95_jitter,
                         "severity": self._classify_jitter_severity(mean_jitter),
                         "packets": len(self.flow_packets[flow_key]),
+                        "first_packet_time": stats_to_check.get("first_packet_time"),
                     }
                 )
 
@@ -367,6 +368,10 @@ class JitterAnalyzer:
         p95_jitter = sorted_jitters[int(len(sorted_jitters) * 0.95)] if len(sorted_jitters) > 1 else max_jitter
         p99_jitter = sorted_jitters[int(len(sorted_jitters) * 0.99)] if len(sorted_jitters) > 1 else max_jitter
 
+        # Get first packet timestamp
+        packets = self.flow_packets[flow_key]
+        first_packet_time = packets[0][0] if packets else None
+
         return {
             "packet_count": len(self.flow_packets[flow_key]),
             "jitter_samples": len(jitters),
@@ -378,6 +383,7 @@ class JitterAnalyzer:
             "min_jitter": min_jitter,
             "max_jitter": max_jitter,
             "stdev_jitter": stdev_jitter,
+            "first_packet_time": first_packet_time,
         }
 
     def _calculate_global_stats(self, jitters: list[float]) -> dict[str, Any]:
