@@ -3534,6 +3534,8 @@ class HTMLReportGenerator:
 
     def _generate_window_flow_table(self, flows: list, type_key: str) -> str:
         """Generate compact table of flows for window analysis."""
+        from datetime import datetime
+
         # Limit to top 10 flows
         flows_to_show = flows[:10]
 
@@ -3542,6 +3544,7 @@ class HTMLReportGenerator:
         html += '<thead style="background: #e9ecef;">'
         html += "<tr>"
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">First Zero Win</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Zero Windows</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Total Duration</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Min Window</th>'
@@ -3557,8 +3560,17 @@ class HTMLReportGenerator:
             min_window = flow.get("min_window_size", 0)
             avg_window = flow.get("avg_window_size", 0)
 
+            # Get first zero window timestamp
+            first_zero_window_time = flow.get("first_zero_window_time", None)
+            if first_zero_window_time:
+                dt = datetime.fromtimestamp(first_zero_window_time)
+                timestamp_iso = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            else:
+                timestamp_iso = "N/A"
+
             html += '<tr style="border-bottom: 1px solid #dee2e6;">'
             html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_key}</td>'
+            html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #555;">{timestamp_iso}</td>'
             html += f'<td style="padding: 10px; text-align: center;"><strong>{zero_window_count}</strong></td>'
             html += f'<td style="padding: 10px; text-align: center;">{self._format_duration(zero_window_duration)}</td>'
             html += f'<td style="padding: 10px; text-align: center;">{min_window:,} bytes</td>'
@@ -3909,6 +3921,8 @@ class HTMLReportGenerator:
 
     def _generate_jitter_flow_table(self, flows: list, severity_key: str) -> str:
         """Generate compact table of flows for jitter analysis."""
+        from datetime import datetime
+
         # Limit to top 10 flows
         flows_to_show = flows[:10]
 
@@ -3917,6 +3931,7 @@ class HTMLReportGenerator:
         html += '<thead style="background: #e9ecef;">'
         html += '<tr>'
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">First Packet</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Mean Jitter</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Max Jitter</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">P95 Jitter</th>'
@@ -3932,8 +3947,17 @@ class HTMLReportGenerator:
             p95_jitter = flow.get("p95_jitter", 0) * 1000
             packets = flow.get("packets", 0)
 
+            # Get first packet timestamp
+            first_packet_time = flow.get("first_packet_time", None)
+            if first_packet_time:
+                dt = datetime.fromtimestamp(first_packet_time)
+                timestamp_iso = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            else:
+                timestamp_iso = "N/A"
+
             html += '<tr style="border-bottom: 1px solid #dee2e6;">'
             html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_str}</td>'
+            html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #555;">{timestamp_iso}</td>'
             html += f'<td style="padding: 10px; text-align: center;"><strong>{mean_jitter:.2f} ms</strong></td>'
             html += f'<td style="padding: 10px; text-align: center;">{max_jitter:.2f} ms</td>'
             html += f'<td style="padding: 10px; text-align: center;">{p95_jitter:.2f} ms</td>'
@@ -4286,6 +4310,8 @@ class HTMLReportGenerator:
 
     def _generate_dns_transaction_table(self, transactions: list, issue_type: str) -> str:
         """Generate compact table of DNS transactions."""
+        from datetime import datetime
+
         # Limit to top 10 transactions
         transactions_to_show = transactions[:10]
 
@@ -4294,6 +4320,7 @@ class HTMLReportGenerator:
         html += '<thead style="background: #e9ecef;">'
         html += '<tr>'
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Domain</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Timestamp</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Query Type</th>'
 
         if issue_type != "timeout":
@@ -4317,8 +4344,17 @@ class HTMLReportGenerator:
             response_time = trans.get("response_time", 0) * 1000  # Convert to ms
             error_code = response.get("response_code_name", "NOERROR")
 
+            # Get query timestamp
+            query_time = query.get("timestamp", None)
+            if query_time:
+                dt = datetime.fromtimestamp(query_time)
+                timestamp_iso = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            else:
+                timestamp_iso = "N/A"
+
             html += '<tr style="border-bottom: 1px solid #dee2e6;">'
             html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{domain}</td>'
+            html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #555;">{timestamp_iso}</td>'
             html += f'<td style="padding: 10px; text-align: center;">{query_type}</td>'
 
             if issue_type != "timeout":
