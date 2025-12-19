@@ -450,6 +450,15 @@ class RetransmissionAnalyzer:
         if reverse_key in self._last_ack_timestamp:
             del self._last_ack_timestamp[reverse_key]
 
+        # CRITICAL FIX v4.16.1: Clear packet buffers to prevent contamination between connections
+        # Bug: Port reuse caused old connection packets to be mixed with new connection timeline
+        # Symptom: Retransmission context showed packets from connection 3h18 minutes earlier
+        # Impact: False positives in retransmission timeline (old handshake merged with new retrans)
+        if flow_key in self._packet_buffer:
+            del self._packet_buffer[flow_key]
+        if reverse_key in self._packet_buffer:
+            del self._packet_buffer[reverse_key]
+
         # RFC 793: Reset TCP state machine for both directions
         self._state_machine.reset_flow(flow_key)
         self._state_machine.reset_flow(reverse_key)
