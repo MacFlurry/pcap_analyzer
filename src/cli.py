@@ -43,6 +43,7 @@ from .performance.streaming_processor import StreamingProcessor
 from .report_generator import ReportGenerator
 from .ssh_capture import capture_from_config
 from .utils.result_sanitizer import get_empty_analyzer_result, sanitize_results
+from .__version__ import __version__
 
 console = Console()
 
@@ -953,6 +954,7 @@ def analyze_pcap_hybrid(
 
 
 @click.group()
+@click.version_option(version=__version__, prog_name="PCAP Analyzer")
 def cli():
     """Analyseur automatisé des causes de latence réseau"""
     pass
