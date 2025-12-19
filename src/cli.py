@@ -697,7 +697,7 @@ def analyze_pcap_hybrid(
 
         if all_retrans:
             # Group by flow
-            flow_stats = defaultdict(lambda: {"count": 0, "type": "Unknown"})
+            flow_stats = defaultdict(lambda: {"count": 0, "type": "Unknown", "flags": {}})
 
             for r in all_retrans:
                 src_ip = r.get("src_ip", "N/A")
@@ -705,10 +705,16 @@ def analyze_pcap_hybrid(
                 dst_ip = r.get("dst_ip", "N/A")
                 dst_port = r.get("dst_port", 0)
                 retrans_type = r.get("retrans_type", "Unknown")
+                tcp_flags = r.get("tcp_flags", "UNKNOWN")
 
                 flow_key = (src_ip, src_port, dst_ip, dst_port)
                 flow_stats[flow_key]["count"] += 1
                 flow_stats[flow_key]["type"] = retrans_type
+
+                # Track dominant flags
+                if tcp_flags not in flow_stats[flow_key]["flags"]:
+                    flow_stats[flow_key]["flags"][tcp_flags] = 0
+                flow_stats[flow_key]["flags"][tcp_flags] += 1
 
             # Sort by count and take top 10
             top_flows = sorted(flow_stats.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
@@ -719,15 +725,24 @@ def analyze_pcap_hybrid(
                 table.add_column("Src Port", justify="right")
                 table.add_column("Dest IP", style="magenta")
                 table.add_column("Dst Port", justify="right")
+                table.add_column("Flags", justify="center", style="blue bold")
                 table.add_column("Retrans", justify="right", style="red")
                 table.add_column("Type", style="yellow")
 
                 for (src_ip, src_port, dst_ip, dst_port), stats in top_flows:
+                    # Get dominant flags
+                    flags_count = stats.get("flags", {})
+                    if flags_count:
+                        dominant_flags = max(flags_count.items(), key=lambda x: x[1])[0]
+                    else:
+                        dominant_flags = "UNKNOWN"
+
                     table.add_row(
                         src_ip,
                         str(src_port),
                         dst_ip,
                         str(dst_port),
+                        dominant_flags,
                         str(stats["count"]),
                         stats["type"]
                     )
