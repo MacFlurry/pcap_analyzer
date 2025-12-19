@@ -114,25 +114,25 @@ class TestXSSVulnerabilities:
 
     def test_xss_in_flow_key_script_tag(self):
         """Test that <script> tags in flow_key are properly escaped."""
-        generator = HTMLReportGenerator()
+        from src.exporters.html_report import escape_html
 
         # XSS attempt with script tag
         xss_flow_key = "<script>alert('xss')</script>:80 → 10.0.0.2:443"
 
-        # Simulate flow table generation (from _generate_flow_table)
-        html = f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{xss_flow_key}</td>'
+        # Test the actual implementation with escape_html()
+        escaped_flow_key = escape_html(xss_flow_key)
+        html = f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{escaped_flow_key}</td>'
 
-        # Check if script tag is NOT escaped
-        if "<script>" in html:
-            print(f"❌ VULNERABILITY FOUND: XSS vulnerability - script tag not escaped!")
-            print(f"   HTML output: {html}")
-            assert False, "CRITICAL: XSS vulnerability detected - script tags are not escaped"
-        else:
-            print(f"✓ XSS script tag test passed (properly escaped)")
+        # Verify script tag is properly escaped
+        assert "<script>" not in html, "CRITICAL: XSS vulnerability - script tags not escaped"
+        assert "&lt;script&gt;" in html, "escape_html() should convert <script> to &lt;script&gt;"
+        assert "alert" in html, "Content should still be visible (just escaped)"
+
+        print(f"✓ XSS script tag test passed: {xss_flow_key[:30]}... → {escaped_flow_key[:40]}...")
 
     def test_xss_in_flow_key_event_handlers(self):
         """Test that HTML event handlers in flow_key are escaped."""
-        generator = HTMLReportGenerator()
+        from src.exporters.html_report import escape_html
 
         xss_attempts = [
             "<img src=x onerror=alert('xss')>:80 → 10.0.0.2:443",
@@ -141,32 +141,49 @@ class TestXSSVulnerabilities:
         ]
 
         for xss_attempt in xss_attempts:
-            html = f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{xss_attempt}</td>'
+            # Test the actual implementation with escape_html()
+            escaped = escape_html(xss_attempt)
+            html = f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{escaped}</td>'
 
-            # Check if event handlers are executable
-            if "onerror=" in html or "onclick=" in html or "onload=" in html:
-                if "&" not in html:  # Not HTML-escaped
-                    print(f"❌ VULNERABILITY: Event handler not escaped in: {html}")
-                    assert False, f"CRITICAL: XSS vulnerability - event handlers not escaped: {xss_attempt}"
+            # CRITICAL: Verify HTML tags are escaped (prevents execution)
+            # "<img" becomes "&lt;img" - not a real HTML tag, just text
+            assert "<img" not in html, f"IMG tag should be escaped to &lt;img in: {xss_attempt}"
+            assert "<div" not in html, f"DIV tag should be escaped to &lt;div in: {xss_attempt}"
 
-            print(f"✓ XSS event handler test for: {xss_attempt}")
+            # Verify that HTML opening brackets are escaped (this is what prevents execution)
+            # The key is that "<" becomes "&lt;" which makes tags non-executable
+            if "<" in xss_attempt:
+                assert "&lt;" in html, f"< should be escaped to &lt; in: {xss_attempt}"
+            if ">" in xss_attempt:
+                assert "&gt;" in html, f"> should be escaped to &gt; in: {xss_attempt}"
+
+            # Verify quotes are escaped (prevents attribute injection)
+            if '"' in xss_attempt:
+                assert "&quot;" in html or "&#34;" in html, f"Quotes should be escaped in: {xss_attempt}"
+
+            # Note: The text "onerror=alert" may appear in the escaped HTML,
+            # but it's SAFE because the < and > are escaped, making it plain text, not executable code
+
+            print(f"✓ XSS event handler test passed for: {xss_attempt[:40]}...")
 
     def test_xss_in_tshark_command_display(self):
         """Test that tshark commands with special chars are properly escaped in HTML."""
-        generator = HTMLReportGenerator()
+        from src.exporters.html_report import escape_html
 
         # Tshark filter with HTML special characters
         tshark_filter = "ip.src == <malicious> && tcp.port == '><script>alert(1)</script>'"
 
-        # Simulate _generate_tshark_command_box
-        html = f'<pre style="margin: 0; overflow-x: auto;">tshark -r input.pcap -Y \'{tshark_filter}\'</pre>'
+        # Test the actual implementation using escape_html() like _generate_tshark_command_box does
+        escaped_filter = escape_html(tshark_filter)
+        html = f'<pre style="margin: 0; overflow-x: auto;">tshark -r input.pcap -Y \'{escaped_filter}\'</pre>'
 
-        # Check if HTML special chars are escaped
-        if "<script>" in html:
-            print(f"❌ VULNERABILITY: Tshark command contains unescaped HTML: {html}")
-            assert False, "CRITICAL: XSS in tshark command display"
+        # Verify HTML special chars are properly escaped
+        assert "<script>" not in html, "Script tags should be escaped in tshark commands"
+        assert "&lt;script&gt;" in html, "escape_html() should convert <script> to &lt;script&gt;"
+        assert "<malicious>" not in html, "HTML tags should be escaped"
+        assert "&lt;malicious&gt;" in html, "Tags should be converted to entities"
 
-        print(f"✓ Tshark command XSS test passed")
+        print(f"✓ Tshark command XSS test passed - filter properly escaped")
 
 
 class TestPathTraversal:
