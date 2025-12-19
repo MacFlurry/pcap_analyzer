@@ -2406,10 +2406,13 @@ class HTMLReportGenerator:
                         f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
                     )
                     result["action"] = "Verify server is running, port is open, and firewall allows traffic"
-                elif ip_info:
-                    # For other retransmission types, IP range can be relevant
+                elif ip_info and ip_info.get("diagnostic", False):
+                    # For other retransmission types, only show diagnostic IP ranges as root cause
+                    # (e.g., TEST-NET, loopback, link-local - NOT RFC 1918 private addresses)
                     result["root_cause"] = f"{most_common_ip[0]} is {ip_info['name']} ({ip_info['rfc']})"
                     result["action"] = ip_info["action"]
+                # Note: RFC 1918 addresses (diagnostic=False) are not shown as root cause
+                # They're normal private IPs and don't indicate a problem
 
                 # Generate tshark filter (STATEFUL - uses tcp.analysis per RFC 793)
                 # All filters use Wireshark's stateful analysis engine, not stateless flag filtering
@@ -2442,55 +2445,76 @@ class HTMLReportGenerator:
         try:
             ip_obj = ipaddress.ip_address(ip)
 
-            # Reserved ranges
+            # Reserved ranges with diagnostic flag
+            # diagnostic=True: Indicates a configuration/routing problem
+            # diagnostic=False: Contextual info only (e.g., RFC 1918 private addresses)
             ranges = {
                 "192.0.2.0/24": {
                     "name": "TEST-NET-1 (Documentation/Testing)",
                     "rfc": "RFC 5737",
                     "action": "Remove hardcoded test IP from application config",
+                    "diagnostic": True,
                 },
                 "198.51.100.0/24": {
                     "name": "TEST-NET-2 (Documentation/Testing)",
                     "rfc": "RFC 5737",
                     "action": "Remove hardcoded test IP from application config",
+                    "diagnostic": True,
                 },
                 "203.0.113.0/24": {
                     "name": "TEST-NET-3 (Documentation/Testing)",
                     "rfc": "RFC 5737",
                     "action": "Remove hardcoded test IP from application config",
+                    "diagnostic": True,
                 },
                 "0.0.0.0/8": {
                     "name": "Current Network (invalid destination)",
                     "rfc": "RFC 1122",
                     "action": "Fix application routing logic",
+                    "diagnostic": True,
                 },
                 "127.0.0.0/8": {
                     "name": "Loopback",
                     "rfc": "RFC 1122",
                     "action": "Check if service should be local or remote",
+                    "diagnostic": True,
                 },
                 "169.254.0.0/16": {
                     "name": "Link-Local (APIPA)",
                     "rfc": "RFC 3927",
                     "action": "Check DHCP configuration",
+                    "diagnostic": True,
                 },
                 "10.0.0.0/8": {
                     "name": "Private Network",
                     "rfc": "RFC 1918",
                     "action": "Verify network routing and NAT",
+                    "diagnostic": False,  # Contextual only, not a root cause
                 },
                 "172.16.0.0/12": {
                     "name": "Private Network",
                     "rfc": "RFC 1918",
                     "action": "Verify network routing and NAT",
+                    "diagnostic": False,  # Contextual only, not a root cause
                 },
                 "192.168.0.0/16": {
                     "name": "Private Network",
                     "rfc": "RFC 1918",
                     "action": "Verify network routing and NAT",
+                    "diagnostic": False,  # Contextual only, not a root cause
                 },
-                "224.0.0.0/4": {"name": "Multicast", "rfc": "RFC 5771", "action": "Check multicast configuration"},
-                "240.0.0.0/4": {"name": "Reserved (Future Use)", "rfc": "RFC 1112", "action": "Invalid destination IP"},
+                "224.0.0.0/4": {
+                    "name": "Multicast",
+                    "rfc": "RFC 5771",
+                    "action": "Check multicast configuration",
+                    "diagnostic": True,
+                },
+                "240.0.0.0/4": {
+                    "name": "Reserved (Future Use)",
+                    "rfc": "RFC 1112",
+                    "action": "Invalid destination IP",
+                    "diagnostic": True,
+                },
             }
 
             for range_str, info in ranges.items():
@@ -2628,7 +2652,7 @@ class HTMLReportGenerator:
         """Generate tshark command box with one-click copy."""
         html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
         html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
-        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -e frame.number -e frame.time_relative -e tcp.seq -e tcp.ack -e tcp.len -e tcp.flags.str</pre>'
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -nn -tad -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -e frame.number -e frame.time -e tcp.seq -e tcp.ack -e tcp.len -e tcp.flags.str</pre>'
         html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy</div>'
         html += "</div>"
 
@@ -2768,6 +2792,7 @@ class HTMLReportGenerator:
         html += '<thead style="background: #e9ecef;">'
         html += "<tr>"
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
+        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Flags</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">First Retrans</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Total Retrans</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Avg Delay</th>'
@@ -2789,12 +2814,21 @@ class HTMLReportGenerator:
                 # Format timestamp in ISO 8601 (YYYY-MM-DD HH:MM:SS.mmm)
                 dt = datetime.fromtimestamp(first_timestamp)
                 timestamp_iso = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Keep milliseconds
+
+                # Determine dominant TCP flags
+                flags_count = {}
+                for r in retrans_list:
+                    flag = r.get("tcp_flags", "UNKNOWN")
+                    flags_count[flag] = flags_count.get(flag, 0) + 1
+                dominant_flags = max(flags_count.items(), key=lambda x: x[1])[0] if flags_count else "UNKNOWN"
             else:
                 duration = 0
                 timestamp_iso = "N/A"
+                dominant_flags = "UNKNOWN"
 
             html += '<tr style="border-bottom: 1px solid #dee2e6;">'
             html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_key}</td>'
+            html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #0066cc; font-weight: bold;">{dominant_flags}</td>'
             html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #555;">{timestamp_iso}</td>'
             html += f'<td style="padding: 10px; text-align: center;"><strong>{total_retrans}</strong></td>'
             html += f'<td style="padding: 10px; text-align: center;">{avg_delay*1000:.1f}ms</td>'
