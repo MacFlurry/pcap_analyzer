@@ -11,9 +11,89 @@ Generates professional, self-contained HTML reports with:
 - No external dependencies (embedded CSS/JS)
 """
 
+import html as html_module
+import ipaddress
+import logging
+import shlex
 from typing import Any
 
 from ..__version__ import __version__
+
+logger = logging.getLogger(__name__)
+
+
+# Security utilities for input validation and output escaping
+def validate_ip_address(ip: str) -> str:
+    """
+    Validate and sanitize IP address (IPv4 or IPv6).
+
+    Args:
+        ip: IP address string to validate
+
+    Returns:
+        Validated IP address as string, or safe fallback on error
+
+    Raises:
+        ValueError: If IP address is invalid (caught internally)
+    """
+    try:
+        validated = ipaddress.ip_address(ip.strip())
+        return str(validated)
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Invalid IP address '{ip}': {e}")
+        return "0.0.0.0"  # Safe fallback for IPv4
+
+
+def validate_port(port: str) -> str:
+    """
+    Validate port number (0-65535).
+
+    Args:
+        port: Port number string to validate
+
+    Returns:
+        Validated port as string, or "0" on error
+
+    Raises:
+        ValueError: If port is out of range (caught internally)
+    """
+    try:
+        port_int = int(str(port).strip())
+        if not (0 <= port_int <= 65535):
+            raise ValueError(f"Port {port_int} out of range")
+        return str(port_int)
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Invalid port '{port}': {e}")
+        return "0"  # Safe fallback
+
+
+def escape_html(text: str) -> str:
+    """
+    Escape HTML special characters to prevent XSS.
+
+    Args:
+        text: Text to escape
+
+    Returns:
+        HTML-escaped text safe for embedding in HTML
+    """
+    if text is None:
+        return ""
+    return html_module.escape(str(text), quote=True)
+
+
+def validate_flow_key_length(flow_key: str, max_length: int = 200) -> bool:
+    """
+    Validate flow_key length to prevent DoS attacks.
+
+    Args:
+        flow_key: Flow key string to validate
+        max_length: Maximum allowed length (default: 200)
+
+    Returns:
+        True if valid, False if too long
+    """
+    return len(flow_key) <= max_length
 
 
 class HTMLReportGenerator:
@@ -155,6 +235,8 @@ class HTMLReportGenerator:
         """
         Generate Wireshark display filter and tshark extraction command.
 
+        SECURITY: All inputs are validated and escaped to prevent command injection and XSS.
+
         Args:
             src_ip: Source IP address
             src_port: Source port
@@ -165,7 +247,18 @@ class HTMLReportGenerator:
 
         Returns:
             Dictionary with 'display_filter' and 'tshark_extract' keys
+
+        References:
+            - OWASP: Command Injection Prevention
         """
+        # SECURITY: Validate IP addresses to prevent command injection
+        src_ip = validate_ip_address(src_ip)
+        dst_ip = validate_ip_address(dst_ip)
+
+        # SECURITY: Validate port numbers to prevent command injection
+        src_port = validate_port(src_port)
+        dst_port = validate_port(dst_port)
+
         # Detect IPv6 vs IPv4
         is_ipv6 = ":" in src_ip and src_ip.count(":") > 1
 
@@ -184,6 +277,12 @@ class HTMLReportGenerator:
         # Add flow-type-specific filters
         if flow_type == "retransmission":
             if seq_num is not None:
+                # SECURITY: Validate seq_num is an integer
+                try:
+                    seq_num = int(seq_num)
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid seq_num: {seq_num}")
+                    seq_num = 0
                 display_filter = f"tcp.seq == {seq_num} && {base_filter}"
                 type_filter = f" and tcp.seq == {seq_num}"
             else:
@@ -207,8 +306,12 @@ class HTMLReportGenerator:
         else:
             combined_filter = f"ip.src == {src_ip} and ip.dst == {dst_ip} and tcp.srcport == {src_port} and tcp.dstport == {dst_port}{type_filter}"
 
+        # SECURITY: Use shlex.quote() to safely escape the combined filter
+        # This prevents command injection via shell metacharacters (;, |, `, $, etc.)
+        safe_combined_filter = shlex.quote(combined_filter)
+
         tshark_cmd = (
-            f"tshark -r input.pcap -Y '{combined_filter}' "
+            f"tshark -r input.pcap -Y {safe_combined_filter} "
             f"-T fields -e frame.number -e frame.time_relative -e tcp.seq -e tcp.ack -e tcp.len"
         )
 
@@ -216,6 +319,140 @@ class HTMLReportGenerator:
             "display_filter": display_filter,
             "tshark_extract": tshark_cmd,
         }
+
+    def _generate_flow_trace_command(self, flow_key: str) -> str:
+        """
+        Generate tshark command for bidirectional flow trace with TCP diagnostics.
+
+        This generates a production-ready tshark command that shows both directions of
+        a TCP flow with comprehensive diagnostic fields for troubleshooting retransmissions,
+        window scaling, and other TCP issues.
+
+        SECURITY: All inputs are validated and escaped to prevent command injection and XSS.
+
+        Args:
+            flow_key: Flow identifier in format "src_ip:src_port → dst_ip:dst_port"
+                     Supports both IPv4 and IPv6 addresses
+
+        Returns:
+            Formatted tshark command string with bidirectional BPF filter and TCP diagnostic fields
+
+        References:
+            - RFC 793: Transmission Control Protocol
+            - RFC 3168: ECN (Explicit Congestion Notification)
+            - tshark(1) man page: Display filter syntax and field extraction
+            - Wireshark Display Filter Reference: tcp.* fields
+            - OWASP: Command Injection Prevention
+        """
+        # Parse flow_key: "src_ip:src_port → dst_ip:dst_port"
+        try:
+            # SECURITY: Validate flow_key length to prevent DoS
+            if not validate_flow_key_length(flow_key):
+                logger.error(f"Flow key exceeds maximum length: {len(flow_key)} chars")
+                return "# Error: Flow key too long (potential DoS attack)"
+
+            parts = flow_key.split(" → ")
+            if len(parts) != 2:
+                return f"# Error: Invalid flow_key format: {flow_key}"
+
+            src_part = parts[0].strip()
+            dst_part = parts[1].strip()
+
+            # Handle IPv6 addresses (may contain multiple colons)
+            # IPv6 format: [addr]:port or addr:port (if no ambiguity)
+            def parse_endpoint(endpoint: str) -> tuple:
+                """Parse IP:port, handling IPv6 addresses."""
+                # Check for IPv6 bracket notation [addr]:port
+                if endpoint.startswith("["):
+                    bracket_end = endpoint.find("]")
+                    if bracket_end == -1:
+                        raise ValueError(f"Invalid IPv6 bracket notation: {endpoint}")
+                    ip = endpoint[1:bracket_end]
+                    port = endpoint[bracket_end + 2 :]  # Skip ']:'
+                    return ip, port
+
+                # Check if this might be IPv6 (contains multiple colons)
+                colon_count = endpoint.count(":")
+                if colon_count > 1:
+                    # IPv6 without brackets - port is after last colon
+                    # But need to handle :: (compressed notation)
+                    last_colon = endpoint.rfind(":")
+                    ip = endpoint[:last_colon]
+                    port = endpoint[last_colon + 1 :]
+                    return ip, port
+
+                # IPv4: simple split on last colon
+                if ":" in endpoint:
+                    ip, port = endpoint.rsplit(":", 1)
+                    return ip, port
+
+                raise ValueError(f"Invalid endpoint format: {endpoint}")
+
+            src_ip, src_port = parse_endpoint(src_part)
+            dst_ip, dst_port = parse_endpoint(dst_part)
+
+            # SECURITY: Validate IP addresses to prevent command injection
+            src_ip = validate_ip_address(src_ip)
+            dst_ip = validate_ip_address(dst_ip)
+
+            # SECURITY: Validate port numbers to prevent command injection
+            src_port = validate_port(src_port)
+            dst_port = validate_port(dst_port)
+
+            # Detect IPv6 vs IPv4 (IPv6 contains colons)
+            is_ipv6 = ":" in src_ip
+
+            # Build bidirectional BPF filter (shows both → and ← directions)
+            if is_ipv6:
+                bpf_filter = (
+                    f"((ipv6.src == {src_ip} and ipv6.dst == {dst_ip} and "
+                    f"tcp.srcport == {src_port} and tcp.dstport == {dst_port}) or "
+                    f"(ipv6.src == {dst_ip} and ipv6.dst == {src_ip} and "
+                    f"tcp.srcport == {dst_port} and tcp.dstport == {src_port}))"
+                )
+            else:
+                bpf_filter = (
+                    f"((ip.src == {src_ip} and ip.dst == {dst_ip} and "
+                    f"tcp.srcport == {src_port} and tcp.dstport == {dst_port}) or "
+                    f"(ip.src == {dst_ip} and ip.dst == {src_ip} and "
+                    f"tcp.srcport == {dst_port} and tcp.dstport == {src_port}))"
+                )
+
+            # TCP diagnostic fields (comprehensive troubleshooting info)
+            # These fields help diagnose retransmissions, window issues, and connection problems
+            fields = [
+                "frame.number",  # Packet number for reference
+                "frame.time_relative",  # Relative timestamp from capture start
+                "ip.src",  # Source IP
+                "ip.dst",  # Dest IP (or ipv6.src/dst for IPv6)
+                "tcp.srcport",  # Source port
+                "tcp.dstport",  # Dest port
+                "tcp.flags.str",  # TCP flags (SYN, ACK, RST, etc.) - human readable
+                "tcp.seq",  # Sequence number
+                "tcp.ack",  # Acknowledgment number
+                "tcp.window_size",  # Window size (in bytes)
+                "tcp.len",  # TCP payload length
+                "tcp.analysis.flags",  # Wireshark's analysis flags (retrans, dup ack, etc.)
+            ]
+
+            # Build tshark command with column formatting for readability
+            # Using -T fields with pipe delimiter, then column -t for alignment
+            field_args = " ".join(f"-e {field}" for field in fields)
+
+            # SECURITY: Use shlex.quote() to safely escape the BPF filter
+            # This prevents command injection via shell metacharacters (;, |, `, $, etc.)
+            safe_bpf_filter = shlex.quote(bpf_filter)
+
+            tshark_cmd = (
+                f"tshark -r input.pcap -Y {safe_bpf_filter} "
+                f"-T fields {field_args} -E separator='|' | column -t -s '|'"
+            )
+
+            return tshark_cmd
+
+        except Exception as e:
+            logger.error(f"Error parsing flow_key '{flow_key}': {e}")
+            return f"# Error parsing flow_key: {escape_html(str(e))}"
 
     def _generate_retransmission_interpretation(
         self,
@@ -588,9 +825,13 @@ class HTMLReportGenerator:
         html_parts.append("</div>")
 
         # Footer with version
-        html_parts.append('<div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-top: 1px solid #dee2e6; text-align: center; color: #6c757d; font-size: 0.9em;">')
+        html_parts.append(
+            '<div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-top: 1px solid #dee2e6; text-align: center; color: #6c757d; font-size: 0.9em;">'
+        )
         html_parts.append(f'  <p style="margin: 0;">Generated by <strong>PCAP Analyzer v{__version__}</strong></p>')
-        html_parts.append('  <p style="margin: 5px 0 0 0; font-size: 0.85em;">Network latency analysis and root cause diagnostics</p>')
+        html_parts.append(
+            '  <p style="margin: 5px 0 0 0; font-size: 0.85em;">Network latency analysis and root cause diagnostics</p>'
+        )
         html_parts.append("</div>")
 
         html_parts.append("</div>")
@@ -2306,8 +2547,15 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_grouped_retransmission_analysis(self, flows: dict, total_packets: int) -> str:
-        """Generate retransmission analysis grouped by type (SYN, RTO, Fast Retrans, Generic, Mixed)."""
+    def _generate_grouped_retransmission_analysis(self, flows: dict, total_packets: int, results: dict = None) -> str:
+        """
+        Generate retransmission analysis grouped by type (SYN, RTO, Fast Retrans, Generic, Mixed).
+
+        Args:
+            flows: Dictionary of flow_key -> retrans_list
+            total_packets: Total packets in capture
+            results: Full analysis results (for behavioral correlation)
+        """
         # Classify each flow by dominant type
         flow_groups = {
             "syn": [],  # SYN retransmissions (connection failures)
@@ -2348,38 +2596,101 @@ class HTMLReportGenerator:
         # Generate section for each type (only if flows exist)
         if flow_groups["syn"]:
             html += self._generate_retrans_type_section(
-                "syn", "SYN Retransmissions (Connection Failures)", flow_groups["syn"], "#dc3545", "🔴"
+                "syn", "SYN Retransmissions (Connection Failures)", flow_groups["syn"], "#dc3545", "🔴", results
             )
 
         if flow_groups["rto"]:
             html += self._generate_retrans_type_section(
-                "rto", "RTO Retransmissions (Packet Loss)", flow_groups["rto"], "#ffc107", "🟡"
+                "rto", "RTO Retransmissions (Packet Loss)", flow_groups["rto"], "#ffc107", "🟡", results
             )
 
         if flow_groups["fast"]:
             html += self._generate_retrans_type_section(
-                "fast", "Fast Retransmissions (Out-of-Order Delivery)", flow_groups["fast"], "#28a745", "🟢"
+                "fast", "Fast Retransmissions (Out-of-Order Delivery)", flow_groups["fast"], "#28a745", "🟢", results
             )
 
         if flow_groups["generic"]:
             html += self._generate_retrans_type_section(
-                "generic", "Generic Retransmissions (Moderate Delay)", flow_groups["generic"], "#17a2b8", "🔵"
+                "generic", "Generic Retransmissions (Moderate Delay)", flow_groups["generic"], "#17a2b8", "🔵", results
             )
 
         if flow_groups["mixed"]:
             html += self._generate_retrans_type_section(
-                "mixed", "Mixed Retransmissions (Multiple Mechanisms)", flow_groups["mixed"], "#6c757d", "⚪"
+                "mixed", "Mixed Retransmissions (Multiple Mechanisms)", flow_groups["mixed"], "#6c757d", "⚪", results
             )
 
         return html
 
-    def _analyze_root_cause(self, flows: list, type_key: str) -> dict:
-        """Analyze root cause and patterns for flows."""
+    def _analyze_root_cause(self, flows: list, type_key: str, results: dict = None) -> dict:
+        """
+        Analyze root cause and patterns for flows using behavioral correlation.
+
+        Args:
+            flows: List of (flow_key, retrans_list) tuples
+            type_key: Type of retransmissions (syn, rto, fast, generic, mixed)
+            results: Full analysis results for behavioral correlation
+
+        Returns:
+            Dictionary with root_cause, action, pattern, tshark_filter
+        """
         result = {"root_cause": None, "action": None, "pattern": None, "tshark_filter": None}
 
         if not flows:
             return result
 
+        # BEHAVIORAL DIAGNOSTICS (Priority over topological analysis)
+        # Check for micro-burst correlation (HIGH priority - datacenter issue)
+        if results:
+            micro_burst_diagnosis = self._detect_micro_bursts(flows, results, type_key)
+            if micro_burst_diagnosis:
+                result.update(micro_burst_diagnosis)
+                # Continue to generate tshark filter below
+                # Don't return early - we want the tshark filter
+
+        # Check for traffic shaping pattern (MEDIUM priority - QoS issue)
+        if not result["root_cause"] and type_key == "rto":
+            # Aggregate all retrans from all flows for pattern analysis
+            all_retrans = []
+            for _, retrans_list in flows:
+                all_retrans.extend(retrans_list)
+
+            if self._detect_traffic_shaping(all_retrans):
+                result["root_cause"] = "Traffic Shaping/Rate Limiting detected (constant retransmission rate pattern)"
+                result["action"] = (
+                    "Review QoS policies (Linux TC: tc-tbf/tc-htb, Cisco policing), "
+                    "increase rate limit if appropriate, or adjust application send rate"
+                )
+
+        # Check for firewall stealth behavior (SYN-specific)
+        if type_key == "syn" and not result["root_cause"]:
+            if self._detect_firewall_stealth(flows):
+                # Get common destination for detailed message
+                dest_ips = {}
+                dest_ports = {}
+                for flow_key, _ in flows:
+                    parts = flow_key.split(" → ")
+                    if len(parts) == 2:
+                        dst_part = parts[1].strip()
+                        if ":" in dst_part:
+                            dst_ip, dst_port = dst_part.rsplit(":", 1)
+                            dest_ips[dst_ip] = dest_ips.get(dst_ip, 0) + 1
+                            dest_ports[dst_port] = dest_ports.get(dst_port, 0) + 1
+
+                if dest_ips:
+                    most_common_ip = max(dest_ips.items(), key=lambda x: x[1])
+                    most_common_port = max(dest_ports.items(), key=lambda x: x[1]) if dest_ports else (None, 0)
+
+                    result["root_cause"] = (
+                        f"Firewall Drop/Stealth Port at {most_common_ip[0]}:{most_common_port[0]} "
+                        f"(100% SYN retransmissions, 0 responses - port is filtered)"
+                    )
+                    result["action"] = (
+                        "Firewall is silently dropping SYN packets (stealth mode). "
+                        "Verify firewall rules allow traffic, or confirm port is intentionally blocked. "
+                        "Unlike 'closed' ports (send RST), filtered ports give no response."
+                    )
+
+        # TOPOLOGICAL ANALYSIS (Fallback if no behavioral diagnosis found)
         # Extract all dest IPs and ports
         dest_ips = {}
         dest_ports = {}
@@ -2435,7 +2746,9 @@ class HTMLReportGenerator:
                 elif type_key == "rto":
                     # RTO: Use tcp.analysis.retransmission (stateful detection)
                     # Exclude fast retransmits and SYN packets
-                    result["tshark_filter"] += " and tcp.analysis.retransmission and not tcp.analysis.fast_retransmission and not tcp.flags.syn == 1"
+                    result[
+                        "tshark_filter"
+                    ] += " and tcp.analysis.retransmission and not tcp.analysis.fast_retransmission and not tcp.flags.syn == 1"
                 elif type_key == "generic" or type_key == "mixed":
                     # Generic/Mixed: Use tcp.analysis.retransmission (stateful detection)
                     result["tshark_filter"] += " and tcp.analysis.retransmission"
@@ -2533,6 +2846,134 @@ class HTMLReportGenerator:
             pass
 
         return None
+
+    def _detect_traffic_shaping(self, retrans_list: list) -> bool:
+        """
+        Detect traffic shaping/rate limiting by analyzing retransmission uniformity.
+
+        Traffic shaping (Linux TC, Cisco policing) causes constant-rate packet drops,
+        resulting in uniform retransmission intervals (low coefficient of variation).
+
+        Args:
+            retrans_list: List of retransmission events for a flow
+
+        Returns:
+            True if retransmissions show constant-rate pattern (CV < 0.3)
+
+        References:
+            - Linux TC: tc-tbf(8), tc-htb(8) man pages
+            - RFC 2474: DiffServ Field in IPv4/IPv6 Headers
+            - Cisco QoS: Policing vs Shaping documentation
+        """
+        if len(retrans_list) < 10:
+            return False
+
+        timestamps = sorted([r.get("timestamp", 0) for r in retrans_list])
+        intervals = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
+
+        if not intervals:
+            return False
+
+        mean_interval = sum(intervals) / len(intervals)
+        if mean_interval == 0:
+            return False
+
+        variance = sum((x - mean_interval) ** 2 for x in intervals) / len(intervals)
+        cv = (variance**0.5) / mean_interval  # Coefficient of variation
+
+        # Low CV (< 0.3) indicates uniform spacing = traffic shaping
+        return cv < 0.3
+
+    def _detect_micro_bursts(self, flows: list, results: dict, type_key: str) -> dict:
+        """
+        Detect micro-bursts causing buffer overflow by correlating burst events with retransmissions.
+
+        Micro-bursts occur when applications send traffic spikes that exceed buffer capacity,
+        causing packet drops and retransmissions. Common in datacenters with bursty workloads.
+
+        Args:
+            flows: List of (flow_key, retrans_list) tuples
+            results: Full analysis results containing burst_analyzer data
+            type_key: Type of retransmissions being analyzed
+
+        Returns:
+            Dictionary with root_cause and action if micro-burst detected, else empty dict
+
+        References:
+            - RFC 7567: Active Queue Management Recommendations
+            - RFC 3168: Explicit Congestion Notification (ECN)
+            - Cisco: "Understanding Micro-bursts in Data Center Networks"
+        """
+        if type_key != "rto" or "burst" not in results:
+            return {}
+
+        burst_results = results.get("burst", {})
+        bursts = burst_results.get("bursts", [])
+
+        if not bursts:
+            return {}
+
+        # Correlate retransmissions with burst events
+        for burst in bursts:
+            burst_start = burst.get("start_time", 0)
+            burst_end = burst.get("end_time", 0)
+            peak_ratio = burst.get("peak_ratio", 0)
+
+            # Check temporal overlap
+            retrans_in_burst = []
+            for _, retrans_list in flows:
+                for r in retrans_list:
+                    ts = r.get("timestamp", 0)
+                    if burst_start <= ts <= burst_end:
+                        retrans_in_burst.append(r)
+
+            # Significant burst causing retransmissions
+            if len(retrans_in_burst) > 5 and peak_ratio > 5.0:
+                pps = burst.get("packets_per_second", 0)
+                bps = burst.get("bytes_per_second", 0)
+
+                return {
+                    "root_cause": (
+                        f"Micro-bursts causing buffer overflow "
+                        f"({pps:.0f} pkt/s spike, {peak_ratio:.1f}x average rate, "
+                        f"{len(retrans_in_burst)} retrans during burst)"
+                    ),
+                    "action": (
+                        "Increase switch/router buffer size, enable ECN (RFC 3168), "
+                        "implement AQM (RFC 7567), or optimize application send patterns"
+                    ),
+                }
+
+        return {}
+
+    def _detect_firewall_stealth(self, flows: list) -> bool:
+        """
+        Detect firewall stealth port behavior (silently dropping SYN packets).
+
+        Firewalls in stealth mode drop SYN packets without sending RST responses,
+        making ports appear "filtered" rather than "closed" (Nmap terminology).
+
+        Args:
+            flows: List of (flow_key, retrans_list) tuples for SYN retransmissions
+
+        Returns:
+            True if 100% SYN retransmissions with no ACK/RST responses
+
+        References:
+            - RFC 793 Section 3.4: Connection establishment
+            - Nmap: Port scanning techniques (filtered vs closed states)
+            - Firewall stealth scanning defense mechanisms
+        """
+        # Check if ANY retransmission received a response (ACK or RST)
+        for _, retrans_list in flows:
+            for r in retrans_list:
+                # If we saw ANY ACK from the receiver, it means server responded
+                if r.get("last_ack_seen") is not None:
+                    return False
+                # Note: RST would prevent retransmissions, so absence of retrans = RST sent
+
+        # All SYN retransmissions, zero responses = firewall stealth
+        return True
 
     def _generate_root_cause_box(self, analysis: dict, type_key: str, flows: list) -> str:
         """Generate root cause analysis box."""
@@ -2656,22 +3097,39 @@ class HTMLReportGenerator:
         return html
 
     def _generate_tshark_command_box(self, tshark_filter: str) -> str:
-        """Generate tshark command box with one-click copy."""
+        """
+        Generate tshark command box with one-click copy.
+
+        SECURITY: tshark_filter is HTML-escaped to prevent XSS.
+        """
         html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
         html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
-        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -nn -tad -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -e frame.number -e frame.time -e tcp.seq -e tcp.ack -e tcp.len -e tcp.flags.str</pre>'
+        # SECURITY: Escape tshark_filter to prevent XSS
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -nn -tad -r &lt;file.pcap&gt; -Y \'{escape_html(tshark_filter)}\' -T fields -e frame.number -e frame.time -e tcp.seq -e tcp.ack -e tcp.len -e tcp.flags.str</pre>'
         html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy</div>'
         html += "</div>"
 
         return html
 
-    def _generate_retrans_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str) -> str:
-        """Generate a section for one retransmission type with explanation + flow table."""
+    def _generate_retrans_type_section(
+        self, type_key: str, title: str, flows: list, color: str, emoji: str, results: dict = None
+    ) -> str:
+        """
+        Generate a section for one retransmission type with explanation + flow table.
+
+        Args:
+            type_key: Type identifier (syn, rto, fast, generic, mixed)
+            title: Display title for this section
+            flows: List of (flow_key, retrans_list) tuples
+            color: CSS color for section header
+            emoji: Emoji for section header
+            results: Full analysis results for behavioral correlation
+        """
         flow_count = len(flows)
         total_retrans = sum(len(retrans_list) for _, retrans_list in flows)
 
-        # Analyze root cause
-        root_cause_analysis = self._analyze_root_cause(flows, type_key)
+        # Analyze root cause with behavioral correlation
+        root_cause_analysis = self._analyze_root_cause(flows, type_key, results)
 
         html = '<div class="retrans-type-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'.format(
             color=color
@@ -2834,13 +3292,38 @@ class HTMLReportGenerator:
                 dominant_flags = "UNKNOWN"
 
             html += '<tr style="border-bottom: 1px solid #dee2e6;">'
-            html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_key}</td>'
+            # SECURITY: Escape flow_key to prevent XSS
+            html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{escape_html(flow_key)}</td>'
             html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #0066cc; font-weight: bold;">{dominant_flags}</td>'
             html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #555;">{timestamp_iso}</td>'
             html += f'<td style="padding: 10px; text-align: center;"><strong>{total_retrans}</strong></td>'
             html += f'<td style="padding: 10px; text-align: center;">{avg_delay*1000:.1f}ms</td>'
             html += f'<td style="padding: 10px; text-align: center;">{self._format_duration(duration)}</td>'
             html += "</tr>"
+
+            # Add flow trace command for flows with >= 3 retransmissions
+            if total_retrans >= 3:
+                flow_trace_cmd = self._generate_flow_trace_command(flow_key)
+                html += '<tr style="border-bottom: 1px solid #dee2e6;">'
+                html += '<td colspan="6" style="padding: 10px; background: #f8f9fa;">'
+                html += '<details style="margin: 0;">'
+                html += '<summary style="cursor: pointer; color: #007bff; font-weight: 500; padding: 5px 0;">📋 Detailed Packet Trace Command (click to expand)</summary>'
+                html += '<div style="margin-top: 10px; background: #263238; color: #aed581; padding: 15px; border-radius: 6px; font-family: monospace; overflow-x: auto;">'
+                html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">Tshark command for bidirectional flow analysis:</div>'
+                # SECURITY: Escape tshark command to prevent XSS
+                html += f'<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; cursor: text; user-select: all; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">{escape_html(flow_trace_cmd)}</pre>'
+                html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy</div>'
+                html += '<div style="color: #ffeb3b; margin-top: 10px; padding-top: 10px; border-top: 1px solid #455a64; font-size: 0.8em;">'
+                html += "<strong>Example Output:</strong><br>"
+                html += '<span style="color: #b0bec5;">Frame | Time      | Src IP      | Dst IP      | SPort | DPort | Flags | Seq    | Ack    | Win   | Len | Analysis</span><br>'
+                html += '<span style="color: #b0bec5;">1     | 0.000000  | 192.168.1.2 | 10.0.0.5    | 51234 | 80    | S     | 0      | 0      | 65535 | 0   |          </span><br>'
+                html += '<span style="color: #b0bec5;">2     | 0.100000  | 10.0.0.5    | 192.168.1.2 | 80    | 51234 | SA    | 0      | 1      | 29200 | 0   |          </span><br>'
+                html += '<span style="color: #ffab40;">5     | 0.250000  | 192.168.1.2 | 10.0.0.5    | 51234 | 80    | PA    | 1      | 1      | 65535 | 512 | Retrans  </span><br>'
+                html += "</div>"
+                html += "</div>"
+                html += "</details>"
+                html += "</td>"
+                html += "</tr>"
 
         html += "</tbody>"
         html += "</table>"
@@ -3297,11 +3780,11 @@ class HTMLReportGenerator:
                                 <summary><strong>🔍 Debug Commands</strong></summary>
                                 <div style="margin-top: 10px;">
                                     <p style="margin: 5px 0;"><strong>Wireshark Display Filter:</strong></p>
-                                    <code class="copy-code">{ws_commands['display_filter']}</code>
+                                    <code class="copy-code">{escape_html(ws_commands['display_filter'])}</code>
                                     <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
 
                                     <p style="margin: 15px 0 5px 0;"><strong>Tshark Extraction:</strong></p>
-                                    <code class="copy-code">{ws_commands['tshark_extract']}</code>
+                                    <code class="copy-code">{escape_html(ws_commands['tshark_extract'])}</code>
                                     <button class="copy-btn" onclick="copyToClipboard(this)">📋 Copy</button>
                                 </div>
                             </details>
@@ -3398,8 +3881,8 @@ class HTMLReportGenerator:
                         flows[flow_key] = []
                     flows[flow_key].append(r)
 
-                # Classify each flow by dominant retransmission type
-                html += self._generate_grouped_retransmission_analysis(flows, total_packets)
+                # Classify each flow by dominant retransmission type (with behavioral correlation)
+                html += self._generate_grouped_retransmission_analysis(flows, total_packets, results)
 
         # TCP Handshakes
         handshake_data = results.get("tcp_handshake", {})
@@ -3659,13 +4142,18 @@ class HTMLReportGenerator:
         return html
 
     def _generate_window_tshark_box(self, analysis: dict) -> str:
-        """Generate tshark command box for window analysis with one-click copy."""
+        """
+        Generate tshark command box for window analysis with one-click copy.
+
+        SECURITY: tshark_filter is HTML-escaped to prevent XSS.
+        """
         # Build tshark filter for window analysis
         tshark_filter = "tcp.window_size_value == 0 || tcp.analysis.zero_window"
 
         html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
         html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
-        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport -e tcp.window_size_value -e tcp.window_size</pre>'
+        # SECURITY: Escape tshark_filter to prevent XSS
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{escape_html(tshark_filter)}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport -e tcp.window_size_value -e tcp.window_size</pre>'
         html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy | Output: CSV with headers</div>'
         html += "</div>"
 
@@ -3708,7 +4196,8 @@ class HTMLReportGenerator:
                 timestamp_iso = "N/A"
 
             html += '<tr style="border-bottom: 1px solid #dee2e6;">'
-            html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{flow_key}</td>'
+            # SECURITY: Escape flow_key to prevent XSS
+            html += f'<td style="padding: 10px; font-family: monospace; font-size: 0.9em;">{escape_html(flow_key)}</td>'
             html += f'<td style="padding: 10px; text-align: center; font-family: monospace; font-size: 0.85em; color: #555;">{timestamp_iso}</td>'
             html += f'<td style="padding: 10px; text-align: center;"><strong>{zero_window_count}</strong></td>'
             html += f'<td style="padding: 10px; text-align: center;">{self._format_duration(zero_window_duration)}</td>'
@@ -3725,7 +4214,9 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_window_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str, capture_duration: float = 0) -> str:
+    def _generate_window_type_section(
+        self, type_key: str, title: str, flows: list, color: str, emoji: str, capture_duration: float = 0
+    ) -> str:
         """Generate a section for one window bottleneck type with explanation + flow table."""
         flow_count = len(flows)
         total_zero_windows = sum(f.get("zero_window_count", 0) for f in flows)
@@ -3782,7 +4273,9 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_grouped_window_analysis(self, window_data: dict, total_packets: int, capture_duration: float = 0) -> str:
+    def _generate_grouped_window_analysis(
+        self, window_data: dict, total_packets: int, capture_duration: float = 0
+    ) -> str:
         """Generate window analysis grouped by bottleneck type (application, receiver, network, other)."""
         flow_stats = window_data.get("flow_statistics", [])
 
@@ -3795,9 +4288,9 @@ class HTMLReportGenerator:
         # Classify flows by bottleneck type
         flow_groups = {
             "application": [],  # Application bottleneck (critical)
-            "receiver": [],     # Receiver constraint (high)
-            "network": [],      # Network congestion (moderate)
-            "other": [],        # Other/unknown (low)
+            "receiver": [],  # Receiver constraint (high)
+            "network": [],  # Network congestion (moderate)
+            "other": [],  # Other/unknown (low)
         }
 
         for flow in flows_with_zero_windows:
@@ -3825,7 +4318,7 @@ class HTMLReportGenerator:
             flow_groups[group_type] = sorted(
                 flow_groups[group_type],
                 key=lambda f: f.get("zero_window_count", 0) * f.get("zero_window_total_duration", 0.0),
-                reverse=True
+                reverse=True,
             )
 
         html = ""
@@ -3838,7 +4331,7 @@ class HTMLReportGenerator:
                 flow_groups["application"],
                 "#dc3545",
                 "🔴",
-                capture_duration
+                capture_duration,
             )
 
         if flow_groups["receiver"]:
@@ -3848,27 +4341,17 @@ class HTMLReportGenerator:
                 flow_groups["receiver"],
                 "#ffc107",
                 "🟡",
-                capture_duration
+                capture_duration,
             )
 
         if flow_groups["network"]:
             html += self._generate_window_type_section(
-                "network",
-                "Network Congestion (Moderate)",
-                flow_groups["network"],
-                "#fd7e14",
-                "🟠",
-                capture_duration
+                "network", "Network Congestion (Moderate)", flow_groups["network"], "#fd7e14", "🟠", capture_duration
             )
 
         if flow_groups["other"]:
             html += self._generate_window_type_section(
-                "other",
-                "Other Window Issues (Low)",
-                flow_groups["other"],
-                "#6c757d",
-                "⚪",
-                capture_duration
+                "other", "Other Window Issues (Low)", flow_groups["other"], "#6c757d", "⚪", capture_duration
             )
 
         return html
@@ -3922,11 +4405,13 @@ class HTMLReportGenerator:
                 ip_info = self._identify_ip_range(most_common_ip[0])
                 if ip_info:
                     result["root_cause"] = f"{most_common_ip[0]} is {ip_info['name']} ({ip_info['rfc']})"
-                    result["action"] = ip_info['action']
+                    result["action"] = ip_info["action"]
                 else:
                     # Real network - suggest investigation
                     result["root_cause"] = f"High jitter to {most_common_ip[0]} across all flows"
-                    result["action"] = f"Investigate network path to {most_common_ip[0]} for congestion or routing issues"
+                    result["action"] = (
+                        f"Investigate network path to {most_common_ip[0]} for congestion or routing issues"
+                    )
 
                 # Generate tshark filter
                 result["tshark_filter"] = f"ip.dst == {most_common_ip[0]}"
@@ -3964,7 +4449,12 @@ class HTMLReportGenerator:
 
         # Severity indicators
         severity_emojis = {"critical": "🔴", "high": "🟡", "medium": "🟢", "low": "⚪"}
-        severity_texts = {"critical": "Critical Severity", "high": "High Severity", "medium": "Medium Severity", "low": "Low Severity"}
+        severity_texts = {
+            "critical": "Critical Severity",
+            "high": "High Severity",
+            "medium": "Medium Severity",
+            "low": "Low Severity",
+        }
 
         severity_emoji = severity_emojis.get(severity_key, "⚪")
         severity_text = severity_texts.get(severity_key, "Low Severity")
@@ -3987,16 +4477,18 @@ class HTMLReportGenerator:
         html += '<div style="background: rgba(255,255,255,0.15); padding: 10px; margin: 10px 0; border-radius: 5px; border-left: 3px solid rgba(255,255,255,0.5);">'
         html += '<p style="margin: 0; font-size: 0.9em;"><strong>📋 RFC 3393 Jitter:</strong></p>'
         html += '<p style="margin: 5px 0 0 0; font-size: 0.85em;">Inter-Packet Delay Variation (IPDV). Critical for real-time applications (VoIP, gaming, streaming).</p>'
-        html += '</div>'
+        html += "</div>"
 
         # Recommended action
         if analysis["action"]:
-            html += '<div style="background: rgba(255,255,255,0.2); padding: 10px; margin-top: 10px; border-radius: 5px;">'
+            html += (
+                '<div style="background: rgba(255,255,255,0.2); padding: 10px; margin-top: 10px; border-radius: 5px;">'
+            )
             html += f'<p style="margin: 0; font-size: 0.9em;"><strong>💡 Recommended Action:</strong></p>'
             html += f'<p style="margin: 5px 0 0 0; font-size: 0.85em;">{analysis["action"]}</p>'
-            html += '</div>'
+            html += "</div>"
 
-        html += '</div>'
+        html += "</div>"
         return html
 
     def _generate_jitter_explanation_concise(self, severity_key: str, flows: list) -> str:
@@ -4062,35 +4554,40 @@ class HTMLReportGenerator:
         if severity_key == "critical":
             html += '<li><strong>Monitor link saturation:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">sar -n DEV 1</code> (Linux)</li>'
             html += '<li><strong>Check interface errors:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">netstat -i</code> or <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">ip -s link</code></li>'
-            html += '<li>Investigate routing changes or BGP flaps</li>'
-            html += '<li>Consider traffic shaping or QoS prioritization</li>'
+            html += "<li>Investigate routing changes or BGP flaps</li>"
+            html += "<li>Consider traffic shaping or QoS prioritization</li>"
         elif severity_key == "high":
             html += '<li><strong>Check for packet reordering:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">netstat -s | grep reordering</code></li>'
             html += '<li><strong>Monitor queue depths:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">tc -s qdisc show</code></li>'
-            html += '<li>Review multipath routing configuration (ECMP)</li>'
-            html += '<li>Analyze traffic patterns for bursts</li>'
+            html += "<li>Review multipath routing configuration (ECMP)</li>"
+            html += "<li>Analyze traffic patterns for bursts</li>"
         elif severity_key == "medium":
-            html += '<li><strong>Monitor trends:</strong> Track jitter over time for degradation</li>'
-            html += '<li>Review network topology for suboptimal paths</li>'
-            html += '<li>Consider buffering strategies for applications</li>'
+            html += "<li><strong>Monitor trends:</strong> Track jitter over time for degradation</li>"
+            html += "<li>Review network topology for suboptimal paths</li>"
+            html += "<li>Consider buffering strategies for applications</li>"
         else:
-            html += '<li><strong>Baseline established:</strong> Document current jitter levels</li>'
-            html += '<li>Continue monitoring for changes</li>'
+            html += "<li><strong>Baseline established:</strong> Document current jitter levels</li>"
+            html += "<li>Continue monitoring for changes</li>"
 
-        html += '</ul>'
-        html += '</div>'
+        html += "</ul>"
+        html += "</div>"
 
         return html
 
     def _generate_jitter_tshark_box(self, analysis: dict) -> str:
-        """Generate tshark command box for jitter debugging."""
+        """
+        Generate tshark command box for jitter debugging.
+
+        SECURITY: tshark_filter is HTML-escaped to prevent XSS.
+        """
         tshark_filter = analysis.get("tshark_filter", "frame.time_delta_displayed > 0.1")
 
         html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
         html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
-        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e frame.time_delta_displayed -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport</pre>'
+        # SECURITY: Escape tshark_filter to prevent XSS
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{escape_html(tshark_filter)}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e frame.time_delta_displayed -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport</pre>'
         html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy | Output: CSV with headers</div>'
-        html += '</div>'
+        html += "</div>"
 
         return html
 
@@ -4104,16 +4601,16 @@ class HTMLReportGenerator:
         html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
         html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
         html += '<thead style="background: #e9ecef;">'
-        html += '<tr>'
+        html += "<tr>"
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">First Packet</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Mean Jitter</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Max Jitter</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">P95 Jitter</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Packets</th>'
-        html += '</tr>'
-        html += '</thead>'
-        html += '<tbody>'
+        html += "</tr>"
+        html += "</thead>"
+        html += "<tbody>"
 
         for flow in flows_to_show:
             flow_str = flow.get("flow", "N/A")
@@ -4137,18 +4634,20 @@ class HTMLReportGenerator:
             html += f'<td style="padding: 10px; text-align: center;">{max_jitter:.2f} ms</td>'
             html += f'<td style="padding: 10px; text-align: center;">{p95_jitter:.2f} ms</td>'
             html += f'<td style="padding: 10px; text-align: center;">{packets}</td>'
-            html += '</tr>'
+            html += "</tr>"
 
-        html += '</tbody>'
-        html += '</table>'
-        html += '</div>'
+        html += "</tbody>"
+        html += "</table>"
+        html += "</div>"
 
         if len(flows) > 10:
             html += f'<p style="color: #6c757d; font-size: 0.9em; font-style: italic; margin-top: 10px;">Showing top 10 of {len(flows)} flows. See JSON report for complete data.</p>'
 
         return html
 
-    def _generate_jitter_severity_section(self, severity_key: str, title: str, flows: list, color: str, emoji: str) -> str:
+    def _generate_jitter_severity_section(
+        self, severity_key: str, title: str, flows: list, color: str, emoji: str
+    ) -> str:
         """Generate a section for one jitter severity level with RCA + flow table."""
         flow_count = len(flows)
         total_packets = sum(f.get("packets", 0) for f in flows)
@@ -4161,7 +4660,7 @@ class HTMLReportGenerator:
         html = f'<div class="jitter-severity-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'
         html += f'<div class="jitter-severity-header" style="background: {color}; color: white; padding: 15px; font-weight: bold; font-size: 1.1em;">'
         html += f'{emoji} {title} — {flow_count} flow{"s" if flow_count != 1 else ""} ({total_packets:,} packets, avg {avg_mean_jitter_ms:.2f}ms jitter)'
-        html += '</div>'
+        html += "</div>"
         html += '<div class="jitter-severity-body" style="padding: 20px; background: #f8f9fa;">'
 
         # Add root cause analysis (if found)
@@ -4180,8 +4679,8 @@ class HTMLReportGenerator:
         # Add compact flow table
         html += self._generate_jitter_flow_table(flows, severity_key)
 
-        html += '</div>'
-        html += '</div>'
+        html += "</div>"
+        html += "</div>"
 
         return html
 
@@ -4195,10 +4694,10 @@ class HTMLReportGenerator:
         # Classify flows by severity (P95-based per RFC 5481)
         flow_groups = {
             "critical": [],  # Critical jitter: P95 > 50ms (UDP) or > 200ms (TCP)
-            "high": [],      # High jitter: P95 50-100ms (UDP) or 100-200ms (TCP)
-            "medium": [],    # Medium jitter: P95 30-50ms
-            "low": [],       # Low jitter: P95 20-30ms
-            "excellent": [], # Excellent jitter: P95 < 20ms
+            "high": [],  # High jitter: P95 50-100ms (UDP) or 100-200ms (TCP)
+            "medium": [],  # Medium jitter: P95 30-50ms
+            "low": [],  # Low jitter: P95 20-30ms
+            "excellent": [],  # Excellent jitter: P95 < 20ms
         }
 
         for flow in high_jitter_flows:
@@ -4208,9 +4707,7 @@ class HTMLReportGenerator:
         # Sort each group by P95 jitter (descending) - primary metric per RFC 5481
         for group_type in flow_groups:
             flow_groups[group_type] = sorted(
-                flow_groups[group_type],
-                key=lambda f: f.get("p95_jitter", 0),
-                reverse=True
+                flow_groups[group_type], key=lambda f: f.get("p95_jitter", 0), reverse=True
             )
 
         html = ""
@@ -4219,47 +4716,27 @@ class HTMLReportGenerator:
         # Order: Critical -> High -> Medium -> Low -> Excellent
         if flow_groups["critical"]:
             html += self._generate_jitter_severity_section(
-                "critical",
-                "Critical Jitter (P95 > 50ms UDP or > 200ms TCP)",
-                flow_groups["critical"],
-                "#dc3545",
-                "🔴"
+                "critical", "Critical Jitter (P95 > 50ms UDP or > 200ms TCP)", flow_groups["critical"], "#dc3545", "🔴"
             )
 
         if flow_groups["high"]:
             html += self._generate_jitter_severity_section(
-                "high",
-                "High Jitter (P95 50-100ms UDP or 100-200ms TCP)",
-                flow_groups["high"],
-                "#ff9800",
-                "🟡"
+                "high", "High Jitter (P95 50-100ms UDP or 100-200ms TCP)", flow_groups["high"], "#ff9800", "🟡"
             )
 
         if flow_groups["medium"]:
             html += self._generate_jitter_severity_section(
-                "medium",
-                "Moderate Jitter (P95 30-50ms)",
-                flow_groups["medium"],
-                "#ffc107",
-                "🟠"
+                "medium", "Moderate Jitter (P95 30-50ms)", flow_groups["medium"], "#ffc107", "🟠"
             )
 
         if flow_groups["low"]:
             html += self._generate_jitter_severity_section(
-                "low",
-                "Low Jitter (P95 20-30ms)",
-                flow_groups["low"],
-                "#6c757d",
-                "⚪"
+                "low", "Low Jitter (P95 20-30ms)", flow_groups["low"], "#6c757d", "⚪"
             )
 
         if flow_groups["excellent"]:
             html += self._generate_jitter_severity_section(
-                "excellent",
-                "Excellent Jitter (P95 < 20ms)",
-                flow_groups["excellent"],
-                "#17a2b8",
-                "💎"
+                "excellent", "Excellent Jitter (P95 < 20ms)", flow_groups["excellent"], "#17a2b8", "💎"
             )
 
         return html
@@ -4371,7 +4848,7 @@ class HTMLReportGenerator:
             "timeout": "Critical Severity",
             "error": "High Severity",
             "slow": "Medium Severity",
-            "k8s": "Informational"
+            "k8s": "Informational",
         }
 
         severity_emoji = severity_emojis.get(issue_type, "⚪")
@@ -4395,16 +4872,18 @@ class HTMLReportGenerator:
         html += '<div style="background: rgba(255,255,255,0.15); padding: 10px; margin: 10px 0; border-radius: 5px; border-left: 3px solid rgba(255,255,255,0.5);">'
         html += '<p style="margin: 0; font-size: 0.9em;"><strong>📋 RFC 1035 DNS:</strong></p>'
         html += '<p style="margin: 5px 0 0 0; font-size: 0.85em;">Domain Name System resolution. Timeouts >5s, errors (NXDOMAIN/SERVFAIL), and slow responses impact application performance.</p>'
-        html += '</div>'
+        html += "</div>"
 
         # Recommended action
         if analysis["action"]:
-            html += '<div style="background: rgba(255,255,255,0.2); padding: 10px; margin-top: 10px; border-radius: 5px;">'
+            html += (
+                '<div style="background: rgba(255,255,255,0.2); padding: 10px; margin-top: 10px; border-radius: 5px;">'
+            )
             html += f'<p style="margin: 0; font-size: 0.9em;"><strong>💡 Recommended Action:</strong></p>'
             html += f'<p style="margin: 5px 0 0 0; font-size: 0.85em;">{analysis["action"]}</p>'
-            html += '</div>'
+            html += "</div>"
 
-        html += '</div>'
+        html += "</div>"
         return html
 
     def _generate_dns_explanation_concise(self, issue_type: str, transactions: list) -> str:
@@ -4460,37 +4939,42 @@ class HTMLReportGenerator:
         if issue_type == "timeout":
             html += '<li><strong>Test DNS connectivity:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">dig @&lt;dns_server&gt; example.com</code></li>'
             html += '<li><strong>Check port 53:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">nc -vz &lt;dns_server&gt; 53</code> or <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">telnet &lt;dns_server&gt; 53</code></li>'
-            html += '<li>Verify firewall rules allow UDP/TCP port 53</li>'
-            html += '<li>Check DNS server status and logs</li>'
+            html += "<li>Verify firewall rules allow UDP/TCP port 53</li>"
+            html += "<li>Check DNS server status and logs</li>"
         elif issue_type == "error":
             html += '<li><strong>Query specific domain:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">nslookup &lt;domain&gt;</code> or <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">dig &lt;domain&gt;</code></li>'
-            html += '<li><strong>Check DNS server logs:</strong> Review for SERVFAIL or configuration errors</li>'
-            html += '<li>Verify upstream resolvers are reachable</li>'
-            html += '<li>Test with alternative DNS servers (8.8.8.8, 1.1.1.1)</li>'
+            html += "<li><strong>Check DNS server logs:</strong> Review for SERVFAIL or configuration errors</li>"
+            html += "<li>Verify upstream resolvers are reachable</li>"
+            html += "<li>Test with alternative DNS servers (8.8.8.8, 1.1.1.1)</li>"
         elif issue_type == "slow":
             html += '<li><strong>Measure DNS latency:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">time dig example.com</code></li>'
-            html += '<li><strong>Enable local DNS caching:</strong> dnsmasq, systemd-resolved, or nscd</li>'
+            html += "<li><strong>Enable local DNS caching:</strong> dnsmasq, systemd-resolved, or nscd</li>"
             html += '<li>Check network latency to DNS server: <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">ping &lt;dns_server&gt;</code></li>'
-            html += '<li>Consider using closer DNS servers or CDN-based resolvers</li>'
+            html += "<li>Consider using closer DNS servers or CDN-based resolvers</li>"
         else:  # k8s
-            html += '<li><strong>Normal behavior:</strong> No action required</li>'
-            html += '<li>K8s DNS tries multiple search domains (e.g., .svc.cluster.local, .cluster.local)</li>'
-            html += '<li>NXDOMAIN responses are expected during multi-level resolution</li>'
+            html += "<li><strong>Normal behavior:</strong> No action required</li>"
+            html += "<li>K8s DNS tries multiple search domains (e.g., .svc.cluster.local, .cluster.local)</li>"
+            html += "<li>NXDOMAIN responses are expected during multi-level resolution</li>"
 
-        html += '</ul>'
-        html += '</div>'
+        html += "</ul>"
+        html += "</div>"
 
         return html
 
     def _generate_dns_tshark_box(self, analysis: dict) -> str:
-        """Generate tshark command box for DNS debugging."""
+        """
+        Generate tshark command box for DNS debugging.
+
+        SECURITY: tshark_filter is HTML-escaped to prevent XSS.
+        """
         tshark_filter = analysis.get("tshark_filter", "dns and dns.flags.rcode != 0")
 
         html = '<div style="background: #263238; color: #aed581; padding: 15px; margin-bottom: 20px; border-radius: 6px; font-family: monospace; position: relative;">'
         html += '<div style="color: #81c784; margin-bottom: 8px; font-size: 0.85em;">📌 Tshark Command (click to select):</div>'
-        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{tshark_filter}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e ip.src -e ip.dst -e dns.qry.name -e dns.qry.type -e dns.flags.rcode -e dns.time</pre>'
+        # SECURITY: Escape tshark_filter to prevent XSS
+        html += f'<pre style="margin: 0; overflow-x: auto; cursor: text; user-select: all; background: #1e1e1e; padding: 10px; border-radius: 4px; font-size: 0.85em;" onclick="window.getSelection().selectAllChildren(this);">tshark -r &lt;file.pcap&gt; -Y \'{escape_html(tshark_filter)}\' -T fields -E header=y -E separator=, -E quote=d -e frame.number -e frame.time_relative -e ip.src -e ip.dst -e dns.qry.name -e dns.qry.type -e dns.flags.rcode -e dns.time</pre>'
         html += '<div style="color: #90caf9; margin-top: 8px; font-size: 0.8em;">💡 Click command to select, then Ctrl+C (Cmd+C) to copy | Output: CSV with headers</div>'
-        html += '</div>'
+        html += "</div>"
 
         return html
 
@@ -4504,21 +4988,23 @@ class HTMLReportGenerator:
         html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
         html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
         html += '<thead style="background: #e9ecef;">'
-        html += '<tr>'
+        html += "<tr>"
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Domain</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Timestamp</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Query Type</th>'
 
         if issue_type != "timeout":
-            html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Response Time</th>'
+            html += (
+                '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Response Time</th>'
+            )
 
         if issue_type == "error" or issue_type == "k8s":
             html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Error Code</th>'
 
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">DNS Server</th>'
-        html += '</tr>'
-        html += '</thead>'
-        html += '<tbody>'
+        html += "</tr>"
+        html += "</thead>"
+        html += "<tbody>"
 
         for trans in transactions_to_show:
             query = trans.get("query", {})
@@ -4550,18 +5036,20 @@ class HTMLReportGenerator:
                 html += f'<td style="padding: 10px; text-align: center;"><span style="color: #dc3545;">{error_code}</span></td>'
 
             html += f'<td style="padding: 10px; text-align: center;">{server}</td>'
-            html += '</tr>'
+            html += "</tr>"
 
-        html += '</tbody>'
-        html += '</table>'
-        html += '</div>'
+        html += "</tbody>"
+        html += "</table>"
+        html += "</div>"
 
         if len(transactions) > 10:
             html += f'<p style="color: #6c757d; font-size: 0.9em; font-style: italic; margin-top: 10px;">Showing top 10 of {len(transactions)} transactions. See JSON report for complete data.</p>'
 
         return html
 
-    def _generate_dns_issue_section(self, issue_type: str, title: str, transactions: list, color: str, emoji: str) -> str:
+    def _generate_dns_issue_section(
+        self, issue_type: str, title: str, transactions: list, color: str, emoji: str
+    ) -> str:
         """Generate a section for one DNS issue type with RCA + transaction table."""
         transaction_count = len(transactions)
 
@@ -4571,7 +5059,7 @@ class HTMLReportGenerator:
         html = f'<div class="dns-issue-section" style="margin: 20px 0; border: 2px solid {color}; border-radius: 8px; overflow: hidden;">'
         html += f'<div class="dns-issue-header" style="background: {color}; color: white; padding: 15px; font-weight: bold; font-size: 1.1em;">'
         html += f'{emoji} {title} — {transaction_count} transaction{"s" if transaction_count != 1 else ""}'
-        html += '</div>'
+        html += "</div>"
         html += '<div class="dns-issue-body" style="padding: 20px; background: #f8f9fa;">'
 
         # Add root cause analysis (if found)
@@ -4590,8 +5078,8 @@ class HTMLReportGenerator:
         # Add compact transaction table
         html += self._generate_dns_transaction_table(transactions, issue_type)
 
-        html += '</div>'
-        html += '</div>'
+        html += "</div>"
+        html += "</div>"
 
         return html
 
@@ -4608,38 +5096,22 @@ class HTMLReportGenerator:
         # Generate section for each issue type (only if transactions exist)
         if timeout_details:
             html += self._generate_dns_issue_section(
-                "timeout",
-                "DNS Timeouts (Critical)",
-                timeout_details,
-                "#dc3545",
-                "🔴"
+                "timeout", "DNS Timeouts (Critical)", timeout_details, "#dc3545", "🔴"
             )
 
         if error_transactions:
             html += self._generate_dns_issue_section(
-                "error",
-                "DNS Errors (High)",
-                error_transactions[:10],  # Limit to top 10
-                "#ffc107",
-                "🟡"
+                "error", "DNS Errors (High)", error_transactions[:10], "#ffc107", "🟡"  # Limit to top 10
             )
 
         if slow_details:
             html += self._generate_dns_issue_section(
-                "slow",
-                "Slow DNS Responses (Moderate)",
-                slow_details,
-                "#fd7e14",
-                "🟠"
+                "slow", "Slow DNS Responses (Moderate)", slow_details, "#fd7e14", "🟠"
             )
 
         if k8s_errors_details:
             html += self._generate_dns_issue_section(
-                "k8s",
-                "Kubernetes Expected Errors (Informational)",
-                k8s_errors_details,
-                "#28a745",
-                "🟢"
+                "k8s", "Kubernetes Expected Errors (Informational)", k8s_errors_details, "#28a745", "🟢"
             )
 
         return html
