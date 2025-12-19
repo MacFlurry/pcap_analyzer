@@ -1410,12 +1410,38 @@ class RetransmissionAnalyzer:
             # Limit to first 10 packets total (from both directions)
             handshake_packets = handshake_packets[:10]
 
+            # Merge retransmission contexts from both directions
+            merged_retrans_contexts = []
+            for context in timeline.retrans_context:
+                # Get timestamp range for this context (±5 packets around retransmission)
+                if context:
+                    context_start_time = min(p.timestamp for p in context)
+                    context_end_time = max(p.timestamp for p in context)
+
+                    # Merge with reverse direction packets in same time range
+                    merged_context = list(context)
+                    if reverse_key and reverse_key in self._packet_buffer:
+                        # Add packets from reverse direction that fall in same time range
+                        for pkt in self._packet_buffer[reverse_key]:
+                            if context_start_time <= pkt.timestamp <= context_end_time:
+                                merged_context.append(pkt)
+
+                    # Sort by timestamp
+                    merged_context.sort(key=lambda p: p.timestamp)
+                    merged_retrans_contexts.append(merged_context)
+                else:
+                    merged_retrans_contexts.append(context)
+
             # Merge teardown packets from both directions
             teardown_packets = list(timeline.teardown)
+
+            # Add teardown from reverse direction buffer (last 10 packets)
             if reverse_key and reverse_key in self._packet_buffer:
-                # Get teardown from reverse direction if it exists
-                if reverse_key in self.sampled_timelines:
-                    teardown_packets.extend(self.sampled_timelines[reverse_key].teardown)
+                teardown_packets.extend(list(self._packet_buffer[reverse_key]))
+
+            # Also add teardown from reverse sampled timeline if it exists
+            if reverse_key and reverse_key in self.sampled_timelines:
+                teardown_packets.extend(self.sampled_timelines[reverse_key].teardown)
 
             # Sort by timestamp and take last 10
             teardown_packets.sort(key=lambda p: p.timestamp)
@@ -1423,7 +1449,7 @@ class RetransmissionAnalyzer:
 
             sampled_timelines_dict[flow_key] = {
                 "handshake": [asdict(p) for p in handshake_packets],
-                "retrans_context": [[asdict(p) for p in context] for context in timeline.retrans_context],
+                "retrans_context": [[asdict(p) for p in context] for context in merged_retrans_contexts],
                 "teardown": [asdict(p) for p in teardown_packets],
             }
 
