@@ -3479,12 +3479,13 @@ class HTMLReportGenerator:
                 </div>
                 """
 
-            # Get total packets for context
+            # Get total packets and capture duration for context
             metadata = results.get("metadata", {})
             total_packets = metadata.get("total_packets", 0)
+            capture_duration = metadata.get("capture_duration", 0)
 
             # Generate grouped window analysis by bottleneck type
-            html += self._generate_grouped_window_analysis(window_data, total_packets)
+            html += self._generate_grouped_window_analysis(window_data, total_packets, capture_duration)
 
         return html
 
@@ -3603,8 +3604,8 @@ class HTMLReportGenerator:
             flow_key = flow.get("flow_key", "N/A")
             zero_window_count = flow.get("zero_window_count", 0)
             zero_window_duration = flow.get("zero_window_total_duration", 0)
-            min_window = flow.get("min_window_size", 0)
-            avg_window = flow.get("avg_window_size", 0)
+            min_window = flow.get("min_window", 0)
+            avg_window = flow.get("mean_window", 0)
 
             # Get first zero window timestamp
             first_zero_window_time = flow.get("first_zero_window_time", None)
@@ -3632,7 +3633,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_window_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str) -> str:
+    def _generate_window_type_section(self, type_key: str, title: str, flows: list, color: str, emoji: str, capture_duration: float = 0) -> str:
         """Generate a section for one window bottleneck type with explanation + flow table."""
         flow_count = len(flows)
         total_zero_windows = sum(f.get("zero_window_count", 0) for f in flows)
@@ -3654,6 +3655,27 @@ class HTMLReportGenerator:
         # Add concise explanation
         html += self._generate_window_explanation_concise(type_key, flows)
 
+        # FIX #4: Add warning for stuck flows (those with unclosed zero windows)
+        if capture_duration > 0:
+            stuck_flows = []
+            for flow in flows:
+                blocked_time = flow.get("zero_window_total_duration", 0)
+                if blocked_time > capture_duration * 0.95:  # Within 95% of capture duration
+                    stuck_flows.append(flow)
+
+            if len(stuck_flows) > 0:
+                html += f"""
+                <div style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                    <p style="margin: 0 0 8px 0;"><strong>⚠️ Stuck Flows Detected</strong></p>
+                    <p style="margin: 0; font-size: 0.95em; color: #856404;">
+                        <strong>{len(stuck_flows)} flow(s)</strong> remained in zero-window state for the entire capture duration
+                        (~{self._format_duration(capture_duration)}). These are likely <strong>zombie connections</strong> that
+                        were established but immediately blocked and never recovered. Consider investigating why these connections
+                        are stuck (application hung, receiver crashed, or network issue).
+                    </p>
+                </div>
+                """
+
         # Add quick actions
         html += self._generate_window_quick_actions(root_cause_analysis, type_key)
 
@@ -3668,7 +3690,7 @@ class HTMLReportGenerator:
 
         return html
 
-    def _generate_grouped_window_analysis(self, window_data: dict, total_packets: int) -> str:
+    def _generate_grouped_window_analysis(self, window_data: dict, total_packets: int, capture_duration: float = 0) -> str:
         """Generate window analysis grouped by bottleneck type (application, receiver, network, other)."""
         flow_stats = window_data.get("flow_statistics", [])
 
@@ -3723,7 +3745,8 @@ class HTMLReportGenerator:
                 "Application Bottleneck (Critical)",
                 flow_groups["application"],
                 "#dc3545",
-                "🔴"
+                "🔴",
+                capture_duration
             )
 
         if flow_groups["receiver"]:
@@ -3732,7 +3755,8 @@ class HTMLReportGenerator:
                 "Receiver Buffer Constraint (High)",
                 flow_groups["receiver"],
                 "#ffc107",
-                "🟡"
+                "🟡",
+                capture_duration
             )
 
         if flow_groups["network"]:
@@ -3741,7 +3765,8 @@ class HTMLReportGenerator:
                 "Network Congestion (Moderate)",
                 flow_groups["network"],
                 "#fd7e14",
-                "🟠"
+                "🟠",
+                capture_duration
             )
 
         if flow_groups["other"]:
@@ -3750,7 +3775,8 @@ class HTMLReportGenerator:
                 "Other Window Issues (Low)",
                 flow_groups["other"],
                 "#6c757d",
-                "⚪"
+                "⚪",
+                capture_duration
             )
 
         return html

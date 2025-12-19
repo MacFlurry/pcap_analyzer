@@ -185,7 +185,9 @@ class TCPWindowAnalyzer:
 
         # Détection Zero Window
         if actual_window == 0:
-            stats["zero_window_count"] += 1
+            # Only increment when starting a NEW zero window period
+            if flow_key not in self._zero_window_start:
+                stats["zero_window_count"] += 1
 
             # Capture le timestamp du premier zero window
             if stats["first_zero_window_time"] is None:
@@ -247,6 +249,10 @@ class TCPWindowAnalyzer:
                 event.duration = duration
                 self._flow_aggregates[flow_key]["zero_duration"] += duration
 
+                # FIX #3: Also append to window_events if significant
+                if duration >= self.zero_window_duration_threshold:
+                    self.window_events.append(event)
+
         # Calcule les statistiques par flux
         self._calculate_flow_statistics()
 
@@ -286,7 +292,9 @@ class TCPWindowAnalyzer:
 
         # Détection Zero Window
         if actual_window == 0:
-            stats["zero_window_count"] += 1
+            # Only increment when starting a NEW zero window period
+            if flow_key not in self._zero_window_start:
+                stats["zero_window_count"] += 1
 
             # Capture le timestamp du premier zero window
             if stats["first_zero_window_time"] is None:
