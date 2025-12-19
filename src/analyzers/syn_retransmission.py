@@ -118,12 +118,29 @@ class SYNRetransmissionAnalyzer:
             # Vérifier si c'est une retransmission (même flux, même seq number)
             if base_flow_key in self.pending_syns:
                 retrans = self.pending_syns[base_flow_key]
-                # On considère que c'est une retransmission si c'est le même flux
-                # et que le temps est cohérent (< 10s depuis le dernier SYN)
-                if retrans.syn_attempts and packet_time - retrans.syn_attempts[-1] < 10.0:
-                    retrans.syn_attempts.append(packet_time)
-                    retrans.syn_packet_nums.append(packet_num)
-                    retrans.retransmission_count += 1
+
+                # RFC 793: TRUE retransmission MUST have SAME Initial Sequence Number (ISN)
+                if retrans.initial_seq is not None and tcp.seq == retrans.initial_seq:
+                    # Same seq = TRUE retransmission
+                    if retrans.syn_attempts and packet_time - retrans.syn_attempts[-1] < 10.0:
+                        retrans.syn_attempts.append(packet_time)
+                        retrans.syn_packet_nums.append(packet_num)
+                        retrans.retransmission_count += 1
+                else:
+                    # Different seq = NEW connection (port reuse)
+                    # Replace old entry with new connection
+                    retrans = SYNRetransmission(
+                        src_ip=ip.src,
+                        dst_ip=ip.dst,
+                        src_port=tcp.sport,
+                        dst_port=tcp.dport,
+                        first_syn_time=packet_time,
+                        initial_seq=tcp.seq,  # RFC 793: Store Initial Sequence Number
+                        syn_attempts=[packet_time],
+                        syn_packet_nums=[packet_num],
+                        retransmission_count=0,
+                    )
+                    self.pending_syns[base_flow_key] = retrans
             else:
                 # Nouveau SYN
                 retrans = SYNRetransmission(
@@ -132,6 +149,7 @@ class SYNRetransmissionAnalyzer:
                     src_port=tcp.sport,
                     dst_port=tcp.dport,
                     first_syn_time=packet_time,
+                    initial_seq=tcp.seq,  # RFC 793: Store Initial Sequence Number
                     syn_attempts=[packet_time],
                     syn_packet_nums=[packet_num],
                     retransmission_count=0,
@@ -158,6 +176,28 @@ class SYNRetransmissionAnalyzer:
                         self.retransmissions.append(retrans)
 
                     del self.pending_syns[reverse_flow]
+
+        # Détection RST - cleanup pending SYNs
+        elif tcp.flags & 0x04:  # RST flag
+            # Clean both directions
+            forward_flow = (ip.src, ip.dst, tcp.sport, tcp.dport)
+            reverse_flow = (ip.dst, ip.src, tcp.dport, tcp.sport)
+
+            if forward_flow in self.pending_syns:
+                del self.pending_syns[forward_flow]
+            if reverse_flow in self.pending_syns:
+                del self.pending_syns[reverse_flow]
+
+        # Détection FIN - cleanup pending SYNs
+        elif tcp.flags & 0x01:  # FIN flag
+            # Clean both directions
+            forward_flow = (ip.src, ip.dst, tcp.sport, tcp.dport)
+            reverse_flow = (ip.dst, ip.src, tcp.dport, tcp.sport)
+
+            if forward_flow in self.pending_syns:
+                del self.pending_syns[forward_flow]
+            if reverse_flow in self.pending_syns:
+                del self.pending_syns[reverse_flow]
 
     def _process_metadata(self, metadata: "PacketMetadata", packet_num: int) -> None:
         """
@@ -188,12 +228,29 @@ class SYNRetransmissionAnalyzer:
             # Vérifier si c'est une retransmission (même flux, même seq number)
             if base_flow_key in self.pending_syns:
                 retrans = self.pending_syns[base_flow_key]
-                # On considère que c'est une retransmission si c'est le même flux
-                # et que le temps est cohérent (< 10s depuis le dernier SYN)
-                if retrans.syn_attempts and packet_time - retrans.syn_attempts[-1] < 10.0:
-                    retrans.syn_attempts.append(packet_time)
-                    retrans.syn_packet_nums.append(packet_num)
-                    retrans.retransmission_count += 1
+
+                # RFC 793: TRUE retransmission MUST have SAME Initial Sequence Number (ISN)
+                if retrans.initial_seq is not None and metadata.tcp_seq == retrans.initial_seq:
+                    # Same seq = TRUE retransmission
+                    if retrans.syn_attempts and packet_time - retrans.syn_attempts[-1] < 10.0:
+                        retrans.syn_attempts.append(packet_time)
+                        retrans.syn_packet_nums.append(packet_num)
+                        retrans.retransmission_count += 1
+                else:
+                    # Different seq = NEW connection (port reuse)
+                    # Replace old entry with new connection
+                    retrans = SYNRetransmission(
+                        src_ip=metadata.src_ip,
+                        dst_ip=metadata.dst_ip,
+                        src_port=metadata.src_port,
+                        dst_port=metadata.dst_port,
+                        first_syn_time=packet_time,
+                        initial_seq=metadata.tcp_seq,  # RFC 793: Store Initial Sequence Number
+                        syn_attempts=[packet_time],
+                        syn_packet_nums=[packet_num],
+                        retransmission_count=0,
+                    )
+                    self.pending_syns[base_flow_key] = retrans
             else:
                 # Nouveau SYN
                 retrans = SYNRetransmission(
@@ -202,6 +259,7 @@ class SYNRetransmissionAnalyzer:
                     src_port=metadata.src_port,
                     dst_port=metadata.dst_port,
                     first_syn_time=packet_time,
+                    initial_seq=metadata.tcp_seq,  # RFC 793: Store Initial Sequence Number
                     syn_attempts=[packet_time],
                     syn_packet_nums=[packet_num],
                     retransmission_count=0,
@@ -228,6 +286,28 @@ class SYNRetransmissionAnalyzer:
                         self.retransmissions.append(retrans)
 
                     del self.pending_syns[reverse_flow]
+
+        # Détection RST - cleanup pending SYNs
+        elif metadata.is_rst:
+            # Clean both directions
+            forward_flow = (metadata.src_ip, metadata.dst_ip, metadata.src_port, metadata.dst_port)
+            reverse_flow = (metadata.dst_ip, metadata.src_ip, metadata.dst_port, metadata.src_port)
+
+            if forward_flow in self.pending_syns:
+                del self.pending_syns[forward_flow]
+            if reverse_flow in self.pending_syns:
+                del self.pending_syns[reverse_flow]
+
+        # Détection FIN - cleanup pending SYNs
+        elif metadata.is_fin:
+            # Clean both directions
+            forward_flow = (metadata.src_ip, metadata.dst_ip, metadata.src_port, metadata.dst_port)
+            reverse_flow = (metadata.dst_ip, metadata.src_ip, metadata.dst_port, metadata.src_port)
+
+            if forward_flow in self.pending_syns:
+                del self.pending_syns[forward_flow]
+            if reverse_flow in self.pending_syns:
+                del self.pending_syns[reverse_flow]
 
     def _cleanup_stale_pending_syns(self, current_time: float) -> None:
         """
