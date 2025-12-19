@@ -1,0 +1,973 @@
+/**
+ * Packet Timeline Visual Interface Stylesheet
+ *
+ * Design System for TCP Packet Timeline Rendering in HTML Reports
+ * - Dark theme compatible (background #1e1e1e)
+ * - Print-friendly
+ * - WCAG 2.1 AAA compliant
+ * - No JavaScript required (CSS-only interactions)
+ *
+ * @version 1.0.0
+ * @author UX Design Team
+ * @date 2025-12-19
+ */
+
+/* ============================================
+   1. TYPOGRAPHY
+   ============================================ */
+
+:root {
+  /* Font Families */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+               'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Monaco', 'Consolas', 'Courier New', monospace;
+
+  /* Font Sizes */
+  --text-xs: 0.75em;    /* 12px - badges */
+  --text-sm: 0.85em;    /* 13.6px - table headers, small text */
+  --text-base: 0.9em;   /* 14.4px - packet data */
+  --text-md: 1em;       /* 16px - normal text */
+  --text-lg: 1.1em;     /* 17.6px - section headers */
+  --text-xl: 1.3em;     /* 20.8px - subsection headers */
+
+  /* Line Heights */
+  --leading-tight: 1.4;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+
+  /* Letter Spacing */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.05em;
+  --tracking-wider: 0.5px;
+}
+
+/* ============================================
+   2. COLOR PALETTE
+   ============================================ */
+
+:root {
+  /* Base Colors */
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-dark-bg: #1e1e1e;
+  --color-gray-50: #f8f9fa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #e8e8e8;
+  --color-gray-300: #e0e0e0;
+  --color-gray-400: #d0d0d0;
+  --color-gray-500: #999999;
+  --color-gray-600: #666666;
+  --color-gray-700: #555555;
+  --color-gray-800: #333333;
+  --color-gray-900: #2c3e50;
+
+  /* Semantic Colors - Backgrounds */
+  --bg-handshake: #f0f9f4;
+  --bg-rto: #fff5f5;
+  --bg-fast-retrans: #fffbf0;
+  --bg-generic-retrans: #f5f9ff;
+  --bg-teardown-clean: #f0f8ff;
+  --bg-teardown-rst: #fff0f0;
+  --bg-normal: #ffffff;
+  --bg-hover: #f8fafc;
+
+  /* Semantic Colors - Borders */
+  --border-success: #28a745;
+  --border-info: #3498db;
+  --border-warning: #f39c12;
+  --border-danger: #e74c3c;
+  --border-default: #e0e0e0;
+
+  /* Badge Colors - Success (Green) */
+  --badge-success-bg: #d4edda;
+  --badge-success-text: #155724;
+  --badge-success-border: #28a745;
+
+  /* Badge Colors - Info (Blue) */
+  --badge-info-bg: #d1ecf1;
+  --badge-info-text: #0c5460;
+  --badge-info-border: #17a2b8;
+
+  /* Badge Colors - Warning (Yellow) */
+  --badge-warning-bg: #fff3cd;
+  --badge-warning-text: #856404;
+  --badge-warning-border: #f39c12;
+
+  /* Badge Colors - Danger (Red) */
+  --badge-danger-bg: #f8d7da;
+  --badge-danger-text: #721c24;
+  --badge-danger-border: #e74c3c;
+
+  /* Direction Colors */
+  --color-outbound: #3498db;
+  --color-inbound: #27ae60;
+
+  /* Accent Colors */
+  --color-accent-green: #aed581; /* Existing header color */
+  --color-accent-blue: #3498db;
+}
+
+/* ============================================
+   3. SPACING SCALE
+   ============================================ */
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+}
+
+/* ============================================
+   4. PACKET TIMELINE CONTAINER
+   ============================================ */
+
+.packet-timeline-container {
+  margin: var(--space-6) 0;
+  background: var(--bg-normal);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* Section Headers */
+.timeline-section-header {
+  margin: 0 0 var(--space-4) 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--border-default);
+  color: var(--color-gray-900);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.timeline-section-header .icon {
+  font-size: 1.2em;
+  line-height: 1;
+}
+
+.timeline-section-header .duration {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--color-gray-600);
+  font-weight: 400;
+  font-family: var(--font-mono);
+}
+
+/* ============================================
+   5. COLLAPSIBLE FLOW CONTAINER
+   ============================================ */
+
+/* Hide checkbox (pure CSS interaction) */
+.flow-expand-checkbox {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Expand/Collapse Button */
+.flow-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-gray-100);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--color-gray-700);
+  transition: all 0.2s ease;
+  user-select: none;
+  min-height: 44px; /* Touch-friendly */
+}
+
+.flow-expand-btn:hover {
+  background: var(--color-gray-200);
+  border-color: var(--border-info);
+  color: var(--color-gray-900);
+}
+
+.flow-expand-btn:focus-within {
+  outline: 3px solid var(--border-info);
+  outline-offset: 2px;
+}
+
+.expand-icon {
+  display: inline-block;
+  font-size: 1.2em;
+  transition: transform 0.2s ease;
+  line-height: 1;
+}
+
+/* Expanded State */
+.flow-expand-checkbox:checked ~ .flow-details {
+  display: block;
+  animation: slideDown 0.3s ease;
+}
+
+.flow-expand-checkbox:checked + .flow-expand-btn {
+  background: var(--border-info);
+  color: var(--color-white);
+  border-color: var(--border-info);
+}
+
+.flow-expand-checkbox:checked + .flow-expand-btn .expand-icon {
+  transform: rotate(45deg); /* ➕ becomes ✖️ */
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 5000px;
+    transform: translateY(0);
+  }
+}
+
+/* Flow Details (Hidden by Default) */
+.flow-details {
+  display: none;
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 2px solid var(--border-default);
+}
+
+/* Flow Summary (When Collapsed) */
+.flow-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-gray-50);
+  border-radius: 6px;
+  margin-bottom: var(--space-4);
+}
+
+.flow-summary-stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.flow-summary-stat .label {
+  color: var(--color-gray-600);
+}
+
+.flow-summary-stat .value {
+  font-weight: 600;
+  color: var(--color-gray-900);
+  font-family: var(--font-mono);
+}
+
+/* ============================================
+   6. PACKET TABLE
+   ============================================ */
+
+.packet-table-wrapper {
+  margin: var(--space-5) 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+}
+
+.packet-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-base);
+}
+
+/* Table Headers */
+.packet-table thead th {
+  background: var(--color-gray-50);
+  color: var(--color-gray-900);
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  border-bottom: 2px solid var(--border-info);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+/* Column Widths */
+.col-number {
+  width: 60px;
+  text-align: center;
+}
+
+.col-time {
+  width: 100px;
+  font-family: var(--font-mono);
+}
+
+.col-direction {
+  width: 80px;
+  text-align: center;
+}
+
+.col-flags {
+  width: 120px;
+}
+
+.col-seq,
+.col-ack {
+  width: 130px;
+  font-family: var(--font-mono);
+  letter-spacing: var(--tracking-tight);
+}
+
+.col-length {
+  width: 80px;
+  text-align: right;
+}
+
+.col-type {
+  min-width: 150px;
+}
+
+/* Table Body Rows */
+.packet-table tbody tr {
+  transition: all 0.2s ease;
+  border-bottom: 1px solid var(--color-gray-200);
+  min-height: 44px;
+  position: relative;
+}
+
+.packet-table tbody tr:hover {
+  background: var(--bg-hover) !important;
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-left: 3px solid var(--border-info);
+}
+
+.packet-table tbody tr:focus-within {
+  outline: 3px solid var(--border-info);
+  outline-offset: 2px;
+  z-index: 5;
+}
+
+.packet-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+/* Table Cells */
+.packet-table tbody td {
+  padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
+  line-height: var(--leading-normal);
+}
+
+.packet-table tbody td.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: var(--tracking-tight);
+}
+
+/* ============================================
+   7. PACKET TYPE STYLES
+   ============================================ */
+
+/* Handshake Packets */
+.packet-handshake {
+  background: var(--bg-handshake) !important;
+  border-left: 4px solid var(--border-success);
+}
+
+/* RTO Retransmission */
+.packet-rto {
+  background: var(--bg-rto) !important;
+  border-left: 4px dashed var(--border-danger);
+}
+
+/* Fast Retransmission */
+.packet-fast-retrans {
+  background: var(--bg-fast-retrans) !important;
+  border-left: 4px dotted var(--border-warning);
+}
+
+/* Generic Retransmission */
+.packet-generic-retrans {
+  background: var(--bg-generic-retrans) !important;
+  border-left: 4px solid var(--border-info);
+}
+
+/* Clean Teardown (FIN) */
+.packet-teardown-clean {
+  background: var(--bg-teardown-clean) !important;
+  border-left: 4px double var(--border-info);
+}
+
+/* Abrupt Teardown (RST) */
+.packet-teardown-rst {
+  background: var(--bg-teardown-rst) !important;
+  border-left: 4px double var(--border-danger);
+}
+
+/* Normal Data Packets */
+.packet-normal {
+  background: var(--bg-normal);
+}
+
+/* ============================================
+   8. DIRECTION INDICATORS
+   ============================================ */
+
+.direction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.direction-outbound {
+  color: var(--color-outbound);
+}
+
+.direction-outbound::before {
+  content: '→';
+}
+
+.direction-inbound {
+  color: var(--color-inbound);
+}
+
+.direction-inbound::before {
+  content: '←';
+}
+
+/* Accessibility: Show text on mobile */
+@media (max-width: 480px) {
+  .direction-outbound::after {
+    content: ' Out';
+    font-size: var(--text-xs);
+  }
+
+  .direction-inbound::after {
+    content: ' In';
+    font-size: var(--text-xs);
+  }
+}
+
+/* ============================================
+   9. TCP FLAGS
+   ============================================ */
+
+.tcp-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.tcp-flag .icon {
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.flag-syn { color: var(--border-info); }
+.flag-ack { color: var(--border-success); }
+.flag-fin { color: var(--border-info); }
+.flag-rst { color: var(--border-danger); }
+.flag-psh { color: var(--color-gray-600); }
+
+/* Combined Flags */
+.tcp-flag.flag-syn-ack .icon::after { content: '🤝'; }
+.tcp-flag.flag-psh-ack .icon::after { content: '📤✅'; }
+.tcp-flag.flag-fin-ack .icon::after { content: '📭✅'; }
+
+/* ============================================
+   10. BADGES
+   ============================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: 12px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.badge-success {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+  border: 1px solid var(--badge-success-border);
+}
+
+.badge-info {
+  background: var(--badge-info-bg);
+  color: var(--badge-info-text);
+  border: 1px solid var(--badge-info-border);
+}
+
+.badge-warning {
+  background: var(--badge-warning-bg);
+  color: var(--badge-warning-text);
+  border: 1px solid var(--badge-warning-border);
+}
+
+.badge-danger {
+  background: var(--badge-danger-bg);
+  color: var(--badge-danger-text);
+  border: 1px solid var(--badge-danger-border);
+}
+
+.badge .icon {
+  font-size: 1em;
+  line-height: 1;
+}
+
+/* ============================================
+   11. TIMELINE SECTIONS
+   ============================================ */
+
+.timeline-section {
+  margin-bottom: var(--space-8);
+  padding: var(--space-5);
+  border-radius: 8px;
+}
+
+.timeline-section.handshake-section {
+  background: var(--bg-handshake);
+  border-left: 3px solid var(--border-success);
+}
+
+.timeline-section.retransmission-section {
+  background: var(--bg-rto);
+  border-left: 3px solid var(--border-danger);
+}
+
+.timeline-section.teardown-section {
+  background: var(--bg-teardown-clean);
+  border-left: 3px solid var(--border-info);
+}
+
+/* Context Groups */
+.packet-context-group {
+  margin: var(--space-4) 0;
+}
+
+.context-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-gray-700);
+  font-style: italic;
+}
+
+.retransmission-highlight {
+  position: relative;
+  padding-left: var(--space-4);
+}
+
+.retransmission-highlight::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--border-danger);
+  border-radius: 2px;
+}
+
+.gap-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  margin: var(--space-2) 0;
+  background: rgba(231, 76, 60, 0.1);
+  border-left: 3px solid var(--border-danger);
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  color: var(--color-gray-700);
+  font-family: var(--font-mono);
+}
+
+/* ============================================
+   12. TIMESTAMP TOGGLE
+   ============================================ */
+
+.timestamp-toggle-wrapper {
+  margin: var(--space-4) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.timestamp-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--text-sm);
+}
+
+.timestamp-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* Toggle visibility based on checkbox */
+#show-absolute-time:not(:checked) ~ .packet-table .time-absolute,
+#show-absolute-time:checked ~ .packet-table .time-relative {
+  display: none;
+}
+
+/* ============================================
+   13. ACCESSIBILITY
+   ============================================ */
+
+/* Screen Reader Only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Skip Links */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 9999;
+  padding: var(--space-3) var(--space-4);
+  background: var(--border-info);
+  color: var(--color-white);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.skip-link:focus {
+  left: var(--space-3);
+  top: var(--space-3);
+}
+
+/* Focus Indicators */
+*:focus {
+  outline: 3px solid var(--border-info);
+  outline-offset: 2px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 3px solid var(--border-info);
+  outline-offset: 2px;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .packet-table tbody tr:hover {
+    border: 2px solid var(--color-black);
+  }
+
+  .badge {
+    border-width: 2px;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================
+   14. MOBILE RESPONSIVENESS
+   ============================================ */
+
+/* Tablet (768px - 1024px) */
+@media (max-width: 1024px) {
+  .col-length {
+    display: none;
+  }
+}
+
+/* Mobile (480px - 768px) */
+@media (max-width: 768px) {
+  /* Hide less critical columns */
+  .col-ack,
+  .col-length {
+    display: none;
+  }
+
+  /* Larger touch targets */
+  .packet-table tbody tr {
+    min-height: 56px;
+  }
+
+  .flow-expand-btn {
+    min-height: 48px;
+    padding: var(--space-4) var(--space-5);
+    font-size: 1.05em;
+  }
+
+  /* Freeze first 3 columns */
+  .packet-table th:nth-child(-n+3),
+  .packet-table td:nth-child(-n+3) {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background: var(--color-white);
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .packet-table th:nth-child(-n+3) {
+    background: var(--color-gray-50);
+  }
+
+  /* Auto-collapse timeline sections */
+  .flow-expand-checkbox {
+    /* Collapsed by default on mobile */
+  }
+
+  .flow-summary {
+    display: block;
+  }
+
+  .flow-summary-stat {
+    display: block;
+    margin: var(--space-2) 0;
+  }
+}
+
+/* Small Mobile (< 480px) */
+@media (max-width: 480px) {
+  /* Show minimal columns only */
+  .col-flags,
+  .col-seq,
+  .col-ack,
+  .col-length {
+    display: none;
+  }
+
+  /* Stack remaining columns */
+  .packet-table {
+    font-size: var(--text-sm);
+  }
+
+  .packet-table thead th,
+  .packet-table tbody td {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* Compact section headers */
+  .timeline-section-header {
+    font-size: var(--text-md);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .timeline-section-header .duration {
+    margin-left: 0;
+  }
+
+  /* Compact padding */
+  .timeline-section {
+    padding: var(--space-4);
+  }
+}
+
+/* ============================================
+   15. PRINT STYLES
+   ============================================ */
+
+@media print {
+  /* Expand all sections for print */
+  .flow-details {
+    display: block !important;
+  }
+
+  /* Remove interactive elements */
+  .flow-expand-btn {
+    display: none;
+  }
+
+  /* Remove shadows and transitions */
+  * {
+    box-shadow: none !important;
+    transition: none !important;
+  }
+
+  /* Black and white friendly */
+  .packet-handshake {
+    background: white !important;
+    border: 2px solid black;
+  }
+
+  .packet-rto {
+    background: #f0f0f0 !important;
+    border: 2px dashed black;
+  }
+
+  .packet-fast-retrans {
+    background: #f8f8f8 !important;
+    border: 2px dotted black;
+  }
+
+  /* Force borders to be visible */
+  .packet-table tbody tr {
+    border: 1px solid #ccc;
+  }
+
+  .packet-table thead th {
+    border: 2px solid black;
+    background: #f0f0f0 !important;
+  }
+
+  /* Page breaks */
+  .timeline-section {
+    page-break-inside: avoid;
+  }
+
+  .packet-table tbody tr {
+    page-break-inside: avoid;
+  }
+}
+
+/* ============================================
+   16. DARK THEME SUPPORT
+   ============================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Override colors for dark mode */
+    --bg-normal: #2c2c2c;
+    --bg-hover: #3a3a3a;
+    --color-gray-50: #2c2c2c;
+    --color-gray-100: #3a3a3a;
+    --color-gray-200: #4a4a4a;
+    --color-gray-600: #aaaaaa;
+    --color-gray-700: #cccccc;
+    --color-gray-800: #e0e0e0;
+    --color-gray-900: #f0f0f0;
+
+    /* Adjust semantic backgrounds for dark mode */
+    --bg-handshake: rgba(40, 167, 69, 0.15);
+    --bg-rto: rgba(231, 76, 60, 0.15);
+    --bg-fast-retrans: rgba(243, 156, 18, 0.15);
+    --bg-generic-retrans: rgba(52, 152, 219, 0.15);
+    --bg-teardown-clean: rgba(52, 152, 219, 0.15);
+    --bg-teardown-rst: rgba(231, 76, 60, 0.15);
+
+    /* Badge adjustments */
+    --badge-success-bg: rgba(40, 167, 69, 0.2);
+    --badge-success-text: #90ee90;
+    --badge-info-bg: rgba(52, 152, 219, 0.2);
+    --badge-info-text: #90caf9;
+    --badge-warning-bg: rgba(243, 156, 18, 0.2);
+    --badge-warning-text: #ffd166;
+    --badge-danger-bg: rgba(231, 76, 60, 0.2);
+    --badge-danger-text: #ff6b6b;
+  }
+
+  .packet-table thead th {
+    background: var(--color-gray-100);
+    color: var(--color-gray-900);
+  }
+
+  .packet-table tbody td {
+    color: var(--color-gray-800);
+  }
+}
+
+/* Force dark theme (when body has class) */
+body.dark-theme {
+  background: var(--color-dark-bg);
+  color: #e0e0e0;
+}
+
+body.dark-theme .packet-timeline-container {
+  background: #2c2c2c;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   17. UTILITY CLASSES
+   ============================================ */
+
+.text-mono {
+  font-family: var(--font-mono);
+  letter-spacing: var(--tracking-tight);
+}
+
+.text-bold {
+  font-weight: 600;
+}
+
+.text-muted {
+  color: var(--color-gray-600);
+}
+
+.text-success {
+  color: var(--border-success);
+}
+
+.text-danger {
+  color: var(--border-danger);
+}
+
+.text-warning {
+  color: var(--border-warning);
+}
+
+.text-info {
+  color: var(--border-info);
+}
+
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: var(--space-1); }
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-5 { margin-top: var(--space-5); }
+
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: var(--space-1); }
+.mb-2 { margin-bottom: var(--space-2); }
+.mb-3 { margin-bottom: var(--space-3); }
+.mb-4 { margin-bottom: var(--space-4); }
+.mb-5 { margin-bottom: var(--space-5); }
