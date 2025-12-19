@@ -3678,9 +3678,14 @@ class HTMLReportGenerator:
             # Highlight retransmission packets
             row_class = "retransmission-packet" if pkt.get("is_retransmission", False) else ""
 
-            # Determine packet direction (inspired by mockup: → blue outgoing, ← green incoming)
-            # If flow_key provided, compare packet direction with flow direction
-            if flow_key and "->" in flow_key:
+            # Determine packet direction with color coding:
+            # 🔴 Red arrow for retransmissions
+            # → Blue arrow for outgoing (client→server)
+            # ← Green arrow for incoming (server→client)
+            if pkt.get("is_retransmission", False):
+                # Retransmitted packet - red arrow regardless of direction
+                direction_arrow = '<span style="color: #e74c3c; font-size: 1.2em; font-weight: bold;">→</span>'
+            elif flow_key and "->" in flow_key:
                 # Parse flow_key to get original src:dst
                 parts = flow_key.split("->")
                 if len(parts) == 2:
