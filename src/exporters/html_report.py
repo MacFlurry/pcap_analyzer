@@ -344,14 +344,21 @@ class HTMLReportGenerator:
             - Wireshark Display Filter Reference: tcp.* fields
             - OWASP: Command Injection Prevention
         """
-        # Parse flow_key: "src_ip:src_port → dst_ip:dst_port"
+        # Parse flow_key: "src_ip:src_port->dst_ip:dst_port" (v4.15.1: uses -> not →)
         try:
             # SECURITY: Validate flow_key length to prevent DoS
             if not validate_flow_key_length(flow_key):
                 logger.error(f"Flow key exceeds maximum length: {len(flow_key)} chars")
                 return "# Error: Flow key too long (potential DoS attack)"
 
-            parts = flow_key.split(" → ")
+            # v4.15.1: Support both old (→) and new (->) formats for backward compatibility
+            if " → " in flow_key:
+                parts = flow_key.split(" → ")
+            elif "->" in flow_key:
+                parts = flow_key.split("->")
+            else:
+                return f"# Error: Invalid flow_key format: {flow_key}"
+
             if len(parts) != 2:
                 return f"# Error: Invalid flow_key format: {flow_key}"
 
@@ -4141,7 +4148,9 @@ class HTMLReportGenerator:
                 # Group by flow first
                 flows = {}
                 for r in retrans_list[:200]:  # Increased limit for better coverage
-                    flow_key = f"{r.get('src_ip')}:{r.get('src_port')} → {r.get('dst_ip')}:{r.get('dst_port')}"
+                    # v4.15.0 FIX: Use same flow_key format as RetransmissionAnalyzer (-> not →)
+                    # This ensures flow_key matches sampled_timelines keys for timeline rendering
+                    flow_key = f"{r.get('src_ip')}:{r.get('src_port')}->{r.get('dst_ip')}:{r.get('dst_port')}"
                     if flow_key not in flows:
                         flows[flow_key] = []
                     flows[flow_key].append(r)
