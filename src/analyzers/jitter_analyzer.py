@@ -1,23 +1,33 @@
 """
-Jitter Analyzer - RFC 3393 IPDV (Inter-Packet Delay Variation)
+Jitter Analyzer - RFC 3393 IPDV + RFC 5481 Percentile-based Classification
 
 Analyzes jitter (delay variation) in packet flows, which is critical
 for real-time applications like video streaming, gaming, and real-time communications.
+
+Methodology:
+- IPDV calculation per RFC 3393: |delay[i] - delay[i-1]|
+- Classification per RFC 5481: P95-based percentile approach
+- Thresholds per ITU-T Y.1541 + Cisco best practices
 
 RFC 3393 defines jitter as:
   IPDV = |delay[i] - delay[i-1]|
 
 Where delay[i] is the inter-arrival time between packets i and i-1.
 
-High jitter indicators:
+High jitter indicators (Real-time/UDP traffic):
+- P95 jitter > 50ms: Critical (5% of packets severely affected)
+- P95 jitter > 30ms: Moderate degradation (Cisco acceptable threshold)
 - Mean jitter > 30ms: Noticeable in real-time communications
-- Max jitter > 100ms: Significant quality degradation
-- P95 jitter > 50ms: Frequent disruptions
+
+Protocol-aware classification:
+- UDP/Real-time: Strict thresholds (20ms excellent, 30ms good, 50ms critical)
+- TCP: Lenient thresholds (100ms warning, 200ms critical) - TCP tolerates jitter better
 
 References:
 - RFC 3393: IP Packet Delay Variation Metric for IPPM
-- ITU-T G.114: One-way transmission time
-- RFC 3550: RTP (Real-time Transport Protocol)
+- RFC 5481: Packet Delay Variation Applicability (percentile approach)
+- ITU-T Y.1541: Network performance objectives (≤50ms for Class 0-1)
+- Cisco: VoIP jitter thresholds (target <20ms, acceptable <30ms, critical >50ms)
 """
 
 import statistics
@@ -26,10 +36,16 @@ from typing import Any, Dict, List, Tuple
 
 from scapy.all import IP, TCP, UDP, IPv6
 
-# RFC 3393 jitter thresholds (in seconds)
-JITTER_THRESHOLD_LOW = 0.030  # <30ms: Excellent
-JITTER_THRESHOLD_MEDIUM = 0.050  # 30-50ms: Acceptable
-JITTER_THRESHOLD_HIGH = 0.100  # >100ms: Poor
+# Jitter thresholds (in seconds) - RFC 5481 P95-based + ITU-T Y.1541 + Cisco best practices
+# Real-time traffic thresholds (VoIP, video conferencing, UDP)
+JITTER_THRESHOLD_EXCELLENT = 0.020  # < 20ms: Excellent (Cisco target)
+JITTER_THRESHOLD_GOOD = 0.030  # 20-30ms: Good (Cisco acceptable)
+JITTER_THRESHOLD_ACCEPTABLE = 0.050  # 30-50ms: Acceptable (ITU-T Y.1541 Class 1)
+JITTER_THRESHOLD_REALTIME_CRITICAL = 0.050  # > 50ms: Critical for real-time (Cisco critical threshold)
+
+# General TCP traffic (more lenient - TCP tolerates jitter better)
+JITTER_THRESHOLD_TCP_WARNING = 0.100  # 100ms: Warning for TCP
+JITTER_THRESHOLD_TCP_CRITICAL = 0.200  # 200ms: Critical for TCP
 
 
 class JitterAnalyzer:
@@ -307,15 +323,25 @@ class JitterAnalyzer:
             stats_to_check = flow_stats_filtered if len(jitters_filtered) > 0 else flow_stats_raw
             mean_jitter = stats_to_check["mean_jitter"]
             p95_jitter = stats_to_check["p95_jitter"]
+            p99_jitter = stats_to_check.get("p99_jitter", 0)
 
-            if mean_jitter > JITTER_THRESHOLD_HIGH or p95_jitter > JITTER_THRESHOLD_HIGH:
+            # Extract protocol from flow_key (5-tuple: src_ip, src_port, dst_ip, dst_port, proto)
+            protocol = flow_key[4]
+
+            # Detect high jitter using P95 as primary metric (RFC 5481)
+            # Lower threshold for detection to catch more flows for detailed reporting
+            # Use JITTER_THRESHOLD_GOOD (30ms) as detection threshold
+            if p95_jitter > JITTER_THRESHOLD_GOOD or mean_jitter > JITTER_THRESHOLD_GOOD:
+                severity = self._classify_jitter_severity(mean_jitter, p95_jitter, protocol)
                 high_jitter_flows.append(
                     {
                         "flow": flow_key_str,
                         "mean_jitter": mean_jitter,
                         "max_jitter": stats_to_check["max_jitter"],
                         "p95_jitter": p95_jitter,
-                        "severity": self._classify_jitter_severity(mean_jitter),
+                        "p99_jitter": p99_jitter,
+                        "severity": severity,
+                        "protocol": protocol,
                         "packets": len(self.flow_packets[flow_key]),
                         "first_packet_time": stats_to_check.get("first_packet_time"),
                     }
@@ -415,13 +441,44 @@ class JitterAnalyzer:
 
         return stats
 
-    def _classify_jitter_severity(self, mean_jitter: float) -> str:
-        """Classify jitter severity based on RFC 3393 thresholds."""
-        if mean_jitter < JITTER_THRESHOLD_LOW:
-            return "low"
-        elif mean_jitter < JITTER_THRESHOLD_MEDIUM:
-            return "medium"
-        elif mean_jitter < JITTER_THRESHOLD_HIGH:
-            return "high"
+    def _classify_jitter_severity(self, mean_jitter: float, p95_jitter: float, protocol: str = "UDP") -> str:
+        """
+        Classify jitter severity using P95-based approach per RFC 5481.
+
+        Args:
+            mean_jitter: Mean jitter value (seconds)
+            p95_jitter: 95th percentile jitter (primary metric, seconds)
+            protocol: Protocol type (UDP/TCP) for threshold selection
+
+        Returns:
+            Severity level: "excellent", "low", "medium", "high", or "critical"
+
+        Methodology:
+            - Uses P95 as primary metric (RFC 5481 recommendation)
+            - P95 > threshold means 5% of packets are severely affected
+            - TCP is less sensitive to jitter than UDP/real-time traffic
+            - Thresholds based on ITU-T Y.1541 and Cisco best practices
+        """
+        # Use P95 as primary metric (RFC 5481 recommendation)
+        # P95 > threshold means 5% of packets are severely affected
+
+        if protocol == "TCP":
+            # TCP is less sensitive to jitter due to buffering
+            if p95_jitter < JITTER_THRESHOLD_TCP_WARNING:
+                return "low"
+            elif p95_jitter < JITTER_THRESHOLD_TCP_CRITICAL:
+                return "medium"
+            else:
+                return "critical"
         else:
-            return "critical"
+            # UDP/Real-time traffic (VoIP, streaming) - stricter thresholds
+            if p95_jitter < JITTER_THRESHOLD_EXCELLENT:
+                return "excellent"
+            elif p95_jitter < JITTER_THRESHOLD_GOOD:
+                return "low"
+            elif p95_jitter < JITTER_THRESHOLD_ACCEPTABLE:
+                return "medium"
+            elif p95_jitter < JITTER_THRESHOLD_REALTIME_CRITICAL:
+                return "high"
+            else:
+                return "critical"
