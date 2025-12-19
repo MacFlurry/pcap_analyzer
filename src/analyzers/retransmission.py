@@ -1025,7 +1025,8 @@ class RetransmissionAnalyzer:
         # Tri des retransmissions par délai décroissant (les plus graves en premier)
         sorted_retransmissions = sorted(self.retransmissions, key=lambda r: r.delay, reverse=True)
 
-        rto_count = sum(1 for r in self.retransmissions if r.retrans_type == "RTO")
+        # Exclude SYN retransmissions from RTO count (they're connection failures, not RTO during established connections)
+        rto_count = sum(1 for r in self.retransmissions if r.retrans_type == "RTO" and not r.is_syn_retrans)
         fast_retrans_count = sum(1 for r in self.retransmissions if r.retrans_type == "Fast Retransmission")
         # All other types (including "Unknown" and "Retransmission")
         other_retrans_count = total_retrans - rto_count - fast_retrans_count
@@ -1058,7 +1059,8 @@ class RetransmissionAnalyzer:
         summary += f"  - Retransmissions totales: {total_retrans}\n"
         summary += f"    ({unique_segments} segment(s) unique(s) retransmis)\n"
 
-        rto_count = sum(1 for r in self.retransmissions if r.retrans_type == "RTO")
+        # Exclude SYN retransmissions from RTO count (they're connection failures, not RTO during established connections)
+        rto_count = sum(1 for r in self.retransmissions if r.retrans_type == "RTO" and not r.is_syn_retrans)
         fast_retrans_count = sum(1 for r in self.retransmissions if r.retrans_type == "Fast Retransmission")
         other_retrans_count = total_retrans - rto_count - fast_retrans_count
 

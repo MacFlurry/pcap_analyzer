@@ -1643,6 +1643,18 @@ class HTMLReportGenerator:
             border-left: 4px solid #3498db;
         }
 
+        .metric-excellent {
+            border-left: 4px solid #38ef7d;
+        }
+
+        .metric-low {
+            border-left: 4px solid #90EE90;
+        }
+
+        .metric-critical {
+            border-left: 4px solid #dc3545;
+        }
+
         .metric-icon {
             font-size: 1.8em;
             margin-bottom: 8px;
@@ -3271,14 +3283,36 @@ class HTMLReportGenerator:
             total_packets = metadata.get("total_packets", 0)
             retrans_rate = (total_retrans / total_packets * 100) if total_packets > 0 else 0
 
+            # Determine severity based on industry best practice thresholds (percentage-based)
+            if retrans_rate >= 5.0:
+                severity_level = "critical"
+                severity_text = "🔴 Critical Retransmission Rate"
+                severity_description = "Severe network problems affecting service quality"
+            elif retrans_rate >= 2.0:
+                severity_level = "danger"
+                severity_text = "🟠 High Retransmission Rate"
+                severity_description = "User experience likely affected, investigation recommended"
+            elif retrans_rate >= 1.0:
+                severity_level = "warning"
+                severity_text = "🟡 Moderate Retransmission Rate"
+                severity_description = "Elevated retransmissions, monitor for trends"
+            elif retrans_rate >= 0.5:
+                severity_level = "low"
+                severity_text = "Minor Retransmissions"
+                severity_description = "Low retransmission rate, acceptable for most networks"
+            else:
+                severity_level = "excellent"
+                severity_text = "✅ Excellent Network Health"
+                severity_description = "Very low retransmission rate"
+
             # Enhanced metric cards with icons
             html += '<div class="summary-grid">'
             html += f"""
-            <div class="metric-card metric-danger">
+            <div class="metric-card metric-{severity_level}">
                 <div class="metric-icon">📦</div>
                 <div class="metric-label">Total Retransmissions</div>
                 <div class="metric-value">{total_retrans:,}</div>
-                <div class="metric-subtext">{retrans_rate:.2f}% of total packets</div>
+                <div class="metric-subtext">{retrans_rate:.2f}% of total packets - {severity_text}</div>
             </div>
             <div class="metric-card metric-warning">
                 <div class="metric-icon">⏱️</div>
