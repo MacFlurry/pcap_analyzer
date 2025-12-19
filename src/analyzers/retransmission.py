@@ -41,6 +41,9 @@ try:
 except ImportError:
     PacketMetadata = None
 
+# Import TCP State Machine for RFC 793 compliant connection tracking
+from .tcp_state_machine import TCPStateMachine
+
 
 @dataclass
 class TCPRetransmission:
@@ -349,6 +352,14 @@ class RetransmissionAnalyzer:
         # ISN tracking for distinguishing true SYN retransmissions from port reuse (RFC 793)
         self._initial_seq: dict[str, int] = {}  # flow_key -> Initial Sequence Number
 
+        # RFC 793 compliant TCP State Machine for connection lifecycle tracking
+        # This prevents false positives when ports are reused after proper connection closure
+        self._state_machine = TCPStateMachine(
+            time_wait_duration=120.0,  # RFC 793: 2×MSL (60s MSL)
+            connection_timeout=300.0,  # 5 minutes inactivity timeout
+            fin_timeout=30.0,  # FIN should complete within 30s
+        )
+
         # Memory optimization: periodic cleanup
         self._packet_counter = 0
         self._cleanup_interval = 10000
@@ -438,6 +449,10 @@ class RetransmissionAnalyzer:
             del self._last_ack_packet_num[reverse_key]
         if reverse_key in self._last_ack_timestamp:
             del self._last_ack_timestamp[reverse_key]
+
+        # RFC 793: Reset TCP state machine for both directions
+        self._state_machine.reset_flow(flow_key)
+        self._state_machine.reset_flow(reverse_key)
 
     def analyze(self, packets: list[Packet]) -> dict[str, Any]:
         """
@@ -643,23 +658,36 @@ class RetransmissionAnalyzer:
         # Add to ring buffer (automatically discards oldest if full)
         self._packet_buffer[flow_key].append(packet_info)
 
-        # Gestion des nouvelles connexions (SYN) et réinitialisations (RST)
-        # FIX: Port reuse detection using ISN tracking (RFC 793)
-        if metadata.is_syn:  # SYN flag
-            # Check if this is port reuse (different ISN) or true SYN retransmission (same ISN)
-            if flow_key in self._initial_seq:
-                if metadata.tcp_seq != self._initial_seq[flow_key]:
-                    # Different ISN = port reuse, reset all flow state
-                    self._reset_flow_state(flow_key, reverse_key)
-            # Store or update ISN for this flow
-            self._initial_seq[flow_key] = metadata.tcp_seq
-        elif metadata.is_rst:  # RST flag
-            # RST packets bypass TIME-WAIT, allowing immediate port reuse
-            # Reset state to prevent false positives on rapid connection recycling
+        # RFC 793: Update TCP state machine
+        tcp_flags = {
+            'SYN': metadata.is_syn,
+            'ACK': metadata.is_ack,
+            'FIN': metadata.is_fin,
+            'RST': metadata.is_rst,
+        }
+        self._state_machine.process_packet(
+            flow_key=flow_key,
+            timestamp=timestamp,
+            tcp_flags=tcp_flags,
+            seq=metadata.tcp_seq,
+            ack=metadata.tcp_ack if metadata.is_ack else 0,
+            payload_len=metadata.tcp_payload_len,
+        )
+
+        # RFC 793: Check if connection is closed and state should be reset
+        # This detects: FIN-ACK completion + timeout, inactivity timeout, port reuse
+        syn_seq = metadata.tcp_seq if metadata.is_syn else None
+        if self._state_machine.should_reset_flow_state(flow_key, timestamp, syn_seq):
+            # Connection closed (FIN-ACK complete, RST, timeout) or port reuse detected
             self._reset_flow_state(flow_key, reverse_key)
-            # Clear ISN tracking
-            if flow_key in self._initial_seq:
-                del self._initial_seq[flow_key]
+            # Update ISN tracking after reset
+            if metadata.is_syn:
+                self._initial_seq[flow_key] = metadata.tcp_seq
+
+        # Legacy ISN tracking (for backward compatibility and additional validation)
+        # The state machine handles the primary logic, this provides secondary validation
+        if metadata.is_syn and flow_key not in self._initial_seq:
+            self._initial_seq[flow_key] = metadata.tcp_seq
 
         # Mise à jour du Max ACK vu pour ce flux
         if metadata.is_ack:  # ACK flag
@@ -964,23 +992,36 @@ class RetransmissionAnalyzer:
         # Add to ring buffer
         self._packet_buffer[flow_key].append(packet_info)
 
-        # Gestion des nouvelles connexions (SYN) et réinitialisations (RST)
-        # FIX: Port reuse detection using ISN tracking (RFC 793)
-        if tcp.flags & 0x02:  # SYN flag
-            # Check if this is port reuse (different ISN) or true SYN retransmission (same ISN)
-            if flow_key in self._initial_seq:
-                if tcp.seq != self._initial_seq[flow_key]:
-                    # Different ISN = port reuse, reset all flow state
-                    self._reset_flow_state(flow_key, reverse_key)
-            # Store or update ISN for this flow
-            self._initial_seq[flow_key] = tcp.seq
-        elif tcp.flags & 0x04:  # RST flag
-            # RST packets bypass TIME-WAIT, allowing immediate port reuse
-            # Reset state to prevent false positives on rapid connection recycling
+        # RFC 793: Update TCP state machine
+        tcp_flags = {
+            'SYN': bool(tcp.flags & 0x02),
+            'ACK': bool(tcp.flags & 0x10),
+            'FIN': bool(tcp.flags & 0x01),
+            'RST': bool(tcp.flags & 0x04),
+        }
+        self._state_machine.process_packet(
+            flow_key=flow_key,
+            timestamp=timestamp,
+            tcp_flags=tcp_flags,
+            seq=tcp.seq,
+            ack=tcp.ack if (tcp.flags & 0x10) else 0,
+            payload_len=len(tcp.payload),
+        )
+
+        # RFC 793: Check if connection is closed and state should be reset
+        # This detects: FIN-ACK completion + timeout, inactivity timeout, port reuse
+        syn_seq = tcp.seq if (tcp.flags & 0x02) else None
+        if self._state_machine.should_reset_flow_state(flow_key, timestamp, syn_seq):
+            # Connection closed (FIN-ACK complete, RST, timeout) or port reuse detected
             self._reset_flow_state(flow_key, reverse_key)
-            # Clear ISN tracking
-            if flow_key in self._initial_seq:
-                del self._initial_seq[flow_key]
+            # Update ISN tracking after reset
+            if tcp.flags & 0x02:  # SYN
+                self._initial_seq[flow_key] = tcp.seq
+
+        # Legacy ISN tracking (for backward compatibility and additional validation)
+        # The state machine handles the primary logic, this provides secondary validation
+        if (tcp.flags & 0x02) and flow_key not in self._initial_seq:
+            self._initial_seq[flow_key] = tcp.seq
 
         # Mise à jour du Max ACK vu pour ce flux
         if tcp.flags & 0x10:  # ACK flag
