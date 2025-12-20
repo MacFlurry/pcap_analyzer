@@ -52,8 +52,9 @@ ssh:
   host: "192.168.1.100"  # IP du serveur distant
   port: 22
   username: "your_username"
-  # password: ""  # Décommentez pour utiliser un mot de passe
-  key_file: "~/.ssh/id_rsa"  # Chemin vers votre clé SSH privée
+  # SECURITY WARNING: Never use password authentication in production!
+  # Password authentication is disabled by design - use key-based auth only
+  key_file: "~/.ssh/id_rsa"  # Chemin vers votre clé SSH privée (REQUIRED)
 
   # Paramètres tcpdump
   tcpdump:

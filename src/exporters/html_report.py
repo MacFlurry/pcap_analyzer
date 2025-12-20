@@ -2571,7 +2571,7 @@ class HTMLReportGenerator:
             html += '<div class="summary-grid">'
             html += f"""
             <div class="metric-card">
-                <div class="metric-label">Total Flows</div>
+                <div class="metric-label">Unidirectional Flows</div>
                 <div class="metric-value">{total_flows}</div>
             </div>
             <div class="metric-card">
@@ -4415,7 +4415,15 @@ class HTMLReportGenerator:
                 <div class="metric-value">{window_data.get("flows_with_issues", 0)}</div>
             </div>
             <div class="metric-card" style="border-left-color: #dc3545;">
-                <div class="metric-label">Total Zero Windows</div>
+                <div class="metric-label">
+                    Zero Window Events
+                    <span class="tooltip-wrapper">
+                        <span class="tooltip-icon">ℹ️</span>
+                        <span class="tooltip-text">
+                            Events (not individual packets). Consecutive zero window packets are grouped into a single event. For example, 2 consecutive win=0 packets count as 1 event.
+                        </span>
+                    </span>
+                </div>
                 <div class="metric-value">{total_zero_windows}</div>
             </div>
             <div class="metric-card" style="border-left-color: #dc3545;">

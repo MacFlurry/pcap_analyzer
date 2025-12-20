@@ -800,7 +800,7 @@ def analyze_pcap_hybrid(
     # Sprint 2: Display jitter summary
     console.print("\n📡 Jitter Analysis (RFC 3393):")
     if jitter_results["total_flows"] > 0:
-        console.print(f"  Total Flows Analyzed: {jitter_results['total_flows']}")
+        console.print(f"  Unidirectional Flows Analyzed: {jitter_results['total_flows']}")
         if jitter_results.get("global_statistics"):
             stats = jitter_results["global_statistics"]
             console.print(f"  Mean Jitter: {stats.get('mean_jitter', 0)*1000:.2f}ms")
@@ -837,7 +837,7 @@ def analyze_pcap_hybrid(
     console.print("\n🧠 Intelligent Service Classification:")
     if service_results["total_flows"] > 0:
         summary = service_results["classification_summary"]
-        console.print(f"  Total Flows: {summary['total_flows']}")
+        console.print(f"  Unidirectional Flows: {summary['total_flows']}")
         console.print(f"  Classified: {summary['classified_count']} ({summary['classification_rate']:.1f}%)")
 
         # Display service distribution
