@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
 # Database schema for users table
+# NOTE: For PostgreSQL, use Alembic migrations instead of this schema
 USER_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -38,6 +39,9 @@ CREATE TABLE IF NOT EXISTS users (
     hashed_password TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user',
     is_active BOOLEAN NOT NULL DEFAULT 1,
+    is_approved BOOLEAN NOT NULL DEFAULT 0,
+    approved_by TEXT,
+    approved_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL,
     last_login TIMESTAMP,
     CONSTRAINT role_check CHECK (role IN ('admin', 'user'))
@@ -186,13 +190,14 @@ class UserDatabaseService:
         """
         return pwd_context.verify(plain_password, hashed_password)
 
-    async def create_user(self, user_data: UserCreate, role: UserRole = UserRole.USER) -> User:
+    async def create_user(self, user_data: UserCreate, role: UserRole = UserRole.USER, auto_approve: bool = False) -> User:
         """
         Create a new user.
 
         Args:
             user_data: User registration data
             role: User role (default: user)
+            auto_approve: If True, approve user immediately (for admin accounts)
 
         Returns:
             Created user
@@ -206,12 +211,18 @@ class UserDatabaseService:
         hashed_password = self.hash_password(user_data.password)
         created_at = datetime.now(timezone.utc)
 
+        # Auto-approve admins and if explicitly requested
+        is_approved = auto_approve or role == UserRole.ADMIN
+        approved_at = created_at if is_approved else None
+        approved_by = user_id if is_approved else None  # Self-approved for initial admin
+
         async with aiosqlite.connect(self.db_path) as db:
             try:
                 await db.execute(
                     """
-                    INSERT INTO users (id, username, email, hashed_password, role, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO users (id, username, email, hashed_password, role, is_approved,
+                                     approved_by, approved_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         user_id,
@@ -219,6 +230,9 @@ class UserDatabaseService:
                         user_data.email.lower(),
                         hashed_password,
                         role.value,
+                        is_approved,
+                        approved_by,
+                        approved_at,
                         created_at,
                     ),
                 )
@@ -232,7 +246,7 @@ class UserDatabaseService:
                 else:
                     raise ValueError(f"Database error: {e}")
 
-        logger.info(f"User created: {user_data.username} (role: {role.value})")
+        logger.info(f"User created: {user_data.username} (role: {role.value}, approved: {is_approved})")
 
         return User(
             id=user_id,
@@ -240,6 +254,9 @@ class UserDatabaseService:
             email=user_data.email.lower(),
             hashed_password=hashed_password,
             role=role,
+            is_approved=is_approved,
+            approved_by=approved_by,
+            approved_at=approved_at,
             created_at=created_at,
         )
 
@@ -271,6 +288,9 @@ class UserDatabaseService:
             hashed_password=row["hashed_password"],
             role=UserRole(row["role"]),
             is_active=bool(row["is_active"]),
+            is_approved=bool(row.get("is_approved", False)),
+            approved_by=row.get("approved_by"),
+            approved_at=datetime.fromisoformat(row["approved_at"]) if row.get("approved_at") else None,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(timezone.utc),
             last_login=datetime.fromisoformat(row["last_login"]) if row["last_login"] else None,
         )
@@ -295,6 +315,9 @@ class UserDatabaseService:
             hashed_password=row["hashed_password"],
             role=UserRole(row["role"]),
             is_active=bool(row["is_active"]),
+            is_approved=bool(row.get("is_approved", False)),
+            approved_by=row.get("approved_by"),
+            approved_at=datetime.fromisoformat(row["approved_at"]) if row.get("approved_at") else None,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(timezone.utc),
             last_login=datetime.fromisoformat(row["last_login"]) if row["last_login"] else None,
         )
@@ -386,12 +409,45 @@ class UserDatabaseService:
                     hashed_password=row["hashed_password"],
                     role=UserRole(row["role"]),
                     is_active=bool(row["is_active"]),
+                    is_approved=bool(row.get("is_approved", False)),
+                    approved_by=row.get("approved_by"),
+                    approved_at=datetime.fromisoformat(row["approved_at"]) if row.get("approved_at") else None,
                     created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(timezone.utc),
                     last_login=datetime.fromisoformat(row["last_login"]) if row["last_login"] else None,
                 )
             )
 
         return users
+
+    async def approve_user(self, user_id: str, approver_id: str) -> bool:
+        """
+        Approve a user account.
+
+        Args:
+            user_id: User ID to approve
+            approver_id: Admin user ID performing the approval
+
+        Returns:
+            True if approved successfully, False if user not found
+        """
+        approved_at = datetime.now(timezone.utc)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                UPDATE users
+                SET is_approved = 1, approved_by = ?, approved_at = ?
+                WHERE id = ?
+                """,
+                (approver_id, approved_at, user_id),
+            )
+            await db.commit()
+            updated = cursor.rowcount > 0
+
+        if updated:
+            logger.info(f"User {user_id} approved by {approver_id}")
+
+        return updated
 
 
 # Singleton instance

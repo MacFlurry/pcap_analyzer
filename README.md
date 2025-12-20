@@ -60,10 +60,72 @@ Interface web avec upload drag-and-drop :
 ```bash
 git clone https://github.com/MacFlurry/pcap_analyzer.git
 cd pcap_analyzer
-docker-compose up -d
+
+# Configuration (optionnelle)
+cp .env.example .env
+# Éditer .env pour configurer les mots de passe et secrets
+
+# Démarrer avec PostgreSQL (développement)
+docker-compose --profile dev up -d
+
+# Ou démarrer en production (sans Adminer)
+docker-compose --profile prod up -d
 ```
 
-Accéder à http://localhost:8000
+Accéder à :
+- Application : http://localhost:8000
+- Adminer (dev) : http://localhost:8080
+
+#### Configuration PostgreSQL
+
+**Variables d'environnement (.env) :**
+```bash
+# Requis en production
+POSTGRES_PASSWORD=votre_mot_de_passe_securise
+SECRET_KEY=votre_cle_secrete_32_chars_minimum
+
+# Optionnel (ports personnalisés)
+APP_PORT=8000
+POSTGRES_PORT=5432
+ADMINER_PORT=8080
+```
+
+**Générer des secrets sécurisés :**
+```bash
+# Mot de passe PostgreSQL
+openssl rand -base64 32
+
+# Secret key pour JWT/sessions
+openssl rand -hex 32
+```
+
+**Connexion à PostgreSQL via Adminer :**
+1. Ouvrir http://localhost:8080
+2. Système : `PostgreSQL`
+3. Serveur : `postgres`
+4. Utilisateur : `pcap`
+5. Mot de passe : (voir .env)
+6. Base de données : `pcap_analyzer`
+
+**Connexion directe via psql :**
+```bash
+docker exec -it pcap_postgres psql -U pcap -d pcap_analyzer
+```
+
+**Commandes utiles :**
+```bash
+# Voir les logs
+docker-compose logs -f
+
+# Arrêter les services
+docker-compose down
+
+# Supprimer les volumes (ATTENTION : perte de données)
+docker-compose down -v
+
+# Nettoyer les anciennes images
+./scripts/cleanup_docker.sh
+```
 
 ### Option 3: Kubernetes (optionnel, production)
 
@@ -259,8 +321,15 @@ pcap_analyzer analyze capture.pcap
 
 **Docker Compose (optionnel)** : Développement local avec interface web
 ```bash
-docker-compose up -d
+# Avec PostgreSQL (recommandé)
+cp .env.example .env  # Configurer les secrets
+docker-compose --profile dev up -d
 docker-compose logs -f
+
+# Accès
+# - Application : http://localhost:8000
+# - Adminer : http://localhost:8080
+# - PostgreSQL : localhost:5432
 ```
 
 **Kubernetes (optionnel)** : Production avec haute disponibilité
@@ -268,7 +337,7 @@ docker-compose logs -f
 - Voir [helm-chart/pcap-analyzer/README.md](helm-chart/pcap-analyzer/README.md)
 - Limitation : 1 replica (SQLite local)
 
-**Production distribuée** : PostgreSQL + S3 + Redis requis (roadmap)
+**Production distribuée** : PostgreSQL + S3 + Redis requis (roadmap v5.0)
 
 ## 🏗️ Structure
 

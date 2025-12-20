@@ -33,6 +33,11 @@ class User(BaseModel):
 
     Multi-tenant architecture: each user owns their uploads.
     Admin can see all resources.
+
+    User approval workflow:
+    - New users start with is_approved=False
+    - Admin must approve users before they can use the system
+    - approved_by and approved_at track approval metadata
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()))
@@ -41,6 +46,9 @@ class User(BaseModel):
     hashed_password: str
     role: UserRole = UserRole.USER
     is_active: bool = True
+    is_approved: bool = False  # New: requires admin approval
+    approved_by: Optional[str] = None  # User ID of approver
+    approved_at: Optional[datetime] = None  # Timestamp of approval
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
 
@@ -100,6 +108,9 @@ class UserResponse(BaseModel):
     email: EmailStr
     role: UserRole
     is_active: bool
+    is_approved: bool
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
     created_at: datetime
     last_login: Optional[datetime]
 

@@ -14,8 +14,11 @@ aiofiles>=23.2.1         # Async file operations
 # Scheduling
 apscheduler>=3.10.0,<4.0  # Cleanup scheduler
 
-# Database (SQLite async)
+# Database (SQLite async + PostgreSQL)
 aiosqlite>=0.19.0,<1.0
+alembic>=1.13.0
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
 
 # Authentication & Security
 python-jose[cryptography]>=3.3.0  # JWT token generation/validation

@@ -21,6 +21,7 @@ pcap-dir/
 *$py.class
 # Configuration locale
 config.yaml
+.env
 # IDE
 # Logs
 # OS
