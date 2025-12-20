@@ -880,14 +880,33 @@ class RetransmissionAnalyzer:
                 # Mark current packet as retransmission in buffer
                 packet_info.is_retransmission = True
 
-                # Capture retransmission context: ±5 packets around this retransmission
-                # Get last 5 packets from buffer (including current retransmission)
-                buffer_list = list(self._packet_buffer[flow_key])
-                context_start = max(0, len(buffer_list) - 5)
-                context_packets = buffer_list[context_start:]  # Last 5 packets (including this one)
+                # v4.17.1: Capture BIDIRECTIONAL retransmission context
+                # Forward direction: Last 5 packets (including current retransmission)
+                forward_buffer = list(self._packet_buffer[flow_key])
+                forward_start = max(0, len(forward_buffer) - 5)
+                forward_context = forward_buffer[forward_start:]
 
-                # Store retransmission context
-                self.sampled_timelines[flow_key].retrans_context.append(context_packets)
+                # Reverse direction: Filter by time window from forward context
+                reverse_context = []
+                if reverse_key in self._packet_buffer and forward_context:
+                    reverse_buffer = list(self._packet_buffer[reverse_key])
+                    time_window_start = forward_context[0].timestamp
+                    time_window_end = forward_context[-1].timestamp
+
+                    # Filter reverse packets within time window, take last 5
+                    reverse_context = [
+                        p for p in reverse_buffer
+                        if time_window_start <= p.timestamp <= time_window_end
+                    ][-5:]
+
+                # Merge bidirectional contexts and bound to 10 packets total
+                merged_context = forward_context + reverse_context
+                merged_context.sort(key=lambda p: p.timestamp)
+                if len(merged_context) > 10:
+                    merged_context = merged_context[:10]
+
+                # Store bidirectional retransmission context
+                self.sampled_timelines[flow_key].retrans_context.append(merged_context)
 
             # Store only original packet info
             if segment_key not in self._seen_segments[flow_key]:
@@ -1233,13 +1252,33 @@ class RetransmissionAnalyzer:
                 # Mark current packet as retransmission in buffer
                 packet_info.is_retransmission = True
 
-                # Capture retransmission context: ±5 packets around this retransmission
-                buffer_list = list(self._packet_buffer[flow_key])
-                context_start = max(0, len(buffer_list) - 5)
-                context_packets = buffer_list[context_start:]
+                # v4.17.1: Capture BIDIRECTIONAL retransmission context
+                # Forward direction: Last 5 packets (including current retransmission)
+                forward_buffer = list(self._packet_buffer[flow_key])
+                forward_start = max(0, len(forward_buffer) - 5)
+                forward_context = forward_buffer[forward_start:]
 
-                # Store retransmission context
-                self.sampled_timelines[flow_key].retrans_context.append(context_packets)
+                # Reverse direction: Filter by time window from forward context
+                reverse_context = []
+                if reverse_key in self._packet_buffer and forward_context:
+                    reverse_buffer = list(self._packet_buffer[reverse_key])
+                    time_window_start = forward_context[0].timestamp
+                    time_window_end = forward_context[-1].timestamp
+
+                    # Filter reverse packets within time window, take last 5
+                    reverse_context = [
+                        p for p in reverse_buffer
+                        if time_window_start <= p.timestamp <= time_window_end
+                    ][-5:]
+
+                # Merge bidirectional contexts and bound to 10 packets total
+                merged_context = forward_context + reverse_context
+                merged_context.sort(key=lambda p: p.timestamp)
+                if len(merged_context) > 10:
+                    merged_context = merged_context[:10]
+
+                # Store bidirectional retransmission context
+                self.sampled_timelines[flow_key].retrans_context.append(merged_context)
 
             # Store only original packet info to prevent unbounded memory growth
             # We only need the first occurrence to detect retransmissions
@@ -1494,8 +1533,8 @@ class RetransmissionAnalyzer:
             handshake_packets.sort(key=lambda p: p.timestamp)
             handshake_packets = handshake_packets[:10]  # First 10 packets total
 
-            # Retransmission contexts: Forward only (reverse not in context range)
-            # Note: Could enhance to capture reverse packets in context range if needed
+            # v4.17.1: Retransmission contexts are now BIDIRECTIONAL
+            # Contexts already merged at capture time (see lines 883-909, 1255-1281)
             merged_retrans_contexts = timeline.retrans_context
 
             # Teardown: Merge forward + reverse snapshots
