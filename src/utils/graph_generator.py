@@ -51,7 +51,7 @@ def generate_jitter_timeseries_graph(
     else:
         jitter_color = '#3498db'  # Blue - OK
 
-    html = f'<div id="{graph_id}" style="height: 400px;"></div>\n'
+    html = f'<div id="{graph_id}" style="width: 100%; height: 400px;"></div>\n'
     html += '<script>\n(function() {\n'
 
     # Jitter trace
@@ -178,13 +178,15 @@ def generate_jitter_timeseries_graph(
         hovermode: 'closest',
         showlegend: true,
         legend: {
-            x: 1.15,
-            y: 1,
-            bgcolor: 'rgba(255, 255, 255, 0.9)',
+            x: 0.02,
+            y: 0.98,
+            xanchor: 'left',
+            yanchor: 'top',
+            bgcolor: 'rgba(255, 255, 255, 0.95)',
             bordercolor: '#ddd',
             borderwidth: 1
         },
-        margin: { t: 50, r: 150, b: 50, l: 60 },
+        margin: { t: 50, r: 60, b: 50, l: 60 },
         plot_bgcolor: '#fafafa',
         paper_bgcolor: '#ffffff'
     };
@@ -206,6 +208,12 @@ def generate_jitter_timeseries_graph(
 """
 
     html += f"    Plotly.newPlot('{graph_id}', data, layout, config);\n"
+    html += f"""
+    // Force resize after initial render to ensure full width
+    setTimeout(function() {{
+        Plotly.Plots.resize('{graph_id}');
+    }}, 100);
+"""
     html += '})();\n</script>\n'
 
     return html
@@ -231,7 +239,7 @@ def generate_multi_flow_comparison_graph(
     colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
               '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400']
 
-    html = f'<div id="{graph_id}" style="height: 500px;"></div>\n'
+    html = f'<div id="{graph_id}" style="width: 100%; height: 500px;"></div>\n'
     html += '<script>\n(function() {\n'
     html += '    var data = [];\n'
 
@@ -280,13 +288,15 @@ def generate_multi_flow_comparison_graph(
         hovermode: 'closest',
         showlegend: true,
         legend: {
-            x: 1.05,
-            y: 1,
-            bgcolor: 'rgba(255, 255, 255, 0.9)',
+            x: 0.02,
+            y: 0.98,
+            xanchor: 'left',
+            yanchor: 'top',
+            bgcolor: 'rgba(255, 255, 255, 0.95)',
             bordercolor: '#ddd',
             borderwidth: 1
         },
-        margin: { t: 60, r: 200, b: 50, l: 60 },
+        margin: { t: 60, r: 60, b: 50, l: 60 },
         plot_bgcolor: '#fafafa',
         paper_bgcolor: '#ffffff'
     };
@@ -307,6 +317,12 @@ def generate_multi_flow_comparison_graph(
 """
 
     html += f"    Plotly.newPlot('{graph_id}', data, layout, config);\n"
+    html += f"""
+    // Force resize after initial render to ensure full width
+    setTimeout(function() {{
+        Plotly.Plots.resize('{graph_id}');
+    }}, 100);
+"""
     html += '})();\n</script>\n'
 
     return html

@@ -888,12 +888,22 @@ class HTMLReportGenerator:
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1600px;
             margin: 0 auto;
             background: white;
             padding: 40px;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* Full-width container for graphs */
+        .graph-fullwidth {
+            padding: 20px 0;
+            background: #fafafa;
+            border-top: 1px solid #e0e0e0;
+            border-bottom: 1px solid #e0e0e0;
+            margin: 20px -40px;
+            padding: 20px 40px;
         }
 
         h1 {
@@ -2487,6 +2497,9 @@ class HTMLReportGenerator:
                 html += '<div style="margin: 20px 0;">'
                 html += generate_multi_flow_comparison_graph(flows_with_timeseries)
                 html += "</div>"
+
+                # v4.18.0: Add interpretation guide after multi-flow graph
+                html += self._generate_jitter_interpretation_guide(jitter_data, high_jitter_flows)
 
         # Generate grouped jitter analysis by severity level
         html += self._generate_grouped_jitter_analysis(jitter_data)
@@ -5020,7 +5033,8 @@ class HTMLReportGenerator:
         # v4.18.0: Add individual flow graphs (top 3 flows with timeseries data)
         flows_with_graphs = [f for f in flows[:5] if "timeseries" in f]
         if flows_with_graphs:
-            html += "<h4 style='margin-top: 25px; margin-bottom: 15px; color: #2c3e50;'>📊 Time-Series Visualization</h4>"
+            html += '<div class="graph-fullwidth">'
+            html += "<h4 style='margin-top: 5px; margin-bottom: 15px; color: #2c3e50;'>📊 Time-Series Visualization</h4>"
             for idx, flow in enumerate(flows_with_graphs[:3]):  # Show top 3 graphs
                 flow_key = flow.get("flow_key", f"Flow {idx+1}")
                 graph_id = f"jitter-graph-{severity_key}-{idx}"
@@ -5035,6 +5049,7 @@ class HTMLReportGenerator:
                     graph_id=graph_id
                 )
                 html += "</div>"
+            html += "</div>"  # Close graph-fullwidth
 
         # Add compact flow table
         html += self._generate_jitter_flow_table(flows, severity_key)
@@ -5043,6 +5058,219 @@ class HTMLReportGenerator:
         html += "</div>"
 
         return html
+
+    def _generate_jitter_interpretation_guide(self, jitter_data: dict, high_jitter_flows: list) -> str:
+        """
+        Generate intelligent interpretation guide for jitter analysis (v4.18.0).
+
+        Provides contextual help based on actual data to help users understand:
+        - What the statistics mean
+        - How to read the multi-flow graph
+        - Intelligent diagnosis based on actual patterns
+        """
+        global_stats = jitter_data.get("global_statistics", {})
+        mean_jitter = global_stats.get("mean_jitter", 0) * 1000  # Convert to ms
+        max_jitter = global_stats.get("max_jitter", 0) * 1000
+
+        # Count flow patterns from timeseries data - analyze temporal progression
+        stable_flows = 0
+        problematic_flows = 0
+
+        for flow in high_jitter_flows:
+            if "timeseries" not in flow:
+                # No timeseries data, use P95 as fallback
+                p95 = flow.get("p95_jitter", 0) * 1000
+                if p95 > 50:
+                    problematic_flows += 1
+                else:
+                    stable_flows += 1
+                continue
+
+            # Analyze temporal pattern: is jitter increasing over time?
+            timeseries = flow.get("timeseries", {})
+            jitter_values = timeseries.get("jitter_values", [])
+
+            if len(jitter_values) < 3:
+                stable_flows += 1
+                continue
+
+            # Convert to ms
+            jitter_ms = [j * 1000 for j in jitter_values]
+
+            # Check if jitter is progressively increasing (degradation pattern)
+            # Compare first quarter vs last quarter
+            quarter_size = max(1, len(jitter_ms) // 4)
+            first_quarter_avg = sum(jitter_ms[:quarter_size]) / quarter_size if quarter_size > 0 else 0
+            last_quarter_avg = sum(jitter_ms[-quarter_size:]) / quarter_size if quarter_size > 0 else 0
+
+            # Degradation: last quarter is >50% higher than first quarter AND exceeds 50ms
+            if last_quarter_avg > first_quarter_avg * 1.5 and last_quarter_avg > 50:
+                problematic_flows += 1
+            # High but stable: mean > 50ms but not increasing significantly
+            elif flow.get("mean_jitter", 0) * 1000 > 50:
+                problematic_flows += 1
+            else:
+                stable_flows += 1
+
+        total_flows = len(high_jitter_flows)
+
+        # Determine severity icon and color
+        if mean_jitter > 100:
+            severity_icon = "🔴"
+            severity_text = "CRITIQUE"
+            severity_color = "#e74c3c"
+        elif mean_jitter > 50:
+            severity_icon = "🟠"
+            severity_text = "ÉLEVÉ"
+            severity_color = "#f39c12"
+        elif mean_jitter > 30:
+            severity_icon = "🟡"
+            severity_text = "MOYEN"
+            severity_color = "#f1c40f"
+        else:
+            severity_icon = "🟢"
+            severity_text = "BON"
+            severity_color = "#2ecc71"
+
+        # Smart diagnosis based on actual data
+        if problematic_flows == 1 and total_flows > 1:
+            diagnosis_type = "localized"
+            diagnosis = f"Problème <strong>localisé</strong>: {problematic_flows} flux sur {total_flows} subit une dégradation, les autres sont stables."
+            recommendation = "Vérifiez le lien réseau spécifique de ce flux, il peut subir une congestion ou saturation localisée."
+        elif problematic_flows > total_flows * 0.8:
+            diagnosis_type = "systemic"
+            diagnosis = f"Problème <strong>systémique</strong>: {problematic_flows} flux sur {total_flows} sont affectés."
+            recommendation = "Congestion réseau généralisée. Vérifiez la bande passante totale, les équipements réseau (routeurs/switches), et envisagez QoS."
+        elif problematic_flows > 0:
+            diagnosis_type = "partial"
+            diagnosis = f"Problème <strong>partiel</strong>: {problematic_flows} flux sur {total_flows} sont dégradés."
+            recommendation = "Certains flux subissent des problèmes. Identifiez les patterns communs (même destination, même protocole)."
+        else:
+            diagnosis_type = "good"
+            diagnosis = f"Tous les {total_flows} flux ont un jitter acceptable (< 30ms)."
+            recommendation = "Réseau en bonne santé pour les applications temps-réel."
+
+        html = """
+<details style="margin: 25px 0; border: 2px solid #667eea; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <summary style="
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 18px 20px;
+        font-size: 1.1em;
+        font-weight: bold;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    ">
+        <span style="font-size: 1.3em;">💡</span>
+        <span>Comment Interpréter Ces Graphiques ? (Cliquez pour afficher)</span>
+    </summary>
+
+    <div style="padding: 25px; background: #f8f9fa;">
+
+        <!-- Section 1: Statistics Explanation -->
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #3498db;">
+            <h4 style="margin: 0 0 15px 0; color: #2c3e50; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.2em;">📊</span> Comprendre les Statistiques Globales
+            </h4>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div style="background: #ecf0f1; padding: 12px; border-radius: 6px;">
+                    <div style="font-weight: bold; color: #34495e; margin-bottom: 5px;">Mean Jitter</div>
+                    <div style="font-size: 0.9em; color: #7f8c8d;">Variation <strong>moyenne</strong> entre paquets</div>
+                </div>
+                <div style="background: #ecf0f1; padding: 12px; border-radius: 6px;">
+                    <div style="font-weight: bold; color: #34495e; margin-bottom: 5px;">Max Jitter</div>
+                    <div style="font-size: 0.9em; color: #7f8c8d;"><strong>Pic</strong> de variation (worst case)</div>
+                </div>
+                <div style="background: #ecf0f1; padding: 12px; border-radius: 6px;">
+                    <div style="font-weight: bold; color: #34495e; margin-bottom: 5px;">Std Dev</div>
+                    <div style="font-size: 0.9em; color: #7f8c8d;"><strong>Stabilité</strong> du jitter (écart-type)</div>
+                </div>
+            </div>
+
+            <div style="background: #e8f4f8; padding: 15px; border-radius: 6px; border-left: 3px solid #3498db;">
+                <div style="font-weight: bold; margin-bottom: 8px;">📏 Référence ITU-T Y.1541 (VoIP/Temps-Réel):</div>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <span>🟢 Excellent: &lt; 20ms</span>
+                    <span>🟡 Acceptable: 20-30ms</span>
+                    <span>🟠 Dégradé: 30-50ms</span>
+                    <span>🔴 Critique: &gt; 50ms</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: Graph Reading Guide -->
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #2ecc71;">
+            <h4 style="margin: 0 0 15px 0; color: #2c3e50; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.2em;">📈</span> Lire le Graphique Multi-Flow
+            </h4>
+
+            <div style="margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <div style="width: 40px; height: 3px; background: #2ecc71;"></div>
+                    <div><strong>Lignes plates (proche de 0)</strong> = Flux stables, comportement normal ✅</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <div style="width: 40px; height: 3px; background: #e74c3c;"></div>
+                    <div><strong>Lignes qui montent</strong> = Dégradation progressive (congestion, saturation) ⚠️</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 40px; height: 3px; background: #f39c12; border-style: dashed;"></div>
+                    <div><strong>Lignes en dents de scie</strong> = Variations irrégulières (pertes, bursts) 📊</div>
+                </div>
+            </div>
+
+            <div style="background: #e8f5e9; padding: 15px; border-radius: 6px; border-left: 3px solid #2ecc71;">
+                <strong>💡 Astuce:</strong> Utilisez les outils Plotly (en haut à droite du graphique):
+                <ul style="margin: 8px 0 0 20px; padding: 0;">
+                    <li>🔍 Zoom pour voir les détails d'une période</li>
+                    <li>📷 Export PNG pour vos rapports</li>
+                    <li>👆 Hover pour voir les valeurs exactes</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Section 3: Intelligent Diagnosis -->
+        <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid {severity_color};">
+            <h4 style="margin: 0 0 15px 0; color: #2c3e50; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.2em;">🎯</span> Diagnostic de Votre Réseau
+            </h4>
+
+            <div style="background: linear-gradient(135deg, {severity_color}15, {severity_color}25); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                <div style="font-size: 1.1em; font-weight: bold; margin-bottom: 8px;">
+                    {severity_icon} Niveau: <span style="color: {severity_color};">{severity_text}</span>
+                </div>
+                <div style="color: #2c3e50;">
+                    {diagnosis}
+                </div>
+            </div>
+
+            <div style="background: #fff9e6; padding: 15px; border-radius: 6px; border-left: 3px solid #f39c12;">
+                <div style="font-weight: bold; margin-bottom: 8px;">💡 Recommandation:</div>
+                <div style="color: #2c3e50;">
+                    {recommendation}
+                </div>
+            </div>
+
+            <div style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; font-size: 0.9em;">
+                <strong>📚 Pour aller plus loin:</strong> Consultez les graphiques individuels par flux ci-dessous pour identifier précisément les périodes et flux problématiques.
+            </div>
+        </div>
+
+    </div>
+</details>
+"""
+
+        return html.format(
+            severity_icon=severity_icon,
+            severity_text=severity_text,
+            severity_color=severity_color,
+            diagnosis=diagnosis,
+            recommendation=recommendation
+        )
 
     def _generate_grouped_jitter_analysis(self, jitter_data: dict) -> str:
         """Generate jitter analysis grouped by severity (critical, high, medium, low, excellent)."""
