@@ -847,6 +847,31 @@ class HTMLReportGenerator:
         html_parts.append("</div>")
 
         html_parts.append("</div>")
+
+        # v4.19.0: Initialize Plotly graphs when QoS tab becomes visible (fix for display:none issue)
+        html_parts.append("""
+<script>
+(function() {
+    var graphsInitialized = false;
+
+    // Listen for QoS tab activation
+    var qosTab = document.getElementById('tab-qos');
+    if (qosTab) {
+        qosTab.addEventListener('change', function() {
+            if (this.checked && !graphsInitialized && window.plotlyGraphData) {
+                // Tab is now visible, initialize all stored graphs
+                console.log('QoS tab activated, initializing ' + window.plotlyGraphData.length + ' Plotly graphs...');
+                window.plotlyGraphData.forEach(function(graph) {
+                    Plotly.newPlot(graph.id, graph.data, graph.layout, graph.config);
+                });
+                graphsInitialized = true;
+            }
+        });
+    }
+})();
+</script>
+""")
+
         html_parts.append("</body>")
         html_parts.append("</html>")
 
@@ -896,14 +921,40 @@ class HTMLReportGenerator:
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
-        /* Full-width container for graphs */
-        .graph-fullwidth {
-            padding: 20px 0;
+        /* Graph container - EXACT copy from POC + explicit width */
+        .graph-container {
+            margin: 20px 0 40px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
             background: #fafafa;
-            border-top: 1px solid #e0e0e0;
-            border-bottom: 1px solid #e0e0e0;
-            margin: 20px -40px;
-            padding: 20px 40px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* POC-style flow header and stats badges */
+        .flow-header {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin: 10px 0;
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            background: #e8f4f8;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border-left: 3px solid #3498db;
         }
 
         h1 {
@@ -2494,9 +2545,7 @@ class HTMLReportGenerator:
 
             if len(flows_with_timeseries) >= 2:
                 html += "<h3>Multi-Flow Jitter Comparison</h3>"
-                html += '<div style="margin: 20px 0;">'
                 html += generate_multi_flow_comparison_graph(flows_with_timeseries)
-                html += "</div>"
 
                 # v4.18.0: Add interpretation guide after multi-flow graph
                 html += self._generate_jitter_interpretation_guide(jitter_data, high_jitter_flows)
@@ -5030,26 +5079,26 @@ class HTMLReportGenerator:
         # Add tshark command
         html += self._generate_jitter_tshark_box(root_cause_analysis)
 
-        # v4.18.0: Add individual flow graphs (top 3 flows with timeseries data)
+        # v4.19.0: Add individual flow graphs with POC-style stats badges (top 3 flows with timeseries data)
         flows_with_graphs = [f for f in flows[:5] if "timeseries" in f]
         if flows_with_graphs:
-            html += '<div class="graph-fullwidth">'
-            html += "<h4 style='margin-top: 5px; margin-bottom: 15px; color: #2c3e50;'>📊 Time-Series Visualization</h4>"
+            html += "<h4 style='margin-top: 25px; margin-bottom: 15px; color: #2c3e50;'>📊 Time-Series Visualization</h4>"
             for idx, flow in enumerate(flows_with_graphs[:3]):  # Show top 3 graphs
                 flow_key = flow.get("flow_key", f"Flow {idx+1}")
                 graph_id = f"jitter-graph-{severity_key}-{idx}"
+                packet_count = flow.get("packets", 0)
 
-                html += f"<h5 style='margin: 15px 0 10px 0; color: #555; font-size: 1em;'>{flow_key}</h5>"
-                html += '<div style="margin: 10px 0 20px 0;">'
+                # Generate graph with POC-style stats badges (flow header + stats + graph)
                 html += generate_jitter_timeseries_graph(
                     flow_name=flow_key,
                     flow_data=flow,
                     rtt_data=None,  # TODO: Add RTT data if available
                     retrans_timestamps=None,  # TODO: Add retrans data if available
-                    graph_id=graph_id
+                    graph_id=graph_id,
+                    packet_count=packet_count,
+                    mean_rtt=0.0,  # TODO: Extract from results
+                    max_rtt=0.0  # TODO: Extract from results
                 )
-                html += "</div>"
-            html += "</div>"  # Close graph-fullwidth
 
         # Add compact flow table
         html += self._generate_jitter_flow_table(flows, severity_key)

@@ -13,10 +13,13 @@ def generate_jitter_timeseries_graph(
     flow_data: Dict[str, Any],
     rtt_data: Optional[Dict[str, List]] = None,
     retrans_timestamps: Optional[List[float]] = None,
-    graph_id: str = "jitter-graph"
+    graph_id: str = "jitter-graph",
+    packet_count: int = 0,
+    mean_rtt: float = 0.0,
+    max_rtt: float = 0.0
 ) -> str:
     """
-    Generate Plotly.js interactive jitter time-series graph.
+    Generate Plotly.js interactive jitter time-series graph with POC-style stats badges.
 
     Args:
         flow_name: Flow identifier string
@@ -24,9 +27,12 @@ def generate_jitter_timeseries_graph(
         rtt_data: Optional RTT data {'timestamps': [...], 'values': [...]}
         retrans_timestamps: Optional list of retransmission timestamps
         graph_id: HTML div ID for the graph
+        packet_count: Number of packets in the flow
+        mean_rtt: Mean RTT value in seconds
+        max_rtt: Max RTT value in seconds
 
     Returns:
-        HTML string with Plotly.js graph
+        HTML string with flow header, stats badges, and Plotly.js graph
     """
     if 'timeseries' not in flow_data:
         return ""
@@ -42,16 +48,44 @@ def generate_jitter_timeseries_graph(
     mean_jitter = flow_data.get('mean_jitter', 0) * 1000
     p95_jitter = flow_data.get('p95_jitter', 0) * 1000
     max_jitter = flow_data.get('max_jitter', 0) * 1000
+    jitter_samples = len(jitter_values)
+    retrans_count = len(retrans_timestamps) if retrans_timestamps else 0
 
-    # Determine color based on severity
+    # Convert RTT to ms
+    mean_rtt_ms = mean_rtt * 1000
+    max_rtt_ms = max_rtt * 1000
+
+    # Determine severity based on p95 jitter
     if p95_jitter > 50:
         jitter_color = '#e74c3c'  # Red - critical
+        severity_badge = '🔴 CRITICAL'
     elif p95_jitter > 30:
         jitter_color = '#f39c12'  # Orange - warning
+        severity_badge = '🟠 WARNING'
     else:
         jitter_color = '#3498db'  # Blue - OK
+        severity_badge = '🟢 OK'
 
-    html = f'<div id="{graph_id}" style="width: 100%; height: 400px;"></div>\n'
+    # Build HTML with POC structure: flow header + stats badges + graph
+    html = f'<div class="flow-header">\n'
+    html += f'    {flow_name}\n'
+    html += '</div>\n'
+
+    # Stats badges
+    html += '<div class="stats">\n'
+    html += f'    <div class="stat-item"><strong>Packets:</strong> {packet_count}</div>\n'
+    html += f'    <div class="stat-item"><strong>Jitter Samples:</strong> {jitter_samples}</div>\n'
+    html += f'    <div class="stat-item"><strong>Mean Jitter:</strong> {mean_jitter:.2f}ms</div>\n'
+    html += f'    <div class="stat-item"><strong>P95 Jitter:</strong> {p95_jitter:.2f}ms</div>\n'
+    html += f'    <div class="stat-item"><strong>Mean RTT:</strong> {mean_rtt_ms:.2f}ms</div>\n'
+    html += f'    <div class="stat-item"><strong>Max RTT:</strong> {max_rtt_ms:.2f}ms</div>\n'
+    html += f'    <div class="stat-item"><strong>Retransmissions:</strong> {retrans_count}</div>\n'
+    html += f'    <div class="stat-item">{severity_badge}</div>\n'
+    html += '</div>\n'
+
+    html += '<div class="graph-container">\n'
+    html += f'    <div id="{graph_id}" style="width: 100%; height: 600px;"></div>\n'
+    html += '</div>\n'
     html += '<script>\n(function() {\n'
 
     # Jitter trace
@@ -207,14 +241,19 @@ def generate_jitter_timeseries_graph(
 
 """
 
-    html += f"    Plotly.newPlot('{graph_id}', data, layout, config);\n"
+    # Store graph data, don't render yet (will be rendered when tab becomes visible)
     html += f"""
-    // Force resize after initial render to ensure full width
-    setTimeout(function() {{
-        Plotly.Plots.resize('{graph_id}');
-    }}, 100);
+    // Store graph configuration globally for lazy initialization
+    window.plotlyGraphData = window.plotlyGraphData || [];
+    window.plotlyGraphData.push({{
+        id: '{graph_id}',
+        data: data,
+        layout: layout,
+        config: config
+    }});
+}})();
+</script>
 """
-    html += '})();\n</script>\n'
 
     return html
 
@@ -239,7 +278,9 @@ def generate_multi_flow_comparison_graph(
     colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
               '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400']
 
-    html = f'<div id="{graph_id}" style="width: 100%; height: 500px;"></div>\n'
+    html = '<div class="graph-container">\n'
+    html += f'    <div id="{graph_id}" style="width: 100%; height: 700px;"></div>\n'
+    html += '</div>\n'
     html += '<script>\n(function() {\n'
     html += '    var data = [];\n'
 
@@ -316,14 +357,19 @@ def generate_multi_flow_comparison_graph(
 
 """
 
-    html += f"    Plotly.newPlot('{graph_id}', data, layout, config);\n"
+    # Store graph data, don't render yet (will be rendered when tab becomes visible)
     html += f"""
-    // Force resize after initial render to ensure full width
-    setTimeout(function() {{
-        Plotly.Plots.resize('{graph_id}');
-    }}, 100);
+    // Store graph configuration globally for lazy initialization
+    window.plotlyGraphData = window.plotlyGraphData || [];
+    window.plotlyGraphData.push({{
+        id: '{graph_id}',
+        data: data,
+        layout: layout,
+        config: config
+    }});
+}})();
+</script>
 """
-    html += '})();\n</script>\n'
 
     return html
 
