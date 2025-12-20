@@ -71,3 +71,42 @@ reports:
     - html
   include_pcap_summary: true
   max_flows_displayed: 50
+
+# PII Redaction Configuration (GDPR/NIST Compliance)
+# Prevents privacy violations by sanitizing logs
+logging:
+  pii_redaction:
+    # SECURITY: MUST be true in production environments
+    # GDPR Art. 5(1)(c): Data Minimization - IP addresses are PII under EU law
+    # CWE-532: Insertion of Sensitive Information into Log File
+    # NIST SP 800-122: Guide to Protecting PII
+    enabled: true
+
+    # Redaction levels:
+    # - PRODUCTION: Redact all PII (IP addresses, MAC addresses, file paths, credentials)
+    #               Preserves first 2 octets of IPv4 for network debugging (e.g., 192.168.XXX.XXX)
+    # - DEVELOPMENT: Keep IP addresses for debugging, redact credentials
+    # - DEBUG: No redaction (WARNING: NOT GDPR-COMPLIANT - use only in isolated dev environments)
+    level: "PRODUCTION"
+
+    # Preserve network prefixes in redacted IPs for troubleshooting
+    # e.g., 192.168.1.1 -> 192.168.XXX.XXX instead of [IP_REDACTED]
+    preserve_network_prefixes: true
+
+    # Legal basis for logging (GDPR Art. 6)
+    # Legitimate interest: Security monitoring, incident response, performance analysis
+    legal_basis: "legitimate_interest_security_monitoring"
+
+    # Data retention policy (GDPR Art. 5(1)(e): Storage Limitation)
+    # Logs containing PII should be retained only as long as necessary
+    retention_days: 90  # Adjust based on your compliance requirements
+
+    # Audit logging configuration
+    # SECURITY CRITICAL: Audit logs contain unredacted PII
+    # Must be encrypted, access-controlled, and compliant with retention policies
+    audit_log:
+      enabled: false  # Enable only if you have secure audit infrastructure
+      path: "/var/log/pcap_analyzer/secure_audit.log"  # Must be encrypted storage
+      encryption_required: true
+      access_control: "security_team_only"
+      retention_days: 365

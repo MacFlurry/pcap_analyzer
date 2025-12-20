@@ -9,10 +9,13 @@ Author: PCAP Analyzer Team
 Sprint: 10 (Performance Optimization)
 """
 
+import logging
 import multiprocessing as mp
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class ParallelAnalyzerExecutor:
@@ -87,8 +90,9 @@ class ParallelAnalyzerExecutor:
                     result = future.result(timeout=300)  # 5 min timeout per analyzer
                     results[name] = result
                 except Exception as e:
+                    # CWE-209: Log detailed error to file, not console
                     # Fallback: run sequentially on error
-                    print(f"Warning: Parallel execution failed for {name}, running sequentially")
+                    logger.warning(f"Parallel execution failed for {name}, falling back to sequential: {e}", exc_info=True)
                     analyzer = next(a for n, a in tasks if n == name)
                     results[name] = self._run_single_analyzer(analyzer, packets)
 

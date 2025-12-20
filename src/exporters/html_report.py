@@ -23,8 +23,11 @@ from ..utils.graph_generator import (
     generate_multi_flow_comparison_graph,
     get_plotly_cdn,
 )
+from ..utils.logging_filters import PIIRedactionFilter
 
 logger = logging.getLogger(__name__)
+# GDPR/NIST Compliance: Redact PII from logs (IP addresses, flow keys)
+logger.addFilter(PIIRedactionFilter())
 
 
 # Security utilities for input validation and output escaping
@@ -2551,7 +2554,7 @@ class HTMLReportGenerator:
                 html += self._generate_jitter_interpretation_guide(jitter_data, high_jitter_flows)
 
         # Generate grouped jitter analysis by severity level
-        html += self._generate_grouped_jitter_analysis(jitter_data)
+        html += self._generate_grouped_jitter_analysis(jitter_data, results)
 
         return html
 
@@ -5057,13 +5060,33 @@ class HTMLReportGenerator:
         return html
 
     def _generate_jitter_severity_section(
-        self, severity_key: str, title: str, flows: list, color: str, emoji: str
+        self, severity_key: str, title: str, flows: list, color: str, emoji: str, results: dict = None
     ) -> str:
         """Generate a section for one jitter severity level with RCA + flow table."""
         flow_count = len(flows)
         total_packets = sum(f.get("packets", 0) for f in flows)
         avg_mean_jitter = sum(f.get("mean_jitter", 0) for f in flows) / flow_count if flow_count > 0 else 0
         avg_mean_jitter_ms = avg_mean_jitter * 1000
+
+        # Build lookup dicts for RTT and retransmission data by flow_key
+        rtt_by_flow = {}
+        retrans_by_flow = {}
+
+        if results:
+            rtt_stats = results.get("rtt", {}).get("flow_statistics", [])
+            for flow_stat in rtt_stats:
+                flow_key = flow_stat.get("flow_key", "")
+                rtt_by_flow[flow_key] = {
+                    "mean_rtt": flow_stat.get("mean_rtt", 0.0),
+                    "max_rtt": flow_stat.get("max_rtt", 0.0),
+                }
+
+            retrans_stats = results.get("retransmission", {}).get("flow_statistics", [])
+            for flow_stat in retrans_stats:
+                flow_key = flow_stat.get("flow_key", "")
+                retrans_by_flow[flow_key] = {
+                    "retransmissions": flow_stat.get("retransmissions", 0),
+                }
 
         # Analyze root cause
         root_cause_analysis = self._analyze_jitter_root_cause(flows, severity_key)
@@ -5096,6 +5119,18 @@ class HTMLReportGenerator:
                 graph_id = f"jitter-graph-{severity_key}-{idx}"
                 packet_count = flow.get("packets", 0)
 
+                # Extract RTT and retransmission data for this flow
+                # Normalize flow_key: jitter has format "IP:port -> IP:port (TCP)"
+                # while RTT/retrans have "IP:port->IP:port"
+                normalized_key = flow_key.replace(" -> ", "->").replace(" (TCP)", "").replace(" (UDP)", "")
+
+                rtt_data = rtt_by_flow.get(normalized_key, {})
+                retrans_data = retrans_by_flow.get(normalized_key, {})
+
+                mean_rtt = rtt_data.get("mean_rtt", 0.0)
+                max_rtt = rtt_data.get("max_rtt", 0.0)
+                retrans_count = retrans_data.get("retransmissions", 0)
+
                 # Generate graph with POC-style stats badges (flow header + stats + graph)
                 html += generate_jitter_timeseries_graph(
                     flow_name=flow_key,
@@ -5104,8 +5139,9 @@ class HTMLReportGenerator:
                     retrans_timestamps=None,  # TODO: Add retrans data if available
                     graph_id=graph_id,
                     packet_count=packet_count,
-                    mean_rtt=0.0,  # TODO: Extract from results
-                    max_rtt=0.0  # TODO: Extract from results
+                    mean_rtt=mean_rtt,
+                    max_rtt=max_rtt,
+                    retrans_count=retrans_count
                 )
 
         # Add compact flow table
@@ -5329,7 +5365,7 @@ class HTMLReportGenerator:
             recommendation=recommendation
         )
 
-    def _generate_grouped_jitter_analysis(self, jitter_data: dict) -> str:
+    def _generate_grouped_jitter_analysis(self, jitter_data: dict, results: dict = None) -> str:
         """Generate jitter analysis grouped by severity (critical, high, medium, low, excellent)."""
         high_jitter_flows = jitter_data.get("high_jitter_flows", [])
 
@@ -5361,27 +5397,27 @@ class HTMLReportGenerator:
         # Order: Critical -> High -> Medium -> Low -> Excellent
         if flow_groups["critical"]:
             html += self._generate_jitter_severity_section(
-                "critical", "Critical Jitter (P95 > 50ms UDP or > 200ms TCP)", flow_groups["critical"], "#dc3545", "🔴"
+                "critical", "Critical Jitter (P95 > 50ms UDP or > 200ms TCP)", flow_groups["critical"], "#dc3545", "🔴", results
             )
 
         if flow_groups["high"]:
             html += self._generate_jitter_severity_section(
-                "high", "High Jitter (P95 50-100ms UDP or 100-200ms TCP)", flow_groups["high"], "#ff9800", "🟡"
+                "high", "High Jitter (P95 50-100ms UDP or 100-200ms TCP)", flow_groups["high"], "#ff9800", "🟡", results
             )
 
         if flow_groups["medium"]:
             html += self._generate_jitter_severity_section(
-                "medium", "Moderate Jitter (P95 30-50ms)", flow_groups["medium"], "#ffc107", "🟠"
+                "medium", "Moderate Jitter (P95 30-50ms)", flow_groups["medium"], "#ffc107", "🟠", results
             )
 
         if flow_groups["low"]:
             html += self._generate_jitter_severity_section(
-                "low", "Low Jitter (P95 20-30ms)", flow_groups["low"], "#6c757d", "⚪"
+                "low", "Low Jitter (P95 20-30ms)", flow_groups["low"], "#6c757d", "⚪", results
             )
 
         if flow_groups["excellent"]:
             html += self._generate_jitter_severity_section(
-                "excellent", "Excellent Jitter (P95 < 20ms)", flow_groups["excellent"], "#17a2b8", "💎"
+                "excellent", "Excellent Jitter (P95 < 20ms)", flow_groups["excellent"], "#17a2b8", "💎", results
             )
 
         return html

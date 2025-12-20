@@ -16,7 +16,8 @@ def generate_jitter_timeseries_graph(
     graph_id: str = "jitter-graph",
     packet_count: int = 0,
     mean_rtt: float = 0.0,
-    max_rtt: float = 0.0
+    max_rtt: float = 0.0,
+    retrans_count: Optional[int] = None
 ) -> str:
     """
     Generate Plotly.js interactive jitter time-series graph with POC-style stats badges.
@@ -30,6 +31,7 @@ def generate_jitter_timeseries_graph(
         packet_count: Number of packets in the flow
         mean_rtt: Mean RTT value in seconds
         max_rtt: Max RTT value in seconds
+        retrans_count: Optional retransmission count (if not provided, derived from retrans_timestamps)
 
     Returns:
         HTML string with flow header, stats badges, and Plotly.js graph
@@ -49,7 +51,9 @@ def generate_jitter_timeseries_graph(
     p95_jitter = flow_data.get('p95_jitter', 0) * 1000
     max_jitter = flow_data.get('max_jitter', 0) * 1000
     jitter_samples = len(jitter_values)
-    retrans_count = len(retrans_timestamps) if retrans_timestamps else 0
+    # Use provided retrans_count if available, otherwise derive from timestamps
+    if retrans_count is None:
+        retrans_count = len(retrans_timestamps) if retrans_timestamps else 0
 
     # Convert RTT to ms
     mean_rtt_ms = mean_rtt * 1000

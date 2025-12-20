@@ -4,6 +4,7 @@ Interface en ligne de commande pour l'analyseur PCAP
 """
 
 import gc
+import logging
 import os
 import sys
 from pathlib import Path
@@ -43,9 +44,17 @@ from .performance.streaming_processor import StreamingProcessor
 from .report_generator import ReportGenerator
 from .ssh_capture import capture_from_config
 from .utils.result_sanitizer import get_empty_analyzer_result, sanitize_results
+from .utils.file_validator import validate_pcap_file
+from .utils.error_sanitizer import log_and_sanitize, sanitize_error_for_display, sanitize_subprocess_error
+from .utils.resource_limits import set_resource_limits, get_current_resource_usage, handle_memory_error
+from .utils.logging_config import setup_logging, shutdown_logging
 from .__version__ import __version__
 
 console = Console()
+logger = logging.getLogger(__name__)
+
+# Track if logging has been initialized
+_logging_initialized = False
 
 # Performance constants
 MEMORY_CLEANUP_INTERVAL = 50_000  # packets - periodic memory cleanup interval
@@ -291,6 +300,8 @@ def analyze_pcap_hybrid(
     enable_streaming: bool = True,
     enable_parallel: bool = False,
     memory_limit_mb: Optional[float] = None,
+    max_expansion_ratio: int = 1000,
+    enable_bomb_protection: bool = True,
 ) -> dict[str, Any]:
     """
     PHASE 2 OPTIMIZATION: Hybrid analysis using dpkt + Scapy.
@@ -300,6 +311,7 @@ def analyze_pcap_hybrid(
     2. Using Scapy only for complex analysis (DNS, ICMP, deep packet inspection)
     3. (Sprint 10) Automatic streaming mode for large files (>100MB)
     4. (Sprint 10) Optional parallel execution for multi-core CPUs
+    5. Decompression bomb protection (OWASP ASVS 5.2.3, CWE-409)
 
     Performance comparison:
     - Old (Scapy only): ~94 seconds for 172k packets
@@ -311,7 +323,12 @@ def analyze_pcap_hybrid(
 
     # Sprint 10: Initialize performance optimization tools
     memory_optimizer = MemoryOptimizer(memory_limit_mb=memory_limit_mb)
-    streaming_processor = StreamingProcessor(pcap_file)
+    streaming_processor = StreamingProcessor(
+        pcap_file,
+        enable_bomb_protection=enable_bomb_protection,
+        max_expansion_ratio=max_expansion_ratio,
+        critical_expansion_ratio=max_expansion_ratio * 10  # Critical threshold is 10x the max
+    )
 
     # Show performance mode info
     perf_stats = streaming_processor.get_stats()
@@ -347,11 +364,23 @@ def analyze_pcap_hybrid(
     burst_analyzer = analyzer_dict["burst"]
     temporal_analyzer = analyzer_dict["temporal"]
 
-    # Fast pass with dpkt
-    parser = FastPacketParser(pcap_file)
+    # Fast pass with dpkt (with decompression bomb protection)
+    parser = FastPacketParser(
+        pcap_file,
+        enable_bomb_protection=enable_bomb_protection,
+        max_expansion_ratio=max_expansion_ratio,
+        critical_expansion_ratio=max_expansion_ratio * 10  # Critical threshold is 10x the max
+    )
 
     # Count total packets first for accurate progress reporting
-    total_packets = sum(1 for _ in FastPacketParser(pcap_file).parse())
+    # Use a separate parser instance for counting (with same protection settings)
+    counter_parser = FastPacketParser(
+        pcap_file,
+        enable_bomb_protection=enable_bomb_protection,
+        max_expansion_ratio=max_expansion_ratio,
+        critical_expansion_ratio=max_expansion_ratio * 10
+    )
+    total_packets = sum(1 for _ in counter_parser.parse())
 
     packet_count = 0
 
@@ -426,12 +455,20 @@ def analyze_pcap_hybrid(
             pcap_for_scapy = temp_pcap_path
             console.print(f"[green]✓ Conversion réussie: {temp_pcap_path}[/green]")
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
+        # CWE-209: Log details to file, show generic message to user
+        logger.warning(f"PCAP conversion timeout: {e}", exc_info=True)
         console.print("[yellow]⚠ Conversion timeout - Utilisation du fichier original[/yellow]")
     except subprocess.CalledProcessError as e:
-        console.print(f"[yellow]⚠ Conversion échouée: {e} - Utilisation du fichier original[/yellow]")
+        # CWE-209: Sanitize subprocess errors (may contain stderr output)
+        logger.error(f"PCAP conversion failed: {e}", exc_info=True)
+        safe_msg = sanitize_subprocess_error(e)
+        console.print(f"[yellow]⚠ {safe_msg} - Utilisation du fichier original[/yellow]")
     except Exception as e:
-        console.print(f"[yellow]⚠ Erreur détection format: {e} - Utilisation du fichier original[/yellow]")
+        # CWE-209: Generic message for user, full details in log
+        logger.error(f"Format detection failed: {e}", exc_info=True)
+        safe_msg = sanitize_error_for_display(e, "Format detection")
+        console.print(f"[yellow]⚠ {safe_msg} - Utilisation du fichier original[/yellow]")
 
     # Only these analyzers need Scapy's deep packet inspection
     dns_analyzer = analyzer_dict["dns"]
@@ -987,9 +1024,86 @@ def analyze_pcap_hybrid(
 
 @click.group()
 @click.version_option(version=__version__, prog_name="PCAP Analyzer")
-def cli():
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
+    default="INFO",
+    help="Set logging level (default: INFO, NEVER use DEBUG in production)"
+)
+@click.option(
+    "--log-file",
+    type=click.Path(),
+    help="Path to log file (default: logs/pcap_analyzer.log)"
+)
+@click.option(
+    "--no-log-file",
+    is_flag=True,
+    help="Disable file logging (console only)"
+)
+@click.option(
+    "--log-format",
+    type=click.Choice(["standard", "json"], case_sensitive=False),
+    default="standard",
+    help="Log format: standard (human-readable) or json (SIEM-friendly)"
+)
+@click.option(
+    "--enable-audit-log",
+    is_flag=True,
+    default=True,
+    help="Enable separate security audit log (default: enabled)"
+)
+@click.option(
+    "--log-config",
+    type=click.Path(exists=True),
+    help="Path to YAML logging configuration file"
+)
+@click.pass_context
+def cli(ctx, log_level, log_file, no_log_file, log_format, enable_audit_log, log_config):
     """Analyseur automatisé des causes de latence réseau"""
-    pass
+    global _logging_initialized
+
+    # Initialize logging only once
+    if not _logging_initialized:
+        # Determine log directory
+        if log_file:
+            log_dir = str(Path(log_file).parent)
+        else:
+            log_dir = "logs"
+
+        # Setup logging with specified configuration
+        try:
+            setup_logging(
+                log_dir=log_dir,
+                log_level=log_level.upper(),
+                enable_console=True,
+                enable_file=not no_log_file,
+                enable_audit=enable_audit_log,
+                log_format=log_format,
+                config_file=log_config
+            )
+            _logging_initialized = True
+
+            # Log startup message
+            logger.info("=" * 80)
+            logger.info(f"PCAP Analyzer v{__version__} - Starting")
+            logger.info(f"Log level: {log_level.upper()}")
+            logger.info(f"Log format: {log_format}")
+            logger.info(f"File logging: {'disabled' if no_log_file else 'enabled'}")
+            logger.info(f"Audit logging: {'enabled' if enable_audit_log else 'disabled'}")
+            logger.info("=" * 80)
+
+            # Security warning for DEBUG level
+            if log_level.upper() == "DEBUG":
+                logger.warning("WARNING: DEBUG logging enabled - may expose sensitive data!")
+                logger.warning("NEVER use DEBUG level in production environments")
+
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to initialize logging: {e}[/yellow]")
+            console.print("[yellow]Continuing with default Python logging...[/yellow]")
+
+    # Store logging config in context for subcommands
+    ctx.ensure_object(dict)
+    ctx.obj["logging_initialized"] = _logging_initialized
 
 
 @cli.command()
@@ -1013,6 +1127,19 @@ def cli():
     help="Enable parallel analyzer execution using multiple CPU cores (Sprint 10 - experimental)",
 )
 @click.option("--memory-limit", type=float, help="Set memory limit in MB (default: 80% of available memory)")
+@click.option("--max-memory", type=float, default=4.0, help="Maximum memory limit in GB for DoS protection (default: 4GB)")
+@click.option("--max-cpu-time", type=int, default=3600, help="Maximum CPU time in seconds for DoS protection (default: 3600s)")
+@click.option(
+    "--max-expansion-ratio",
+    type=int,
+    default=1000,
+    help="Maximum safe expansion ratio for decompression bomb detection (default: 1000, OWASP ASVS 5.2.3)",
+)
+@click.option(
+    "--allow-large-expansion",
+    is_flag=True,
+    help="Disable decompression bomb protection (WARNING: use only for trusted large captures)",
+)
 def analyze(
     pcap_file,
     latency,
@@ -1028,6 +1155,10 @@ def analyze(
     no_streaming,
     parallel,
     memory_limit,
+    max_memory,
+    max_cpu_time,
+    max_expansion_ratio,
+    allow_large_expansion,
 ):
     """
     Analyse un fichier PCAP local pour détecter les causes de latence
@@ -1040,7 +1171,37 @@ def analyze(
         pcap_analyzer analyze capture.pcap -l 2.0
         pcap_analyzer analyze capture.pcap --no-details
         pcap_analyzer analyze capture.pcap --details-limit 50
+        pcap_analyzer analyze capture.pcap --max-memory 8.0 --max-cpu-time 7200
     """
+    # Log analysis start
+    logger.info(f"Starting PCAP analysis: {pcap_file}")
+    logger.info(f"Parameters: latency_filter={latency}, include_localhost={include_localhost}, "
+                f"streaming={'disabled' if no_streaming else 'auto'}, parallel={parallel}")
+
+    # Security: Set OS-level resource limits to prevent DoS attacks (CWE-770, NIST SC-5)
+    try:
+        set_resource_limits(
+            memory_gb=max_memory,
+            cpu_seconds=max_cpu_time,
+            max_file_size_gb=10.0,  # 10GB max for any output file
+            max_open_files=1024     # Standard Linux default
+        )
+        console.print(f"[dim]Resource limits applied: {max_memory}GB RAM, {max_cpu_time}s CPU time[/dim]")
+        logger.info(f"Resource limits applied: memory={max_memory}GB, cpu={max_cpu_time}s, "
+                   f"file_size=10GB, open_files=1024")
+    except ValueError as e:
+        console.print(f"[red]Invalid resource limit values: {e}[/red]")
+        logger.error(f"Invalid resource limit values: {e}")
+        sys.exit(1)
+    except OSError as e:
+        console.print(f"[yellow]Warning: Failed to set resource limits: {e}[/yellow]")
+        console.print("[yellow]Continuing without resource limits (not recommended for production)[/yellow]")
+        logger.warning(f"Failed to set resource limits: {e} - continuing without limits")
+    except Exception as e:
+        console.print(f"[yellow]Unexpected error setting resource limits: {e}[/yellow]")
+        console.print("[yellow]Continuing without resource limits[/yellow]")
+        logger.warning(f"Unexpected error setting resource limits: {e}")
+
     # Security: Validate and canonicalize pcap_file path to prevent symlink attacks
     try:
         pcap_path = Path(pcap_file).resolve(strict=True)
@@ -1056,6 +1217,34 @@ def analyze(
     except (OSError, RuntimeError) as e:
         raise click.BadParameter(f"Erreur de validation du chemin: {e}")
 
+    # OWASP ASVS 5.2: File Validation (CWE-434, CWE-770)
+    # Validate PCAP file BEFORE processing to prevent malicious uploads
+    console.print("[cyan]Validating PCAP file...[/cyan]")
+    logger.info(f"Validating PCAP file: {pcap_file}")
+    try:
+        pcap_type, file_size = validate_pcap_file(pcap_file, max_size_gb=20)
+        file_size_mb = file_size / (1024 * 1024)
+        console.print(f"[green]✓ Valid {pcap_type.upper()} file ({file_size_mb:.2f} MB)[/green]")
+        logger.info(f"File validation successful: type={pcap_type}, size={file_size_mb:.2f}MB")
+    except FileNotFoundError as e:
+        console.print(f"[red]✗ File validation failed: {e}[/red]")
+        logger.error(f"File validation failed (FileNotFoundError): {e}")
+        raise click.Abort()
+    except PermissionError as e:
+        console.print(f"[red]✗ File validation failed: {e}[/red]")
+        logger.error(f"File validation failed (PermissionError): {e}")
+        raise click.Abort()
+    except ValueError as e:
+        console.print(f"[red]✗ File validation failed: {e}[/red]")
+        console.print("[yellow]Hint: Ensure the file is a valid PCAP capture (not a text file, executable, or corrupted file).[/yellow]")
+        logger.error(f"File validation failed (ValueError): {e}")
+        raise click.Abort()
+    except Exception as e:
+        # Catch-all for unexpected errors (sanitize error message)
+        console.print(f"[red]✗ File validation failed: Unexpected error during validation[/red]")
+        logger.error(f"Unexpected validation error: {type(e).__name__}: {e}")
+        raise click.Abort()
+
     # Charge la configuration
     cfg = get_config(config)
 
@@ -1068,17 +1257,40 @@ def analyze(
 
     # Analyse avec le mode hybride optimisé (dpkt + Scapy)
     # Sprint 10: Add performance optimizations
-    results = analyze_pcap_hybrid(
-        pcap_file,
-        cfg,
-        latency_filter=latency,
-        show_details=show_details,
-        details_limit=details_limit,
-        include_localhost=include_localhost,
-        enable_streaming=not no_streaming,
-        enable_parallel=parallel,
-        memory_limit_mb=memory_limit,
-    )
+    # Security: Decompression bomb protection (OWASP ASVS 5.2.3, CWE-409)
+    # Security: Wrap analysis in try/except to handle resource limit violations gracefully (CWE-770)
+    logger.info("Starting hybrid PCAP analysis (dpkt + Scapy)")
+    try:
+        results = analyze_pcap_hybrid(
+            pcap_file,
+            cfg,
+            latency_filter=latency,
+            show_details=show_details,
+            details_limit=details_limit,
+            include_localhost=include_localhost,
+            enable_streaming=not no_streaming,
+            enable_parallel=parallel,
+            memory_limit_mb=memory_limit,
+            max_expansion_ratio=max_expansion_ratio,
+            enable_bomb_protection=not allow_large_expansion,
+        )
+        logger.info("PCAP analysis completed successfully")
+    except MemoryError:
+        # Memory limit exceeded (RLIMIT_AS triggered)
+        console.print("\n[red]CRITICAL: Memory limit exceeded![/red]")
+        console.print("[red]The PCAP file is too large for the allocated memory.[/red]")
+        console.print(f"[yellow]Current limit: {max_memory}GB[/yellow]")
+        console.print("[yellow]Suggestions:[/yellow]")
+        console.print(f"  1. Increase memory limit: --max-memory {max_memory * 2}")
+        console.print("  2. Enable streaming mode (should be automatic for large files)")
+        console.print("  3. Split the PCAP file into smaller chunks")
+        console.print("\n[dim]This is a security protection against resource exhaustion (CWE-770, NIST SC-5)[/dim]")
+        logger.critical(f"Memory limit exceeded during PCAP analysis: {max_memory}GB")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Analysis interrupted by user[/yellow]")
+        logger.warning("Analysis interrupted by user (SIGINT)")
+        sys.exit(130)  # Standard exit code for SIGINT
 
     # Génération des rapports
     if not no_report:
@@ -1095,7 +1307,9 @@ def analyze(
 @click.option("-c", "--config", type=click.Path(exists=True), help="Fichier de configuration personnalisé")
 @click.option("--analyze/--no-analyze", default=True, help="Analyser automatiquement après capture")
 @click.option("-l", "--latency", type=float, help="Seuil de latence pour l'analyse")
-def capture(duration, filter, output, config, analyze, latency):
+@click.option("--max-memory", type=float, default=4.0, help="Maximum memory limit in GB for DoS protection (default: 4GB)")
+@click.option("--max-cpu-time", type=int, default=3600, help="Maximum CPU time in seconds for DoS protection (default: 3600s)")
+def capture(duration, filter, output, config, analyze, latency, max_memory, max_cpu_time):
     """
     Capture des paquets via SSH depuis un serveur distant
 
@@ -1103,6 +1317,18 @@ def capture(duration, filter, output, config, analyze, latency):
         pcap_analyzer capture -d 120
         pcap_analyzer capture -d 60 -f "host 192.168.1.100"
     """
+    # Security: Set OS-level resource limits to prevent DoS attacks (CWE-770, NIST SC-5)
+    try:
+        set_resource_limits(
+            memory_gb=max_memory,
+            cpu_seconds=max_cpu_time,
+            max_file_size_gb=10.0,
+            max_open_files=1024
+        )
+        console.print(f"[dim]Resource limits applied: {max_memory}GB RAM, {max_cpu_time}s CPU time[/dim]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Failed to set resource limits: {e}[/yellow]")
+
     # Charge la configuration
     cfg = get_config(config)
 
@@ -1153,12 +1379,17 @@ def capture(duration, filter, output, config, analyze, latency):
         # Analyse automatique si demandé
         if analyze:
             console.print("\n[cyan]Lancement de l'analyse automatique...[/cyan]")
-            results = analyze_pcap_hybrid(
-                local_pcap, cfg, latency_filter=latency, show_details=True, include_localhost=False
-            )
+            try:
+                results = analyze_pcap_hybrid(
+                    local_pcap, cfg, latency_filter=latency, show_details=True, include_localhost=False
+                )
 
-            # Génération des rapports
-            _generate_reports(results, local_pcap, None, cfg)
+                # Génération des rapports
+                _generate_reports(results, local_pcap, None, cfg)
+            except MemoryError:
+                console.print("\n[red]CRITICAL: Memory limit exceeded during analysis![/red]")
+                console.print(f"[yellow]Try increasing memory limit: --max-memory {max_memory * 2}[/yellow]")
+                sys.exit(1)
 
     except Exception as e:
         console.print(f"[red]❌ Erreur lors de la capture: {e}[/red]")
@@ -1235,16 +1466,22 @@ def benchmark(pcap_file, output):
             console.print(f"\n[green]✓ Benchmark report saved to: {output}[/green]")
 
     except Exception as e:
-        console.print(f"[red]❌ Benchmark failed: {e}[/red]")
-        import traceback
-
-        traceback.print_exc()
+        # CWE-209: Information Exposure Through Error Messages
+        # NIST SP 800-53 SI-10(3): Predictable Behavior for Invalid Inputs
+        # Log full details to file (including stack trace), show sanitized message to user
+        logger.error(f"Benchmark failed: {e}", exc_info=True)
+        safe_msg = sanitize_error_for_display(e, "Benchmark")
+        console.print(f"[red]❌ {safe_msg}[/red]")
         sys.exit(1)
 
 
 def main():
     """Point d'entrée principal"""
-    cli()
+    try:
+        cli()
+    finally:
+        # Ensure all logs are flushed before exit
+        shutdown_logging()
 
 
 if __name__ == "__main__":

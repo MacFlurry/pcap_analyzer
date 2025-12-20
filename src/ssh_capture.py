@@ -24,7 +24,11 @@ import paramiko
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from .utils.logging_filters import PIIRedactionFilter
+
 logger = logging.getLogger(__name__)
+# GDPR/NIST Compliance: Redact PII from logs (IP addresses, BPF filters, file paths)
+logger.addFilter(PIIRedactionFilter())
 
 console = Console()
 
