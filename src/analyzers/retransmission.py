@@ -153,16 +153,26 @@ class SampledTimeline:
     """
     Hybrid sampled timeline for problematic TCP flows.
 
-    Architecture: Option C - Hybrid Sampled Timeline (v4.15.0)
+    Architecture: Option E - Snapshot-on-Problematic (v4.17.0)
     - Lazy allocation: only created when flow becomes problematic
     - Ring buffer: constant memory per flow via deque
     - Samples: handshake (10) + retrans context (±5) + teardown (10)
+    - Bidirectional: captures reverse direction at moment of detection
 
-    Memory: ~25-50 packets per problematic flow (vs full capture)
+    Memory: ~7.8 KB per problematic flow (vs full capture)
+    - Forward: handshake (10) + contexts + teardown (10) ~5.4 KB
+    - Reverse: handshake (10) + teardown (10) ~2.4 KB
     """
     handshake: list[SimplePacketInfo]  # First 10 packets (connection setup)
     retrans_context: list[list[SimplePacketInfo]]  # ±5 packets around each retransmission
     teardown: list[SimplePacketInfo]  # Last 10 packets (connection teardown)
+
+    # CRITICAL FIX v4.17.0: Bidirectional timeline snapshot
+    # Captures reverse direction at moment flow becomes problematic
+    # Prevents data loss when port reuse cleanup deletes _packet_buffer[reverse_key]
+    reverse_handshake: list[SimplePacketInfo] = field(default_factory=list)
+    reverse_teardown: list[SimplePacketInfo] = field(default_factory=list)
+    reverse_captured: bool = False
 
 
 @dataclass
@@ -849,26 +859,54 @@ class RetransmissionAnalyzer:
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]["retransmissions"] += 1
 
-                # v4.15.0: Sampled Timeline - Lazy allocation on first retransmission
+                # v4.17.0: Sampled Timeline - Lazy allocation with bidirectional snapshot
                 if flow_key not in self.sampled_timelines:
-                    # Flow just became problematic - allocate timeline
+                    # Flow just became problematic - snapshot BOTH directions
+                    # CRITICAL: Capture reverse direction NOW before port reuse cleanup deletes it
+                    forward_handshake = list(self._packet_buffer[flow_key])
+                    reverse_handshake = []
+                    if reverse_key in self._packet_buffer:
+                        reverse_handshake = list(self._packet_buffer[reverse_key])
+
                     self.sampled_timelines[flow_key] = SampledTimeline(
-                        handshake=list(self._packet_buffer[flow_key]),  # Copy buffered handshake packets
-                        retrans_context=[],  # Will be populated with ±5 packets around each retransmission
-                        teardown=[],  # Will be populated on FIN/RST
+                        handshake=forward_handshake,
+                        retrans_context=[],
+                        teardown=[],
+                        reverse_handshake=reverse_handshake,  # NEW: Bidirectional snapshot
+                        reverse_teardown=[],  # NEW: Will be captured on FIN/RST
+                        reverse_captured=True,  # NEW: Mark as captured
                     )
 
                 # Mark current packet as retransmission in buffer
                 packet_info.is_retransmission = True
 
-                # Capture retransmission context: ±5 packets around this retransmission
-                # Get last 5 packets from buffer (including current retransmission)
-                buffer_list = list(self._packet_buffer[flow_key])
-                context_start = max(0, len(buffer_list) - 5)
-                context_packets = buffer_list[context_start:]  # Last 5 packets (including this one)
+                # v4.17.1: Capture BIDIRECTIONAL retransmission context
+                # Forward direction: Last 5 packets (including current retransmission)
+                forward_buffer = list(self._packet_buffer[flow_key])
+                forward_start = max(0, len(forward_buffer) - 5)
+                forward_context = forward_buffer[forward_start:]
 
-                # Store retransmission context
-                self.sampled_timelines[flow_key].retrans_context.append(context_packets)
+                # Reverse direction: Filter by time window from forward context
+                reverse_context = []
+                if reverse_key in self._packet_buffer and forward_context:
+                    reverse_buffer = list(self._packet_buffer[reverse_key])
+                    time_window_start = forward_context[0].timestamp
+                    time_window_end = forward_context[-1].timestamp
+
+                    # Filter reverse packets within time window, take last 5
+                    reverse_context = [
+                        p for p in reverse_buffer
+                        if time_window_start <= p.timestamp <= time_window_end
+                    ][-5:]
+
+                # Merge bidirectional contexts and bound to 10 packets total
+                merged_context = forward_context + reverse_context
+                merged_context.sort(key=lambda p: p.timestamp)
+                if len(merged_context) > 10:
+                    merged_context = merged_context[:10]
+
+                # Store bidirectional retransmission context
+                self.sampled_timelines[flow_key].retrans_context.append(merged_context)
 
             # Store only original packet info
             if segment_key not in self._seen_segments[flow_key]:
@@ -945,14 +983,20 @@ class RetransmissionAnalyzer:
             self.anomalies.append(anomaly)
             self._flow_counters[flow_key]["zero_windows"] += 1
 
-        # v4.15.0: Capture teardown packets (FIN/RST) for sampled timeline
+        # v4.17.0: Capture teardown packets (FIN/RST) for sampled timeline - BIDIRECTIONAL
         # v4.15.7: Only capture FIRST teardown (RFC 793 compliant - teardown begins at first FIN/RST)
         # Do NOT overwrite if already captured (e.g., retransmitted FIN 14 minutes later)
         # Only for flows that have sampled timeline (i.e., flows with retransmissions)
         if flow_key in self.sampled_timelines and (metadata.is_fin or metadata.is_rst):
-            # Capture only if not already captured (first FIN/RST wins)
+            # Capture forward teardown (only if not already captured)
             if not self.sampled_timelines[flow_key].teardown:
                 self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
+
+            # CRITICAL FIX v4.17.0: Capture reverse teardown simultaneously
+            # Prevents data loss when port reuse cleanup deletes reverse buffer
+            if not self.sampled_timelines[flow_key].reverse_teardown:
+                if reverse_key in self._packet_buffer:
+                    self.sampled_timelines[flow_key].reverse_teardown = list(self._packet_buffer[reverse_key])
 
     def finalize(self) -> dict[str, Any]:
         """Finalise l'analyse et génère le rapport"""
@@ -1187,25 +1231,54 @@ class RetransmissionAnalyzer:
                 self.retransmissions.append(retrans)
                 self._flow_counters[flow_key]["retransmissions"] += 1
 
-                # v4.15.0: Sampled Timeline - Lazy allocation on first retransmission (Scapy path)
+                # v4.17.0: Sampled Timeline - Lazy allocation with bidirectional snapshot (Scapy path)
                 if flow_key not in self.sampled_timelines:
-                    # Flow just became problematic - allocate timeline
+                    # Flow just became problematic - snapshot BOTH directions
+                    # CRITICAL: Capture reverse direction NOW before port reuse cleanup deletes it
+                    forward_handshake = list(self._packet_buffer[flow_key])
+                    reverse_handshake = []
+                    if reverse_key in self._packet_buffer:
+                        reverse_handshake = list(self._packet_buffer[reverse_key])
+
                     self.sampled_timelines[flow_key] = SampledTimeline(
-                        handshake=list(self._packet_buffer[flow_key]),  # Copy buffered handshake packets
-                        retrans_context=[],  # Will be populated with ±5 packets around each retransmission
-                        teardown=[],  # Will be populated on FIN/RST
+                        handshake=forward_handshake,
+                        retrans_context=[],
+                        teardown=[],
+                        reverse_handshake=reverse_handshake,  # NEW: Bidirectional snapshot
+                        reverse_teardown=[],  # NEW: Will be captured on FIN/RST
+                        reverse_captured=True,  # NEW: Mark as captured
                     )
 
                 # Mark current packet as retransmission in buffer
                 packet_info.is_retransmission = True
 
-                # Capture retransmission context: ±5 packets around this retransmission
-                buffer_list = list(self._packet_buffer[flow_key])
-                context_start = max(0, len(buffer_list) - 5)
-                context_packets = buffer_list[context_start:]
+                # v4.17.1: Capture BIDIRECTIONAL retransmission context
+                # Forward direction: Last 5 packets (including current retransmission)
+                forward_buffer = list(self._packet_buffer[flow_key])
+                forward_start = max(0, len(forward_buffer) - 5)
+                forward_context = forward_buffer[forward_start:]
 
-                # Store retransmission context
-                self.sampled_timelines[flow_key].retrans_context.append(context_packets)
+                # Reverse direction: Filter by time window from forward context
+                reverse_context = []
+                if reverse_key in self._packet_buffer and forward_context:
+                    reverse_buffer = list(self._packet_buffer[reverse_key])
+                    time_window_start = forward_context[0].timestamp
+                    time_window_end = forward_context[-1].timestamp
+
+                    # Filter reverse packets within time window, take last 5
+                    reverse_context = [
+                        p for p in reverse_buffer
+                        if time_window_start <= p.timestamp <= time_window_end
+                    ][-5:]
+
+                # Merge bidirectional contexts and bound to 10 packets total
+                merged_context = forward_context + reverse_context
+                merged_context.sort(key=lambda p: p.timestamp)
+                if len(merged_context) > 10:
+                    merged_context = merged_context[:10]
+
+                # Store bidirectional retransmission context
+                self.sampled_timelines[flow_key].retrans_context.append(merged_context)
 
             # Store only original packet info to prevent unbounded memory growth
             # We only need the first occurrence to detect retransmissions
@@ -1294,13 +1367,19 @@ class RetransmissionAnalyzer:
             self.anomalies.append(anomaly)
             self._flow_counters[flow_key]["zero_windows"] += 1
 
-        # v4.15.0: Capture teardown packets (FIN/RST) for sampled timeline (Scapy path)
+        # v4.17.0: Capture teardown packets (FIN/RST) for sampled timeline - BIDIRECTIONAL (Scapy path)
         # v4.15.7: Only capture FIRST teardown (RFC 793 compliant - teardown begins at first FIN/RST)
         # Do NOT overwrite if already captured (e.g., retransmitted FIN 14 minutes later)
         if flow_key in self.sampled_timelines and (tcp.flags & 0x01 or tcp.flags & 0x04):  # FIN or RST
-            # Capture only if not already captured (first FIN/RST wins)
+            # Capture forward teardown (only if not already captured)
             if not self.sampled_timelines[flow_key].teardown:
                 self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
+
+            # CRITICAL FIX v4.17.0: Capture reverse teardown simultaneously
+            # Prevents data loss when port reuse cleanup deletes reverse buffer
+            if not self.sampled_timelines[flow_key].reverse_teardown:
+                if reverse_key in self._packet_buffer:
+                    self.sampled_timelines[flow_key].reverse_teardown = list(self._packet_buffer[reverse_key])
 
     def _get_flow_key(self, packet: Packet) -> str:
         """Génère une clé de flux unidirectionnelle"""
@@ -1443,67 +1522,23 @@ class RetransmissionAnalyzer:
         # All other types (including "Unknown" and "Retransmission")
         other_retrans_count = total_retrans - rto_count - fast_retrans_count
 
-        # v4.15.0: Serialize sampled timelines for HTML report
-        # v4.15.3: Merge bidirectional packets for complete handshake view
+        # v4.17.0: Serialize sampled timelines for HTML report - SIMPLIFIED
+        # Uses pre-captured bidirectional snapshots instead of _packet_buffer lookups
+        # No complex reverse_key calculations needed - data already captured at detection time
         sampled_timelines_dict = {}
         for flow_key, timeline in self.sampled_timelines.items():
-            # Calculate reverse flow key to get packets from opposite direction
-            # flow_key format: "10.0.0.1:80->10.0.0.2:443"
-            if "->" in flow_key:
-                parts = flow_key.split("->")
-                if len(parts) == 2:
-                    reverse_key = f"{parts[1]}->{parts[0]}"
-                else:
-                    reverse_key = None
-            else:
-                reverse_key = None
-
-            # Merge handshake packets from both directions
-            handshake_packets = list(timeline.handshake)  # Copy original direction
-            if reverse_key and reverse_key in self._packet_buffer:
-                # Add packets from reverse direction buffer
-                handshake_packets.extend(self._packet_buffer[reverse_key])
-
-            # Sort by timestamp for chronological order
+            # CRITICAL FIX v4.17.0: Use pre-captured snapshots (no buffer lookups)
+            # Handshake: Merge forward + reverse snapshots
+            handshake_packets = list(timeline.handshake) + list(timeline.reverse_handshake)
             handshake_packets.sort(key=lambda p: p.timestamp)
+            handshake_packets = handshake_packets[:10]  # First 10 packets total
 
-            # Limit to first 10 packets total (from both directions)
-            handshake_packets = handshake_packets[:10]
+            # v4.17.1: Retransmission contexts are now BIDIRECTIONAL
+            # Contexts already merged at capture time (see lines 883-909, 1255-1281)
+            merged_retrans_contexts = timeline.retrans_context
 
-            # Merge retransmission contexts from both directions
-            merged_retrans_contexts = []
-            for context in timeline.retrans_context:
-                # Get timestamp range for this context (±5 packets around retransmission)
-                if context:
-                    context_start_time = min(p.timestamp for p in context)
-                    context_end_time = max(p.timestamp for p in context)
-
-                    # Merge with reverse direction packets in same time range
-                    merged_context = list(context)
-                    if reverse_key and reverse_key in self._packet_buffer:
-                        # Add packets from reverse direction that fall in same time range
-                        for pkt in self._packet_buffer[reverse_key]:
-                            if context_start_time <= pkt.timestamp <= context_end_time:
-                                merged_context.append(pkt)
-
-                    # Sort by timestamp
-                    merged_context.sort(key=lambda p: p.timestamp)
-                    merged_retrans_contexts.append(merged_context)
-                else:
-                    merged_retrans_contexts.append(context)
-
-            # Merge teardown packets from both directions
-            teardown_packets = list(timeline.teardown)
-
-            # Add teardown from reverse direction buffer (last 10 packets)
-            if reverse_key and reverse_key in self._packet_buffer:
-                teardown_packets.extend(list(self._packet_buffer[reverse_key]))
-
-            # Also add teardown from reverse sampled timeline if it exists
-            if reverse_key and reverse_key in self.sampled_timelines:
-                teardown_packets.extend(self.sampled_timelines[reverse_key].teardown)
-
-            # Sort by timestamp and take last 10
+            # Teardown: Merge forward + reverse snapshots
+            teardown_packets = list(timeline.teardown) + list(timeline.reverse_teardown)
             teardown_packets.sort(key=lambda p: p.timestamp)
             teardown_packets = teardown_packets[-10:] if len(teardown_packets) > 10 else teardown_packets
 
