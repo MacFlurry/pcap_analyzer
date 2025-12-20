@@ -67,3 +67,4 @@ ISSUE_*.md
 # Helm packaged charts
 helm-chart/*.tgz
 .coverage
+.claude/debugging-methodology.md
