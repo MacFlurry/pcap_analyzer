@@ -12,9 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import health, progress, reports, upload, views
+from app.api.routes import auth, health, progress, reports, upload, views
 from app.services.cleanup import CleanupScheduler
 from app.services.database import get_db_service
+from app.services.user_database import get_user_db_service
 from app.services.worker import get_worker
 
 # Configuration logging
@@ -42,6 +43,20 @@ async def lifespan(app: FastAPI):
     db_service = get_db_service()
     await db_service.init_db()
     logger.info("Database initialized")
+
+    # Initialiser la base de données utilisateurs
+    user_db_service = get_user_db_service()
+    await user_db_service.init_db()
+    logger.info("User database initialized")
+
+    # Migrer la table tasks pour ajouter owner_id (multi-tenant)
+    await user_db_service.migrate_tasks_table()
+
+    # Créer compte admin brise-glace si aucun admin n'existe
+    admin_password = await user_db_service.create_admin_breakglass_if_not_exists()
+    if admin_password:
+        # Password logged by user_database.py with warnings
+        pass
 
     # Démarrer le worker d'analyse
     worker = get_worker()
@@ -95,6 +110,7 @@ if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 # Inclusion des routes API
+app.include_router(auth.router)  # Auth router has its own prefix
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(progress.router, prefix="/api", tags=["progress"])

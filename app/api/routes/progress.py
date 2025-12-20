@@ -7,10 +7,12 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from app.auth import get_current_user, verify_ownership
 from app.models.schemas import TaskStatus
+from app.models.user import User
 from app.services.database import get_db_service
 from app.services.worker import get_worker
 
@@ -138,18 +140,24 @@ async def progress_event_generator(task_id: str) -> AsyncGenerator[str, None]:
 
 
 @router.get("/progress/{task_id}")
-async def get_progress(task_id: str):
+async def get_progress(task_id: str, current_user: User = Depends(get_current_user)):
     """
     Stream de progression en temps réel via Server-Sent Events.
 
+    **Authentification requise**: Bearer token dans Authorization header
+    **Multi-tenant**: Users can only track their own tasks (admins can track all)
+
     Args:
         task_id: ID de la tâche à suivre
+        current_user: Current authenticated user
 
     Returns:
         StreamingResponse avec événements SSE
 
     Raises:
-        HTTPException: Si la tâche n'existe pas
+        HTTPException 401: If not authenticated
+        HTTPException 403: If user doesn't own the task
+        HTTPException 404: Si la tâche n'existe pas
     """
     # Vérifier que la tâche existe
     db_service = get_db_service()
@@ -161,7 +169,15 @@ async def get_progress(task_id: str):
             detail=f"Task {task_id} not found",
         )
 
-    logger.info(f"Starting SSE stream for task {task_id}")
+    # Vérifier ownership (multi-tenant)
+    if not verify_ownership(current_user, task_info.owner_id):
+        logger.warning(f"User {current_user.username} attempted to track task {task_id} (owner: {task_info.owner_id})")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: you can only track your own tasks",
+        )
+
+    logger.info(f"User {current_user.username} starting SSE stream for task {task_id}")
 
     return StreamingResponse(
         progress_event_generator(task_id),
@@ -175,18 +191,24 @@ async def get_progress(task_id: str):
 
 
 @router.get("/status/{task_id}")
-async def get_task_status(task_id: str):
+async def get_task_status(task_id: str, current_user: User = Depends(get_current_user)):
     """
     Récupère le statut actuel d'une tâche (sans SSE).
 
+    **Authentification requise**: Bearer token dans Authorization header
+    **Multi-tenant**: Users can only access their own tasks (admins can access all)
+
     Args:
         task_id: ID de la tâche
+        current_user: Current authenticated user
 
     Returns:
         Informations sur la tâche
 
     Raises:
-        HTTPException: Si la tâche n'existe pas
+        HTTPException 401: If not authenticated
+        HTTPException 403: If user doesn't own the task
+        HTTPException 404: Si la tâche n'existe pas
     """
     db_service = get_db_service()
     task_info = await db_service.get_task(task_id)
@@ -197,22 +219,44 @@ async def get_task_status(task_id: str):
             detail=f"Task {task_id} not found",
         )
 
+    # Vérifier ownership (multi-tenant)
+    if not verify_ownership(current_user, task_info.owner_id):
+        logger.warning(f"User {current_user.username} attempted to access task {task_id} (owner: {task_info.owner_id})")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: you can only access your own tasks",
+        )
+
     return task_info
 
 
 @router.get("/history")
-async def get_task_history(limit: int = 20):
+async def get_task_history(limit: int = 20, current_user: User = Depends(get_current_user)):
     """
     Récupère l'historique des tâches récentes.
 
+    **Authentification requise**: Bearer token dans Authorization header
+    **Multi-tenant**:
+    - Regular users: see only their own tasks
+    - Admin users: see all tasks
+
     Args:
         limit: Nombre maximum de tâches à retourner (défaut: 20)
+        current_user: Current authenticated user
 
     Returns:
-        Liste des tâches récentes
+        Liste des tâches récentes (filtered by ownership)
     """
     db_service = get_db_service()
-    tasks = await db_service.get_recent_tasks(limit=limit)
+
+    # Admin voit tout, regular users voient seulement leurs propres tâches
+    from app.models.user import UserRole
+    if current_user.role == UserRole.ADMIN:
+        tasks = await db_service.get_recent_tasks(limit=limit)
+    else:
+        tasks = await db_service.get_recent_tasks(limit=limit, owner_id=current_user.id)
+
+    logger.info(f"User {current_user.username} fetched {len(tasks)} tasks from history")
 
     return {
         "tasks": tasks,

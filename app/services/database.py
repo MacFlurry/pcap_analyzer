@@ -92,6 +92,7 @@ class DatabaseService:
         task_id: str,
         filename: str,
         file_size_bytes: int,
+        owner_id: str = None,
     ) -> TaskInfo:
         """
         Crée une nouvelle tâche d'analyse (status=PENDING).
@@ -100,6 +101,7 @@ class DatabaseService:
             task_id: ID unique de la tâche (UUID)
             filename: Nom du fichier PCAP uploadé
             file_size_bytes: Taille du fichier en octets
+            owner_id: User ID of the owner (multi-tenant)
 
         Returns:
             TaskInfo object
@@ -110,14 +112,14 @@ class DatabaseService:
             await db.execute(
                 """
                 INSERT INTO tasks (
-                    task_id, filename, status, uploaded_at, file_size_bytes
-                ) VALUES (?, ?, ?, ?, ?)
+                    task_id, filename, status, uploaded_at, file_size_bytes, owner_id
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (task_id, filename, TaskStatus.PENDING.value, uploaded_at, file_size_bytes),
+                (task_id, filename, TaskStatus.PENDING.value, uploaded_at, file_size_bytes, owner_id),
             )
             await db.commit()
 
-        logger.info(f"Task created: {task_id} ({filename}, {file_size_bytes} bytes)")
+        logger.info(f"Task created: {task_id} ({filename}, {file_size_bytes} bytes, owner: {owner_id})")
 
         return TaskInfo(
             task_id=task_id,
@@ -125,6 +127,7 @@ class DatabaseService:
             status=TaskStatus.PENDING,
             uploaded_at=uploaded_at,
             file_size_bytes=file_size_bytes,
+            owner_id=owner_id,
         )
 
     async def get_task(self, task_id: str) -> Optional[TaskInfo]:
@@ -143,7 +146,7 @@ class DatabaseService:
                 """
                 SELECT task_id, filename, status, uploaded_at, analyzed_at,
                        file_size_bytes, total_packets, health_score,
-                       report_html_path, report_json_path, error_message
+                       report_html_path, report_json_path, error_message, owner_id
                 FROM tasks WHERE task_id = ?
                 """,
                 (task_id,),
@@ -168,6 +171,7 @@ class DatabaseService:
             report_html_url=f"/api/reports/{task_id}/html" if row["report_html_path"] else None,
             report_json_url=f"/api/reports/{task_id}/json" if row["report_json_path"] else None,
             error_message=row["error_message"],
+            owner_id=row["owner_id"],
         )
 
     async def update_status(self, task_id: str, status: TaskStatus, error_message: Optional[str] = None):
@@ -228,30 +232,49 @@ class DatabaseService:
 
         logger.info(f"Task {task_id} results updated: {total_packets} packets, score {health_score:.1f}")
 
-    async def get_recent_tasks(self, limit: int = 20) -> list[TaskInfo]:
+    async def get_recent_tasks(self, limit: int = 20, owner_id: str = None) -> list[TaskInfo]:
         """
         Récupère les tâches récentes (historique).
 
         Args:
             limit: Nombre maximum de tâches à retourner
+            owner_id: Filter by owner ID (multi-tenant). If None, returns all tasks.
 
         Returns:
             Liste de TaskInfo, triée par date décroissante
         """
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
-            async with db.execute(
-                """
-                SELECT task_id, filename, status, uploaded_at, analyzed_at,
-                       file_size_bytes, total_packets, health_score,
-                       report_html_path, report_json_path, error_message
-                FROM tasks
-                ORDER BY uploaded_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ) as cursor:
-                rows = await cursor.fetchall()
+
+            if owner_id:
+                # Filter by owner_id (regular users)
+                async with db.execute(
+                    """
+                    SELECT task_id, filename, status, uploaded_at, analyzed_at,
+                           file_size_bytes, total_packets, health_score,
+                           report_html_path, report_json_path, error_message, owner_id
+                    FROM tasks
+                    WHERE owner_id = ?
+                    ORDER BY uploaded_at DESC
+                    LIMIT ?
+                    """,
+                    (owner_id, limit),
+                ) as cursor:
+                    rows = await cursor.fetchall()
+            else:
+                # No filter (admin users)
+                async with db.execute(
+                    """
+                    SELECT task_id, filename, status, uploaded_at, analyzed_at,
+                           file_size_bytes, total_packets, health_score,
+                           report_html_path, report_json_path, error_message, owner_id
+                    FROM tasks
+                    ORDER BY uploaded_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ) as cursor:
+                    rows = await cursor.fetchall()
 
         tasks = []
         for row in rows:
@@ -270,6 +293,7 @@ class DatabaseService:
                     report_html_url=f"/api/reports/{row['task_id']}/html" if row["report_html_path"] else None,
                     report_json_url=f"/api/reports/{row['task_id']}/json" if row["report_json_path"] else None,
                     error_message=row["error_message"],
+                    owner_id=row["owner_id"],
                 )
             )
 

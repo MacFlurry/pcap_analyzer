@@ -6,9 +6,11 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
 
+from app.auth import get_current_user, verify_ownership
+from app.models.user import User
 from app.services.database import get_db_service
 
 logger = logging.getLogger(__name__)
@@ -21,18 +23,24 @@ REPORTS_DIR = DATA_DIR / "reports"
 
 
 @router.get("/reports/{task_id}/html")
-async def get_html_report(task_id: str):
+async def get_html_report(task_id: str, current_user: User = Depends(get_current_user)):
     """
     Récupère le rapport HTML d'une analyse.
 
+    **Authentification requise**: Bearer token dans Authorization header
+    **Multi-tenant**: Users can only access their own reports (admins can access all)
+
     Args:
         task_id: ID de la tâche
+        current_user: Current authenticated user
 
     Returns:
         Fichier HTML du rapport
 
     Raises:
-        HTTPException: Si la tâche ou le rapport n'existe pas
+        HTTPException 401: If not authenticated
+        HTTPException 403: If user doesn't own the task
+        HTTPException 404: Si la tâche ou le rapport n'existe pas
     """
     db_service = get_db_service()
     task_info = await db_service.get_task(task_id)
@@ -41,6 +49,14 @@ async def get_html_report(task_id: str):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Task {task_id} not found",
+        )
+
+    # Vérifier ownership (multi-tenant: users see only own tasks, admin sees all)
+    if not verify_ownership(current_user, task_info.owner_id):
+        logger.warning(f"User {current_user.username} attempted to access task {task_id} (owner: {task_info.owner_id})")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: you can only access your own reports",
         )
 
     # Vérifier que le rapport existe
@@ -52,7 +68,7 @@ async def get_html_report(task_id: str):
             detail="Rapport HTML non trouvé. L'analyse est peut-être en cours.",
         )
 
-    logger.info(f"Serving HTML report for task {task_id}: {html_path}")
+    logger.info(f"User {current_user.username} serving HTML report for task {task_id}: {html_path}")
 
     return FileResponse(
         path=html_path,
@@ -62,18 +78,24 @@ async def get_html_report(task_id: str):
 
 
 @router.get("/reports/{task_id}/json")
-async def get_json_report(task_id: str):
+async def get_json_report(task_id: str, current_user: User = Depends(get_current_user)):
     """
     Récupère le rapport JSON d'une analyse.
 
+    **Authentification requise**: Bearer token dans Authorization header
+    **Multi-tenant**: Users can only access their own reports (admins can access all)
+
     Args:
         task_id: ID de la tâche
+        current_user: Current authenticated user
 
     Returns:
         Données JSON du rapport
 
     Raises:
-        HTTPException: Si la tâche ou le rapport n'existe pas
+        HTTPException 401: If not authenticated
+        HTTPException 403: If user doesn't own the task
+        HTTPException 404: Si la tâche ou le rapport n'existe pas
     """
     db_service = get_db_service()
     task_info = await db_service.get_task(task_id)
@@ -82,6 +104,14 @@ async def get_json_report(task_id: str):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Task {task_id} not found",
+        )
+
+    # Vérifier ownership (multi-tenant)
+    if not verify_ownership(current_user, task_info.owner_id):
+        logger.warning(f"User {current_user.username} attempted to access task {task_id} (owner: {task_info.owner_id})")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: you can only access your own reports",
         )
 
     # Vérifier que le rapport existe
@@ -93,7 +123,7 @@ async def get_json_report(task_id: str):
             detail="Rapport JSON non trouvé. L'analyse est peut-être en cours.",
         )
 
-    logger.info(f"Serving JSON report for task {task_id}: {json_path}")
+    logger.info(f"User {current_user.username} serving JSON report for task {task_id}: {json_path}")
 
     return FileResponse(
         path=json_path,
@@ -103,18 +133,24 @@ async def get_json_report(task_id: str):
 
 
 @router.delete("/reports/{task_id}")
-async def delete_report(task_id: str):
+async def delete_report(task_id: str, current_user: User = Depends(get_current_user)):
     """
     Supprime les rapports d'une tâche (HTML et JSON).
 
+    **Authentification requise**: Bearer token dans Authorization header
+    **Multi-tenant**: Users can only delete their own reports (admins can delete all)
+
     Args:
         task_id: ID de la tâche
+        current_user: Current authenticated user
 
     Returns:
         Message de confirmation
 
     Raises:
-        HTTPException: Si la tâche n'existe pas
+        HTTPException 401: If not authenticated
+        HTTPException 403: If user doesn't own the task
+        HTTPException 404: Si la tâche n'existe pas
     """
     db_service = get_db_service()
     task_info = await db_service.get_task(task_id)
@@ -123,6 +159,14 @@ async def delete_report(task_id: str):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Task {task_id} not found",
+        )
+
+    # Vérifier ownership (multi-tenant)
+    if not verify_ownership(current_user, task_info.owner_id):
+        logger.warning(f"User {current_user.username} attempted to delete task {task_id} (owner: {task_info.owner_id})")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: you can only delete your own reports",
         )
 
     # Supprimer les fichiers
@@ -134,12 +178,12 @@ async def delete_report(task_id: str):
     if html_path.exists():
         html_path.unlink()
         deleted_files.append("HTML")
-        logger.info(f"Deleted HTML report: {html_path}")
+        logger.info(f"User {current_user.username} deleted HTML report: {html_path}")
 
     if json_path.exists():
         json_path.unlink()
         deleted_files.append("JSON")
-        logger.info(f"Deleted JSON report: {json_path}")
+        logger.info(f"User {current_user.username} deleted JSON report: {json_path}")
 
     # Marquer la tâche comme expirée
     from app.models.schemas import TaskStatus
