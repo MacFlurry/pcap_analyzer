@@ -12,6 +12,9 @@ services:
     volumes:
       # Persistent data storage (uploads, reports, database)
       - pcap_data:/data
+    tmpfs:
+      # In-memory filesystem for temporary files (faster + security)
+      - /tmp:size=512M,mode=1777
     environment:
       # Configuration (override defaults)
       - MAX_UPLOAD_SIZE_MB=500

@@ -39,7 +39,7 @@ FROM python:3.11-slim-bookworm
 
 LABEL maintainer="PCAP Analyzer Team"
 LABEL description="PCAP Network Analysis Tool - Web Interface"
-LABEL version="4.2.2"
+LABEL version="4.21.0"
 LABEL org.opencontainers.image.source="https://github.com/MacFlurry/pcap_analyzer"
 
 # Install runtime libs only
