@@ -18,6 +18,11 @@ import shlex
 from typing import Any
 
 from ..__version__ import __version__
+from ..utils.graph_generator import (
+    generate_jitter_timeseries_graph,
+    generate_multi_flow_comparison_graph,
+    get_plotly_cdn,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2187,6 +2192,8 @@ class HTMLReportGenerator:
             initializeEventListeners();
         }
     </script>
+    <!-- Plotly.js CDN for interactive graphs (v4.18.0) -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>"""
 
     def _generate_title(self, results: dict[str, Any]) -> str:
@@ -2462,6 +2469,24 @@ class HTMLReportGenerator:
                     </p>
                 </div>
                 """
+
+        # v4.18.0: Multi-flow comparison graph
+        high_jitter_flows = jitter_data.get("high_jitter_flows", [])
+        if high_jitter_flows and len(high_jitter_flows) >= 2:
+            # Prepare data for multi-flow comparison (top 10 flows)
+            flows_with_timeseries = []
+            for flow in high_jitter_flows[:10]:
+                if "timeseries" in flow:
+                    flows_with_timeseries.append({
+                        "name": flow.get("flow_key", "Unknown"),
+                        "timeseries": flow["timeseries"]
+                    })
+
+            if len(flows_with_timeseries) >= 2:
+                html += "<h3>Multi-Flow Jitter Comparison</h3>"
+                html += '<div style="margin: 20px 0;">'
+                html += generate_multi_flow_comparison_graph(flows_with_timeseries)
+                html += "</div>"
 
         # Generate grouped jitter analysis by severity level
         html += self._generate_grouped_jitter_analysis(jitter_data)
@@ -4991,6 +5016,25 @@ class HTMLReportGenerator:
 
         # Add tshark command
         html += self._generate_jitter_tshark_box(root_cause_analysis)
+
+        # v4.18.0: Add individual flow graphs (top 3 flows with timeseries data)
+        flows_with_graphs = [f for f in flows[:5] if "timeseries" in f]
+        if flows_with_graphs:
+            html += "<h4 style='margin-top: 25px; margin-bottom: 15px; color: #2c3e50;'>📊 Time-Series Visualization</h4>"
+            for idx, flow in enumerate(flows_with_graphs[:3]):  # Show top 3 graphs
+                flow_key = flow.get("flow_key", f"Flow {idx+1}")
+                graph_id = f"jitter-graph-{severity_key}-{idx}"
+
+                html += f"<h5 style='margin: 15px 0 10px 0; color: #555; font-size: 1em;'>{flow_key}</h5>"
+                html += '<div style="margin: 10px 0 20px 0;">'
+                html += generate_jitter_timeseries_graph(
+                    flow_name=flow_key,
+                    flow_data=flow,
+                    rtt_data=None,  # TODO: Add RTT data if available
+                    retrans_timestamps=None,  # TODO: Add retrans data if available
+                    graph_id=graph_id
+                )
+                html += "</div>"
 
         # Add compact flow table
         html += self._generate_jitter_flow_table(flows, severity_key)

@@ -136,14 +136,16 @@ class JitterAnalyzer:
                 for i in range(1, len(delays)):
                     jitter = abs(delays[i][0] - delays[i - 1][0])
                     delay_current = delays[i][0]
+                    # v4.18.0: Store timestamp with jitter for time-series graphs
+                    timestamp = session[i + 1][0]  # session[i+1] because delays start at index 1
 
-                    # Raw jitter (all data)
-                    self.flow_jitters[flow_key].append(jitter)
+                    # Raw jitter (all data) - store as (timestamp, jitter) tuple
+                    self.flow_jitters[flow_key].append((timestamp, jitter))
                     self.all_jitters.append(jitter)
 
                     # Filtered jitter (exclude large gaps)
                     if delay_current < self.session_gap_threshold:
-                        self.flow_jitters_filtered[flow_key].append(jitter)
+                        self.flow_jitters_filtered[flow_key].append((timestamp, jitter))
                         self.all_jitters_filtered.append(jitter)
                     else:
                         self.large_gaps_filtered += 1
@@ -333,19 +335,22 @@ class JitterAnalyzer:
             # Use JITTER_THRESHOLD_GOOD (30ms) as detection threshold
             if p95_jitter > JITTER_THRESHOLD_GOOD or mean_jitter > JITTER_THRESHOLD_GOOD:
                 severity = self._classify_jitter_severity(mean_jitter, p95_jitter, protocol)
-                high_jitter_flows.append(
-                    {
-                        "flow": flow_key_str,
-                        "mean_jitter": mean_jitter,
-                        "max_jitter": stats_to_check["max_jitter"],
-                        "p95_jitter": p95_jitter,
-                        "p99_jitter": p99_jitter,
-                        "severity": severity,
-                        "protocol": protocol,
-                        "packets": len(self.flow_packets[flow_key]),
-                        "first_packet_time": stats_to_check.get("first_packet_time"),
-                    }
-                )
+                flow_dict = {
+                    "flow": flow_key_str,
+                    "flow_key": flow_key_str,  # v4.18.0: for HTML report
+                    "mean_jitter": mean_jitter,
+                    "max_jitter": stats_to_check["max_jitter"],
+                    "p95_jitter": p95_jitter,
+                    "p99_jitter": p99_jitter,
+                    "severity": severity,
+                    "protocol": protocol,
+                    "packets": len(self.flow_packets[flow_key]),
+                    "first_packet_time": stats_to_check.get("first_packet_time"),
+                }
+                # v4.18.0: Add timeseries data for graphs if available
+                if "timeseries" in stats_to_check:
+                    flow_dict["timeseries"] = stats_to_check["timeseries"]
+                high_jitter_flows.append(flow_dict)
 
         # Global statistics (raw)
         global_stats_raw = self._calculate_global_stats(self.all_jitters)
@@ -367,30 +372,39 @@ class JitterAnalyzer:
             "rst_fin_detected": self.rst_fin_detected,  # Issue #10: Track RST/FIN session boundaries
         }
 
-    def _calculate_flow_stats(self, flow_key: tuple, jitters: list[float]) -> dict[str, Any]:
+    def _calculate_flow_stats(self, flow_key: tuple, jitters: list) -> dict[str, Any]:
         """
         Calculate statistics for a flow's jitter values.
 
         Args:
             flow_key: Flow identifier tuple
-            jitters: List of jitter values
+            jitters: List of (timestamp, jitter) tuples (v4.18.0) or jitter values
 
         Returns:
-            Dictionary with flow statistics
+            Dictionary with flow statistics including time-series data
         """
         if len(jitters) == 0:
             return {}
 
-        mean_jitter = statistics.mean(jitters)
-        median_jitter = statistics.median(jitters)
-        max_jitter = max(jitters)
-        min_jitter = min(jitters)
+        # v4.18.0: Extract jitter values and timestamps from tuples
+        if isinstance(jitters[0], tuple):
+            timestamps = [t for t, j in jitters]
+            jitter_values = [j for t, j in jitters]
+        else:
+            # Backward compatibility: plain jitter values
+            timestamps = []
+            jitter_values = jitters
+
+        mean_jitter = statistics.mean(jitter_values)
+        median_jitter = statistics.median(jitter_values)
+        max_jitter = max(jitter_values)
+        min_jitter = min(jitter_values)
 
         # Standard deviation (if enough samples)
-        stdev_jitter = statistics.stdev(jitters) if len(jitters) > 1 else 0.0
+        stdev_jitter = statistics.stdev(jitter_values) if len(jitter_values) > 1 else 0.0
 
         # Percentiles
-        sorted_jitters = sorted(jitters)
+        sorted_jitters = sorted(jitter_values)
         p95_jitter = sorted_jitters[int(len(sorted_jitters) * 0.95)] if len(sorted_jitters) > 1 else max_jitter
         p99_jitter = sorted_jitters[int(len(sorted_jitters) * 0.99)] if len(sorted_jitters) > 1 else max_jitter
 
@@ -398,9 +412,9 @@ class JitterAnalyzer:
         packets = self.flow_packets[flow_key]
         first_packet_time = packets[0][0] if packets else None
 
-        return {
+        result = {
             "packet_count": len(self.flow_packets[flow_key]),
-            "jitter_samples": len(jitters),
+            "jitter_samples": len(jitter_values),
             "mean_jitter": mean_jitter,
             "median_jitter": median_jitter,
             "p50_jitter": median_jitter,
@@ -411,6 +425,18 @@ class JitterAnalyzer:
             "stdev_jitter": stdev_jitter,
             "first_packet_time": first_packet_time,
         }
+
+        # v4.18.0: Add time-series data for graphs
+        if timestamps:
+            # Convert to relative timestamps (from first packet)
+            base_time = first_packet_time if first_packet_time else timestamps[0]
+            relative_timestamps = [(t - base_time) for t in timestamps]
+            result["timeseries"] = {
+                "timestamps": relative_timestamps,
+                "jitter_values": jitter_values
+            }
+
+        return result
 
     def _calculate_global_stats(self, jitters: list[float]) -> dict[str, Any]:
         """
