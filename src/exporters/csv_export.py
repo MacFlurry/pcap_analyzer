@@ -211,7 +211,7 @@ class CSVExporter:
         if service_data:
             summary = service_data.get("classification_summary", {})
             if "total_flows" in summary:
-                rows.append({"Metric": "Total Flows", "Value": str(summary["total_flows"])})
+                rows.append({"Metric": "Unidirectional Flows", "Value": str(summary["total_flows"])})
             if "classified_count" in summary:
                 rows.append({"Metric": "Classified Flows", "Value": str(summary["classified_count"])})
             if "classification_rate" in summary:

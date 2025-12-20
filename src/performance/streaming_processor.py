@@ -7,18 +7,24 @@ Optimized packet processing with:
 - Chunked processing for large files
 - Configurable memory limits
 - Progress tracking
+- Decompression bomb protection (OWASP ASVS 5.2.3, CWE-409)
 
 Author: PCAP Analyzer Team
 Sprint: 10 (Performance Optimization)
 """
 
 import gc
+import logging
 import os
 from collections.abc import Iterator
 from typing import Any, List, Optional
 
 from scapy.all import PcapReader
 from scapy.packet import Packet
+
+from ..utils.decompression_monitor import DecompressionMonitor, DecompressionBombError
+
+logger = logging.getLogger(__name__)
 
 
 class StreamingProcessor:
@@ -30,6 +36,7 @@ class StreamingProcessor:
     - Automatic garbage collection between chunks
     - Configurable chunk sizes based on file size
     - Progress callback support
+    - Decompression bomb protection (OWASP ASVS 5.2.3, CWE-409)
     """
 
     # File size thresholds for different strategies
@@ -42,17 +49,33 @@ class StreamingProcessor:
     MEDIUM_CHUNK_SIZE = 20000  # packets
     LARGE_CHUNK_SIZE = 10000  # packets
 
-    def __init__(self, pcap_file: str):
+    def __init__(
+        self,
+        pcap_file: str,
+        enable_bomb_protection: bool = True,
+        max_expansion_ratio: int = 1000,
+        critical_expansion_ratio: int = 10000
+    ):
         """
         Initialize streaming processor.
 
         Args:
             pcap_file: Path to PCAP file
+            enable_bomb_protection: Enable decompression bomb detection (default: True)
+            max_expansion_ratio: Warning threshold for expansion ratio (default: 1000)
+            critical_expansion_ratio: Critical threshold for expansion ratio (default: 10000)
         """
         self.pcap_file = pcap_file
         self.file_size = os.path.getsize(pcap_file)
         self.chunk_size = self._determine_chunk_size()
         self.processing_mode = self._determine_processing_mode()
+
+        # Initialize decompression bomb monitor
+        self.decompression_monitor = DecompressionMonitor(
+            max_ratio=max_expansion_ratio,
+            critical_ratio=critical_expansion_ratio,
+            enabled=enable_bomb_protection
+        )
 
     def _determine_processing_mode(self) -> str:
         """Determine best processing mode based on file size."""
@@ -80,14 +103,39 @@ class StreamingProcessor:
         """
         Stream packets from PCAP file with progress callback.
 
+        SECURITY: Monitors for decompression bomb attacks (OWASP ASVS 5.2.3, CWE-409).
+
         Args:
             callback: Optional function called for each packet (packet, index)
 
         Yields:
             Scapy packet objects
+
+        Raises:
+            DecompressionBombError: If expansion ratio exceeds critical threshold
         """
+        bytes_processed = 0
+
         with PcapReader(self.pcap_file) as reader:
             for i, packet in enumerate(reader):
+                # Track bytes for decompression bomb detection
+                bytes_processed += len(packet)
+
+                # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
+                if i % 10000 == 0 and i > 0:
+                    try:
+                        self.decompression_monitor.check_expansion_ratio(
+                            self.file_size,
+                            bytes_processed,
+                            i
+                        )
+                    except DecompressionBombError:
+                        logger.critical(
+                            f"Decompression bomb detected at packet {i}. "
+                            f"Processing aborted for security."
+                        )
+                        raise
+
                 if callback:
                     callback(packet, i)
                 yield packet
@@ -96,20 +144,42 @@ class StreamingProcessor:
         """
         Stream packets in chunks for memory-efficient processing.
 
+        SECURITY: Monitors for decompression bomb attacks (OWASP ASVS 5.2.3, CWE-409).
+
         Args:
             callback: Optional function called after each chunk (chunk_idx, chunk_size)
 
         Yields:
             Lists of Scapy packets (chunks)
+
+        Raises:
+            DecompressionBombError: If expansion ratio exceeds critical threshold
         """
         chunk = []
         chunk_idx = 0
         packet_count = 0
+        bytes_processed = 0
 
         with PcapReader(self.pcap_file) as reader:
             for packet in reader:
                 chunk.append(packet)
                 packet_count += 1
+                bytes_processed += len(packet)
+
+                # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
+                if packet_count % 10000 == 0:
+                    try:
+                        self.decompression_monitor.check_expansion_ratio(
+                            self.file_size,
+                            bytes_processed,
+                            packet_count
+                        )
+                    except DecompressionBombError:
+                        logger.critical(
+                            f"Decompression bomb detected at packet {packet_count}. "
+                            f"Processing aborted for security."
+                        )
+                        raise
 
                 if len(chunk) >= self.chunk_size:
                     # Yield full chunk
@@ -133,11 +203,14 @@ class StreamingProcessor:
         """
         Load all packets in memory (for small files only).
 
+        SECURITY: Monitors for decompression bomb attacks (OWASP ASVS 5.2.3, CWE-409).
+
         Returns:
             List of all packets
 
         Raises:
             MemoryError: If file is too large
+            DecompressionBombError: If expansion ratio exceeds critical threshold
         """
         if self.processing_mode != "memory":
             raise MemoryError(
@@ -146,9 +219,27 @@ class StreamingProcessor:
             )
 
         packets = []
+        bytes_processed = 0
+
         with PcapReader(self.pcap_file) as reader:
-            for packet in reader:
+            for i, packet in enumerate(reader):
                 packets.append(packet)
+                bytes_processed += len(packet)
+
+                # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
+                if i % 10000 == 0 and i > 0:
+                    try:
+                        self.decompression_monitor.check_expansion_ratio(
+                            self.file_size,
+                            bytes_processed,
+                            i
+                        )
+                    except DecompressionBombError:
+                        logger.critical(
+                            f"Decompression bomb detected while loading all packets. "
+                            f"Processing aborted for security."
+                        )
+                        raise
 
         return packets
 

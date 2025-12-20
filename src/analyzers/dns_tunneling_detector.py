@@ -244,29 +244,45 @@ class DNSTunnelingDetector(BaseAnalyzer):
         """
         patterns = []
 
+        # SECURITY: ReDoS protection (CWE-1333) - limit subdomain length before regex
+        # DNS labels max length is 63 chars (RFC 1035), full FQDN is 255 chars max
+        # Malicious PCAPs could inject very long strings to exploit regex backtracking
+        MAX_SUBDOMAIN_LENGTH = 255
+
+        if len(subdomain) > MAX_SUBDOMAIN_LENGTH:
+            # Abnormally long subdomain is highly suspicious by itself
+            patterns.append("abnormally-long")
+            # Truncate to prevent ReDoS attacks
+            subdomain = subdomain[:MAX_SUBDOMAIN_LENGTH]
+
         # Base64 pattern (alphanumeric + / and =)
         # Stricter: Require min 32 chars AND check entropy to avoid false positives
         # Example false positive: "sundry-f-net" matched the old pattern
-        if len(subdomain) >= 32 and re.match(r"^[A-Za-z0-9+/=]+$", subdomain):
-            # Verify high entropy (true base64 has ~6.0 bits/char)
-            entropy = DNSTunnelingDetector._calculate_entropy(subdomain)
-            if entropy > 5.0:  # High entropy confirms encoding
-                patterns.append("base64")
+        if len(subdomain) >= 32 and len(subdomain) <= MAX_SUBDOMAIN_LENGTH:
+            if re.match(r"^[A-Za-z0-9+/=]+$", subdomain):
+                # Verify high entropy (true base64 has ~6.0 bits/char)
+                entropy = DNSTunnelingDetector._calculate_entropy(subdomain)
+                if entropy > 5.0:  # High entropy confirms encoding
+                    patterns.append("base64")
 
         # Hex encoding pattern - also stricter (min 32 chars for data exfiltration)
-        if len(subdomain) >= 32 and re.match(r"^[0-9a-fA-F]+$", subdomain):
-            patterns.append("hex")
+        if len(subdomain) >= 32 and len(subdomain) <= MAX_SUBDOMAIN_LENGTH:
+            if re.match(r"^[0-9a-fA-F]+$", subdomain):
+                patterns.append("hex")
 
         # UUID pattern (used in some C2) - kept as is, specific enough
-        if re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", subdomain):
-            patterns.append("uuid")
+        # UUID has fixed length (36 chars), safe from ReDoS
+        if len(subdomain) == 36:
+            if re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", subdomain):
+                patterns.append("uuid")
 
         # Long random alphanumeric - increased threshold to 40 chars
-        if len(subdomain) >= 40 and re.match(r"^[a-z0-9]+$", subdomain):
-            # Check if it looks random (high char diversity)
-            char_freq = Counter(subdomain)
-            if len(char_freq) > len(subdomain) * 0.6:  # Very high diversity (60%+)
-                patterns.append("random")
+        if len(subdomain) >= 40 and len(subdomain) <= MAX_SUBDOMAIN_LENGTH:
+            if re.match(r"^[a-z0-9]+$", subdomain):
+                # Check if it looks random (high char diversity)
+                char_freq = Counter(subdomain)
+                if len(char_freq) > len(subdomain) * 0.6:  # Very high diversity (60%+)
+                    patterns.append("random")
 
         return patterns
 

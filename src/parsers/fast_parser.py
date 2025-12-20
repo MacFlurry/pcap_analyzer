@@ -5,6 +5,8 @@ This module uses dpkt (lightweight packet parsing) to extract metadata from pack
 much faster than Scapy's full dissection. dpkt achieves ~12,000 packets/second
 compared to Scapy's ~700-900 packets/second.
 
+SECURITY: Implements decompression bomb protection (OWASP ASVS 5.2.3, CWE-409).
+
 Usage:
     parser = FastPacketParser('capture.pcap')
     for metadata in parser.parse():
@@ -13,6 +15,7 @@ Usage:
 """
 
 import logging
+import os
 import socket
 import struct
 from collections.abc import Iterator
@@ -22,7 +25,12 @@ from typing import Optional
 
 import dpkt
 
+from ..utils.decompression_monitor import DecompressionMonitor, DecompressionBombError
+from ..utils.logging_filters import PIIRedactionFilter
+
 logger = logging.getLogger(__name__)
+# GDPR/NIST Compliance: Redact PII from logs (IP addresses, file paths)
+logger.addFilter(PIIRedactionFilter())
 
 
 @dataclass
@@ -89,18 +97,37 @@ class FastPacketParser:
     Provides 10x performance improvement over Scapy for basic packet metadata extraction.
     Use this for initial pass through large PCAP files, then use Scapy only for
     packets that need deep inspection (DNS, ICMP details, etc.).
+
+    SECURITY: Includes decompression bomb protection (OWASP ASVS 5.2.3, CWE-409).
     """
 
-    def __init__(self, pcap_file: str):
+    def __init__(
+        self,
+        pcap_file: str,
+        enable_bomb_protection: bool = True,
+        max_expansion_ratio: int = 1000,
+        critical_expansion_ratio: int = 10000
+    ):
         """
         Initialize fast parser.
 
         Args:
             pcap_file: Path to PCAP file
+            enable_bomb_protection: Enable decompression bomb detection (default: True)
+            max_expansion_ratio: Warning threshold for expansion ratio (default: 1000)
+            critical_expansion_ratio: Critical threshold for expansion ratio (default: 10000)
         """
         self.pcap_file = Path(pcap_file)
         if not self.pcap_file.exists():
             raise FileNotFoundError(f"PCAP file not found: {pcap_file}")
+
+        # Initialize decompression bomb monitor
+        self.decompression_monitor = DecompressionMonitor(
+            max_ratio=max_expansion_ratio,
+            critical_ratio=critical_expansion_ratio,
+            enabled=enable_bomb_protection
+        )
+        self.file_size = os.path.getsize(self.pcap_file)
 
     def parse(self) -> Iterator[PacketMetadata]:
         """
@@ -109,10 +136,16 @@ class FastPacketParser:
         This is significantly faster than Scapy's PcapReader because dpkt
         does minimal parsing - only what's needed for the metadata.
 
+        SECURITY: Monitors for decompression bomb attacks (OWASP ASVS 5.2.3, CWE-409).
+
         Yields:
             PacketMetadata: Lightweight packet information
+
+        Raises:
+            DecompressionBombError: If expansion ratio exceeds critical threshold
         """
         packet_num = 0
+        bytes_processed = 0
 
         with open(self.pcap_file, "rb") as f:
             try:
@@ -135,8 +168,30 @@ class FastPacketParser:
                 try:
                     metadata = self._extract_metadata(buf, packet_num, timestamp, datalink)
                     if metadata:
+                        # Track bytes processed for decompression bomb detection
+                        bytes_processed += metadata.packet_length
+
+                        # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
+                        if packet_num % 10000 == 0 and packet_num > 0:
+                            try:
+                                self.decompression_monitor.check_expansion_ratio(
+                                    self.file_size,
+                                    bytes_processed,
+                                    packet_num
+                                )
+                            except DecompressionBombError:
+                                logger.critical(
+                                    f"Decompression bomb detected at packet {packet_num}. "
+                                    f"Processing aborted for security. "
+                                    f"Processed {bytes_processed:,} bytes from {self.file_size:,} byte file."
+                                )
+                                raise
+
                         yield metadata
                     packet_num += 1
+                except DecompressionBombError:
+                    # Re-raise security exceptions
+                    raise
                 except Exception as e:
                     # Skip malformed packets but log for debugging
                     logger.debug(f"Skipping malformed packet #{packet_num}: {e}")

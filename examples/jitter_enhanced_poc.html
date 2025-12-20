@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POC Enhanced: Jitter + RTT + Retransmissions</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+        }
+        .flow-header {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin: 10px 0;
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            background: #e8f4f8;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border-left: 3px solid #3498db;
+        }
+        .graph-container {
+            margin: 20px 0 40px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            background: #fafafa;
+        }
+        .feature-badge {
+            display: inline-block;
+            background: #27ae60;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 POC Enhanced: Jitter + RTT + Retransmissions</h1>
+
+        <div class="success">
+            <strong>✅ POC Enhanced avec 3 nouvelles features!</strong><br>
+            <span class="feature-badge">NEW</span> RTT Overlay (double Y-axis)<br>
+            <span class="feature-badge">NEW</span> Retransmission Markers (points rouges)<br>
+            <span class="feature-badge">NEW</span> Multi-Flow Comparison
+        </div>
+
+        <div class="info">
+            <strong>📊 Légende des graphes:</strong><br>
+            • <strong style="color: #3498db;">Ligne bleue</strong>: Jitter (axe Y gauche)<br>
+            • <strong style="color: #2ecc71;">Ligne verte</strong>: RTT (axe Y droit)<br>
+            • <strong style="color: #e74c3c;">Points rouges</strong>: Retransmissions détectées<br>
+            • <strong style="color: #f39c12;">Ligne orange pointillée</strong>: Threshold 30ms<br>
+            • <strong style="color: #e74c3c;">Ligne rouge pointillée</strong>: Threshold 50ms
+        </div>
+
+        <h2>📊 Multi-Flow Comparison</h2>
+        <div class="info">
+            Comparaison des 5 flux avec le plus de jitter sur un seul graphe.<br>
+            Permet de voir immédiatement quel flux a le plus de problèmes.
+        </div>
+        <div class="graph-container">
+            <div id="multi-flow-graph"></div>
+        </div>
+
+        <script>
+        (function() {
+
+            var traces = [{"x": [0.020999908447265625, 0.02200007438659668, 0.023000001907348633, 0.0280001163482666, 0.04800009727478027, 0.04900002479553223, 130.04900002479553, 130.06900000572205, 130.0699999332428, 130.07100009918213, 130.07200002670288, 130.07299995422363, 130.29299998283386, 130.29399991035461, 130.29900002479553, 130.31900000572205, 130.3199999332428], "y": [19.00005340576172, 0.0002384185791015625, 0.0002384185791015625, 4.000186920166016, 14.999866485595703, 19.00005340576172, 129999.00007247925, 129980.00001907349, 19.00005340576172, 0.0002384185791015625, 0.0002384185791015625, 0.0, 219.00010108947754, 219.00010108947754, 4.000186920166016, 14.999866485595703, 19.00005340576172], "name": "10.0.10.50:8080...", "type": "scatter", "mode": "lines", "line": {"color": "#3498db", "width": 2}}, {"x": [0.021000146865844727, 0.02200007438659668, 0.023000001907348633, 0.023999929428100586, 0.02500009536743164, 0.026000022888183594, 0.026999950408935547, 0.032000064849853516, 0.03299999237060547, 0.03800010681152344, 0.05800008773803711, 0.05900001525878906], "y": [18.999814987182617, 0.0002384185791015625, 0.0, 0.0, 0.0002384185791015625, 0.0002384185791015625, 0.0, 4.000186920166016, 4.000186920166016, 4.000186920166016, 14.999866485595703, 19.00005340576172], "name": "10.0.10.50:443...", "type": "scatter", "mode": "lines", "line": {"color": "#e74c3c", "width": 2}}, {"x": [0.020999908447265625, 0.02200007438659668, 0.023000001907348633, 0.023999929428100586, 0.02500009536743164, 0.026000022888183594, 0.23600006103515625, 0.2369999885559082, 0.24200010299682617, 0.26200008392333984, 0.2630000114440918], "y": [19.00005340576172, 0.0002384185791015625, 0.0002384185791015625, 0.0, 0.0002384185791015625, 0.0002384185791015625, 209.0001106262207, 209.0001106262207, 4.000186920166016, 14.999866485595703, 19.00005340576172], "name": "10.0.10.50:80...", "type": "scatter", "mode": "lines", "line": {"color": "#2ecc71", "width": 2}}, {"x": [0.021000146865844727, 0.02200007438659668, 0.022999048233032227, 0.5229990482330322, 0.5239989757537842, 0.5249991416931152, 0.5259990692138672, 0.5269989967346191, 0.5319991111755371, 0.5519990921020508, 0.5529990196228027], "y": [18.999814987182617, 0.0002384185791015625, 0.00095367431640625, 499.00102615356445, 499.00007247924805, 0.0002384185791015625, 0.0002384185791015625, 0.0, 4.000186920166016, 14.999866485595703, 19.00005340576172], "name": "10.0.10.50:5432...", "type": "scatter", "mode": "lines", "line": {"color": "#f39c12", "width": 2}}, {"x": [0.021000146865844727, 0.5429990291595459, 0.5449991226196289, 0.5469989776611328, 0.5489990711212158, 0.5549991130828857, 0.5749990940093994, 0.5759990215301514], "y": [18.999814987182617, 520.9987163543701, 519.9987888336182, 0.0002384185791015625, 0.0002384185791015625, 3.999948501586914, 13.99993896484375, 19.00005340576172], "name": "10.0.10.50:9000...", "type": "scatter", "mode": "lines", "line": {"color": "#9b59b6", "width": 2}}];
+
+            var layout = {
+                title: 'Jitter Comparison Across Top 5 Flows',
+                xaxis: { title: 'Time (seconds)', gridcolor: '#e0e0e0' },
+                yaxis: { title: 'Jitter (ms)', gridcolor: '#e0e0e0' },
+                hovermode: 'closest',
+                showlegend: true,
+                legend: {
+                    x: 1.05,
+                    y: 1,
+                    bgcolor: 'rgba(255, 255, 255, 0.9)',
+                    bordercolor: '#ddd',
+                    borderwidth: 1
+                },
+                margin: { t: 50, r: 200, b: 50, l: 60 },
+                plot_bgcolor: '#fafafa'
+            };
+
+            var config = {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'multi_flow_jitter_comparison',
+                    height: 600,
+                    width: 1400,
+                    scale: 2
+                }
+            };
+
+            Plotly.newPlot('multi-flow-graph', traces, layout, config);
+        })();
+        </script>
+
+        <h2>📈 Individual Flow Analysis (Jitter + RTT + Retransmissions)</h2>
+
+        <div class="flow-header">
+            10.0.10.50:8080 -> 192.168.1.100:50005
+        </div>
+        <div class="stats">
+            <div class="stat-item">
+                <strong>Packets:</strong> 19
+            </div>
+            <div class="stat-item">
+                <strong>Jitter Samples:</strong> 17
+            </div>
+            <div class="stat-item">
+                <strong>Mean Jitter:</strong> 15325.35ms
+            </div>
+            <div class="stat-item">
+                <strong>P95 Jitter:</strong> 129999.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Mean RTT:</strong> 0.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Max RTT:</strong> 0.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Retransmissions:</strong> 0
+            </div>
+            <div class="stat-item">
+                🔴 CRITICAL
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div id="flow-graph-1"></div>
+        </div>
+
+        <script>
+        (function() {
+            // Jitter trace (primary Y-axis)
+            var jitterTrace = {
+                x: [0.020999908447265625, 0.02200007438659668, 0.023000001907348633, 0.0280001163482666, 0.04800009727478027, 0.04900002479553223, 130.04900002479553, 130.06900000572205, 130.0699999332428, 130.07100009918213, 130.07200002670288, 130.07299995422363, 130.29299998283386, 130.29399991035461, 130.29900002479553, 130.31900000572205, 130.3199999332428],
+                y: [19.00005340576172, 0.0002384185791015625, 0.0002384185791015625, 4.000186920166016, 14.999866485595703, 19.00005340576172, 129999.00007247925, 129980.00001907349, 19.00005340576172, 0.0002384185791015625, 0.0002384185791015625, 0.0, 219.00010108947754, 219.00010108947754, 4.000186920166016, 14.999866485595703, 19.00005340576172],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Jitter',
+                yaxis: 'y',
+                line: { color: '#3498db', width: 2 },
+                marker: { size: 4, color: '#3498db' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>Jitter:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // RTT trace (secondary Y-axis)
+            var rttTrace = {
+                x: [],
+                y: [],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'RTT',
+                yaxis: 'y2',
+                line: { color: '#2ecc71', width: 2 },
+                marker: { size: 4, color: '#2ecc71' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>RTT:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // Retransmission markers
+            var retransTrace = {
+                x: [],
+                y: [],  // Place above jitter line
+                type: 'scatter',
+                mode: 'markers',
+                name: 'Retransmissions',
+                yaxis: 'y',
+                marker: {
+                    size: 12,
+                    color: '#e74c3c',
+                    symbol: 'x',
+                    line: { width: 2, color: '#c0392b' }
+                },
+                hovertemplate: '<b>Retransmission</b><br>Time: %{x:.3f}s<extra></extra>'
+            };
+
+            // Threshold lines
+            var threshold30 = {
+                x: [0.020999908447265625, 130.3199999332428],
+                y: [30, 30],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Warning (30ms)',
+                yaxis: 'y',
+                line: { color: '#f39c12', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var threshold50 = {
+                x: [0.020999908447265625, 130.3199999332428],
+                y: [50, 50],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Critical (50ms)',
+                yaxis: 'y',
+                line: { color: '#e74c3c', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var data = [jitterTrace, rttTrace, retransTrace, threshold30, threshold50];
+
+            var layout = {
+                title: 'Jitter + RTT + Retransmissions Over Time',
+                xaxis: {
+                    title: 'Time (seconds)',
+                    gridcolor: '#e0e0e0',
+                    domain: [0, 1]
+                },
+                yaxis: {
+                    title: 'Jitter (ms)',
+                    titlefont: { color: '#3498db' },
+                    tickfont: { color: '#3498db' },
+                    gridcolor: '#e0e0e0'
+                },
+                yaxis2: {
+                    title: 'RTT (ms)',
+                    titlefont: { color: '#2ecc71' },
+                    tickfont: { color: '#2ecc71' },
+                    overlaying: 'y',
+                    side: 'right'
+                },
+                hovermode: 'closest',
+                showlegend: true,
+                legend: {
+                    x: 1.15,
+                    y: 1,
+                    bgcolor: 'rgba(255, 255, 255, 0.9)',
+                    bordercolor: '#ddd',
+                    borderwidth: 1
+                },
+                margin: { t: 50, r: 150, b: 50, l: 60 },
+                plot_bgcolor: '#fafafa'
+            };
+
+            var config = {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'flow_1_jitter_rtt',
+                    height: 600,
+                    width: 1400,
+                    scale: 2
+                }
+            };
+
+            Plotly.newPlot('flow-graph-1', data, layout, config);
+        })();
+        </script>
+
+        <div class="flow-header">
+            10.0.10.50:443 -> 192.168.1.100:50003
+        </div>
+        <div class="stats">
+            <div class="stat-item">
+                <strong>Packets:</strong> 14
+            </div>
+            <div class="stat-item">
+                <strong>Jitter Samples:</strong> 12
+            </div>
+            <div class="stat-item">
+                <strong>Mean Jitter:</strong> 5.42ms
+            </div>
+            <div class="stat-item">
+                <strong>P95 Jitter:</strong> 19.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Mean RTT:</strong> 9.50ms
+            </div>
+            <div class="stat-item">
+                <strong>Max RTT:</strong> 12.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Retransmissions:</strong> 2
+            </div>
+            <div class="stat-item">
+                🟢 OK
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div id="flow-graph-2"></div>
+        </div>
+
+        <script>
+        (function() {
+            // Jitter trace (primary Y-axis)
+            var jitterTrace = {
+                x: [0.021000146865844727, 0.02200007438659668, 0.023000001907348633, 0.023999929428100586, 0.02500009536743164, 0.026000022888183594, 0.026999950408935547, 0.032000064849853516, 0.03299999237060547, 0.03800010681152344, 0.05800008773803711, 0.05900001525878906],
+                y: [18.999814987182617, 0.0002384185791015625, 0.0, 0.0, 0.0002384185791015625, 0.0002384185791015625, 0.0, 4.000186920166016, 4.000186920166016, 4.000186920166016, 14.999866485595703, 19.00005340576172],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Jitter',
+                yaxis: 'y',
+                line: { color: '#3498db', width: 2 },
+                marker: { size: 4, color: '#3498db' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>Jitter:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // RTT trace (secondary Y-axis)
+            var rttTrace = {
+                x: [0.03299999237060547, 0.03800010681152344],
+                y: [6.999969482421875, 12.000083923339844],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'RTT',
+                yaxis: 'y2',
+                line: { color: '#2ecc71', width: 2 },
+                marker: { size: 4, color: '#2ecc71' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>RTT:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // Retransmission markers
+            var retransTrace = {
+                x: [0.023999929428100586, 0.026000022888183594],
+                y: [22.800064086914062, 22.800064086914062],  // Place above jitter line
+                type: 'scatter',
+                mode: 'markers',
+                name: 'Retransmissions',
+                yaxis: 'y',
+                marker: {
+                    size: 12,
+                    color: '#e74c3c',
+                    symbol: 'x',
+                    line: { width: 2, color: '#c0392b' }
+                },
+                hovertemplate: '<b>Retransmission</b><br>Time: %{x:.3f}s<extra></extra>'
+            };
+
+            // Threshold lines
+            var threshold30 = {
+                x: [0.021000146865844727, 0.05900001525878906],
+                y: [30, 30],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Warning (30ms)',
+                yaxis: 'y',
+                line: { color: '#f39c12', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var threshold50 = {
+                x: [0.021000146865844727, 0.05900001525878906],
+                y: [50, 50],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Critical (50ms)',
+                yaxis: 'y',
+                line: { color: '#e74c3c', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var data = [jitterTrace, rttTrace, retransTrace, threshold30, threshold50];
+
+            var layout = {
+                title: 'Jitter + RTT + Retransmissions Over Time',
+                xaxis: {
+                    title: 'Time (seconds)',
+                    gridcolor: '#e0e0e0',
+                    domain: [0, 1]
+                },
+                yaxis: {
+                    title: 'Jitter (ms)',
+                    titlefont: { color: '#3498db' },
+                    tickfont: { color: '#3498db' },
+                    gridcolor: '#e0e0e0'
+                },
+                yaxis2: {
+                    title: 'RTT (ms)',
+                    titlefont: { color: '#2ecc71' },
+                    tickfont: { color: '#2ecc71' },
+                    overlaying: 'y',
+                    side: 'right'
+                },
+                hovermode: 'closest',
+                showlegend: true,
+                legend: {
+                    x: 1.15,
+                    y: 1,
+                    bgcolor: 'rgba(255, 255, 255, 0.9)',
+                    bordercolor: '#ddd',
+                    borderwidth: 1
+                },
+                margin: { t: 50, r: 150, b: 50, l: 60 },
+                plot_bgcolor: '#fafafa'
+            };
+
+            var config = {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'flow_2_jitter_rtt',
+                    height: 600,
+                    width: 1400,
+                    scale: 2
+                }
+            };
+
+            Plotly.newPlot('flow-graph-2', data, layout, config);
+        })();
+        </script>
+
+        <div class="flow-header">
+            10.0.10.50:80 -> 192.168.1.100:50001
+        </div>
+        <div class="stats">
+            <div class="stat-item">
+                <strong>Packets:</strong> 13
+            </div>
+            <div class="stat-item">
+                <strong>Jitter Samples:</strong> 11
+            </div>
+            <div class="stat-item">
+                <strong>Mean Jitter:</strong> 43.18ms
+            </div>
+            <div class="stat-item">
+                <strong>P95 Jitter:</strong> 209.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Mean RTT:</strong> 0.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Max RTT:</strong> 0.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Retransmissions:</strong> 0
+            </div>
+            <div class="stat-item">
+                🔴 CRITICAL
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div id="flow-graph-3"></div>
+        </div>
+
+        <script>
+        (function() {
+            // Jitter trace (primary Y-axis)
+            var jitterTrace = {
+                x: [0.020999908447265625, 0.02200007438659668, 0.023000001907348633, 0.023999929428100586, 0.02500009536743164, 0.026000022888183594, 0.23600006103515625, 0.2369999885559082, 0.24200010299682617, 0.26200008392333984, 0.2630000114440918],
+                y: [19.00005340576172, 0.0002384185791015625, 0.0002384185791015625, 0.0, 0.0002384185791015625, 0.0002384185791015625, 209.0001106262207, 209.0001106262207, 4.000186920166016, 14.999866485595703, 19.00005340576172],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Jitter',
+                yaxis: 'y',
+                line: { color: '#3498db', width: 2 },
+                marker: { size: 4, color: '#3498db' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>Jitter:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // RTT trace (secondary Y-axis)
+            var rttTrace = {
+                x: [],
+                y: [],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'RTT',
+                yaxis: 'y2',
+                line: { color: '#2ecc71', width: 2 },
+                marker: { size: 4, color: '#2ecc71' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>RTT:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // Retransmission markers
+            var retransTrace = {
+                x: [],
+                y: [],  // Place above jitter line
+                type: 'scatter',
+                mode: 'markers',
+                name: 'Retransmissions',
+                yaxis: 'y',
+                marker: {
+                    size: 12,
+                    color: '#e74c3c',
+                    symbol: 'x',
+                    line: { width: 2, color: '#c0392b' }
+                },
+                hovertemplate: '<b>Retransmission</b><br>Time: %{x:.3f}s<extra></extra>'
+            };
+
+            // Threshold lines
+            var threshold30 = {
+                x: [0.020999908447265625, 0.2630000114440918],
+                y: [30, 30],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Warning (30ms)',
+                yaxis: 'y',
+                line: { color: '#f39c12', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var threshold50 = {
+                x: [0.020999908447265625, 0.2630000114440918],
+                y: [50, 50],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Critical (50ms)',
+                yaxis: 'y',
+                line: { color: '#e74c3c', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var data = [jitterTrace, rttTrace, retransTrace, threshold30, threshold50];
+
+            var layout = {
+                title: 'Jitter + RTT + Retransmissions Over Time',
+                xaxis: {
+                    title: 'Time (seconds)',
+                    gridcolor: '#e0e0e0',
+                    domain: [0, 1]
+                },
+                yaxis: {
+                    title: 'Jitter (ms)',
+                    titlefont: { color: '#3498db' },
+                    tickfont: { color: '#3498db' },
+                    gridcolor: '#e0e0e0'
+                },
+                yaxis2: {
+                    title: 'RTT (ms)',
+                    titlefont: { color: '#2ecc71' },
+                    tickfont: { color: '#2ecc71' },
+                    overlaying: 'y',
+                    side: 'right'
+                },
+                hovermode: 'closest',
+                showlegend: true,
+                legend: {
+                    x: 1.15,
+                    y: 1,
+                    bgcolor: 'rgba(255, 255, 255, 0.9)',
+                    bordercolor: '#ddd',
+                    borderwidth: 1
+                },
+                margin: { t: 50, r: 150, b: 50, l: 60 },
+                plot_bgcolor: '#fafafa'
+            };
+
+            var config = {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'flow_3_jitter_rtt',
+                    height: 600,
+                    width: 1400,
+                    scale: 2
+                }
+            };
+
+            Plotly.newPlot('flow-graph-3', data, layout, config);
+        })();
+        </script>
+
+        <div class="flow-header">
+            10.0.10.50:5432 -> 192.168.1.100:50004
+        </div>
+        <div class="stats">
+            <div class="stat-item">
+                <strong>Packets:</strong> 13
+            </div>
+            <div class="stat-item">
+                <strong>Jitter Samples:</strong> 11
+            </div>
+            <div class="stat-item">
+                <strong>Mean Jitter:</strong> 95.91ms
+            </div>
+            <div class="stat-item">
+                <strong>P95 Jitter:</strong> 499.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Mean RTT:</strong> 1.50ms
+            </div>
+            <div class="stat-item">
+                <strong>Max RTT:</strong> 2.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Retransmissions:</strong> 0
+            </div>
+            <div class="stat-item">
+                🔴 CRITICAL
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div id="flow-graph-4"></div>
+        </div>
+
+        <script>
+        (function() {
+            // Jitter trace (primary Y-axis)
+            var jitterTrace = {
+                x: [0.021000146865844727, 0.02200007438659668, 0.022999048233032227, 0.5229990482330322, 0.5239989757537842, 0.5249991416931152, 0.5259990692138672, 0.5269989967346191, 0.5319991111755371, 0.5519990921020508, 0.5529990196228027],
+                y: [18.999814987182617, 0.0002384185791015625, 0.00095367431640625, 499.00102615356445, 499.00007247924805, 0.0002384185791015625, 0.0002384185791015625, 0.0, 4.000186920166016, 14.999866485595703, 19.00005340576172],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Jitter',
+                yaxis: 'y',
+                line: { color: '#3498db', width: 2 },
+                marker: { size: 4, color: '#3498db' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>Jitter:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // RTT trace (secondary Y-axis)
+            var rttTrace = {
+                x: [0.5239989757537842, 0.5249991416931152],
+                y: [0.9999275207519531, 2.000093460083008],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'RTT',
+                yaxis: 'y2',
+                line: { color: '#2ecc71', width: 2 },
+                marker: { size: 4, color: '#2ecc71' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>RTT:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // Retransmission markers
+            var retransTrace = {
+                x: [],
+                y: [],  // Place above jitter line
+                type: 'scatter',
+                mode: 'markers',
+                name: 'Retransmissions',
+                yaxis: 'y',
+                marker: {
+                    size: 12,
+                    color: '#e74c3c',
+                    symbol: 'x',
+                    line: { width: 2, color: '#c0392b' }
+                },
+                hovertemplate: '<b>Retransmission</b><br>Time: %{x:.3f}s<extra></extra>'
+            };
+
+            // Threshold lines
+            var threshold30 = {
+                x: [0.021000146865844727, 0.5529990196228027],
+                y: [30, 30],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Warning (30ms)',
+                yaxis: 'y',
+                line: { color: '#f39c12', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var threshold50 = {
+                x: [0.021000146865844727, 0.5529990196228027],
+                y: [50, 50],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Critical (50ms)',
+                yaxis: 'y',
+                line: { color: '#e74c3c', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var data = [jitterTrace, rttTrace, retransTrace, threshold30, threshold50];
+
+            var layout = {
+                title: 'Jitter + RTT + Retransmissions Over Time',
+                xaxis: {
+                    title: 'Time (seconds)',
+                    gridcolor: '#e0e0e0',
+                    domain: [0, 1]
+                },
+                yaxis: {
+                    title: 'Jitter (ms)',
+                    titlefont: { color: '#3498db' },
+                    tickfont: { color: '#3498db' },
+                    gridcolor: '#e0e0e0'
+                },
+                yaxis2: {
+                    title: 'RTT (ms)',
+                    titlefont: { color: '#2ecc71' },
+                    tickfont: { color: '#2ecc71' },
+                    overlaying: 'y',
+                    side: 'right'
+                },
+                hovermode: 'closest',
+                showlegend: true,
+                legend: {
+                    x: 1.15,
+                    y: 1,
+                    bgcolor: 'rgba(255, 255, 255, 0.9)',
+                    bordercolor: '#ddd',
+                    borderwidth: 1
+                },
+                margin: { t: 50, r: 150, b: 50, l: 60 },
+                plot_bgcolor: '#fafafa'
+            };
+
+            var config = {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'flow_4_jitter_rtt',
+                    height: 600,
+                    width: 1400,
+                    scale: 2
+                }
+            };
+
+            Plotly.newPlot('flow-graph-4', data, layout, config);
+        })();
+        </script>
+
+        <div class="flow-header">
+            10.0.10.50:9000 -> 192.168.1.100:50006
+        </div>
+        <div class="stats">
+            <div class="stat-item">
+                <strong>Packets:</strong> 10
+            </div>
+            <div class="stat-item">
+                <strong>Jitter Samples:</strong> 8
+            </div>
+            <div class="stat-item">
+                <strong>Mean Jitter:</strong> 137.12ms
+            </div>
+            <div class="stat-item">
+                <strong>P95 Jitter:</strong> 521.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Mean RTT:</strong> 0.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Max RTT:</strong> 0.00ms
+            </div>
+            <div class="stat-item">
+                <strong>Retransmissions:</strong> 0
+            </div>
+            <div class="stat-item">
+                🔴 CRITICAL
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div id="flow-graph-5"></div>
+        </div>
+
+        <script>
+        (function() {
+            // Jitter trace (primary Y-axis)
+            var jitterTrace = {
+                x: [0.021000146865844727, 0.5429990291595459, 0.5449991226196289, 0.5469989776611328, 0.5489990711212158, 0.5549991130828857, 0.5749990940093994, 0.5759990215301514],
+                y: [18.999814987182617, 520.9987163543701, 519.9987888336182, 0.0002384185791015625, 0.0002384185791015625, 3.999948501586914, 13.99993896484375, 19.00005340576172],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Jitter',
+                yaxis: 'y',
+                line: { color: '#3498db', width: 2 },
+                marker: { size: 4, color: '#3498db' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>Jitter:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // RTT trace (secondary Y-axis)
+            var rttTrace = {
+                x: [],
+                y: [],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'RTT',
+                yaxis: 'y2',
+                line: { color: '#2ecc71', width: 2 },
+                marker: { size: 4, color: '#2ecc71' },
+                hovertemplate: '<b>Time:</b> %{x:.3f}s<br><b>RTT:</b> %{y:.2f}ms<extra></extra>'
+            };
+
+            // Retransmission markers
+            var retransTrace = {
+                x: [],
+                y: [],  // Place above jitter line
+                type: 'scatter',
+                mode: 'markers',
+                name: 'Retransmissions',
+                yaxis: 'y',
+                marker: {
+                    size: 12,
+                    color: '#e74c3c',
+                    symbol: 'x',
+                    line: { width: 2, color: '#c0392b' }
+                },
+                hovertemplate: '<b>Retransmission</b><br>Time: %{x:.3f}s<extra></extra>'
+            };
+
+            // Threshold lines
+            var threshold30 = {
+                x: [0.021000146865844727, 0.5759990215301514],
+                y: [30, 30],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Warning (30ms)',
+                yaxis: 'y',
+                line: { color: '#f39c12', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var threshold50 = {
+                x: [0.021000146865844727, 0.5759990215301514],
+                y: [50, 50],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Critical (50ms)',
+                yaxis: 'y',
+                line: { color: '#e74c3c', width: 1, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+
+            var data = [jitterTrace, rttTrace, retransTrace, threshold30, threshold50];
+
+            var layout = {
+                title: 'Jitter + RTT + Retransmissions Over Time',
+                xaxis: {
+                    title: 'Time (seconds)',
+                    gridcolor: '#e0e0e0',
+                    domain: [0, 1]
+                },
+                yaxis: {
+                    title: 'Jitter (ms)',
+                    titlefont: { color: '#3498db' },
+                    tickfont: { color: '#3498db' },
+                    gridcolor: '#e0e0e0'
+                },
+                yaxis2: {
+                    title: 'RTT (ms)',
+                    titlefont: { color: '#2ecc71' },
+                    tickfont: { color: '#2ecc71' },
+                    overlaying: 'y',
+                    side: 'right'
+                },
+                hovermode: 'closest',
+                showlegend: true,
+                legend: {
+                    x: 1.15,
+                    y: 1,
+                    bgcolor: 'rgba(255, 255, 255, 0.9)',
+                    bordercolor: '#ddd',
+                    borderwidth: 1
+                },
+                margin: { t: 50, r: 150, b: 50, l: 60 },
+                plot_bgcolor: '#fafafa'
+            };
+
+            var config = {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'flow_5_jitter_rtt',
+                    height: 600,
+                    width: 1400,
+                    scale: 2
+                }
+            };
+
+            Plotly.newPlot('flow-graph-5', data, layout, config);
+        })();
+        </script>
+
+        <h2>💡 Features Implémentées</h2>
+
+        <div class="success">
+            <strong>✅ RTT Overlay (Double Y-Axis):</strong><br>
+            • Axe Y gauche: Jitter (bleu)<br>
+            • Axe Y droit: RTT (vert)<br>
+            • Permet de voir la corrélation jitter ↔ RTT<br>
+            • Spike RTT = souvent spike jitter
+        </div>
+
+        <div class="success">
+            <strong>✅ Retransmission Markers:</strong><br>
+            • Points rouges (X) aux moments des retransmissions<br>
+            • Hover pour voir le timestamp exact<br>
+            • Corrélation visuelle retrans ↔ jitter/RTT
+        </div>
+
+        <div class="success">
+            <strong>✅ Multi-Flow Comparison:</strong><br>
+            • 5 flux sur un seul graphe<br>
+            • Identification immédiate du pire flux<br>
+            • Comparaison relative des performances
+        </div>
+
+        <h2>🚀 Prochaine Étape: Intégration</h2>
+
+        <div class="info">
+            <strong>Ready pour intégration dans pcap_analyzer!</strong><br><br>
+
+            Ce POC démontre que toutes les features sont faciles à implémenter:<br>
+            • RTT: Données déjà dans rtt_analyzer.py<br>
+            • Retrans: Données déjà dans retransmission.py<br>
+            • Multi-flow: Juste regrouper les données<br><br>
+
+            <strong>Effort total:</strong> 3-4 heures pour intégrer tout ça<br>
+            <strong>Impact:</strong> Transformation complète de l'outil! 🎯
+        </div>
+
+    </div>
+</body>
+</html>
