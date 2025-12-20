@@ -667,7 +667,19 @@ class RetransmissionAnalyzer:
         # Add to ring buffer (automatically discards oldest if full)
         self._packet_buffer[flow_key].append(packet_info)
 
-        # RFC 793: Update TCP state machine
+        # CRITICAL FIX v4.16.2: Check for port reuse BEFORE updating state machine
+        # Race condition fix: must validate ISN and timestamps BEFORE process_packet() overwrites them
+        # Bug: process_packet() updates flow_state.isn and last_packet_time, breaking validation
+        # Solution: Check should_reset_flow_state() BEFORE calling process_packet()
+        syn_seq = metadata.tcp_seq if metadata.is_syn else None
+        if self._state_machine.should_reset_flow_state(flow_key, timestamp, syn_seq):
+            # Connection closed (FIN-ACK complete, RST, timeout) or port reuse detected
+            self._reset_flow_state(flow_key, reverse_key)
+            # Update ISN tracking after reset
+            if metadata.is_syn:
+                self._initial_seq[flow_key] = metadata.tcp_seq
+
+        # RFC 793: Update TCP state machine (AFTER potential reset)
         tcp_flags = {
             'SYN': metadata.is_syn,
             'ACK': metadata.is_ack,
@@ -682,16 +694,6 @@ class RetransmissionAnalyzer:
             ack=metadata.tcp_ack if metadata.is_ack else 0,
             payload_len=metadata.tcp_payload_len,
         )
-
-        # RFC 793: Check if connection is closed and state should be reset
-        # This detects: FIN-ACK completion + timeout, inactivity timeout, port reuse
-        syn_seq = metadata.tcp_seq if metadata.is_syn else None
-        if self._state_machine.should_reset_flow_state(flow_key, timestamp, syn_seq):
-            # Connection closed (FIN-ACK complete, RST, timeout) or port reuse detected
-            self._reset_flow_state(flow_key, reverse_key)
-            # Update ISN tracking after reset
-            if metadata.is_syn:
-                self._initial_seq[flow_key] = metadata.tcp_seq
 
         # Legacy ISN tracking (for backward compatibility and additional validation)
         # The state machine handles the primary logic, this provides secondary validation
@@ -1001,7 +1003,19 @@ class RetransmissionAnalyzer:
         # Add to ring buffer
         self._packet_buffer[flow_key].append(packet_info)
 
-        # RFC 793: Update TCP state machine
+        # CRITICAL FIX v4.16.2: Check for port reuse BEFORE updating state machine (Scapy path)
+        # Race condition fix: must validate ISN and timestamps BEFORE process_packet() overwrites them
+        # Bug: process_packet() updates flow_state.isn and last_packet_time, breaking validation
+        # Solution: Check should_reset_flow_state() BEFORE calling process_packet()
+        syn_seq = tcp.seq if (tcp.flags & 0x02) else None
+        if self._state_machine.should_reset_flow_state(flow_key, timestamp, syn_seq):
+            # Connection closed (FIN-ACK complete, RST, timeout) or port reuse detected
+            self._reset_flow_state(flow_key, reverse_key)
+            # Update ISN tracking after reset
+            if tcp.flags & 0x02:  # SYN
+                self._initial_seq[flow_key] = tcp.seq
+
+        # RFC 793: Update TCP state machine (AFTER potential reset)
         tcp_flags = {
             'SYN': bool(tcp.flags & 0x02),
             'ACK': bool(tcp.flags & 0x10),
@@ -1016,16 +1030,6 @@ class RetransmissionAnalyzer:
             ack=tcp.ack if (tcp.flags & 0x10) else 0,
             payload_len=len(tcp.payload),
         )
-
-        # RFC 793: Check if connection is closed and state should be reset
-        # This detects: FIN-ACK completion + timeout, inactivity timeout, port reuse
-        syn_seq = tcp.seq if (tcp.flags & 0x02) else None
-        if self._state_machine.should_reset_flow_state(flow_key, timestamp, syn_seq):
-            # Connection closed (FIN-ACK complete, RST, timeout) or port reuse detected
-            self._reset_flow_state(flow_key, reverse_key)
-            # Update ISN tracking after reset
-            if tcp.flags & 0x02:  # SYN
-                self._initial_seq[flow_key] = tcp.seq
 
         # Legacy ISN tracking (for backward compatibility and additional validation)
         # The state machine handles the primary logic, this provides secondary validation
