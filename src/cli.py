@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 import click
 from rich.console import Console
@@ -302,6 +302,7 @@ def analyze_pcap_hybrid(
     memory_limit_mb: Optional[float] = None,
     max_expansion_ratio: int = 1000,
     enable_bomb_protection: bool = True,
+    progress_callback: Optional[Callable[[str, int, str], None]] = None,
 ) -> dict[str, Any]:
     """
     PHASE 2 OPTIMIZATION: Hybrid analysis using dpkt + Scapy.
@@ -317,9 +318,21 @@ def analyze_pcap_hybrid(
     - Old (Scapy only): ~94 seconds for 172k packets
     - New (Hybrid): ~30-40 seconds (target)
     - New (Hybrid + Streaming): memory-efficient for files >100MB
+
+    Args:
+        progress_callback: Optional callback for progress updates (web UI mode).
+                          Signature: (phase: str, progress_percent: int, message: str) -> None
+                          If None, Rich Progress bars are displayed in console (CLI mode).
     """
     thresholds = config.thresholds
     results = {}
+
+    # DEBUG: Log if callback is provided
+    if progress_callback:
+        logger.info(f"[CALLBACK DEBUG] cli_analyze_pcap_hybrid received callback: {progress_callback} (type: {type(progress_callback).__name__})")
+        logger.info("Progress callback is provided - will send real-time updates")
+    else:
+        logger.warning("[CALLBACK DEBUG] cli_analyze_pcap_hybrid received NO callback - using Rich Progress bars for CLI")
 
     # Sprint 10: Initialize performance optimization tools
     memory_optimizer = MemoryOptimizer(memory_limit_mb=memory_limit_mb)
@@ -374,6 +387,11 @@ def analyze_pcap_hybrid(
 
     # Count total packets first for accurate progress reporting
     # Use a separate parser instance for counting (with same protection settings)
+    if progress_callback:
+        logger.info("[CALLBACK DEBUG] About to invoke callback for counting phase (0%)")
+        progress_callback("counting", 0, "Comptage des paquets...")
+        logger.info("[CALLBACK DEBUG] Callback invoked successfully for counting (0%)")
+
     counter_parser = FastPacketParser(
         pcap_file,
         enable_bomb_protection=enable_bomb_protection,
@@ -382,13 +400,15 @@ def analyze_pcap_hybrid(
     )
     total_packets = sum(1 for _ in counter_parser.parse())
 
+    if progress_callback:
+        progress_callback("counting", 5, f"{total_packets:,} paquets détectés")
+
     packet_count = 0
 
-    with Progress(
-        SpinnerColumn(), TextColumn("[cyan]Processing..."), BarColumn(), TaskProgressColumn(), console=console
-    ) as progress:
-        task = progress.add_task("[cyan]Extracting metadata...", total=total_packets)
-
+    # Phase 1: dpkt metadata extraction (5-50%)
+    if progress_callback:
+        progress_callback("metadata_extraction", 5, "Extraction métadonnées (dpkt)...")
+        # Callback mode: no Rich Progress bars
         for metadata in parser.parse():
             packet_count += 1
 
@@ -410,7 +430,38 @@ def analyze_pcap_hybrid(
                 gc.collect()
 
             if packet_count % PROGRESS_UPDATE_INTERVAL == 0:
-                progress.update(task, completed=packet_count)
+                # Update progress: 5-50% range for Phase 1
+                percent = 5 + int((packet_count / total_packets) * 45)
+                progress_callback("metadata_extraction", percent, f"{packet_count:,}/{total_packets:,} paquets")
+    else:
+        # CLI mode: Rich Progress bars
+        with Progress(
+            SpinnerColumn(), TextColumn("[cyan]Processing..."), BarColumn(), TaskProgressColumn(), console=console
+        ) as progress:
+            task = progress.add_task("[cyan]Extracting metadata...", total=total_packets)
+
+            for metadata in parser.parse():
+                packet_count += 1
+
+                # Pass metadata to compatible analyzers (much faster than Scapy)
+                timestamp_analyzer.process_packet(metadata, packet_count - 1)
+                handshake_analyzer.process_packet(metadata, packet_count - 1)
+                retrans_analyzer.process_packet(metadata, packet_count - 1)
+                rtt_analyzer.process_packet(metadata, packet_count - 1)
+                window_analyzer.process_packet(metadata, packet_count - 1)
+                reset_analyzer.process_packet(metadata, packet_count - 1)
+                toptalkers_analyzer.process_packet(metadata, packet_count - 1)
+                throughput_analyzer.process_packet(metadata, packet_count - 1)
+                syn_retrans_analyzer.process_packet(metadata, packet_count - 1)
+                tcp_timeout_analyzer.process_packet(metadata, packet_count - 1)
+                burst_analyzer.process_packet(metadata, packet_count - 1)
+                temporal_analyzer.process_packet(metadata, packet_count - 1)
+
+                if packet_count % MEMORY_CLEANUP_INTERVAL == 0:
+                    gc.collect()
+
+                if packet_count % PROGRESS_UPDATE_INTERVAL == 0:
+                    progress.update(task, completed=packet_count)
 
     console.print(f"[green]✓ Phase 1 terminée: {packet_count} paquets traités[/green]")
 
@@ -504,16 +555,9 @@ def analyze_pcap_hybrid(
     with MemoryMonitor("Packet Loading", memory_optimizer) as monitor:
         if processing_mode == "memory" and enable_streaming:
             # Small files: Load all packets into memory (original behavior)
-            console.print("[cyan]Loading packets into memory (small file mode)...[/cyan]")
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[cyan]Processing complex protocols..."),
-                BarColumn(),
-                TaskProgressColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
-
+            if progress_callback:
+                progress_callback("scapy_loading", 50, "Chargement paquets Scapy...")
+                # Callback mode
                 with PcapReader(pcap_for_scapy) as reader:
                     for i, packet in enumerate(reader):
                         # Collect all packets for protocol/jitter analysis
@@ -528,19 +572,42 @@ def analyze_pcap_hybrid(
                             complex_packet_count += 1
 
                         if i % PROGRESS_UPDATE_INTERVAL == 0:
-                            progress.update(task, completed=i)
+                            # Update progress: 50-75% range for Phase 2 loading
+                            percent = 50 + int((i / total_packets) * 25)
+                            progress_callback("scapy_loading", percent, f"{i:,}/{total_packets:,} paquets")
+            else:
+                # CLI mode
+                console.print("[cyan]Loading packets into memory (small file mode)...[/cyan]")
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[cyan]Processing complex protocols..."),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
+
+                    with PcapReader(pcap_for_scapy) as reader:
+                        for i, packet in enumerate(reader):
+                            # Collect all packets for protocol/jitter analysis
+                            scapy_packets.append(packet)
+
+                            # Only process packets that need deep inspection
+                            if packet.haslayer(DNS):
+                                dns_analyzer.process_packet(packet, i)
+                                complex_packet_count += 1
+                            if packet.haslayer(ICMP):
+                                icmp_analyzer.process_packet(packet, i)
+                                complex_packet_count += 1
+
+                            if i % PROGRESS_UPDATE_INTERVAL == 0:
+                                progress.update(task, completed=i)
 
         else:
             # Large files: Use streaming/chunked processing
-            console.print(f"[cyan]Using streaming mode for large file ({processing_mode})...[/cyan]")
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[cyan]Processing complex protocols..."),
-                BarColumn(),
-                TaskProgressColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
+            if progress_callback:
+                progress_callback("scapy_loading", 50, "Chargement paquets (streaming)...")
+                # Callback mode
                 packet_idx = 0
 
                 for chunk in streaming_processor.stream_chunks():
@@ -559,72 +626,142 @@ def analyze_pcap_hybrid(
                         packet_idx += 1
 
                         if packet_idx % PROGRESS_UPDATE_INTERVAL == 0:
-                            progress.update(task, completed=packet_idx)
+                            # Update progress: 50-75% range for Phase 2 loading
+                            percent = 50 + int((packet_idx / total_packets) * 25)
+                            progress_callback("scapy_loading", percent, f"{packet_idx:,}/{total_packets:,} paquets")
 
                     # Trigger GC after each chunk if under memory pressure (Fix for Issue #4)
                     if memory_optimizer.check_memory_pressure():
                         collected = memory_optimizer.trigger_gc(force=False)  # Use cooldown logic
-                        # Rate-limit logging to reduce spam
-                        if collected > 0:
-                            console.print(f"[green]  GC collected {collected} objects[/green]")
-                        elif memory_optimizer.consecutive_empty_gcs == 1:
-                            # Only log once when GC starts being ineffective
-                            console.print(f"[dim]  GC triggered but collected 0 objects (will reduce frequency)[/dim]")
 
                     # Explicit cleanup after chunk processing
                     memory_optimizer.release_chunk_memory(chunk)
+            else:
+                # CLI mode
+                console.print(f"[cyan]Using streaming mode for large file ({processing_mode})...[/cyan]")
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[cyan]Processing complex protocols..."),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task("[cyan]Deep inspection...", total=total_packets)
+                    packet_idx = 0
+
+                    for chunk in streaming_processor.stream_chunks():
+                        # Extend scapy_packets with chunk
+                        scapy_packets.extend(chunk)
+
+                        # Process chunk for deep inspection
+                        for packet in chunk:
+                            if packet.haslayer(DNS):
+                                dns_analyzer.process_packet(packet, packet_idx)
+                                complex_packet_count += 1
+                            if packet.haslayer(ICMP):
+                                icmp_analyzer.process_packet(packet, packet_idx)
+                                complex_packet_count += 1
+
+                            packet_idx += 1
+
+                            if packet_idx % PROGRESS_UPDATE_INTERVAL == 0:
+                                progress.update(task, completed=packet_idx)
+
+                        # Trigger GC after each chunk if under memory pressure (Fix for Issue #4)
+                        if memory_optimizer.check_memory_pressure():
+                            collected = memory_optimizer.trigger_gc(force=False)  # Use cooldown logic
+                            # Rate-limit logging to reduce spam
+                            if collected > 0:
+                                console.print(f"[green]  GC collected {collected} objects[/green]")
+                            elif memory_optimizer.consecutive_empty_gcs == 1:
+                                # Only log once when GC starts being ineffective
+                                console.print(f"[dim]  GC triggered but collected 0 objects (will reduce frequency)[/dim]")
+
+                        # Explicit cleanup after chunk processing
+                        memory_optimizer.release_chunk_memory(chunk)
 
     # Show memory usage
     mem_summary = monitor.get_summary()
-    console.print(f"[cyan]Memory used for packet loading: {mem_summary['used_mb']:.2f} MB[/cyan]")
+    if not progress_callback:
+        console.print(f"[cyan]Memory used for packet loading: {mem_summary['used_mb']:.2f} MB[/cyan]")
 
     # Reset GC tracking before Phase 2 (Fix for Issue #4)
     # This allows GC to retry if needed during analysis phase
     memory_optimizer.reset_gc_tracking()
 
-    # Analyze protocol distribution and jitter
-    console.print("[cyan]Analyzing protocol distribution...[/cyan]")
+    # Phase 3: Protocol analysis (75-80%)
+    if progress_callback:
+        progress_callback("protocol_analysis", 75, "Analyse protocoles...")
+
+    if not progress_callback:
+        console.print("[cyan]Analyzing protocol distribution...[/cyan]")
     protocol_results = protocol_analyzer.analyze(scapy_packets)
 
-    console.print("[cyan]Analyzing jitter (RFC 3393 IPDV)...[/cyan]")
+    if not progress_callback:
+        console.print("[cyan]Analyzing jitter (RFC 3393 IPDV)...[/cyan]")
     jitter_results = jitter_analyzer.analyze(scapy_packets)
 
-    console.print("[cyan]Classifying traffic patterns (ML-like heuristics)...[/cyan]")
+    if not progress_callback:
+        console.print("[cyan]Classifying traffic patterns (ML-like heuristics)...[/cyan]")
     service_results = service_classifier.analyze(scapy_packets)
 
-    # Sprint 5-7: Security analysis
-    console.print("[cyan]Detecting port scans...[/cyan]")
-    port_scan_results = port_scan_detector.analyze(scapy_packets)
+    # Phase 4: Security detection (80-95%)
+    # Define security detectors list for progress tracking
+    security_detectors = [
+        ("port_scan", port_scan_detector, "Détection port scan"),
+        ("brute_force", brute_force_detector, "Détection brute-force"),
+        ("ddos", ddos_detector, "Détection DDoS"),
+        ("dns_tunneling", dns_tunneling_detector, "Détection DNS tunneling"),
+        ("data_exfiltration", data_exfiltration_detector, "Détection exfiltration"),
+        ("c2_beaconing", c2_beaconing_detector, "Détection C2 beaconing"),
+        ("lateral_movement", lateral_movement_detector, "Détection mouvement latéral"),
+    ]
 
-    console.print("[cyan]Detecting brute-force attacks...[/cyan]")
-    brute_force_results = brute_force_detector.analyze(scapy_packets)
+    for idx, (name, detector, description) in enumerate(security_detectors):
+        if progress_callback:
+            percent = 80 + int((idx / len(security_detectors)) * 15)
+            progress_callback("security_detection", percent, description)
+        else:
+            console.print(f"[cyan]{description}...[/cyan]")
 
-    console.print("[cyan]Detecting DDoS attacks...[/cyan]")
-    ddos_results = ddos_detector.analyze(scapy_packets)
+        if name == "port_scan":
+            port_scan_results = detector.analyze(scapy_packets)
+        elif name == "brute_force":
+            brute_force_results = detector.analyze(scapy_packets)
+        elif name == "ddos":
+            ddos_results = detector.analyze(scapy_packets)
+        elif name == "dns_tunneling":
+            dns_tunneling_results = detector.analyze(scapy_packets)
+        elif name == "data_exfiltration":
+            data_exfiltration_results = detector.analyze(scapy_packets)
+        elif name == "c2_beaconing":
+            c2_beaconing_results = detector.analyze(scapy_packets)
+        elif name == "lateral_movement":
+            lateral_movement_results = detector.analyze(scapy_packets)
 
-    console.print("[cyan]Detecting DNS tunneling...[/cyan]")
-    dns_tunneling_results = dns_tunneling_detector.analyze(scapy_packets)
+    if not progress_callback:
+        console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
 
-    console.print("[cyan]Detecting data exfiltration...[/cyan]")
-    data_exfiltration_results = data_exfiltration_detector.analyze(scapy_packets)
-
-    console.print("[cyan]Detecting C2 beaconing...[/cyan]")
-    c2_beaconing_results = c2_beaconing_detector.analyze(scapy_packets)
-
-    console.print("[cyan]Detecting lateral movement...[/cyan]")
-    lateral_movement_results = lateral_movement_detector.analyze(scapy_packets)
-
-    console.print(f"[green]✓ Phase 2 terminée: {complex_packet_count} paquets analysés[/green]")
-
-    # Finalize all analyzers
-    with Progress(
-        SpinnerColumn(), TextColumn("[cyan]Finalisation..."), BarColumn(), TaskProgressColumn(), console=console
-    ) as progress:
-        task = progress.add_task("[cyan]Computing statistics...", total=len(analyzers))
+    # Phase 5: Finalization (95-100%)
+    if progress_callback:
+        progress_callback("finalization", 95, "Finalisation...")
+        # Callback mode
         for idx, analyzer in enumerate(analyzers):
             if hasattr(analyzer, "finalize"):
                 analyzer.finalize()
-            progress.update(task, completed=idx + 1)
+            if (idx + 1) % 5 == 0:  # Update every 5 analyzers
+                percent = 95 + int(((idx + 1) / len(analyzers)) * 5)
+                progress_callback("finalization", percent, f"Finalisation {idx + 1}/{len(analyzers)}")
+    else:
+        # CLI mode
+        with Progress(
+            SpinnerColumn(), TextColumn("[cyan]Finalisation..."), BarColumn(), TaskProgressColumn(), console=console
+        ) as progress:
+            task = progress.add_task("[cyan]Computing statistics...", total=len(analyzers))
+            for idx, analyzer in enumerate(analyzers):
+                if hasattr(analyzer, "finalize"):
+                    analyzer.finalize()
+                progress.update(task, completed=idx + 1)
 
     # Collect results (growing list of dpkt-compatible analyzers)
     results["timestamps"] = timestamp_analyzer._generate_report()

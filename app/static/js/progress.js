@@ -365,9 +365,20 @@ class ProgressMonitor {
         } else if (data.phase) {
             // Si pas de message spécifique, toujours utiliser un message basé sur la phase
             const phaseMessages = {
+                // New granular phases
+                counting: 'Comptage des paquets...',
+                metadata_extraction: 'Extraction des métadonnées avec dpkt...',
+                scapy_loading: 'Chargement des paquets avec Scapy...',
+                protocol_analysis: 'Analyse de la distribution des protocoles...',
+                security_detection: 'Détection des menaces de sécurité...',
+                finalization: 'Calcul des statistiques finales...',
+
+                // Legacy phases (backward compatibility)
                 metadata: 'Extraction des métadonnées...',
                 analysis: 'Analyse des paquets en cours...',
                 finalize: 'Finalisation du rapport...',
+
+                // Completion states
                 completed: 'Analyse terminée avec succès',
                 failed: 'Analyse échouée'
             };
@@ -462,9 +473,20 @@ class ProgressMonitor {
 
     updatePhase(phase) {
         const phases = {
+            // New granular phases
+            counting: 'Comptage des paquets',
+            metadata_extraction: 'Extraction métadonnées (dpkt)',
+            scapy_loading: 'Chargement paquets Scapy',
+            protocol_analysis: 'Analyse protocoles',
+            security_detection: 'Détection menaces',
+            finalization: 'Finalisation',
+
+            // Legacy phases (backward compatibility)
             metadata: 'Extraction métadonnées',
             analysis: 'Analyse des paquets',
             finalize: 'Finalisation',
+
+            // Completion states
             completed: 'Terminé',
             failed: 'Échec',
             pending: 'En attente'
@@ -727,9 +749,20 @@ class ProgressMonitor {
 
     getPhaseType(phase) {
         const types = {
+            // New granular phases
+            counting: 'info',
+            metadata_extraction: 'info',
+            scapy_loading: 'info',
+            protocol_analysis: 'info',
+            security_detection: 'info',
+            finalization: 'info',
+
+            // Legacy phases
             metadata: 'info',
             analysis: 'info',
             finalize: 'info',
+
+            // Completion states
             completed: 'success',
             failed: 'error'
         };

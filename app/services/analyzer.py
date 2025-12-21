@@ -198,43 +198,39 @@ class AnalyzerService:
         config = get_config()
 
         # Callback wrapper pour synchroniser avec asyncio
+        loop = asyncio.get_event_loop()
+
+        # Create sync wrapper for progress callback that can be called from executor thread
+        sync_progress_callback = None
         if progress_callback:
-            await progress_callback.update(
-                phase="metadata",
-                progress_percent=0,
-                message="Initialisation de l'analyse...",
-            )
+            logger.info(f"[CALLBACK DEBUG] Task {task_id}: progress_callback exists, creating wrapper")
+            def sync_callback_wrapper(phase: str, progress_percent: int, message: str):
+                """
+                Synchronous wrapper that schedules the async callback in the event loop.
+                This can be called from the executor thread (synchronous code).
+                """
+                logger.info(f"[CALLBACK DEBUG] Task {task_id}: Wrapper called - phase={phase}, progress={progress_percent}%, message={message}")
+                # Schedule the async callback in the main event loop (fire-and-forget)
+                asyncio.run_coroutine_threadsafe(
+                    progress_callback.update(
+                        phase=phase,
+                        progress_percent=progress_percent,
+                        message=message,
+                    ),
+                    loop
+                )
+
+            sync_progress_callback = sync_callback_wrapper
+            logger.info(f"[CALLBACK DEBUG] Task {task_id}: Wrapper created successfully")
+        else:
+            logger.warning(f"[CALLBACK DEBUG] Task {task_id}: No progress_callback provided!")
 
         try:
-            # Exécuter l'analyse dans un thread séparé (blocking operation)
-            # TODO: Instrumenter analyze_pcap_hybrid pour accepter des callbacks
-            # Pour l'instant, on l'exécute tel quel et on simule les updates
-            loop = asyncio.get_event_loop()
-
-            # Phase 1: Metadata extraction (0-50%)
-            if progress_callback:
-                await progress_callback.update(
-                    phase="metadata",
-                    progress_percent=10,
-                    message="Extraction des métadonnées (dpkt)...",
-                )
-
-            # Exécuter l'analyse (blocking)
+            # Exécuter l'analyse dans un thread séparé avec callbacks en temps réel
             results = await loop.run_in_executor(
                 None,  # Default executor
-                lambda: self._run_analysis_sync(pcap_path, config),
+                lambda: self._run_analysis_sync(pcap_path, config, sync_progress_callback),
             )
-
-            # Phase 2: Analysis complete (100%)
-            if progress_callback:
-                total_packets = results.get("metadata", {}).get("total_packets", 0)
-                await progress_callback.update(
-                    phase="finalize",
-                    progress_percent=90,
-                    packets_processed=total_packets,
-                    total_packets=total_packets,
-                    message="Génération des rapports...",
-                )
 
             # Générer les rapports
             report_paths = await self._generate_reports(task_id, results, pcap_path)
@@ -268,7 +264,7 @@ class AnalyzerService:
             # Re-raise avec le message traduit pour que le worker puisse le stocker
             raise Exception(human_error) from e
 
-    def _run_analysis_sync(self, pcap_path: str, config) -> dict[str, Any]:
+    def _run_analysis_sync(self, pcap_path: str, config, progress_callback=None) -> dict[str, Any]:
         """
         Exécute l'analyse synchrone (version CLI).
 
@@ -277,13 +273,17 @@ class AnalyzerService:
         Args:
             pcap_path: Chemin vers le fichier PCAP
             config: Configuration object
+            progress_callback: Optional synchronous callback for progress updates
 
         Returns:
             Dictionnaire avec résultats d'analyse
         """
-        # Appeler la fonction CLI existante
-        # NOTE: Cette fonction utilise Rich Progress qui affiche dans le terminal
-        # Pour la version web, il faudrait instrumenter la fonction pour accepter des callbacks
+        if progress_callback:
+            logger.info(f"[CALLBACK DEBUG] _run_analysis_sync received callback: {progress_callback}")
+        else:
+            logger.warning(f"[CALLBACK DEBUG] _run_analysis_sync received NO callback!")
+
+        # Appeler la fonction CLI avec support de callbacks pour progression en temps réel
         results = cli_analyze_pcap_hybrid(
             pcap_file=pcap_path,
             config=config,
@@ -292,6 +292,7 @@ class AnalyzerService:
             include_localhost=False,
             enable_streaming=True,
             enable_parallel=False,
+            progress_callback=progress_callback,  # Pass callback for real-time progress
         )
 
         return results
