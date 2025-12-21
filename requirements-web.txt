@@ -24,6 +24,7 @@ psycopg2-binary>=2.9.9
 python-jose[cryptography]>=3.3.0  # JWT token generation/validation
 passlib[bcrypt]>=1.7.4            # Password hashing with bcrypt
 fastapi-csrf-protect>=0.3.4,<1.0  # CSRF protection (OWASP ASVS 4.2.2)
+zxcvbn>=4.5.0,<5.0                # Password strength estimation (Issue #23)
 
 # Optional: Monitoring (uncomment if needed)
 # prometheus-client>=0.19.0  # Prometheus metrics

@@ -19,7 +19,8 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, validator
+from zxcvbn import zxcvbn
 
 from app.auth import create_access_token, get_current_admin_user, get_current_user
 from app.models.user import (
@@ -41,10 +42,44 @@ router = APIRouter(prefix="/api", tags=["auth"])
 
 
 class PasswordUpdate(BaseModel):
-    """Schema for password update."""
+    """Schema for password update (Issue #23: with zxcvbn strength validation)."""
 
     current_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=12, max_length=128)
+
+    @validator("new_password")
+    def password_strength(cls, v):
+        """
+        Enhanced password policy (Issue #23: NIST SP 800-63B + zxcvbn strength meter).
+
+        Requirements:
+        - Minimum 12 characters (NIST recommendation)
+        - Strength score ≥ 3/4 (zxcvbn: strong or very strong)
+        - Detailed feedback on weak passwords
+        """
+        if len(v) < 12:
+            raise ValueError("Password must be at least 12 characters")
+
+        # Check password strength using zxcvbn (0-4 scale)
+        result = zxcvbn(v)
+        score = result['score']
+        feedback = result['feedback']
+
+        # Require score ≥ 3 (strong or very strong)
+        if score < 3:
+            # Build detailed error message from zxcvbn feedback
+            error_parts = [f"Password is too weak (strength: {score}/4, need ≥3)"]
+
+            if feedback.get('warning'):
+                error_parts.append(f"Warning: {feedback['warning']}")
+
+            if feedback.get('suggestions'):
+                suggestions = '; '.join(feedback['suggestions'])
+                error_parts.append(f"Suggestions: {suggestions}")
+
+            raise ValueError('. '.join(error_parts))
+
+        return v
 
 
 @router.post("/token", response_model=Token)
@@ -297,15 +332,16 @@ async def update_password(
             detail="Incorrect current password",
         )
 
-    # Validate new password (min 12 chars)
-    if len(password_update.new_password) < 12:
+    # Update password in database (includes history check - Issue #23)
+    try:
+        await user_db.update_password(current_user.id, password_update.new_password)
+    except ValueError as e:
+        # Password reuse detected (last 5 passwords)
+        logger.warning(f"Password update failed for {current_user.username}: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be at least 12 characters",
+            detail=str(e),
         )
-
-    # Update password in database
-    await user_db.update_password(current_user.id, password_update.new_password)
 
     logger.info(f"Password updated for user: {current_user.username}")
     return UserResponse(

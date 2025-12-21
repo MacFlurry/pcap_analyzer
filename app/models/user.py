@@ -18,6 +18,7 @@ from typing import Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, EmailStr, Field, validator
+from zxcvbn import zxcvbn
 
 
 class UserRole(str, Enum):
@@ -74,29 +75,39 @@ class UserCreate(BaseModel):
     @validator("password")
     def password_strength(cls, v):
         """
-        Password policy based on NIST SP 800-63B.
+        Enhanced password policy (Issue #23: NIST SP 800-63B + zxcvbn strength meter).
 
         Requirements:
         - Minimum 12 characters (NIST recommendation)
-        - No complexity requirements (counter-productive per NIST)
-        - Check against common passwords
+        - Strength score ≥ 3/4 (zxcvbn: strong or very strong)
+        - Not in common passwords list
+        - Detailed feedback on weak passwords
 
         Note: We don't enforce special chars/uppercase because NIST says
         it doesn't improve security and leads to predictable patterns.
+        Length + entropy (measured by zxcvbn) is more important.
         """
         if len(v) < 12:
             raise ValueError("Password must be at least 12 characters")
 
-        # Check against common passwords
-        common_passwords = [
-            "password123456",
-            "admin123456",
-            "123456789012",
-            "qwertyuiopas",
-            "passwordpassword",
-        ]
-        if v.lower() in common_passwords:
-            raise ValueError("Password is too common")
+        # Check password strength using zxcvbn (0-4 scale)
+        result = zxcvbn(v)
+        score = result['score']
+        feedback = result['feedback']
+
+        # Require score ≥ 3 (strong or very strong)
+        if score < 3:
+            # Build detailed error message from zxcvbn feedback
+            error_parts = [f"Password is too weak (strength: {score}/4, need ≥3)"]
+
+            if feedback.get('warning'):
+                error_parts.append(f"Warning: {feedback['warning']}")
+
+            if feedback.get('suggestions'):
+                suggestions = '; '.join(feedback['suggestions'])
+                error_parts.append(f"Suggestions: {suggestions}")
+
+            raise ValueError('. '.join(error_parts))
 
         return v
 

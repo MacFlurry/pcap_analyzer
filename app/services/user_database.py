@@ -74,6 +74,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 """
 
+# Password history table schema (Issue #23: Enhanced Password Policy)
+PASSWORD_HISTORY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS password_history (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    hashed_password TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_history_user_id ON password_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_history_user_created ON password_history(user_id, created_at DESC);
+"""
+
 # Modify tasks table to add owner_id (multi-tenant)
 TASKS_MIGRATION = """
 -- Add owner_id column to tasks table (if not exists)
@@ -107,7 +121,8 @@ class UserDatabaseService:
         if self.pool.db_type == "sqlite":
             # SQLite: create schema directly
             await self.pool.execute_script(USER_SCHEMA)
-            logger.info("SQLite user database initialized")
+            await self.pool.execute_script(PASSWORD_HISTORY_SCHEMA)
+            logger.info("SQLite user database initialized (with password_history table)")
         else:
             # PostgreSQL: schema managed by Alembic migrations
             logger.info("PostgreSQL user database connected (schema managed by Alembic)")
@@ -329,6 +344,9 @@ class UserDatabaseService:
             )
             await self.pool.execute(query, *params)
 
+            # Add initial password to history (Issue #23)
+            await self.add_password_to_history(user_id, hashed_password)
+
         except Exception as e:
             error_str = str(e).lower()
             if "username" in error_str or "unique" in error_str:
@@ -462,13 +480,21 @@ class UserDatabaseService:
 
     async def update_password(self, user_id: str, new_password: str):
         """
-        Update user's password.
+        Update user's password (Issue #23: with password history check).
         Also resets password_must_change flag to False.
 
         Args:
             user_id: User ID
             new_password: New password (will be hashed)
+
+        Raises:
+            ValueError: If password was used recently (reuse of last 5)
         """
+        # Check password reuse (Issue #23)
+        is_reused = await self.check_password_reuse(user_id, new_password)
+        if is_reused:
+            raise ValueError("Password was used recently. Please choose a different password (last 5 passwords cannot be reused)")
+
         hashed_password = self.hash_password(new_password)
 
         query, params = self.pool.translate_query(
@@ -477,7 +503,78 @@ class UserDatabaseService:
         )
         await self.pool.execute(query, *params)
 
+        # Add new password to history (Issue #23)
+        await self.add_password_to_history(user_id, hashed_password)
+
         logger.info(f"Password updated for user_id: {user_id} (password_must_change reset to False)")
+
+    async def add_password_to_history(self, user_id: str, hashed_password: str):
+        """
+        Add a password to user's password history (Issue #23).
+
+        Automatically cleans up old history entries (keeps only last 5).
+
+        Args:
+            user_id: User ID
+            hashed_password: Hashed password to add to history
+        """
+        from uuid import uuid4
+
+        # 1. Add new password to history
+        history_id = str(uuid4())
+        created_at = datetime.now(timezone.utc)
+
+        query, params = self.pool.translate_query(
+            "INSERT INTO password_history (id, user_id, hashed_password, created_at) VALUES (?, ?, ?, ?)",
+            (history_id, user_id, hashed_password, created_at),
+        )
+        await self.pool.execute(query, *params)
+
+        # 2. Clean up old history (keep only last 5)
+        # Get all history entries for this user ordered by created_at DESC
+        query, params = self.pool.translate_query(
+            "SELECT id FROM password_history WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        )
+        rows = await self.pool.fetch_all(query, *params)
+
+        # If more than 5 entries, delete the oldest ones
+        if len(rows) > 5:
+            old_ids = [row[0] for row in rows[5:]]  # Everything beyond the first 5
+
+            # Build DELETE query with IN clause
+            placeholders = ', '.join(['?' for _ in old_ids])
+            delete_query = f"DELETE FROM password_history WHERE id IN ({placeholders})"
+            delete_query, delete_params = self.pool.translate_query(delete_query, tuple(old_ids))
+            await self.pool.execute(delete_query, *delete_params)
+
+            logger.debug(f"Cleaned up {len(old_ids)} old password history entries for user {user_id}")
+
+    async def check_password_reuse(self, user_id: str, new_password: str) -> bool:
+        """
+        Check if new password was used recently (Issue #23: prevent reuse of last 5).
+
+        Args:
+            user_id: User ID
+            new_password: New password (plaintext) to check
+
+        Returns:
+            True if password was used before (reuse detected), False otherwise
+        """
+        # Get last 5 password hashes
+        query, params = self.pool.translate_query(
+            "SELECT hashed_password FROM password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 5",
+            (user_id,),
+        )
+        rows = await self.pool.fetch_all(query, *params)
+
+        # Check if new password matches any of the last 5
+        for row in rows:
+            old_hashed_password = row[0]
+            if self.verify_password(new_password, old_hashed_password):
+                return True  # Reuse detected!
+
+        return False  # Password not reused
 
     async def get_all_users(self, limit: int = 100) -> list[User]:
         """
