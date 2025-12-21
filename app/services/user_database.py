@@ -190,14 +190,19 @@ class UserDatabaseService:
                 )
                 await self.pool.execute(query, *params)
 
-                logger.warning("=" * 80)
-                logger.warning("🔐 ADMIN PASSWORD UPDATED FROM SECRETS FILE")
-                logger.warning("=" * 80)
-                logger.warning(f"Username: admin")
-                logger.warning(f"Password: {secrets_password}")
-                logger.warning("")
-                logger.warning("📝 Password synchronized with /var/run/secrets/admin_password")
-                logger.warning("=" * 80)
+                # Security: Display password to STDOUT only (not in persistent logs)
+                # CWE-532 mitigation: Passwords must not be stored in log files
+                print("=" * 80, flush=True)
+                print("🔐 ADMIN PASSWORD UPDATED FROM SECRETS FILE", flush=True)
+                print("=" * 80, flush=True)
+                print(f"Username: admin", flush=True)
+                print(f"Password: {secrets_password}", flush=True)
+                print("", flush=True)
+                print("📝 Password synchronized with /var/run/secrets/admin_password", flush=True)
+                print("=" * 80, flush=True)
+
+                # Log security event WITHOUT password (CWE-532 compliance)
+                logger.warning("🔐 Admin password updated from secrets file (password displayed on STDOUT only)")
 
                 return secrets_password
             else:
@@ -216,20 +221,25 @@ class UserDatabaseService:
 
             await self.create_user(admin_user_create, role=UserRole.ADMIN, auto_approve=True)
 
-            logger.warning("=" * 80)
-            logger.warning("🔒 ADMIN BRISE-GLACE ACCOUNT CREATED")
-            logger.warning("=" * 80)
-            logger.warning(f"Username: admin")
-            logger.warning(f"Password: {admin_password}")
-            logger.warning("")
+            # Security: Display password to STDOUT only (not in persistent logs)
+            # CWE-532 mitigation: Passwords must not be stored in log files
+            print("=" * 80, flush=True)
+            print("🔒 ADMIN BRISE-GLACE ACCOUNT CREATED", flush=True)
+            print("=" * 80, flush=True)
+            print(f"Username: admin", flush=True)
+            print(f"Password: {admin_password}", flush=True)
+            print("", flush=True)
             if secrets_password:
-                logger.warning("📝 Password loaded from /var/run/secrets/admin_password")
+                print("📝 Password loaded from /var/run/secrets/admin_password", flush=True)
             else:
-                logger.warning("🔐 Random password generated (no secrets file found)")
-            logger.warning("")
-            logger.warning("⚠️  CHANGE THIS PASSWORD IMMEDIATELY AFTER FIRST LOGIN!")
-            logger.warning("   Use: PUT /api/users/me with new password")
-            logger.warning("=" * 80)
+                print("🔐 Random password generated (no secrets file found)", flush=True)
+            print("", flush=True)
+            print("⚠️  CHANGE THIS PASSWORD IMMEDIATELY AFTER FIRST LOGIN!", flush=True)
+            print("   Use: PUT /api/users/me with new password", flush=True)
+            print("=" * 80, flush=True)
+
+            # Log security event WITHOUT password (CWE-532 compliance)
+            logger.warning("🔒 Admin brise-glace account created (password displayed on STDOUT only)")
 
             return admin_password
 

@@ -17,6 +17,7 @@ References:
 import logging
 import os
 import secrets
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -47,20 +48,46 @@ def get_secret_key() -> str:
         Secret key (32+ bytes for HS256)
 
     Security:
-    - Use SECRET_KEY env var in production (set in K8s secret)
-    - Generate random key if missing (development only)
+    - REQUIRED in production: Set SECRET_KEY env var (32+ chars)
+    - Development: Auto-generates random key (invalidates tokens on restart)
     - Minimum 32 bytes (256 bits) for HS256
+
+    Raises:
+        ValueError: If SECRET_KEY missing in production mode
+        ValueError: If SECRET_KEY shorter than 32 characters
     """
     secret_key = os.getenv("SECRET_KEY")
+    environment = os.getenv("ENVIRONMENT", "development").lower()
 
     if not secret_key:
+        # Check if running in production mode
+        if environment == "production":
+            # FAIL HARD in production mode without SECRET_KEY
+            error_msg = (
+                "🚨 SECURITY ERROR: SECRET_KEY environment variable is not set!\n"
+                "Production deployment REQUIRES a persistent SECRET_KEY.\n"
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"\n"
+                "Set it via environment variable or Kubernetes secret."
+            )
+            logger.error(error_msg)
+            raise ValueError("SECRET_KEY is required in production mode")
+
         # Development: generate random key (will be different on each restart)
+        print("=" * 80, file=sys.stderr)
+        print("⚠️  WARNING: SECRET_KEY not set - generating random key", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        print("This is OK for development, but causes issues:", file=sys.stderr)
+        print("  - All JWT tokens invalidated on app restart", file=sys.stderr)
+        print("  - Users must re-login after every deployment", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("For production, generate and set a persistent SECRET_KEY:", file=sys.stderr)
+        print("  python -c \"import secrets; print(secrets.token_hex(32))\"", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
         logger.warning("SECRET_KEY not set, generating random key (development only)")
-        logger.warning("Set SECRET_KEY env var for production!")
         secret_key = secrets.token_urlsafe(32)
 
     if len(secret_key) < 32:
-        raise ValueError("SECRET_KEY must be at least 32 characters")
+        raise ValueError("SECRET_KEY must be at least 32 characters (current length: {})".format(len(secret_key)))
 
     return secret_key
 

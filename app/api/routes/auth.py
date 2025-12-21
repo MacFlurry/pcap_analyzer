@@ -17,13 +17,14 @@ References:
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
 
 from app.auth import create_access_token, get_current_admin_user, get_current_user
 from app.models.user import Token, User, UserCreate, UserResponse, UserRole
 from app.services.user_database import get_user_db_service
+from app.utils.rate_limiter import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +39,12 @@ class PasswordUpdate(BaseModel):
 
 
 @router.post("/token", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     """
-    Login endpoint (OAuth2 password flow).
+    Login endpoint (OAuth2 password flow) with rate limiting.
 
     Args:
+        request: HTTP request (for IP-based rate limiting)
         form_data: OAuth2 form with username and password
 
     Returns:
@@ -51,6 +53,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     Raises:
         HTTPException 401: If credentials are invalid
         HTTPException 403: If account is not approved
+        HTTPException 429: If rate limit exceeded
+
+    Security:
+        - Rate limiting: Exponential backoff after failed attempts (OWASP ASVS V2.2.1)
+        - Username enumeration prevention: Generic error messages (CWE-204)
 
     Usage (cURL):
         curl -X POST http://localhost:8000/api/token \\
@@ -69,14 +76,30 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         const data = await response.json();
         localStorage.setItem('access_token', data.access_token);
     """
+    # Get client IP for rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Rate limiting check (OWASP ASVS V2.2.1)
+    rate_limiter = get_rate_limiter()
+    allowed, retry_after = rate_limiter.is_allowed(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed login attempts. Try again in {retry_after:.0f} seconds.",
+            headers={"Retry-After": str(int(retry_after))},
+        )
+
     user_db = get_user_db_service()
 
     # Get user by username first
     user = await user_db.get_user_by_username(form_data.username)
 
+    # Security: All failed login scenarios use generic logging to prevent username enumeration
+    # (OWASP ASVS V2.2.2, CWE-204 mitigation)
     if not user:
         # User doesn't exist - return generic error (prevent username enumeration)
-        logger.warning(f"Failed login attempt for unknown user: {form_data.username}")
+        logger.warning("Failed login attempt: invalid credentials")
+        rate_limiter.record_failure(client_ip)  # Track failed attempt
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -85,7 +108,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     # Check if account is active
     if not user.is_active:
-        logger.warning(f"Login attempt for inactive account: {form_data.username}")
+        logger.warning("Failed login attempt: account inactive")
+        rate_limiter.record_failure(client_ip)  # Track failed attempt
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account has been deactivated. Contact administrator.",
@@ -93,7 +117,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     # Check if account is approved
     if not user.is_approved:
-        logger.info(f"Login attempt for unapproved account: {form_data.username}")
+        logger.info("Failed login attempt: account pending approval")
+        rate_limiter.record_failure(client_ip)  # Track failed attempt
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account pending approval. Please wait for administrator approval.",
@@ -101,12 +126,16 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     # Verify password
     if not user_db.verify_password(form_data.password, user.hashed_password):
-        logger.warning(f"Failed login attempt (wrong password) for username: {form_data.username}")
+        logger.warning("Failed login attempt: invalid credentials")
+        rate_limiter.record_failure(client_ip)  # Track failed attempt
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Success - reset rate limiter
+    rate_limiter.record_success(client_ip)
 
     # Update last login
     await user_db.update_last_login(user.id)

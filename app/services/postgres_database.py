@@ -66,17 +66,39 @@ class DatabasePool:
         Create connection pool (PostgreSQL only).
 
         For SQLite, connections are created per-query.
+
+        Security:
+            Supports TLS/SSL for PostgreSQL connections via DATABASE_SSL_MODE env var.
+            Modes: disable, prefer (default), require, verify-full
         """
         if self.db_type == "postgresql":
             if not self.pool:
+                # TLS/SSL configuration (OWASP ASVS V2.8, CWE-319 mitigation)
+                ssl_mode = os.getenv("DATABASE_SSL_MODE", "prefer")  # prefer, require, verify-full, disable
+
+                # Map SSL mode to asyncpg parameter
+                ssl_param = None
+                if ssl_mode == "disable":
+                    ssl_param = False
+                elif ssl_mode == "prefer":
+                    ssl_param = "prefer"  # Try SSL, fallback to non-SSL (default for backward compatibility)
+                elif ssl_mode == "require":
+                    ssl_param = "require"  # Require SSL but don't verify certificate
+                elif ssl_mode == "verify-full":
+                    ssl_param = "verify-full"  # Require SSL and verify certificate (recommended for production)
+                else:
+                    logger.warning(f"Invalid DATABASE_SSL_MODE '{ssl_mode}', defaulting to 'prefer'")
+                    ssl_param = "prefer"
+
                 # Create asyncpg connection pool
                 self.pool = await asyncpg.create_pool(
                     self.database_url,
                     min_size=2,
                     max_size=10,
                     command_timeout=60,
+                    ssl=ssl_param,  # ✅ TLS/SSL enforcement
                 )
-                logger.info("PostgreSQL connection pool created")
+                logger.info(f"PostgreSQL connection pool created (SSL mode: {ssl_mode})")
         elif self.db_type == "sqlite":
             # SQLite: ensure data directory exists
             if self.sqlite_path:

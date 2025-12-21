@@ -3,10 +3,17 @@ SQLite to PostgreSQL data migration utility.
 
 Handles export/import of users, tasks, and progress_snapshots tables
 with proper type conversions (UUID, timestamps).
+
+Security:
+- Uses secure temporary files (tempfile.mkstemp) to prevent CWE-798
+- Sets restrictive file permissions (0o600) to prevent unauthorized access
+- Cleans up temporary files after migration
 """
 
 import asyncio
 import json
+import os
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -137,27 +144,49 @@ async def import_json_to_postgresql(postgres_url: str, input_file: str) -> None:
         )
 
 
-async def migrate_database(sqlite_url: str, postgres_url: str, temp_file: str = "/tmp/migration.json") -> Dict[str, int]:
+async def migrate_database(sqlite_url: str, postgres_url: str, temp_file: str = None) -> Dict[str, int]:
     """
     Full migration from SQLite to PostgreSQL.
 
     Args:
         sqlite_url: Source SQLite database URL
         postgres_url: Target PostgreSQL database URL
-        temp_file: Temporary JSON file for export
+        temp_file: Optional temporary JSON file path. If None, creates secure temp file.
 
     Returns:
         Statistics: {"users": count, "tasks": count, "progress_snapshots": count}
+
+    Security:
+        Uses secure temporary files with restrictive permissions (CWE-798 mitigation)
     """
-    # Export SQLite data
-    data = await export_sqlite_to_json(sqlite_url, temp_file)
+    # Create secure temporary file if not provided (CWE-798 mitigation)
+    cleanup_temp_file = False
+    if temp_file is None:
+        # Create secure temp file with restrictive permissions (0o600)
+        fd, temp_file = tempfile.mkstemp(suffix=".json", prefix="pcap_migration_")
+        os.close(fd)  # Close file descriptor, we'll use the path
+        os.chmod(temp_file, 0o600)  # Owner read/write only
+        cleanup_temp_file = True
 
-    # Import to PostgreSQL
-    await import_json_to_postgresql(postgres_url, temp_file)
+    try:
+        # Export SQLite data
+        data = await export_sqlite_to_json(sqlite_url, temp_file)
 
-    # Return statistics
-    return {
-        "users": len(data["users"]),
-        "tasks": len(data["tasks"]),
-        "progress_snapshots": len(data["progress_snapshots"])
-    }
+        # Import to PostgreSQL
+        await import_json_to_postgresql(postgres_url, temp_file)
+
+        # Return statistics
+        return {
+            "users": len(data["users"]),
+            "tasks": len(data["tasks"]),
+            "progress_snapshots": len(data["progress_snapshots"])
+        }
+    finally:
+        # Clean up temporary file if we created it (security best practice)
+        if cleanup_temp_file and os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except Exception as e:
+                # Log but don't fail migration
+                import logging
+                logging.warning(f"Failed to clean up temporary file {temp_file}: {e}")
