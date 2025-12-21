@@ -5075,17 +5075,21 @@ class HTMLReportGenerator:
         if results:
             rtt_stats = results.get("rtt", {}).get("flow_statistics", [])
             for flow_stat in rtt_stats:
-                flow_key = flow_stat.get("flow_key", "")
+                # flow_statistics has structure: {"key": N, "value": {...}}
+                flow_value = flow_stat.get("value", flow_stat)
+                flow_key = flow_value.get("flow_key", "")
                 rtt_by_flow[flow_key] = {
-                    "mean_rtt": flow_stat.get("mean_rtt", 0.0),
-                    "max_rtt": flow_stat.get("max_rtt", 0.0),
+                    "mean_rtt": flow_value.get("mean_rtt", 0.0),
+                    "max_rtt": flow_value.get("max_rtt", 0.0),
                 }
 
             retrans_stats = results.get("retransmission", {}).get("flow_statistics", [])
             for flow_stat in retrans_stats:
-                flow_key = flow_stat.get("flow_key", "")
+                # flow_statistics has structure: {"key": N, "value": {...}}
+                flow_value = flow_stat.get("value", flow_stat)
+                flow_key = flow_value.get("flow_key", "")
                 retrans_by_flow[flow_key] = {
-                    "retransmissions": flow_stat.get("retransmissions", 0),
+                    "retransmissions": flow_value.get("retransmissions", 0),
                 }
 
         # Analyze root cause
