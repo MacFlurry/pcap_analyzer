@@ -36,7 +36,7 @@ def _parse_timestamp(value) -> Optional[datetime]:
     return None
 
 
-# SQLite schema
+# SQLite schema (mirrors PostgreSQL schema for compatibility)
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
     task_id TEXT PRIMARY KEY,
@@ -53,12 +53,14 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_heartbeat TIMESTAMP,
     progress_percent INTEGER DEFAULT 0,
-    current_phase TEXT
+    current_phase TEXT,
+    owner_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_uploaded_at ON tasks(uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_heartbeat ON tasks(last_heartbeat);
+CREATE INDEX IF NOT EXISTS idx_owner_id ON tasks(owner_id);
 
 CREATE TABLE IF NOT EXISTS progress_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -122,13 +122,41 @@ def mock_analyzer(test_data_dir: Path) -> MockAnalyzerService:
     return MockAnalyzerService(data_dir=str(test_data_dir))
 
 
+def get_test_database_url(test_data_dir: Path, db_type: str = "auto") -> str:
+    """
+    Get database URL for tests.
+
+    Args:
+        test_data_dir: Test directory for SQLite database
+        db_type: "sqlite", "postgresql", or "auto" (detect from environment)
+
+    Returns:
+        Database URL string
+    """
+    if db_type == "postgresql" or (db_type == "auto" and os.getenv("DATABASE_URL", "").startswith("postgresql")):
+        # Use PostgreSQL from environment
+        return os.getenv(
+            "DATABASE_URL",
+            "postgresql://pcap:change_me_in_production@localhost:5432/pcap_analyzer_test"
+        )
+    else:
+        # Default to SQLite
+        db_path = test_data_dir / "test.db"
+        return f"sqlite:///{db_path}"
+
+
 @pytest.fixture
 async def test_db(test_data_dir: Path) -> AsyncGenerator[DatabaseService, None]:
-    """Create test database"""
-    db_path = test_data_dir / "test.db"
-    db = DatabaseService(db_path=str(db_path))
+    """Create test database (auto-detects SQLite vs PostgreSQL from DATABASE_URL)"""
+    database_url = get_test_database_url(test_data_dir, db_type="auto")
+
+    db = DatabaseService(database_url=database_url)
     await db.init_db()
     yield db
+
+    # Cleanup for PostgreSQL (TRUNCATE tables for isolation)
+    if database_url.startswith("postgresql"):
+        await cleanup_database(db.pool)
 
 
 @pytest.fixture

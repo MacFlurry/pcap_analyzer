@@ -18,7 +18,7 @@ pytestmark = pytest.mark.asyncio
 
 @pytest.fixture
 async def client():
-    """Create async HTTP client for testing with initialized databases."""
+    """Create async HTTP client for testing (supports SQLite and PostgreSQL via DATABASE_URL)."""
     tmpdir = Path(tempfile.mkdtemp(prefix="auth_test_"))
 
     try:
@@ -28,7 +28,12 @@ async def client():
         original_secret_key = os.environ.get("SECRET_KEY")
 
         os.environ["DATA_DIR"] = str(tmpdir)
-        os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/pcap_analyzer.db"
+
+        # Support DATABASE_URL override for PostgreSQL testing
+        # Only set to SQLite if not already configured
+        if not original_database_url:
+            os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/pcap_analyzer.db"
+
         os.environ["SECRET_KEY"] = "test-secret-key-for-jwt-signing-in-tests-minimum-32-chars"
 
         # Clear singletons
@@ -77,6 +82,20 @@ async def client():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac
     finally:
+        # Cleanup PostgreSQL if used (TRUNCATE tables for isolation)
+        current_database_url = os.environ.get("DATABASE_URL", "")
+        if current_database_url.startswith("postgresql"):
+            from app.services.user_database import get_user_db_service
+            user_db = get_user_db_service()
+            if user_db and user_db.pool:
+                try:
+                    await user_db.pool.execute("""
+                        TRUNCATE TABLE progress_snapshots, tasks, users
+                        RESTART IDENTITY CASCADE
+                    """)
+                except Exception:
+                    pass  # Tables might not exist
+
         shutil.rmtree(tmpdir, ignore_errors=True)
 
         # Restore environment variables
