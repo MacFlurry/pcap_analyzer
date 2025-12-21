@@ -299,6 +299,9 @@ curl -X POST http://localhost:8000/api/token \
 | PUT | `/api/admin/users/{id}/block` | Block user account | ✅ | ✅ |
 | PUT | `/api/admin/users/{id}/unblock` | Unblock user account | ✅ | ✅ |
 | DELETE | `/api/admin/users/{id}` | Delete user account | ✅ | ✅ |
+| POST | `/api/admin/users/bulk/approve` | Bulk approve multiple users | ✅ | ✅ |
+| POST | `/api/admin/users/bulk/block` | Bulk block multiple users | ✅ | ✅ |
+| POST | `/api/admin/users/bulk/unblock` | Bulk unblock multiple users | ✅ | ✅ |
 
 ---
 
@@ -560,7 +563,31 @@ if (pendingUsers.length > 0) {
   console.log('Approved user:', approved);
 }
 
-// 5. View all tasks (admin sees everyone's tasks)
+// 5. Bulk approve all pending users (Issue #22)
+if (pendingUsers.length > 1) {
+  // Get CSRF token
+  const csrfResponse = await fetchAPI('/api/csrf/token', {
+    headers: authHeaders
+  });
+
+  const bulkAuthHeaders = {
+    ...authHeaders,
+    'X-CSRF-Token': csrfResponse.csrf_token
+  };
+
+  const userIds = pendingUsers.map(u => u.id);
+
+  const bulkResult = await fetchAPI('/api/admin/users/bulk/approve', {
+    method: 'POST',
+    headers: bulkAuthHeaders,
+    body: JSON.stringify({ user_ids: userIds })
+  });
+
+  console.log(`Bulk approve: ${bulkResult.success}/${bulkResult.total} succeeded`);
+  console.log('Details:', bulkResult.results);
+}
+
+// 6. View all tasks (admin sees everyone's tasks)
 const allTasks = await fetchAPI('/api/history', {
   headers: authHeaders
 });

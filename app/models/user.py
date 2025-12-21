@@ -133,3 +133,46 @@ class TokenData(BaseModel):
     username: str
     role: UserRole
     exp: datetime  # Expiration
+
+
+class BulkUserActionRequest(BaseModel):
+    """Schema for bulk user actions (approve, block, unblock)."""
+
+    user_ids: list[str] = Field(..., min_items=1, max_items=100, description="List of user IDs to process")
+
+    @validator("user_ids")
+    def validate_user_ids(cls, v):
+        """Ensure user IDs are unique and not empty."""
+        if not v:
+            raise ValueError("user_ids list cannot be empty")
+
+        # Remove duplicates while preserving order
+        unique_ids = []
+        seen = set()
+        for user_id in v:
+            if user_id not in seen:
+                unique_ids.append(user_id)
+                seen.add(user_id)
+
+        if len(unique_ids) != len(v):
+            raise ValueError("user_ids list contains duplicates")
+
+        return unique_ids
+
+
+class BulkActionResult(BaseModel):
+    """Result for a single user in a bulk action."""
+
+    user_id: str
+    username: Optional[str] = None
+    status: str  # "success" or "failed"
+    reason: Optional[str] = None  # Failure reason if status="failed"
+
+
+class BulkUserActionResponse(BaseModel):
+    """Response for bulk user actions."""
+
+    total: int = Field(..., description="Total number of users processed")
+    success: int = Field(..., description="Number of successful actions")
+    failed: int = Field(..., description="Number of failed actions")
+    results: list[BulkActionResult] = Field(..., description="Detailed results for each user")

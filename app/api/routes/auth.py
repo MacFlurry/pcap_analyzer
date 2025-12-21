@@ -22,7 +22,16 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
 
 from app.auth import create_access_token, get_current_admin_user, get_current_user
-from app.models.user import Token, User, UserCreate, UserResponse, UserRole
+from app.models.user import (
+    BulkActionResult,
+    BulkUserActionRequest,
+    BulkUserActionResponse,
+    Token,
+    User,
+    UserCreate,
+    UserResponse,
+    UserRole,
+)
 from app.services.user_database import get_user_db_service
 from app.utils.rate_limiter import get_rate_limiter
 
@@ -794,3 +803,424 @@ async def create_user_by_admin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create user: {str(e)}",
         )
+
+
+@router.post("/admin/users/bulk/approve", response_model=BulkUserActionResponse)
+async def bulk_approve_users(
+    request: BulkUserActionRequest,
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Bulk approve multiple user accounts (admin only).
+
+    Approves multiple users in a single request. Users that are already approved
+    or don't exist will be marked as failed in the response.
+
+    Args:
+        request: List of user IDs to approve
+        admin: Current admin user (from JWT token)
+
+    Returns:
+        Summary of bulk operation (success count, failed count, detailed results)
+
+    Requires:
+        Admin role
+
+    Example Request:
+        POST /api/admin/users/bulk/approve
+        {
+            "user_ids": [
+                "550e8400-e29b-41d4-a716-446655440000",
+                "660e8400-e29b-41d4-a716-446655440001"
+            ]
+        }
+
+    Example Response:
+        {
+            "total": 2,
+            "success": 1,
+            "failed": 1,
+            "results": [
+                {
+                    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "username": "alice",
+                    "status": "success"
+                },
+                {
+                    "user_id": "660e8400-e29b-41d4-a716-446655440001",
+                    "username": "bob",
+                    "status": "failed",
+                    "reason": "User is already approved"
+                }
+            ]
+        }
+    """
+    user_db = get_user_db_service()
+    results = []
+    success_count = 0
+    failed_count = 0
+
+    for user_id in request.user_ids:
+        try:
+            # Get user
+            user = await user_db.get_user_by_id(user_id)
+
+            if not user:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        status="failed",
+                        reason="User not found",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Check if already approved
+            if user.is_approved:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        username=user.username,
+                        status="failed",
+                        reason="User is already approved",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Approve user
+            approval_success = await user_db.approve_user(user_id, admin.id)
+
+            if not approval_success:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        username=user.username,
+                        status="failed",
+                        reason="Failed to approve user (database error)",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Success
+            results.append(
+                BulkActionResult(
+                    user_id=user_id,
+                    username=user.username,
+                    status="success",
+                )
+            )
+            success_count += 1
+
+            # Audit log
+            logger.warning(f"🔓 AUDIT: Admin {admin.username} approved user {user.username} (id: {user_id}) [BULK]")
+
+        except Exception as e:
+            logger.error(f"Error approving user {user_id}: {e}")
+            results.append(
+                BulkActionResult(
+                    user_id=user_id,
+                    status="failed",
+                    reason=f"Internal error: {str(e)}",
+                )
+            )
+            failed_count += 1
+
+    return BulkUserActionResponse(
+        total=len(request.user_ids),
+        success=success_count,
+        failed=failed_count,
+        results=results,
+    )
+
+
+@router.post("/admin/users/bulk/block", response_model=BulkUserActionResponse)
+async def bulk_block_users(
+    request: BulkUserActionRequest,
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Bulk block multiple user accounts (admin only).
+
+    Blocks multiple users in a single request. Sets is_active=False for each user.
+
+    Args:
+        request: List of user IDs to block
+        admin: Current admin user (from JWT token)
+
+    Returns:
+        Summary of bulk operation (success count, failed count, detailed results)
+
+    Safety Features:
+        - Cannot block your own account
+        - Cannot block other admin accounts
+        - Skips users that are already blocked
+
+    Requires:
+        Admin role
+
+    Example Request:
+        POST /api/admin/users/bulk/block
+        {
+            "user_ids": [
+                "550e8400-e29b-41d4-a716-446655440000",
+                "660e8400-e29b-41d4-a716-446655440001"
+            ]
+        }
+
+    Example Response:
+        {
+            "total": 2,
+            "success": 2,
+            "failed": 0,
+            "results": [
+                {
+                    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "username": "alice",
+                    "status": "success"
+                },
+                {
+                    "user_id": "660e8400-e29b-41d4-a716-446655440001",
+                    "username": "bob",
+                    "status": "success"
+                }
+            ]
+        }
+    """
+    user_db = get_user_db_service()
+    results = []
+    success_count = 0
+    failed_count = 0
+
+    for user_id in request.user_ids:
+        try:
+            # Get user
+            user = await user_db.get_user_by_id(user_id)
+
+            if not user:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        status="failed",
+                        reason="User not found",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Prevent self-blocking
+            if user.id == admin.id:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        username=user.username,
+                        status="failed",
+                        reason="Cannot block your own account",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Prevent blocking other admins
+            if user.role == UserRole.ADMIN:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        username=user.username,
+                        status="failed",
+                        reason="Cannot block admin accounts",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Check if already blocked
+            if not user.is_active:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        username=user.username,
+                        status="failed",
+                        reason="User is already blocked",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Block user
+            block_success = await user_db.block_user(user_id)
+
+            if not block_success:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        username=user.username,
+                        status="failed",
+                        reason="Failed to block user (database error)",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Success
+            results.append(
+                BulkActionResult(
+                    user_id=user_id,
+                    username=user.username,
+                    status="success",
+                )
+            )
+            success_count += 1
+
+            # Audit log
+            logger.warning(f"🔒 AUDIT: Admin {admin.username} blocked user {user.username} (id: {user_id}) [BULK]")
+
+        except Exception as e:
+            logger.error(f"Error blocking user {user_id}: {e}")
+            results.append(
+                BulkActionResult(
+                    user_id=user_id,
+                    status="failed",
+                    reason=f"Internal error: {str(e)}",
+                )
+            )
+            failed_count += 1
+
+    return BulkUserActionResponse(
+        total=len(request.user_ids),
+        success=success_count,
+        failed=failed_count,
+        results=results,
+    )
+
+
+@router.post("/admin/users/bulk/unblock", response_model=BulkUserActionResponse)
+async def bulk_unblock_users(
+    request: BulkUserActionRequest,
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Bulk unblock multiple user accounts (admin only).
+
+    Unblocks multiple users in a single request. Sets is_active=True for each user.
+
+    Args:
+        request: List of user IDs to unblock
+        admin: Current admin user (from JWT token)
+
+    Returns:
+        Summary of bulk operation (success count, failed count, detailed results)
+
+    Requires:
+        Admin role
+
+    Example Request:
+        POST /api/admin/users/bulk/unblock
+        {
+            "user_ids": [
+                "550e8400-e29b-41d4-a716-446655440000",
+                "660e8400-e29b-41d4-a716-446655440001"
+            ]
+        }
+
+    Example Response:
+        {
+            "total": 2,
+            "success": 1,
+            "failed": 1,
+            "results": [
+                {
+                    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "username": "alice",
+                    "status": "success"
+                },
+                {
+                    "user_id": "660e8400-e29b-41d4-a716-446655440001",
+                    "username": "bob",
+                    "status": "failed",
+                    "reason": "User is already active"
+                }
+            ]
+        }
+    """
+    user_db = get_user_db_service()
+    results = []
+    success_count = 0
+    failed_count = 0
+
+    for user_id in request.user_ids:
+        try:
+            # Get user
+            user = await user_db.get_user_by_id(user_id)
+
+            if not user:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        status="failed",
+                        reason="User not found",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Check if already active
+            if user.is_active:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        username=user.username,
+                        status="failed",
+                        reason="User is already active",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Unblock user
+            unblock_success = await user_db.unblock_user(user_id)
+
+            if not unblock_success:
+                results.append(
+                    BulkActionResult(
+                        user_id=user_id,
+                        username=user.username,
+                        status="failed",
+                        reason="Failed to unblock user (database error)",
+                    )
+                )
+                failed_count += 1
+                continue
+
+            # Success
+            results.append(
+                BulkActionResult(
+                    user_id=user_id,
+                    username=user.username,
+                    status="success",
+                )
+            )
+            success_count += 1
+
+            # Audit log
+            logger.warning(f"🔓 AUDIT: Admin {admin.username} unblocked user {user.username} (id: {user_id}) [BULK]")
+
+        except Exception as e:
+            logger.error(f"Error unblocking user {user_id}: {e}")
+            results.append(
+                BulkActionResult(
+                    user_id=user_id,
+                    status="failed",
+                    reason=f"Internal error: {str(e)}",
+                )
+            )
+            failed_count += 1
+
+    return BulkUserActionResponse(
+        total=len(request.user_ids),
+        success=success_count,
+        failed=failed_count,
+        results=results,
+    )

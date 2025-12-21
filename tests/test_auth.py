@@ -705,3 +705,319 @@ class TestSessionInvalidation:
         )
 
         assert response.status_code == 401
+
+
+class TestBulkUserActions:
+    """Tests for bulk user actions (Issue #22)."""
+
+    @pytest.mark.asyncio
+    async def test_bulk_approve_success(self, client: AsyncClient):
+        """Test bulk approve with all users succeeding."""
+        # Create 3 unapproved users
+        users_data = [
+            {"username": "bulk1", "email": "bulk1@test.com", "password": "bulkpass123456"},
+            {"username": "bulk2", "email": "bulk2@test.com", "password": "bulkpass123456"},
+            {"username": "bulk3", "email": "bulk3@test.com", "password": "bulkpass123456"},
+        ]
+
+        user_ids = []
+        for user_data in users_data:
+            response = await client.post("/api/register", json=user_data)
+            assert response.status_code == 201
+            user_ids.append(response.json()["id"])
+
+        # Login as admin
+        admin_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        admin_token = admin_response.json()["access_token"]
+
+        # Bulk approve all 3 users
+        response = await client.post(
+            "/api/admin/users/bulk/approve",
+            json={"user_ids": user_ids},
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 3
+        assert data["success"] == 3
+        assert data["failed"] == 0
+        assert len(data["results"]) == 3
+        for result in data["results"]:
+            assert result["status"] == "success"
+            assert result["username"] in ["bulk1", "bulk2", "bulk3"]
+
+    @pytest.mark.asyncio
+    async def test_bulk_approve_mixed_results(self, client: AsyncClient):
+        """Test bulk approve with some users already approved."""
+        # Create 2 unapproved users
+        user1_response = await client.post(
+            "/api/register",
+            json={"username": "mixed1", "email": "mixed1@test.com", "password": "mixedpass123456"}
+        )
+        user1_id = user1_response.json()["id"]
+
+        user2_response = await client.post(
+            "/api/register",
+            json={"username": "mixed2", "email": "mixed2@test.com", "password": "mixedpass123456"}
+        )
+        user2_id = user2_response.json()["id"]
+
+        # Login as admin
+        admin_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        admin_token = admin_response.json()["access_token"]
+
+        # Approve first user
+        await client.put(
+            f"/api/admin/users/{user1_id}/approve",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        # Bulk approve both users (one already approved, one not)
+        response = await client.post(
+            "/api/admin/users/bulk/approve",
+            json={"user_ids": [user1_id, user2_id]},
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+        assert data["success"] == 1  # Only user2
+        assert data["failed"] == 1   # user1 already approved
+
+        # Check results
+        results = data["results"]
+        user1_result = next(r for r in results if r["user_id"] == user1_id)
+        user2_result = next(r for r in results if r["user_id"] == user2_id)
+
+        assert user1_result["status"] == "failed"
+        assert "already approved" in user1_result["reason"].lower()
+
+        assert user2_result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_bulk_approve_nonexistent_user(self, client: AsyncClient):
+        """Test bulk approve with nonexistent user ID."""
+        # Login as admin
+        admin_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        admin_token = admin_response.json()["access_token"]
+
+        # Try to approve nonexistent user
+        fake_id = "00000000-0000-0000-0000-000000000000"
+        response = await client.post(
+            "/api/admin/users/bulk/approve",
+            json={"user_ids": [fake_id]},
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        assert response.status_code == 200  # Bulk operations don't fail completely
+        data = response.json()
+        assert data["total"] == 1
+        assert data["success"] == 0
+        assert data["failed"] == 1
+        assert data["results"][0]["status"] == "failed"
+        assert "not found" in data["results"][0]["reason"].lower()
+
+    @pytest.mark.asyncio
+    async def test_bulk_approve_unauthorized(self, client: AsyncClient):
+        """Test bulk approve without admin role (403)."""
+        # Create and login as regular user
+        await client.post(
+            "/api/register",
+            json={"username": "regular", "email": "regular@test.com", "password": "regularpass12"}
+        )
+
+        # Admin approves regular user
+        admin_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        admin_token = admin_response.json()["access_token"]
+
+        regular_user_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        # Approve regular user first
+        users_response = await client.get(
+            "/api/users",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        regular_user_id = next(u["id"] for u in users_response.json() if u["username"] == "regular")
+        await client.put(
+            f"/api/admin/users/{regular_user_id}/approve",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        # Login as regular user
+        regular_response = await client.post(
+            "/api/token",
+            data={"username": "regular", "password": "regularpass12"}
+        )
+        regular_token = regular_response.json()["access_token"]
+
+        # Try bulk approve as regular user (should fail)
+        response = await client.post(
+            "/api/admin/users/bulk/approve",
+            json={"user_ids": [regular_user_id]},
+            headers={"Authorization": f"Bearer {regular_token}"}
+        )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_bulk_block_success(self, client: AsyncClient):
+        """Test bulk block with all users succeeding."""
+        # Create and approve 2 users
+        user_ids = []
+        for i in range(2):
+            user_response = await client.post(
+                "/api/register",
+                json={
+                    "username": f"blocktest{i}",
+                    "email": f"blocktest{i}@test.com",
+                    "password": "blocktestpass12"
+                }
+            )
+            user_ids.append(user_response.json()["id"])
+
+        # Login as admin and approve users
+        admin_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        admin_token = admin_response.json()["access_token"]
+
+        for user_id in user_ids:
+            await client.put(
+                f"/api/admin/users/{user_id}/approve",
+                headers={"Authorization": f"Bearer {admin_token}"}
+            )
+
+        # Bulk block both users
+        response = await client.post(
+            "/api/admin/users/bulk/block",
+            json={"user_ids": user_ids},
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+        assert data["success"] == 2
+        assert data["failed"] == 0
+
+    @pytest.mark.asyncio
+    async def test_bulk_block_cannot_block_self(self, client: AsyncClient):
+        """Test bulk block prevents blocking your own account."""
+        # Login as admin
+        admin_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        admin_token = admin_response.json()["access_token"]
+
+        # Get admin user ID
+        me_response = await client.get(
+            "/api/users/me",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        admin_id = me_response.json()["id"]
+
+        # Try to block self
+        response = await client.post(
+            "/api/admin/users/bulk/block",
+            json={"user_ids": [admin_id]},
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        assert response.status_code == 200  # Bulk doesn't fail completely
+        data = response.json()
+        assert data["total"] == 1
+        assert data["success"] == 0
+        assert data["failed"] == 1
+        assert "cannot block your own account" in data["results"][0]["reason"].lower()
+
+    @pytest.mark.asyncio
+    async def test_bulk_unblock_success(self, client: AsyncClient):
+        """Test bulk unblock with all users succeeding."""
+        # Create, approve, and block 2 users
+        user_ids = []
+        for i in range(2):
+            user_response = await client.post(
+                "/api/register",
+                json={
+                    "username": f"unblocktest{i}",
+                    "email": f"unblocktest{i}@test.com",
+                    "password": "unblocktestpass"
+                }
+            )
+            user_ids.append(user_response.json()["id"])
+
+        # Login as admin
+        admin_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        admin_token = admin_response.json()["access_token"]
+
+        # Approve and block users
+        for user_id in user_ids:
+            await client.put(
+                f"/api/admin/users/{user_id}/approve",
+                headers={"Authorization": f"Bearer {admin_token}"}
+            )
+            await client.put(
+                f"/api/admin/users/{user_id}/block",
+                headers={"Authorization": f"Bearer {admin_token}"}
+            )
+
+        # Bulk unblock both users
+        response = await client.post(
+            "/api/admin/users/bulk/unblock",
+            json={"user_ids": user_ids},
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+        assert data["success"] == 2
+        assert data["failed"] == 0
+
+    @pytest.mark.asyncio
+    async def test_bulk_actions_invalid_request(self, client: AsyncClient):
+        """Test bulk actions with invalid request (empty list, duplicates)."""
+        # Login as admin
+        admin_response = await client.post(
+            "/api/token",
+            data={"username": "admin", "password": "testpass1234"}
+        )
+        admin_token = admin_response.json()["access_token"]
+
+        # Test with empty list (should fail validation)
+        response = await client.post(
+            "/api/admin/users/bulk/approve",
+            json={"user_ids": []},
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 422  # Validation error
+
+        # Test with duplicates (should fail validation)
+        fake_id = "00000000-0000-0000-0000-000000000000"
+        response = await client.post(
+            "/api/admin/users/bulk/approve",
+            json={"user_ids": [fake_id, fake_id]},  # Duplicate IDs
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 422  # Validation error
