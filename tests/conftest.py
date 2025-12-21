@@ -23,6 +23,38 @@ from app.services.database import DatabaseService
 from app.services.worker import AnalysisWorker
 
 
+# =============================================================================
+# Pytest Configuration for Dual-Database Testing (Issue #26 Phase 2)
+# =============================================================================
+
+
+def pytest_configure(config):
+    """Register custom markers for dual-database testing."""
+    config.addinivalue_line(
+        "markers",
+        "db_parametrize: Run test against both SQLite and PostgreSQL (auto-parametrized)"
+    )
+
+
+def pytest_generate_tests(metafunc):
+    """
+    Auto-parametrize tests marked with @pytest.mark.db_parametrize.
+
+    Tests with 'db_type' in their signature will be run twice:
+    - Once with db_type="sqlite"
+    - Once with db_type="postgresql"
+
+    The test_db fixture will automatically use the correct database based on db_type.
+    """
+    if "db_type" in metafunc.fixturenames and metafunc.definition.get_closest_marker("db_parametrize"):
+        metafunc.parametrize("db_type", ["sqlite", "postgresql"])
+
+
+# =============================================================================
+# Test Fixtures
+# =============================================================================
+
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create event loop for async tests"""
@@ -146,9 +178,23 @@ def get_test_database_url(test_data_dir: Path, db_type: str = "auto") -> str:
 
 
 @pytest.fixture
-async def test_db(test_data_dir: Path) -> AsyncGenerator[DatabaseService, None]:
-    """Create test database (auto-detects SQLite vs PostgreSQL from DATABASE_URL)"""
-    database_url = get_test_database_url(test_data_dir, db_type="auto")
+async def test_db(test_data_dir: Path, request) -> AsyncGenerator[DatabaseService, None]:
+    """
+    Create test database (auto-detects SQLite vs PostgreSQL from DATABASE_URL).
+
+    Supports dual-database testing via @pytest.mark.db_parametrize:
+    - If test has db_type parameter, uses that to select database
+    - Otherwise auto-detects from DATABASE_URL environment variable
+    """
+    # Check if test is parametrized with db_type
+    db_type = "auto"
+    if hasattr(request, "param"):
+        db_type = request.param
+    elif "db_type" in request.fixturenames:
+        # Get db_type from parametrized test argument
+        db_type = request.getfixturevalue("db_type")
+
+    database_url = get_test_database_url(test_data_dir, db_type=db_type)
 
     db = DatabaseService(database_url=database_url)
     await db.init_db()

@@ -1,5 +1,8 @@
 """
 Tests unitaires pour le service database
+
+Note: All tests are parametrized to run on both SQLite and PostgreSQL
+via @pytest.mark.db_parametrize (Issue #26 Phase 2)
 """
 
 from datetime import datetime
@@ -12,8 +15,9 @@ from app.services.database import DatabaseService
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_init_db(test_db):
-    """Test database initialization"""
+@pytest.mark.db_parametrize
+async def test_init_db(test_db, db_type):
+    """Test database initialization (SQLite and PostgreSQL)"""
     # Database should be initialized
     assert test_db is not None
 
@@ -24,8 +28,9 @@ async def test_init_db(test_db):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_task(test_db):
-    """Test task creation"""
+@pytest.mark.db_parametrize
+async def test_create_task(test_db, db_type):
+    """Test task creation (SQLite and PostgreSQL)"""
     task = await test_db.create_task(task_id="test-123", filename="test.pcap", file_size_bytes=1024)
 
     assert task.task_id == "test-123"
@@ -36,8 +41,9 @@ async def test_create_task(test_db):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_task(test_db):
-    """Test retrieving a task"""
+@pytest.mark.db_parametrize
+async def test_get_task(test_db, db_type):
+    """Test retrieving a task (SQLite and PostgreSQL)"""
     # Create task
     await test_db.create_task(task_id="test-456", filename="test2.pcap", file_size_bytes=2048)
 
@@ -51,16 +57,18 @@ async def test_get_task(test_db):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_nonexistent_task(test_db):
-    """Test retrieving a non-existent task"""
+@pytest.mark.db_parametrize
+async def test_get_nonexistent_task(test_db, db_type):
+    """Test retrieving a non-existent task (SQLite and PostgreSQL)"""
     task = await test_db.get_task("nonexistent")
     assert task is None
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_status(test_db):
-    """Test updating task status"""
+@pytest.mark.db_parametrize
+async def test_update_status(test_db, db_type):
+    """Test updating task status (SQLite and PostgreSQL)"""
     # Create task
     await test_db.create_task(task_id="test-789", filename="test3.pcap", file_size_bytes=4096)
 
@@ -74,8 +82,9 @@ async def test_update_status(test_db):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_results(test_db):
-    """Test updating analysis results"""
+@pytest.mark.db_parametrize
+async def test_update_results(test_db, db_type):
+    """Test updating analysis results (SQLite and PostgreSQL)"""
     # Create task
     await test_db.create_task(task_id="test-results", filename="results.pcap", file_size_bytes=8192)
 
@@ -98,8 +107,9 @@ async def test_update_results(test_db):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_recent_tasks(test_db):
-    """Test retrieving recent tasks"""
+@pytest.mark.db_parametrize
+async def test_get_recent_tasks(test_db, db_type):
+    """Test retrieving recent tasks (SQLite and PostgreSQL)"""
     # Create multiple tasks
     for i in range(5):
         await test_db.create_task(task_id=f"task-{i}", filename=f"test{i}.pcap", file_size_bytes=1024 * i)
@@ -114,8 +124,9 @@ async def test_get_recent_tasks(test_db):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_stats(test_db):
-    """Test getting statistics"""
+@pytest.mark.db_parametrize
+async def test_get_stats(test_db, db_type):
+    """Test getting statistics (SQLite and PostgreSQL)"""
     # Create tasks with different statuses
     await test_db.create_task("pending-1", "p1.pcap", 100)
     await test_db.create_task("pending-2", "p2.pcap", 100)
@@ -137,8 +148,9 @@ async def test_get_stats(test_db):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_mark_expired_tasks(test_db):
-    """Test marking expired tasks"""
+@pytest.mark.db_parametrize
+async def test_mark_expired_tasks(test_db, db_type):
+    """Test marking expired tasks (SQLite and PostgreSQL)"""
     # Create old task (would need to manipulate timestamps in real test)
     # For now, just test the function doesn't crash
     count = await test_db.mark_expired_tasks(retention_hours=24)
