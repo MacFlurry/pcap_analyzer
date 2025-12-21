@@ -50,6 +50,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     Raises:
         HTTPException 401: If credentials are invalid
+        HTTPException 403: If account is not approved
 
     Usage (cURL):
         curl -X POST http://localhost:8000/api/token \\
@@ -70,23 +71,52 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """
     user_db = get_user_db_service()
 
-    # Authenticate user
-    user = await user_db.authenticate_user(form_data.username, form_data.password)
+    # Get user by username first
+    user = await user_db.get_user_by_username(form_data.username)
 
     if not user:
-        logger.warning(f"Failed login attempt for username: {form_data.username}")
+        # User doesn't exist - return generic error (prevent username enumeration)
+        logger.warning(f"Failed login attempt for unknown user: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Check if account is active
+    if not user.is_active:
+        logger.warning(f"Login attempt for inactive account: {form_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account has been deactivated. Contact administrator.",
+        )
+
+    # Check if account is approved
+    if not user.is_approved:
+        logger.info(f"Login attempt for unapproved account: {form_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account pending approval. Please wait for administrator approval.",
+        )
+
+    # Verify password
+    if not user_db.verify_password(form_data.password, user.hashed_password):
+        logger.warning(f"Failed login attempt (wrong password) for username: {form_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Update last login
+    await user_db.update_last_login(user.id)
+
     # Create access token
     access_token = create_access_token(user)
 
-    logger.info(f"User logged in: {user.username} (role: {user.role.value})")
+    logger.info(f"User logged in: {user.username} (role: {user.role.value}, password_must_change: {user.password_must_change})")
 
-    return Token(access_token=access_token, token_type="bearer", expires_in=1800)
+    return Token(access_token=access_token, token_type="bearer", expires_in=1800, password_must_change=user.password_must_change)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -135,6 +165,9 @@ async def register(user_data: UserCreate):
             email=user.email,
             role=user.role,
             is_active=user.is_active,
+            is_approved=user.is_approved,
+            approved_by=user.approved_by,
+            approved_at=user.approved_at,
             created_at=user.created_at,
             last_login=user.last_login,
         )
@@ -175,6 +208,9 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         email=current_user.email,
         role=current_user.role,
         is_active=current_user.is_active,
+        is_approved=current_user.is_approved,
+        approved_by=current_user.approved_by,
+        approved_at=current_user.approved_at,
         created_at=current_user.created_at,
         last_login=current_user.last_login,
     )
@@ -240,6 +276,9 @@ async def update_password(
         email=current_user.email,
         role=current_user.role,
         is_active=current_user.is_active,
+        is_approved=current_user.is_approved,
+        approved_by=current_user.approved_by,
+        approved_at=current_user.approved_at,
         created_at=current_user.created_at,
         last_login=current_user.last_login,
     )
@@ -283,8 +322,446 @@ async def get_all_users(
             email=user.email,
             role=user.role,
             is_active=user.is_active,
+            is_approved=user.is_approved,
+            approved_by=user.approved_by,
+            approved_at=user.approved_at,
             created_at=user.created_at,
             last_login=user.last_login,
         )
         for user in users
     ]
+
+
+@router.put("/admin/users/{user_id}/approve", response_model=UserResponse)
+async def approve_user(
+    user_id: str,
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Approve a user account (admin only).
+
+    Args:
+        user_id: User ID to approve
+        admin: Current admin user (from JWT token)
+
+    Returns:
+        Updated user info
+
+    Raises:
+        HTTPException 404: If user not found
+        HTTPException 400: If user is already approved
+
+    Requires:
+        Admin role
+
+    Usage (JavaScript):
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(`/api/admin/users/${userId}/approve`, {
+            method: 'PUT',
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const updatedUser = await response.json();
+    """
+    user_db = get_user_db_service()
+
+    # Get user to approve
+    user = await user_db.get_user_by_id(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found",
+        )
+
+    if user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User {user.username} is already approved",
+        )
+
+    # Approve user
+    success = await user_db.approve_user(user_id, admin.id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to approve user",
+        )
+
+    # Fetch updated user
+    updated_user = await user_db.get_user_by_id(user_id)
+
+    logger.warning(f"🔓 AUDIT: Admin {admin.username} approved user {user.username} (id: {user_id})")
+
+    return UserResponse(
+        id=updated_user.id,
+        username=updated_user.username,
+        email=updated_user.email,
+        role=updated_user.role,
+        is_active=updated_user.is_active,
+        is_approved=updated_user.is_approved,
+        approved_by=updated_user.approved_by,
+        approved_at=updated_user.approved_at,
+        created_at=updated_user.created_at,
+        last_login=updated_user.last_login,
+    )
+
+
+@router.put("/admin/users/{user_id}/block", response_model=UserResponse)
+async def block_user(
+    user_id: str,
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Block a user account (admin only).
+
+    Sets is_active=False, preventing login.
+
+    Args:
+        user_id: User ID to block
+        admin: Current admin user (from JWT token)
+
+    Returns:
+        Updated user info
+
+    Raises:
+        HTTPException 404: If user not found
+        HTTPException 400: If trying to block self or another admin
+        HTTPException 400: If user is already blocked
+
+    Requires:
+        Admin role
+
+    Usage (JavaScript):
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(`/api/admin/users/${userId}/block`, {
+            method: 'PUT',
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const updatedUser = await response.json();
+    """
+    user_db = get_user_db_service()
+
+    # Get user to block
+    user = await user_db.get_user_by_id(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found",
+        )
+
+    # Prevent self-blocking
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot block your own account",
+        )
+
+    # Prevent blocking other admins
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot block admin accounts. Contact system administrator.",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User {user.username} is already blocked",
+        )
+
+    # Block user (set is_active=False)
+    success = await user_db.block_user(user_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to block user",
+        )
+
+    # Fetch updated user
+    updated_user = await user_db.get_user_by_id(user_id)
+
+    logger.warning(f"🔒 AUDIT: Admin {admin.username} blocked user {user.username} (id: {user_id})")
+
+    return UserResponse(
+        id=updated_user.id,
+        username=updated_user.username,
+        email=updated_user.email,
+        role=updated_user.role,
+        is_active=updated_user.is_active,
+        is_approved=updated_user.is_approved,
+        approved_by=updated_user.approved_by,
+        approved_at=updated_user.approved_at,
+        created_at=updated_user.created_at,
+        last_login=updated_user.last_login,
+    )
+
+
+@router.put("/admin/users/{user_id}/unblock", response_model=UserResponse)
+async def unblock_user(
+    user_id: str,
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Unblock a user account (admin only).
+
+    Sets is_active=True, allowing login again.
+
+    Args:
+        user_id: User ID to unblock
+        admin: Current admin user (from JWT token)
+
+    Returns:
+        Updated user info
+
+    Raises:
+        HTTPException 404: If user not found
+        HTTPException 400: If user is already active
+
+    Requires:
+        Admin role
+
+    Usage (JavaScript):
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(`/api/admin/users/${userId}/unblock`, {
+            method: 'PUT',
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const updatedUser = await response.json();
+    """
+    user_db = get_user_db_service()
+
+    # Get user to unblock
+    user = await user_db.get_user_by_id(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found",
+        )
+
+    if user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User {user.username} is already active",
+        )
+
+    # Unblock user (set is_active=True)
+    success = await user_db.unblock_user(user_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unblock user",
+        )
+
+    # Fetch updated user
+    updated_user = await user_db.get_user_by_id(user_id)
+
+    logger.warning(f"🔓 AUDIT: Admin {admin.username} unblocked user {user.username} (id: {user_id})")
+
+    return UserResponse(
+        id=updated_user.id,
+        username=updated_user.username,
+        email=updated_user.email,
+        role=updated_user.role,
+        is_active=updated_user.is_active,
+        is_approved=updated_user.is_approved,
+        approved_by=updated_user.approved_by,
+        approved_at=updated_user.approved_at,
+        created_at=updated_user.created_at,
+        last_login=updated_user.last_login,
+    )
+
+
+@router.delete("/admin/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Delete a user account (admin only).
+
+    Deletes the user and all associated tasks (CASCADE).
+
+    Args:
+        user_id: User ID to delete
+        admin: Current admin user (from JWT token)
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException 404: If user not found
+        HTTPException 400: If trying to delete self or another admin
+
+    Requires:
+        Admin role
+
+    Usage (JavaScript):
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(`/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const result = await response.json();
+    """
+    user_db = get_user_db_service()
+
+    # Get user to delete
+    user = await user_db.get_user_by_id(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found",
+        )
+
+    # Prevent self-deletion
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account",
+        )
+
+    # Prevent deleting other admins
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete admin accounts. Contact system administrator.",
+        )
+
+    # Delete user (CASCADE will delete associated tasks)
+    try:
+        # Execute DELETE query
+        query, params = user_db.pool.translate_query(
+            "DELETE FROM users WHERE id = ?",
+            (user_id,),
+        )
+        await user_db.pool.execute(query, *params)
+
+        logger.warning(f"🗑️  AUDIT: Admin {admin.username} deleted user {user.username} (id: {user_id})")
+
+        return {
+            "message": f"User {user.username} deleted successfully",
+            "user_id": user_id,
+            "username": user.username,
+        }
+
+    except Exception as e:
+        logger.error(f"Error deleting user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}",
+        )
+
+
+class AdminUserCreate(BaseModel):
+    """Schema for admin user creation with temporary password."""
+
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    role: UserRole = UserRole.USER
+
+
+@router.post("/admin/users", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def create_user_by_admin(
+    user_data: AdminUserCreate,
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Create a new user with a temporary password (admin only).
+
+    The user will be forced to change their password on first login.
+    A random temporary password is generated and returned in the response.
+
+    Args:
+        username: Username (3-50 chars, alphanumeric)
+        email: User email address
+        role: User role (default: user)
+        admin: Current admin user (from JWT token)
+
+    Returns:
+        User info + temporary password (SAVE THIS PASSWORD!)
+
+    Raises:
+        HTTPException 400: If username/email already exists
+        HTTPException 403: If not admin
+        HTTPException 500: Database error
+
+    Security:
+        - Password is 16 characters, URL-safe random
+        - User is auto-approved
+        - password_must_change flag is set to True
+        - Password is returned ONCE in response (not stored)
+
+    Example Response:
+        {
+            "user": {
+                "id": "...",
+                "username": "john.doe",
+                "email": "john@example.com",
+                "role": "user",
+                "is_approved": true,
+                "password_must_change": true
+            },
+            "temporary_password": "Xy9K-vBm2LpQ4nRt",
+            "message": "User created. Temporary password must be changed on first login."
+        }
+    """
+    import secrets
+
+    user_db = get_user_db_service()
+
+    # Generate secure temporary password (16 chars, URL-safe)
+    temporary_password = secrets.token_urlsafe(16)[:16]
+
+    # Create user creation payload
+    user_create = UserCreate(
+        username=user_data.username,
+        email=user_data.email,
+        password=temporary_password,
+    )
+
+    try:
+        # Create user with password_must_change=True and auto_approve=True
+        user = await user_db.create_user(
+            user_create,
+            role=user_data.role,
+            auto_approve=True,
+            password_must_change=True,
+        )
+
+        logger.warning(
+            f"🔐 ADMIN ACTION: User {user_data.username} created by admin {admin.username} "
+            f"with temporary password (must change on first login)"
+        )
+
+        return {
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role.value,
+                "is_active": user.is_active,
+                "is_approved": user.is_approved,
+                "password_must_change": user.password_must_change,
+                "created_at": user.created_at.isoformat(),
+            },
+            "temporary_password": temporary_password,
+            "message": "✅ User created successfully. Temporary password must be changed on first login.",
+        }
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create user: {str(e)}",
+        )

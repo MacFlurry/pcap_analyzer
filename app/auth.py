@@ -20,7 +20,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import ValidationError
@@ -166,6 +166,96 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
 
     if not user.is_active:
         logger.warning(f"User from token is inactive: {user.username}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive",
+        )
+
+    return user
+
+
+async def get_current_user_sse(
+    request: Request,
+    token: Optional[str] = Query(None, description="JWT token for SSE (since EventSource can't send headers)"),
+) -> User:
+    """
+    Extract and validate current user from JWT token for SSE endpoints.
+
+    EventSource API doesn't support custom headers, so we accept token via:
+    1. Query parameter ?token=xxx (for SSE compatibility)
+    2. Authorization header (fallback for fetch() calls)
+
+    Args:
+        request: FastAPI request object
+        token: JWT token from query parameter
+
+    Returns:
+        Current authenticated user
+
+    Raises:
+        HTTPException 401: If token is invalid/expired or user not found
+
+    Security Note:
+    - Tokens in URLs are logged by proxies/servers (less secure than headers)
+    - Only use for SSE where headers aren't possible
+    - Tokens should be short-lived (30 min default)
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    # Try to get token from query param first, then Authorization header
+    if not token:
+        # Fallback to Authorization header
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+        else:
+            logger.warning("SSE: No token in query param or Authorization header")
+            raise credentials_exception
+
+    try:
+        # Decode and validate JWT
+        secret_key = get_secret_key()
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
+
+        # Extract user info from token
+        user_id: str = payload.get("sub")
+        username: str = payload.get("username")
+        role_str: str = payload.get("role")
+
+        if user_id is None or username is None or role_str is None:
+            logger.warning("SSE: Invalid token payload (missing fields)")
+            raise credentials_exception
+
+        # Create TokenData for validation
+        token_data = TokenData(
+            sub=user_id,
+            username=username,
+            role=UserRole(role_str),
+            exp=datetime.fromtimestamp(payload.get("exp"), tz=timezone.utc),
+        )
+
+    except JWTError as e:
+        logger.warning(f"SSE: JWT validation failed: {e}")
+        raise credentials_exception
+
+    except ValidationError as e:
+        logger.warning(f"SSE: Token data validation failed: {e}")
+        raise credentials_exception
+
+    # Get user from database (verify still exists and active)
+    user_db = get_user_db_service()
+    user = await user_db.get_user_by_id(token_data.sub)
+
+    if user is None:
+        logger.warning(f"SSE: User from token not found: {token_data.sub}")
+        raise credentials_exception
+
+    if not user.is_active:
+        logger.warning(f"SSE: User from token is inactive: {user.username}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive",

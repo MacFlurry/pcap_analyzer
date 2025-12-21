@@ -1,7 +1,7 @@
-# Architecture Design - PCAP Analyzer v4.21.0
+# Architecture Design - PCAP Analyzer v4.22.0
 
-**Last Updated**: 2025-12-20
-**Version**: 4.21.0
+**Last Updated**: 2025-12-21
+**Version**: 4.22.0
 **Security Score**: 91.5% (Production Ready)
 
 ## Vue d'ensemble
@@ -12,7 +12,7 @@ PCAP Analyzer est une application d'analyse de fichiers PCAP conçue avec une ar
 
 ```
 ┌─────────────────────────────────────────────────┐
-│              PCAP Analyzer v4.21.0              │
+│              PCAP Analyzer v4.22.0              │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │  Mode 1: CLI (Recommandé)                      │
@@ -55,7 +55,7 @@ PCAP Analyzer est une application d'analyse de fichiers PCAP conçue avec une ar
 └─────────────────────────────────────────────────┘
                        │
 ┌─────────────────────────────────────────────────┐
-│            Couche Sécurité (v4.21.0)            │
+│            Couche Sécurité (v4.22.0)            │
 │  ┌──────────────────────────────────────────┐  │
 │  │  • File Validator (PCAP magic numbers)   │  │
 │  │  • Decompression Bomb Monitor            │  │
@@ -122,7 +122,7 @@ for analyzer in deep_analyzers:
 
 **Résultat :** 1.7x speedup global (93.3s → 55.2s sur 131k paquets)
 
-### 3. Architecture de sécurité v4.21.0 (Production Ready)
+### 3. Architecture de sécurité v4.22.0 (Production Ready)
 
 **Score de sécurité** : 51% → 91.5% (+40.5 points)
 
@@ -196,7 +196,294 @@ for analyzer in deep_analyzers:
 
 **Détails dans** : `/SECURITY.md` (24.5 KB, 20 sections)
 
-### 4. Architecture asynchrone (Web mode)
+### 4. Architecture d'authentification et gestion utilisateurs (v4.22.0)
+
+**Système multi-tenant** avec authentification JWT et gestion des rôles.
+
+#### Composants principaux
+
+```
+┌─────────────────────────────────────────────────┐
+│       Authentification & Authorization          │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│  JWT Token-Based Authentication                 │
+│  ┌──────────────────────────────────────┐      │
+│  │  • Access tokens (30 min expiry)     │      │
+│  │  • Bearer authorization              │      │
+│  │  • OAuth2 password flow              │      │
+│  │  • python-jose cryptography          │      │
+│  └──────────────────────────────────────┘      │
+│                                                 │
+│  Role-Based Access Control (RBAC)              │
+│  ┌──────────────────────────────────────┐      │
+│  │  • USER: Own uploads only            │      │
+│  │  • ADMIN: All resources + user mgmt  │      │
+│  │  • Dependency injection guards       │      │
+│  └──────────────────────────────────────┘      │
+│                                                 │
+│  User Management                                │
+│  ┌──────────────────────────────────────┐      │
+│  │  • Admin panel (create/block/delete) │      │
+│  │  • User approval workflow            │      │
+│  │  • Temporary passwords (forced change)│     │
+│  │  • Password policy (12 chars min)    │      │
+│  │  • bcrypt hashing (cost=12)          │      │
+│  └──────────────────────────────────────┘      │
+│                                                 │
+│  Multi-Tenant Data Isolation                    │
+│  ┌──────────────────────────────────────┐      │
+│  │  • owner_id foreign key on tasks     │      │
+│  │  • Row-level security queries        │      │
+│  │  • Admin sees all, users see own     │      │
+│  └──────────────────────────────────────┘      │
+└─────────────────────────────────────────────────┘
+```
+
+#### Base de données utilisateurs (PostgreSQL)
+
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    role VARCHAR(20) DEFAULT 'user',  -- 'user' | 'admin'
+    is_active BOOLEAN DEFAULT true,
+    is_approved BOOLEAN DEFAULT false,
+    approved_by UUID REFERENCES users(id),
+    approved_at TIMESTAMP,
+    password_must_change BOOLEAN DEFAULT false,  -- v4.22.0
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_login TIMESTAMP
+);
+
+CREATE TABLE tasks (
+    task_id UUID PRIMARY KEY,
+    owner_id UUID REFERENCES users(id) ON DELETE CASCADE,  -- Multi-tenant
+    filename TEXT NOT NULL,
+    status TEXT NOT NULL,
+    -- ... autres champs
+);
+```
+
+#### Flux d'authentification
+
+```
+┌──────────────┐
+│  Browser     │
+└──────┬───────┘
+       │ POST /api/token (username, password)
+       ▼
+┌──────────────────────┐
+│  FastAPI Auth        │
+│  • Verify credentials│──────> bcrypt.verify()
+│  • Check is_active   │
+│  • Check is_approved │
+│  • Check password_   │
+│    must_change       │
+└──────┬───────────────┘
+       │
+       ▼
+┌──────────────────────┐
+│  JWT Token Created   │
+│  {                   │
+│    "sub": user_id,   │
+│    "username": "...",│
+│    "role": "user",   │
+│    "exp": +30min     │
+│  }                   │
+│  + password_must_    │
+│    change: bool      │
+└──────┬───────────────┘
+       │
+       ▼
+┌──────────────────────┐
+│  Client Response     │
+│  {                   │
+│    "access_token",   │
+│    "token_type",     │
+│    "expires_in",     │
+│    "password_must_   │
+│     change": true/   │
+│                false"│
+│  }                   │
+└──────────────────────┘
+       │
+       ▼
+┌──────────────────────┐
+│  Protected Requests  │
+│  Header:             │
+│  Authorization:      │
+│    Bearer <token>    │
+└──────────────────────┘
+```
+
+#### Système de mot de passe temporaire (v4.22.0)
+
+**Workflow de création d'utilisateur par l'admin :**
+
+1. **Admin crée utilisateur** via POST /api/admin/users
+   - Génération de mot de passe temporaire (16 chars, URL-safe via `secrets.token_urlsafe()`)
+   - Flag `password_must_change=True` automatiquement défini
+   - Mot de passe affiché UNE FOIS à l'admin (copie clipboard)
+
+2. **Premier login utilisateur** avec mot de passe temporaire
+   - Token JWT contient `password_must_change: true`
+   - Frontend redirige automatiquement vers `/change-password`
+   - Impossible d'accéder à l'application sans changement
+
+3. **Changement de mot de passe obligatoire**
+   - Page dédiée avec validation (12+ chars, différent de l'ancien)
+   - PUT /api/users/me avec `current_password` + `new_password`
+   - Flag `password_must_change` reset à `false` en base
+
+4. **Login normal après changement**
+   - Token ne contient plus `password_must_change: true`
+   - Accès complet à l'application
+
+**Sécurité :**
+- Mots de passe temporaires non réutilisables (changés immédiatement)
+- Pas de stockage du mot de passe temporaire côté serveur
+- Audit logging de toutes les créations d'utilisateurs
+- Prévention de navigation away sur page de changement (beforeunload)
+
+#### Admin Panel Features
+
+**Interface web** : `/admin` (admin role requis)
+
+**Fonctionnalités :**
+1. **Liste utilisateurs** avec filtrage par rôle/statut
+2. **Création d'utilisateurs** avec mot de passe temporaire
+3. **Approbation** des comptes en attente
+4. **Blocage/déblocage** des comptes utilisateurs
+5. **Suppression** d'utilisateurs (cascade sur leurs tasks)
+6. **Statistiques** : nombre d'admins, users, pending, blocked
+
+**Sécurité :**
+- Admin ne peut pas se bloquer/supprimer lui-même
+- Admin ne peut pas supprimer d'autres admins
+- Toutes les actions loggées dans security audit
+
+#### Workflow d'approbation des utilisateurs
+
+```
+┌──────────────┐
+│ User signs   │
+│   up (/register)│
+└──────┬───────┘
+       │
+       ▼
+┌──────────────────────┐
+│  Account created     │
+│  is_approved = false │
+└──────┬───────────────┘
+       │
+       ▼
+┌──────────────────────┐
+│  User tries login    │
+│  → 403 Forbidden     │
+│  "Pending approval"  │
+└──────────────────────┘
+       │
+       ▼
+┌──────────────────────┐
+│  Admin approves      │
+│  via /admin panel    │
+│  → is_approved=true  │
+│  → approved_by set   │
+│  → approved_at set   │
+└──────┬───────────────┘
+       │
+       ▼
+┌──────────────────────┐
+│  User can login      │
+│  → Access granted    │
+└──────────────────────┘
+```
+
+#### Compte admin brise-glace (Breakglass)
+
+**Problème** : Pas d'admin initial pour approuver d'autres utilisateurs.
+
+**Solution** : Compte admin auto-créé au premier démarrage.
+
+```python
+# app/services/user_database.py
+async def create_admin_breakglass_if_not_exists() -> Optional[str]:
+    """
+    Crée un compte admin si aucun admin n'existe.
+
+    Mot de passe sources (ordre de priorité) :
+    1. Docker/Kubernetes secret : /var/run/secrets/admin_password
+    2. Variable d'environnement : ADMIN_PASSWORD
+    3. Génération aléatoire (20 chars)
+
+    Returns:
+        Admin password (si créé), None sinon
+    """
+    # Check if any admin exists
+    admin_count = await self.count_admins()
+    if admin_count > 0:
+        return None
+
+    # Get password from secrets or generate
+    admin_password = self._get_admin_password()
+
+    # Create admin account
+    await self.create_user(
+        UserCreate(username="admin", email="admin@localhost", password=admin_password),
+        role=UserRole.ADMIN,
+        auto_approve=True
+    )
+
+    # Log password (WARN level, visible in logs)
+    logger.warning("=" * 80)
+    logger.warning("🔒 ADMIN BRISE-GLACE ACCOUNT CREATED")
+    logger.warning("=" * 80)
+    logger.warning(f"Username: admin")
+    logger.warning(f"Password: {admin_password}")
+    logger.warning("⚠️  CHANGE THIS PASSWORD IMMEDIATELY AFTER FIRST LOGIN!")
+    logger.warning("=" * 80)
+
+    return admin_password
+```
+
+**Sécurité :**
+- Mot de passe affiché une fois dans les logs au démarrage
+- Support Docker secrets (production)
+- Variable d'environnement (dev)
+- Génération aléatoire (fallback)
+
+#### Navigation et UX
+
+**Menu utilisateur** (top-right, visible si authentifié) :
+- Avatar avec initiales (2 premiers caractères username)
+- Dropdown menu :
+  - Nom d'utilisateur + rôle
+  - Profile (placeholder pour v4.23.0)
+  - Sécurité (placeholder pour 2FA - issue #29)
+  - **Se déconnecter** (clear localStorage, redirect /login)
+
+**Navigation conditionnelle :**
+- "Admin" link visible seulement pour role=admin
+- Upload/History accessible si authentifié + approuvé
+- Redirection /login si non authentifié
+
+#### Roadmap 2FA (v4.23.0)
+
+**Issue GitHub** : #29
+
+**Features prévues :**
+- TOTP (Time-based One-Time Password) via `pyotp`
+- QR code setup (Google Authenticator, Authy)
+- Backup codes (10 codes, single-use, bcrypt hashed)
+- Page `/security` complète
+- Rate limiting TOTP verification (3 attempts/min)
+
+**Détails** : Voir issue #29 pour spec complète
+
+### 5. Architecture asynchrone (Web mode)
 
 **Problème :** L'analyse PCAP peut prendre plusieurs minutes → blocage du serveur web.
 
@@ -314,7 +601,7 @@ def create_analyzers() -> list[BaseAnalyzer]:
 
 Voir [../src/analyzers/](../src/analyzers/) pour le code complet.
 
-## Features majeures (v4.16.0 - v4.21.0)
+## Features majeures (v4.16.0 - v4.22.0)
 
 ### 1. TCP State Machine (v4.16.0) - RFC 793
 
@@ -387,7 +674,66 @@ def generate_jitter_timeseries_graph(
 
 **Module** : `src/analyzers/retransmission.py` (enhanced)
 
-### 4. Security Hardening (v4.21.0)
+### 4. Authentication & User Management System (v4.22.0)
+
+**Problème** : Application web sans authentification ni contrôle d'accès.
+
+**Solution** : Système complet d'authentification JWT avec gestion des utilisateurs.
+
+**Features** :
+- **JWT Authentication** : OAuth2 password flow, tokens 30 min expiry
+- **Role-Based Access Control** : USER (own resources) vs ADMIN (all + management)
+- **Multi-Tenant Architecture** : Row-level security via owner_id foreign key
+- **Admin Panel** : Web UI for user management (create/approve/block/delete)
+- **User Approval Workflow** : New users must be approved by admin before access
+- **Temporary Password System** :
+  - Admin creates users with auto-generated temporary passwords (16 chars, URL-safe)
+  - Users forced to change password on first login (password_must_change flag)
+  - Frontend auto-redirects to `/change-password` page
+  - Password change resets flag to allow normal access
+- **Breakglass Admin Account** : Auto-created at startup if no admin exists
+  - Password from Docker secrets or environment variable or random generation
+  - Password logged once at startup for initial access
+- **User Menu & Logout** : Avatar with dropdown (profile, security, logout)
+- **Password Security** : bcrypt hashing (cost=12), 12+ chars minimum policy
+
+**Modules** :
+- `app/models/user.py` - User/Token models with password_must_change field
+- `app/services/user_database.py` - PostgreSQL user management with breakglass admin
+- `app/api/routes/auth.py` - Auth endpoints including POST /api/admin/users
+- `app/templates/admin.html` - Admin panel with user creation modals
+- `app/templates/change-password.html` - Forced password change page
+- `app/static/js/common.js` - User menu logic and logout
+
+**Database Schema** :
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    username VARCHAR(50) UNIQUE,
+    email VARCHAR(255) UNIQUE,
+    hashed_password VARCHAR(255),
+    role VARCHAR(20) DEFAULT 'user',
+    is_active BOOLEAN DEFAULT true,
+    is_approved BOOLEAN DEFAULT false,
+    password_must_change BOOLEAN DEFAULT false,  -- NEW
+    approved_by UUID REFERENCES users(id),
+    approved_at TIMESTAMP,
+    created_at TIMESTAMP,
+    last_login TIMESTAMP
+);
+
+CREATE TABLE tasks (
+    task_id UUID PRIMARY KEY,
+    owner_id UUID REFERENCES users(id) ON DELETE CASCADE,  -- Multi-tenant
+    -- ... other fields
+);
+```
+
+**Impact** : Sécurisation complète de l'application web avec isolation des données utilisateurs.
+
+**Roadmap** : 2FA (Two-Factor Authentication) planifié pour v4.23.0 (issue #29)
+
+### 5. Security Hardening (v4.21.0)
 
 **Transformation majeure** : Score 51% → 91.5%
 
@@ -853,7 +1199,7 @@ def log_analysis_event(task_id: str, event: str, details: dict):
 async def health_check():
     return {
         "status": "healthy",
-        "version": "4.21.0",
+        "version": "4.22.0",
         "security_score": "91.5%",
         "uptime_seconds": time.time() - start_time,
         "active_analyses": worker.get_active_count(),
@@ -929,7 +1275,7 @@ tests/
 
 ---
 
-**Version**: 4.21.0
-**Last Updated**: 2025-12-20
+**Version**: 4.22.0
+**Last Updated**: 2025-12-21
 **Security Score**: 91.5% (Production Ready)
 **Compliance**: 100% OWASP ASVS, NIST, CWE Top 25, GDPR

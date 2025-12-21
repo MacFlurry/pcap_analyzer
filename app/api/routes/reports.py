@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.auth import get_current_user, verify_ownership
+from app.auth import get_current_user, get_current_user_sse, verify_ownership
 from app.models.user import User
 from app.services.database import get_db_service
 
@@ -23,11 +23,11 @@ REPORTS_DIR = DATA_DIR / "reports"
 
 
 @router.get("/reports/{task_id}/html")
-async def get_html_report(task_id: str, current_user: User = Depends(get_current_user)):
+async def get_html_report(task_id: str, current_user: User = Depends(get_current_user_sse)):
     """
     Récupère le rapport HTML d'une analyse.
 
-    **Authentification requise**: Bearer token dans Authorization header
+    **Authentification requise**: Bearer token in query param ?token=xxx OR Authorization header
     **Multi-tenant**: Users can only access their own reports (admins can access all)
 
     Args:
@@ -41,6 +41,9 @@ async def get_html_report(task_id: str, current_user: User = Depends(get_current
         HTTPException 401: If not authenticated
         HTTPException 403: If user doesn't own the task
         HTTPException 404: Si la tâche ou le rapport n'existe pas
+
+    Note:
+        Token can be passed via query param for browser navigation compatibility.
     """
     db_service = get_db_service()
     task_info = await db_service.get_task(task_id)
@@ -78,11 +81,11 @@ async def get_html_report(task_id: str, current_user: User = Depends(get_current
 
 
 @router.get("/reports/{task_id}/json")
-async def get_json_report(task_id: str, current_user: User = Depends(get_current_user)):
+async def get_json_report(task_id: str, current_user: User = Depends(get_current_user_sse)):
     """
     Récupère le rapport JSON d'une analyse.
 
-    **Authentification requise**: Bearer token dans Authorization header
+    **Authentification requise**: Bearer token in query param ?token=xxx OR Authorization header
     **Multi-tenant**: Users can only access their own reports (admins can access all)
 
     Args:

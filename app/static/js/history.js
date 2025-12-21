@@ -18,7 +18,62 @@ class HistoryManager {
         this.currentFilter = 'all';
         this.selectedTasks = new Set();
 
-        this.init();
+        // Check authentication before initializing
+        this.checkAuthentication().then(isAuth => {
+            if (isAuth) {
+                this.init();
+            }
+        });
+    }
+
+    async checkAuthentication() {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            return false;
+        }
+
+        // Verify token is still valid
+        try {
+            const response = await fetch('/api/users/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('token_type');
+                localStorage.removeItem('current_user');
+                window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Auth check error:', error);
+            window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            return false;
+        }
+    }
+
+    getAuthHeaders() {
+        const token = localStorage.getItem('access_token');
+        return {
+            'Authorization': `Bearer ${token}`
+        };
+    }
+
+    addTokenToUrl(url) {
+        /**
+         * Add authentication token to URL as query parameter.
+         * Used for navigation links (reports) where we can't send headers.
+         */
+        const token = localStorage.getItem('access_token');
+        if (!token || !url) return url;
+
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}token=${encodeURIComponent(token)}`;
     }
 
     init() {
@@ -67,7 +122,18 @@ class HistoryManager {
         this.showLoading();
 
         try {
-            const response = await fetch('/api/history?limit=50');
+            const response = await fetch('/api/history?limit=50', {
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+
             const data = await response.json();
 
             if (data.tasks && data.tasks.length > 0) {
@@ -249,7 +315,7 @@ class HistoryManager {
         // View report (si completed)
         if (task.status === 'completed' && task.report_html_url) {
             actions.push(`
-                <a href="${task.report_html_url}" target="_blank" rel="noopener noreferrer" class="action-btn btn-view" title="Voir le rapport">
+                <a href="${this.addTokenToUrl(task.report_html_url)}" target="_blank" rel="noopener noreferrer" class="action-btn btn-view" title="Voir le rapport">
                     <i class="fas fa-eye"></i>
                 </a>
             `);
@@ -267,7 +333,7 @@ class HistoryManager {
         // Download JSON (si completed)
         if (task.status === 'completed' && task.report_json_url) {
             actions.push(`
-                <a href="${task.report_json_url}" class="action-btn btn-download" title="Télécharger JSON">
+                <a href="${this.addTokenToUrl(task.report_json_url)}" class="action-btn btn-download" title="Télécharger JSON">
                     <i class="fas fa-download"></i>
                 </a>
             `);
@@ -378,11 +444,15 @@ class HistoryManager {
         for (const taskId of taskIds) {
             try {
                 const response = await fetch(`/api/reports/${taskId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: this.getAuthHeaders()
                 });
 
                 if (response.ok) {
                     successCount++;
+                } else if (response.status === 401) {
+                    window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+                    return;
                 } else {
                     errorCount++;
                 }
@@ -414,13 +484,16 @@ class HistoryManager {
 
         try {
             const response = await fetch(`/api/reports/${taskId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: this.getAuthHeaders()
             });
 
             if (response.ok) {
                 window.toast.success('✓ Analyse supprimée avec succès');
                 // Recharger l'historique pour retirer l'élément de la liste
                 this.loadHistory();
+            } else if (response.status === 401) {
+                window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
             } else {
                 const data = await response.json();
                 throw new Error(data.detail || 'Erreur lors de la suppression');

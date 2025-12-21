@@ -1,0 +1,55 @@
+#!/bin/bash
+# ============================================
+# PCAP Analyzer - Docker Entrypoint
+# Generates random admin password and stores in /var/run/secrets
+# ============================================
+
+set -e
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Secrets directory
+SECRETS_DIR="/var/run/secrets"
+ADMIN_PASSWORD_FILE="${SECRETS_DIR}/admin_password"
+
+# Create secrets directory if it doesn't exist
+mkdir -p "${SECRETS_DIR}"
+
+# Generate random admin password (24 chars, URL-safe)
+if [ ! -f "${ADMIN_PASSWORD_FILE}" ]; then
+    echo -e "${CYAN}🔐 Generating new admin password...${NC}"
+
+    # Generate secure random password using Python
+    ADMIN_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24)[:24])")
+
+    # Store in secrets file
+    echo -n "${ADMIN_PASSWORD}" > "${ADMIN_PASSWORD_FILE}"
+    chmod 600 "${ADMIN_PASSWORD_FILE}"
+
+    echo -e "${GREEN}✅ Admin password generated and stored in ${ADMIN_PASSWORD_FILE}${NC}"
+    echo ""
+    echo -e "${YELLOW}========================================${NC}"
+    echo -e "${MAGENTA}🔒 ADMIN CREDENTIALS${NC}"
+    echo -e "${YELLOW}========================================${NC}"
+    echo -e "${GREEN}Username:${NC} admin"
+    echo -e "${GREEN}Password:${NC} ${ADMIN_PASSWORD}"
+    echo -e "${YELLOW}========================================${NC}"
+    echo -e "${RED}⚠️  SAVE THIS PASSWORD - IT WON'T BE SHOWN AGAIN!${NC}"
+    echo -e "${CYAN}📝 Access it inside container: cat /var/run/secrets/admin_password${NC}"
+    echo -e "${YELLOW}========================================${NC}"
+    echo ""
+else
+    echo -e "${BLUE}ℹ️  Admin password already exists in ${ADMIN_PASSWORD_FILE}${NC}"
+    echo -e "${CYAN}📝 To view: cat ${ADMIN_PASSWORD_FILE}${NC}"
+fi
+
+# Execute the main command (uvicorn)
+echo -e "${GREEN}🚀 Starting PCAP Analyzer...${NC}"
+exec "$@"

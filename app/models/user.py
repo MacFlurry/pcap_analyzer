@@ -49,6 +49,7 @@ class User(BaseModel):
     is_approved: bool = False  # New: requires admin approval
     approved_by: Optional[str] = None  # User ID of approver
     approved_at: Optional[datetime] = None  # Timestamp of approval
+    password_must_change: bool = False  # Force password change on first login
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
 
@@ -111,6 +112,7 @@ class UserResponse(BaseModel):
     is_approved: bool
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    password_must_change: bool = False
     created_at: datetime
     last_login: Optional[datetime]
 
@@ -121,6 +123,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = 1800  # 30 minutes
+    password_must_change: bool = False  # Client must redirect to password change
 
 
 class TokenData(BaseModel):

@@ -57,9 +57,9 @@ ENV PYTHONUNBUFFERED=1
 RUN groupadd -r pcapuser && \
     useradd -r -g pcapuser -u 1000 -m -d /home/pcapuser pcapuser
 
-# Create directories with proper permissions
-RUN mkdir -p /app /data/uploads /data/reports /data/logs /tmp && \
-    chown -R pcapuser:pcapuser /app /data /tmp
+# Create directories with proper permissions (including secrets directory)
+RUN mkdir -p /app /data/uploads /data/reports /data/logs /tmp /var/run/secrets && \
+    chown -R pcapuser:pcapuser /app /data /tmp /var/run/secrets
 
 WORKDIR /app
 
@@ -67,6 +67,11 @@ WORKDIR /app
 COPY --chown=pcapuser:pcapuser src/ ./src/
 COPY --chown=pcapuser:pcapuser app/ ./app/
 COPY --chown=pcapuser:pcapuser config.yaml ./
+
+# Copy entrypoint script and make it executable
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 755 /usr/local/bin/docker-entrypoint.sh && \
+    ls -la /usr/local/bin/docker-entrypoint.sh
 
 # Switch to non-root user
 USER pcapuser
@@ -87,6 +92,9 @@ ENV REPORT_TTL_HOURS=24
 ENV DATA_DIR=/data
 ENV LOG_LEVEL=INFO
 ENV MAX_QUEUE_SIZE=5
+
+# Entrypoint script (generates admin password)
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Startup command (uvicorn with 1 worker for CPU-bound workload)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

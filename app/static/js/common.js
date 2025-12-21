@@ -382,5 +382,128 @@ document.addEventListener('DOMContentLoaded', () => {
     // Expose utils globally
     window.utils = Utils;
 
+    // Show Admin link only for admin users
+    checkAdminAccess();
+
+    // Initialize user menu
+    initializeUserMenu();
+
     console.log('PCAP Analyzer - Common JS initialized');
 });
+
+// ========================================
+// 7. ADMIN ACCESS CHECK
+// ========================================
+
+async function checkAdminAccess() {
+    const adminNavLink = document.getElementById('admin-nav-link');
+    if (!adminNavLink) return; // Not on a page with admin link
+
+    const token = localStorage.getItem('access_token');
+    if (!token) return; // Not logged in
+
+    try {
+        const response = await fetch('/api/users/me', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const user = await response.json();
+            // Show admin link only for admin users
+            if (user.role === 'admin') {
+                adminNavLink.classList.remove('hidden');
+            }
+        }
+    } catch (error) {
+        // Silently fail - user is not logged in or network error
+        console.debug('Admin access check failed:', error);
+    }
+}
+
+// ========================================
+// 8. USER MENU
+// ========================================
+
+function initializeUserMenu() {
+    const userMenu = document.getElementById('user-menu');
+    const userMenuButton = document.getElementById('user-menu-button');
+    const userMenuDropdown = document.getElementById('user-menu-dropdown');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    if (!userMenu) return; // User menu not present on this page
+
+    // Check if user is logged in
+    const token = localStorage.getItem('access_token');
+    const currentUserData = localStorage.getItem('current_user');
+
+    if (token && currentUserData) {
+        try {
+            const user = JSON.parse(currentUserData);
+
+            // Show user menu
+            userMenu.classList.remove('hidden');
+
+            // Set user initials (first 2 characters of username)
+            const initials = user.username.substring(0, 2).toUpperCase();
+            const userInitialsEl = document.getElementById('user-initials');
+            if (userInitialsEl) {
+                userInitialsEl.textContent = initials;
+            }
+
+            // Set dropdown user info
+            const userMenuUsername = document.getElementById('user-menu-username');
+            const userMenuRole = document.getElementById('user-menu-role');
+            if (userMenuUsername) {
+                userMenuUsername.textContent = user.username;
+            }
+            if (userMenuRole) {
+                userMenuRole.textContent = user.role.toUpperCase();
+            }
+
+            // Toggle dropdown on button click
+            if (userMenuButton && userMenuDropdown) {
+                userMenuButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    userMenuDropdown.classList.toggle('hidden');
+                });
+            }
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (userMenuDropdown && !userMenu.contains(e.target)) {
+                    userMenuDropdown.classList.add('hidden');
+                }
+            });
+
+            // Handle logout
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', () => {
+                    handleLogout();
+                });
+            }
+        } catch (error) {
+            console.error('Failed to parse user data:', error);
+            // Clear invalid data
+            localStorage.removeItem('current_user');
+        }
+    }
+}
+
+function handleLogout() {
+    // Clear all localStorage auth data
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token_type');
+    localStorage.removeItem('current_user');
+
+    // Show toast notification
+    if (window.toast) {
+        window.toast.info('Déconnexion réussie', 2000);
+    }
+
+    // Redirect to login page after short delay
+    setTimeout(() => {
+        window.location.href = '/login';
+    }, 500);
+}

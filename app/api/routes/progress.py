@@ -10,7 +10,7 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from app.auth import get_current_user, verify_ownership
+from app.auth import get_current_user, get_current_user_sse, verify_ownership
 from app.models.schemas import TaskStatus
 from app.models.user import User
 from app.services.database import get_db_service
@@ -140,11 +140,11 @@ async def progress_event_generator(task_id: str) -> AsyncGenerator[str, None]:
 
 
 @router.get("/progress/{task_id}")
-async def get_progress(task_id: str, current_user: User = Depends(get_current_user)):
+async def get_progress(task_id: str, current_user: User = Depends(get_current_user_sse)):
     """
     Stream de progression en temps réel via Server-Sent Events.
 
-    **Authentification requise**: Bearer token dans Authorization header
+    **Authentification requise**: Bearer token in query param ?token=xxx (EventSource limitation)
     **Multi-tenant**: Users can only track their own tasks (admins can track all)
 
     Args:
@@ -155,9 +155,12 @@ async def get_progress(task_id: str, current_user: User = Depends(get_current_us
         StreamingResponse avec événements SSE
 
     Raises:
-        HTTPException 401: If not authenticated
+        HTTPException 401: If not authenticated or token missing
         HTTPException 403: If user doesn't own the task
         HTTPException 404: Si la tâche n'existe pas
+
+    Note:
+        EventSource API doesn't support custom headers, so token must be in URL query param.
     """
     # Vérifier que la tâche existe
     db_service = get_db_service()

@@ -67,12 +67,16 @@
                     <a href="/history" class="nav-link {% block nav_history %}{% endblock %}">
                         <i class="fas fa-history mr-2"></i>Historique
                     </a>
+                    <a href="/admin" id="admin-nav-link" class="nav-link {% block nav_admin %}{% endblock %} hidden" title="Admin Panel (admin only)">
+                        <i class="fas fa-users-cog mr-2"></i>Admin
+                        <span class="ml-1 px-2 py-0.5 text-xs bg-purple-500 text-white rounded-full">ADMIN</span>
+                    </a>
                     <a href="/docs" target="_blank" class="nav-link">
                         <i class="fas fa-code mr-2"></i>API Docs
                     </a>
                 </div>
 
-                <!-- Dark Mode Toggle -->
+                <!-- Dark Mode Toggle & User Menu -->
                 <div class="flex items-center space-x-4">
                     <button id="theme-toggle" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                         <i class="fas fa-moon dark:hidden text-gray-600"></i>
@@ -83,6 +87,34 @@
                     <div id="health-status" class="hidden md:flex items-center space-x-2 px-3 py-1 rounded-full bg-green-100 dark:bg-green-900">
                         <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                         <span class="text-sm font-medium text-green-700 dark:text-green-300">Healthy</span>
+                    </div>
+
+                    <!-- User Profile Menu (shown when logged in) -->
+                    <div id="user-menu" class="hidden relative">
+                        <button id="user-menu-button" class="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <div class="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-sm">
+                                <span id="user-initials">U</span>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-600 dark:text-gray-400 text-xs"></i>
+                        </button>
+
+                        <!-- Dropdown Menu -->
+                        <div id="user-menu-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50">
+                            <div class="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                                <p id="user-menu-username" class="text-sm font-semibold text-gray-900 dark:text-white"></p>
+                                <p id="user-menu-role" class="text-xs text-gray-500 dark:text-gray-400"></p>
+                            </div>
+                            <a href="/profile" class="hidden block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <i class="fas fa-user mr-2 text-primary"></i>Mon Profil
+                            </a>
+                            <a href="/security" class="hidden block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <i class="fas fa-shield-alt mr-2 text-primary"></i>Sécurité
+                            </a>
+                            <div class="border-t border-gray-200 dark:border-gray-700"></div>
+                            <button id="logout-btn" class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Se déconnecter
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
