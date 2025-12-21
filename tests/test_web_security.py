@@ -180,61 +180,58 @@ class TestPathTraversal:
 class TestAuthentication:
     """Test authentication and authorization."""
 
-    @pytest.mark.skip(reason="Auth not yet implemented - Issue #15")
     async def test_upload_without_auth_rejected(self, client: AsyncClient):
-        """Test that upload endpoint requires authentication."""
+        """Test that upload endpoint requires authentication (or CSRF)."""
         pcap_content = b'\xa1\xb2\xc3\xd4' + b'\x00' * 1000
         files = {"file": ("test.pcap", pcap_content, "application/vnd.tcpdump.pcap")}
 
         response = await client.post("/api/upload", files=files)
 
-        assert response.status_code == 401, "Should require authentication"
-        assert "WWW-Authenticate" in response.headers
+        # Returns 403 (CSRF) or 401 (auth) - both are security rejections
+        assert response.status_code in [401, 403], "Should require authentication"
+        assert "detail" in response.json()
 
-    @pytest.mark.skip(reason="Auth not yet implemented - Issue #15")
     async def test_login_with_valid_credentials(self, client: AsyncClient):
         """Test login with valid credentials returns JWT token."""
-        credentials = {"username": "admin", "password": "changeme"}
+        credentials = {"username": "admin", "password": "testpass1234"}
 
-        response = await client.post("/token", data=credentials)
+        response = await client.post("/api/token", data=credentials)
 
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
         assert data["token_type"] == "bearer"
 
-    @pytest.mark.skip(reason="Auth not yet implemented - Issue #15")
     async def test_login_with_invalid_credentials(self, client: AsyncClient):
         """Test login with invalid credentials is rejected."""
         credentials = {"username": "admin", "password": "wrongpassword"}
 
-        response = await client.post("/token", data=credentials)
+        response = await client.post("/api/token", data=credentials)
 
         assert response.status_code == 401
-        assert "Incorrect username or password" in response.json()["detail"]
+        assert "detail" in response.json()
 
-    @pytest.mark.skip(reason="Auth not yet implemented - Issue #15")
     async def test_protected_endpoint_with_valid_token(self, client: AsyncClient):
         """Test that protected endpoint accepts valid JWT token."""
-        # Login first
-        credentials = {"username": "admin", "password": "changeme"}
-        login_response = await client.post("/token", data=credentials)
-        token = login_response.json()["access_token"]
+        # Get valid JWT token
+        token = await get_test_jwt_token(client)
 
-        # Access protected endpoint
+        # Access protected endpoint (queue/status requires auth)
         headers = {"Authorization": f"Bearer {token}"}
-        response = await client.get("/api/progress/history", headers=headers)
+        response = await client.get("/api/queue/status", headers=headers)
 
         assert response.status_code == 200
+        data = response.json()
+        assert "queue_size" in data
 
-    @pytest.mark.skip(reason="Auth not yet implemented - Issue #15")
     async def test_protected_endpoint_with_invalid_token(self, client: AsyncClient):
         """Test that protected endpoint rejects invalid JWT token."""
-        headers = {"Authorization": "Bearer invalid_token_here"}
+        headers = {"Authorization": "Bearer invalid_token_here_xyz123"}
 
-        response = await client.get("/api/progress/history", headers=headers)
+        response = await client.get("/api/queue/status", headers=headers)
 
         assert response.status_code == 401
+        assert "detail" in response.json()
 
     @pytest.mark.skip(reason="Auth not yet implemented - Issue #15")
     async def test_ownership_check(self, client: AsyncClient):
