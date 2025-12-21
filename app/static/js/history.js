@@ -172,6 +172,11 @@ class HistoryManager {
         this.loading.classList.add('hidden');
         this.emptyState.classList.remove('hidden');
         this.historyContainer.classList.add('hidden');
+
+        // Clear selections when showing empty state
+        this.selectedTasks.clear();
+        this.selectAllCheckbox.checked = false;
+        this.updateSelectionUI();
     }
 
     displayHistory(tasks) {
