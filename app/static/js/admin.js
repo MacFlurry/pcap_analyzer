@@ -483,61 +483,84 @@ class AdminPanel {
         let successCount = 0;
         let errorCount = 0;
 
-        // Get CSRF headers once for all requests
+        // Get CSRF headers once for bulk request
         const csrfHeaders = await window.csrfManager.getHeaders();
 
-        for (const userId of userIds) {
-            try {
-                let response;
-                if (action === 'approve') {
-                    response = await fetch(`/api/admin/users/${userId}/approve`, {
-                        method: 'PUT',
-                        headers: {
-                            ...this.getAuthHeaders(),
-                            ...csrfHeaders
-                        }
-                    });
-                } else if (action === 'block') {
-                    response = await fetch(`/api/admin/users/${userId}/block`, {
-                        method: 'PUT',
-                        headers: {
-                            ...this.getAuthHeaders(),
-                            ...csrfHeaders
-                        }
-                    });
-                } else if (action === 'unblock') {
-                    response = await fetch(`/api/admin/users/${userId}/unblock`, {
-                        method: 'PUT',
-                        headers: {
-                            ...this.getAuthHeaders(),
-                            ...csrfHeaders
-                        }
-                    });
-                } else if (action === 'delete') {
-                    response = await fetch(`/api/admin/users/${userId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            ...this.getAuthHeaders(),
-                            ...csrfHeaders
-                        }
-                    });
+        try {
+            let response;
+
+            // Use bulk endpoints for approve, block, unblock (Issue #22)
+            if (action === 'approve' || action === 'block' || action === 'unblock') {
+                response = await fetch(`/api/admin/users/bulk/${action}`, {
+                    method: 'POST',
+                    headers: {
+                        ...this.getAuthHeaders(),
+                        ...csrfHeaders,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ user_ids: userIds })
+                });
+
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        window.loadingOverlay.hide();
+                        window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                        this.clearSelection();
+                        return;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
                 }
 
-                if (response.ok) {
-                    successCount++;
-                } else if (response.status === 403) {
-                    // CSRF error - stop processing
-                    window.loadingOverlay.hide();
-                    window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-                    this.clearSelection();
-                    return;
-                } else {
-                    errorCount++;
+                // Parse bulk response
+                const result = await response.json();
+                successCount = result.success;
+                errorCount = result.failed;
+
+                // Show detailed results if there were failures
+                if (errorCount > 0 && result.results) {
+                    const failedUsers = result.results
+                        .filter(r => r.status === 'failed')
+                        .map(r => `${r.username || r.user_id}: ${r.reason}`)
+                        .join('\n');
+                    console.warn(`Failed users:\n${failedUsers}`);
                 }
-            } catch (error) {
-                console.error(`Failed to ${action} user ${userId}:`, error);
-                errorCount++;
+
+            } else if (action === 'delete') {
+                // Delete doesn't have bulk endpoint, use loop (legacy)
+                for (const userId of userIds) {
+                    try {
+                        response = await fetch(`/api/admin/users/${userId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                ...this.getAuthHeaders(),
+                                ...csrfHeaders
+                            }
+                        });
+
+                        if (response.ok) {
+                            successCount++;
+                        } else if (response.status === 403) {
+                            // CSRF error - stop processing
+                            window.loadingOverlay.hide();
+                            window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                            this.clearSelection();
+                            return;
+                        } else {
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Failed to delete user ${userId}:`, error);
+                        errorCount++;
+                    }
+                }
             }
+
+        } catch (error) {
+            console.error(`Bulk ${action} failed:`, error);
+            window.loadingOverlay.hide();
+            window.toast.error(`❌ Failed to ${action} users: ${error.message}`);
+            this.clearSelection();
+            return;
         }
 
         window.loadingOverlay.hide();
