@@ -16,6 +16,7 @@ from app.models.user import User
 from app.services.database import get_db_service
 from app.services.worker import get_worker
 from app.utils.path_validator import validate_filename, validate_path_in_directory
+from app.utils.file_validator import validate_pcap_upload_complete
 
 logger = logging.getLogger(__name__)
 
@@ -110,23 +111,26 @@ async def upload_pcap(
     """
     logger.info(f"Upload request received: {file.filename} ({file.content_type})")
 
-    # Lire le contenu du fichier
-    try:
-        content = await file.read()
-        file_size = len(content)
-    except Exception as e:
-        logger.error(f"Error reading uploaded file: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erreur lors de la lecture du fichier",
-        )
-
-    # Validation: Sanitize filename (path traversal protection)
+    # Validation Step 1: Sanitize filename (path traversal protection)
     sanitized_filename = validate_filename(file.filename)
 
-    # Validation: Size and format
-    validate_pcap_file(sanitized_filename, file_size)
-    validate_pcap_magic_bytes(content)
+    # Validation Step 2: Stream-based validation (size + magic + decompression bomb)
+    # This replaces the old vulnerable pattern of reading entire file then validating
+    try:
+        content, pcap_type = await validate_pcap_upload_complete(file)
+        file_size = len(content)
+        logger.info(
+            f"Upload validated: {sanitized_filename}, size: {file_size} bytes, type: {pcap_type}"
+        )
+    except HTTPException:
+        # Re-raise validation errors (400, 413)
+        raise
+    except Exception as e:
+        logger.error(f"Error during upload validation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erreur lors de la validation du fichier",
+        )
 
     # Générer un task_id unique
     task_id = str(uuid.uuid4())

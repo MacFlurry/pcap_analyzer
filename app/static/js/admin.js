@@ -314,14 +314,20 @@ class AdminPanel {
 
     async approveUser(userId) {
         try {
+            const csrfHeaders = await window.csrfManager.getHeaders();
             const response = await fetch(`/api/admin/users/${userId}/approve`, {
                 method: 'PUT',
-                headers: this.getAuthHeaders()
+                headers: {
+                    ...this.getAuthHeaders(),
+                    ...csrfHeaders
+                }
             });
 
             if (response.ok) {
                 window.toast.success('✓ User approved successfully');
                 this.loadUsers();
+            } else if (response.status === 403) {
+                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
             } else {
                 const error = await response.json();
                 window.toast.error(`❌ ${error.detail || 'Failed to approve user'}`);
@@ -338,14 +344,20 @@ class AdminPanel {
         }
 
         try {
+            const csrfHeaders = await window.csrfManager.getHeaders();
             const response = await fetch(`/api/admin/users/${userId}/block`, {
                 method: 'PUT',
-                headers: this.getAuthHeaders()
+                headers: {
+                    ...this.getAuthHeaders(),
+                    ...csrfHeaders
+                }
             });
 
             if (response.ok) {
                 window.toast.success('✓ User blocked successfully');
                 this.loadUsers();
+            } else if (response.status === 403) {
+                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
             } else {
                 const error = await response.json();
                 window.toast.error(`❌ ${error.detail || 'Failed to block user'}`);
@@ -358,14 +370,20 @@ class AdminPanel {
 
     async unblockUser(userId) {
         try {
+            const csrfHeaders = await window.csrfManager.getHeaders();
             const response = await fetch(`/api/admin/users/${userId}/unblock`, {
                 method: 'PUT',
-                headers: this.getAuthHeaders()
+                headers: {
+                    ...this.getAuthHeaders(),
+                    ...csrfHeaders
+                }
             });
 
             if (response.ok) {
                 window.toast.success('✓ User unblocked successfully');
                 this.loadUsers();
+            } else if (response.status === 403) {
+                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
             } else {
                 const error = await response.json();
                 window.toast.error(`❌ ${error.detail || 'Failed to unblock user'}`);
@@ -382,14 +400,20 @@ class AdminPanel {
         }
 
         try {
+            const csrfHeaders = await window.csrfManager.getHeaders();
             const response = await fetch(`/api/admin/users/${userId}`, {
                 method: 'DELETE',
-                headers: this.getAuthHeaders()
+                headers: {
+                    ...this.getAuthHeaders(),
+                    ...csrfHeaders
+                }
             });
 
             if (response.ok) {
                 window.toast.success(`✓ User "${username}" deleted successfully`);
                 this.loadUsers();
+            } else if (response.status === 403) {
+                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
             } else {
                 const error = await response.json();
                 window.toast.error(`❌ ${error.detail || 'Failed to delete user'}`);
@@ -459,33 +483,54 @@ class AdminPanel {
         let successCount = 0;
         let errorCount = 0;
 
+        // Get CSRF headers once for all requests
+        const csrfHeaders = await window.csrfManager.getHeaders();
+
         for (const userId of userIds) {
             try {
                 let response;
                 if (action === 'approve') {
                     response = await fetch(`/api/admin/users/${userId}/approve`, {
                         method: 'PUT',
-                        headers: this.getAuthHeaders()
+                        headers: {
+                            ...this.getAuthHeaders(),
+                            ...csrfHeaders
+                        }
                     });
                 } else if (action === 'block') {
                     response = await fetch(`/api/admin/users/${userId}/block`, {
                         method: 'PUT',
-                        headers: this.getAuthHeaders()
+                        headers: {
+                            ...this.getAuthHeaders(),
+                            ...csrfHeaders
+                        }
                     });
                 } else if (action === 'unblock') {
                     response = await fetch(`/api/admin/users/${userId}/unblock`, {
                         method: 'PUT',
-                        headers: this.getAuthHeaders()
+                        headers: {
+                            ...this.getAuthHeaders(),
+                            ...csrfHeaders
+                        }
                     });
                 } else if (action === 'delete') {
                     response = await fetch(`/api/admin/users/${userId}`, {
                         method: 'DELETE',
-                        headers: this.getAuthHeaders()
+                        headers: {
+                            ...this.getAuthHeaders(),
+                            ...csrfHeaders
+                        }
                     });
                 }
 
                 if (response.ok) {
                     successCount++;
+                } else if (response.status === 403) {
+                    // CSRF error - stop processing
+                    window.loadingOverlay.hide();
+                    window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                    this.clearSelection();
+                    return;
                 } else {
                     errorCount++;
                 }
@@ -558,10 +603,12 @@ class AdminPanel {
         }
 
         try {
+            const csrfHeaders = await window.csrfManager.getHeaders();
             const response = await fetch('/api/admin/users', {
                 method: 'POST',
                 headers: {
                     ...this.getAuthHeaders(),
+                    ...csrfHeaders,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ username, email, role })
@@ -582,6 +629,8 @@ class AdminPanel {
                 await this.loadUsers();
 
                 window.toast.success(`✅ Utilisateur ${username} créé avec succès`);
+            } else if (response.status === 403) {
+                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
             } else {
                 const error = await response.json();
                 window.toast.error(error.detail || 'Erreur lors de la création');

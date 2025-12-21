@@ -497,6 +497,11 @@ function handleLogout() {
     localStorage.removeItem('token_type');
     localStorage.removeItem('current_user');
 
+    // Clear CSRF token and stop auto-refresh
+    if (window.csrfManager) {
+        window.csrfManager.clear();
+    }
+
     // Show toast notification
     if (window.toast) {
         window.toast.info('Déconnexion réussie', 2000);

@@ -7,12 +7,15 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_csrf_protect.exceptions import CsrfProtectError
 
-from app.api.routes import auth, health, progress, reports, upload, views
+from app.api.routes import auth, csrf, health, progress, reports, upload, views
+from app.security.csrf import requires_csrf_protection
 from app.services.cleanup import CleanupScheduler
 from app.services.database import get_db_service
 from app.services.user_database import get_user_db_service
@@ -95,7 +98,52 @@ app = FastAPI(
     },
 )
 
-# CORS middleware (à configurer selon environnement)
+
+# ========================================
+# CSRF PROTECTION CONFIGURATION
+# ========================================
+
+# Exception handler for CSRF errors
+@app.exception_handler(CsrfProtectError)
+async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
+    """
+    Handle CSRF validation errors.
+    Returns HTTP 403 Forbidden with detailed error message.
+    """
+    logger.warning(
+        f"CSRF validation failed: {exc.message} "
+        f"(method={request.method}, path={request.url.path})"
+    )
+    return JSONResponse(
+        status_code=403,
+        content={
+            "detail": "CSRF token validation failed. Please refresh the page and try again.",
+            "error_type": "csrf_validation_failed",
+        },
+    )
+
+
+# CSRF Middleware (MUST be BEFORE CORS middleware!)
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    """
+    CSRF protection middleware.
+    Validates CSRF token for state-changing requests (POST, PUT, PATCH, DELETE).
+
+    IMPORTANT: This middleware MUST be registered BEFORE CORS middleware
+    to ensure CSRF validation happens before CORS headers are added.
+    """
+    # Check if this request requires CSRF protection
+    if requires_csrf_protection(request):
+        # CSRF validation will be done by CsrfProtect dependency in route handlers
+        # This middleware just logs that CSRF check is required
+        logger.debug(f"CSRF check required: {request.method} {request.url.path}")
+
+    response = await call_next(request)
+    return response
+
+
+# CORS middleware (AFTER CSRF middleware!)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # TODO: Restreindre en production
@@ -111,6 +159,7 @@ if static_path.exists():
 
 # Inclusion des routes API
 app.include_router(auth.router)  # Auth router has its own prefix
+app.include_router(csrf.router)  # CSRF router (requires authentication)
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(progress.router, prefix="/api", tags=["progress"])

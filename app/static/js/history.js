@@ -445,18 +445,29 @@ class HistoryManager {
         let successCount = 0;
         let errorCount = 0;
 
+        // Get CSRF headers
+        const csrfHeaders = await window.csrfManager.getHeaders();
+
         // Delete tasks one by one
         for (const taskId of taskIds) {
             try {
                 const response = await fetch(`/api/reports/${taskId}`, {
                     method: 'DELETE',
-                    headers: this.getAuthHeaders()
+                    headers: {
+                        ...this.getAuthHeaders(),
+                        ...csrfHeaders
+                    }
                 });
 
                 if (response.ok) {
                     successCount++;
                 } else if (response.status === 401) {
                     window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+                    return;
+                } else if (response.status === 403) {
+                    // CSRF error
+                    window.loadingOverlay.hide();
+                    window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
                     return;
                 } else {
                     errorCount++;
@@ -492,9 +503,15 @@ class HistoryManager {
         }
 
         try {
+            // Get CSRF headers
+            const csrfHeaders = await window.csrfManager.getHeaders();
+
             const response = await fetch(`/api/reports/${taskId}`, {
                 method: 'DELETE',
-                headers: this.getAuthHeaders()
+                headers: {
+                    ...this.getAuthHeaders(),
+                    ...csrfHeaders
+                }
             });
 
             if (response.ok) {
@@ -503,6 +520,9 @@ class HistoryManager {
                 this.loadHistory();
             } else if (response.status === 401) {
                 window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            } else if (response.status === 403) {
+                // CSRF error
+                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
             } else {
                 const data = await response.json();
                 throw new Error(data.detail || 'Erreur lors de la suppression');

@@ -222,7 +222,12 @@ class UploadManager {
         const formData = new FormData();
         formData.append('file', this.selectedFile);
 
-        const headers = this.getAuthHeaders();
+        // Get CSRF headers and merge with auth headers
+        const csrfHeaders = await window.csrfManager.getHeaders();
+        const headers = {
+            ...this.getAuthHeaders(),
+            ...csrfHeaders
+        };
         console.log('Upload - Headers:', headers);
 
         try {
@@ -253,8 +258,15 @@ class UploadManager {
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('token_type');
                 localStorage.removeItem('current_user');
+                window.csrfManager.clear();
                 window.loadingOverlay.hide();
                 window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            } else if (response.status === 403) {
+                // CSRF validation failed
+                window.loadingOverlay.hide();
+                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                // Revenir à l'état initial
+                this.clearFile();
             } else {
                 // Erreur
                 throw new Error(data.detail || 'Erreur lors de l\'upload');
