@@ -37,25 +37,29 @@ def sanitize_file_path(text: str) -> str:
         text: Error message that may contain file paths
 
     Returns:
-        Text with file paths replaced by [PATH_REDACTED]
+        Text with user paths replaced by [USER] and other paths by [PATH_REDACTED]
 
     Examples:
         >>> sanitize_file_path("No such file: /home/user/secret.pcap")
-        'No such file: [PATH_REDACTED]'
-        >>> sanitize_file_path("Error in /var/lib/app/config.py line 42")
-        'Error in [PATH_REDACTED] line 42'
+        'No such file: /home/[USER]/secret.pcap'
+        >>> sanitize_file_path("Error in /Users/alice/Documents/file.py")
+        'Error in /Users/[USER]/Documents/file.py'
     """
-    # Pattern matches common file path formats (Unix and Windows)
-    # Matches: /path/to/file, C:\path\to\file, ./relative/path, etc.
-    patterns = [
-        r'(?:[A-Za-z]:)?(?:[\\/][^\\/\s:]+)+(?:\.\w+)?',  # Absolute/relative paths
-        r'(?:file://)?/[^\s]+',  # file:// URLs
-        r'[A-Za-z]:\\[^\s]+',  # Windows paths
-    ]
-
     sanitized = text
-    for pattern in patterns:
-        sanitized = re.sub(pattern, '[PATH_REDACTED]', sanitized)
+
+    # Redact user-specific paths with [USER] placeholder
+    # Unix: /home/username
+    sanitized = re.sub(r'/home/([^/\s]+)', '/home/[USER]', sanitized)
+
+    # macOS: /Users/username
+    sanitized = re.sub(r'/Users/([^/\s]+)', '/Users/[USER]', sanitized)
+
+    # Windows: C:\Users\username
+    sanitized = re.sub(r'C:\\Users\\([^\\s]+)', r'C:\\Users\\[USER]', sanitized)
+    sanitized = re.sub(r'C:/Users/([^/\s]+)', 'C:/Users/[USER]', sanitized)
+
+    # DON'T redact system paths like /tmp, /var, /etc (safe, non-user-specific)
+    # These are already generic and don't expose user information
 
     return sanitized
 
@@ -84,6 +88,50 @@ def sanitize_python_internals(text: str) -> str:
 
     # Remove traceback line references
     sanitized = re.sub(r'File\s+"[^"]+",\s+line\s+\d+', 'File [PATH_REDACTED], line [LINE_REDACTED]', sanitized)
+
+    return sanitized
+
+
+def sanitize_stack_trace(text: str) -> str:
+    """
+    Remove stack traces from error messages.
+
+    Alias for sanitize_python_internals that also removes traceback headers.
+    """
+    # Remove traceback header
+    sanitized = re.sub(r'Traceback \(most recent call last\):.*', '', text, flags=re.DOTALL)
+
+    # Remove any remaining Python internals
+    sanitized = sanitize_python_internals(sanitized)
+
+    # If everything was removed, return generic message
+    if not sanitized or sanitized.isspace():
+        return "An error occurred"
+
+    return sanitized.strip()
+
+
+def sanitize_error_message(text: str, context: Optional[str] = None) -> str:
+    """
+    Sanitize an error message text by removing sensitive information.
+
+    This function combines file path and Python internals sanitization.
+
+    Args:
+        text: Error message text to sanitize
+        context: Optional context (currently unused, for API compatibility)
+
+    Returns:
+        Sanitized error message
+    """
+    sanitized = sanitize_file_path(text)
+    sanitized = sanitize_python_internals(sanitized)
+
+    # Redact common credential patterns
+    sanitized = re.sub(r'(?:password|passwd|pwd|secret|token|key|api[-_]?key)\s*[=:]\s*[^\s]+', '[CREDENTIAL_REDACTED]', sanitized, flags=re.IGNORECASE)
+
+    # Redact connection strings
+    sanitized = re.sub(r'(?:postgresql|mysql|mongodb)://[^@]+@[^\s]+', '[CONNECTION_REDACTED]', sanitized)
 
     return sanitized
 
