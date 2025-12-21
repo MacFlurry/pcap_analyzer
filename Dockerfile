@@ -67,6 +67,8 @@ WORKDIR /app
 COPY --chown=pcapuser:pcapuser src/ ./src/
 COPY --chown=pcapuser:pcapuser app/ ./app/
 COPY --chown=pcapuser:pcapuser config.yaml ./
+COPY --chown=pcapuser:pcapuser alembic/ ./alembic/
+COPY --chown=pcapuser:pcapuser alembic.ini ./
 
 # Copy entrypoint script and make it executable
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

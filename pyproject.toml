@@ -59,6 +59,8 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",  # Password hashing with bcrypt
     "bcrypt>=3.2.0,<4.0",  # Pin to 3.x for passlib compatibility
     "email-validator>=2.0.0",  # EmailStr validation in Pydantic
+    "fastapi-csrf-protect>=0.3.4,<1.0",  # CSRF protection (OWASP ASVS 4.2.2)
+    "zxcvbn>=4.5.0,<5.0",  # Password strength estimation (Issue #23)
 ]
 
 [project.optional-dependencies]
