@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from app.auth import get_current_user, get_current_user_sse, verify_ownership
 from app.models.user import User
 from app.services.database import get_db_service
+from app.utils.path_validator import validate_task_id, validate_path_in_directory
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ async def get_html_report(task_id: str, current_user: User = Depends(get_current
     Note:
         Token can be passed via query param for browser navigation compatibility.
     """
+    # Validate task_id format (UUID v4) to prevent path traversal
+    task_id = validate_task_id(task_id)
+
     db_service = get_db_service()
     task_info = await db_service.get_task(task_id)
 
@@ -64,6 +68,9 @@ async def get_html_report(task_id: str, current_user: User = Depends(get_current
 
     # Vérifier que le rapport existe
     html_path = REPORTS_DIR / f"{task_id}.html"
+
+    # Defense-in-depth: Verify resolved path is within REPORTS_DIR
+    html_path = validate_path_in_directory(html_path, REPORTS_DIR)
 
     if not html_path.exists():
         raise HTTPException(
@@ -100,6 +107,9 @@ async def get_json_report(task_id: str, current_user: User = Depends(get_current
         HTTPException 403: If user doesn't own the task
         HTTPException 404: Si la tâche ou le rapport n'existe pas
     """
+    # Validate task_id format (UUID v4) to prevent path traversal
+    task_id = validate_task_id(task_id)
+
     db_service = get_db_service()
     task_info = await db_service.get_task(task_id)
 
@@ -119,6 +129,9 @@ async def get_json_report(task_id: str, current_user: User = Depends(get_current
 
     # Vérifier que le rapport existe
     json_path = REPORTS_DIR / f"{task_id}.json"
+
+    # Defense-in-depth: Verify resolved path is within REPORTS_DIR
+    json_path = validate_path_in_directory(json_path, REPORTS_DIR)
 
     if not json_path.exists():
         raise HTTPException(
@@ -155,6 +168,9 @@ async def delete_report(task_id: str, current_user: User = Depends(get_current_u
         HTTPException 403: If user doesn't own the task
         HTTPException 404: Si la tâche n'existe pas
     """
+    # Validate task_id format (UUID v4) to prevent path traversal
+    task_id = validate_task_id(task_id)
+
     db_service = get_db_service()
     task_info = await db_service.get_task(task_id)
 
@@ -175,6 +191,10 @@ async def delete_report(task_id: str, current_user: User = Depends(get_current_u
     # Supprimer les fichiers
     html_path = REPORTS_DIR / f"{task_id}.html"
     json_path = REPORTS_DIR / f"{task_id}.json"
+
+    # Defense-in-depth: Verify resolved paths are within REPORTS_DIR
+    html_path = validate_path_in_directory(html_path, REPORTS_DIR)
+    json_path = validate_path_in_directory(json_path, REPORTS_DIR)
 
     deleted_files = []
 

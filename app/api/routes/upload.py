@@ -15,6 +15,7 @@ from app.models.schemas import UploadResponse
 from app.models.user import User
 from app.services.database import get_db_service
 from app.services.worker import get_worker
+from app.utils.path_validator import validate_filename, validate_path_in_directory
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +121,11 @@ async def upload_pcap(
             detail="Erreur lors de la lecture du fichier",
         )
 
-    # Validation
-    validate_pcap_file(file.filename, file_size)
+    # Validation: Sanitize filename (path traversal protection)
+    sanitized_filename = validate_filename(file.filename)
+
+    # Validation: Size and format
+    validate_pcap_file(sanitized_filename, file_size)
     validate_pcap_magic_bytes(content)
 
     # Générer un task_id unique
@@ -131,7 +135,11 @@ async def upload_pcap(
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Sauvegarder le fichier dans uploads/
-    upload_path = UPLOADS_DIR / f"{task_id}{Path(file.filename).suffix}"
+    upload_path = UPLOADS_DIR / f"{task_id}{Path(sanitized_filename).suffix}"
+
+    # Defense-in-depth: Verify resolved path is within UPLOADS_DIR
+    upload_path = validate_path_in_directory(upload_path, UPLOADS_DIR)
+
     try:
         with open(upload_path, "wb") as f:
             f.write(content)
