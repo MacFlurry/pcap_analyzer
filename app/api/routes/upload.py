@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from app.auth import get_current_user
 from app.models.schemas import UploadResponse
 from app.models.user import User
+from app.security.csrf import validate_csrf_token
 from app.services.database import get_db_service
 from app.services.worker import get_worker
 from app.utils.path_validator import validate_filename, validate_path_in_directory
@@ -87,7 +88,12 @@ def validate_pcap_magic_bytes(file_content: bytes) -> None:
         )
 
 
-@router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/upload",
+    response_model=UploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(validate_csrf_token)],
+)
 async def upload_pcap(
     file: UploadFile = File(...),  # noqa: B008
     current_user: User = Depends(get_current_user),

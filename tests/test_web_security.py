@@ -573,11 +573,19 @@ async def client():
         os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/pcap_analyzer.db"
         os.environ["SECRET_KEY"] = "test-secret-key-for-jwt-signing-in-tests-minimum-32-chars"
 
-        # Clear singletons
+        # Clear singletons and reload modules to pick up new DATA_DIR
         import sys
         from app.services import database, user_database
         database._db_service = None
         user_database._user_db_service = None
+
+        # Force reload of modules that have DATA_DIR constants
+        # This ensures they pick up the new DATA_DIR environment variable
+        if 'app.api.routes.upload' in sys.modules:
+            import importlib
+            importlib.reload(sys.modules['app.api.routes.upload'])
+        if 'app.api.routes.reports' in sys.modules:
+            importlib.reload(sys.modules['app.api.routes.reports'])
 
         # Now import app (it will use the temp DATA_DIR)
         from app.main import app

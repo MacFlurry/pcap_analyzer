@@ -11,7 +11,7 @@ References:
 import os
 from typing import Optional
 
-from fastapi import Request
+from fastapi import Depends, Request
 from fastapi_csrf_protect import CsrfProtect
 from pydantic import BaseModel
 
@@ -110,3 +110,23 @@ def requires_csrf_protection(request: Request) -> bool:
         return False
 
     return True
+
+
+async def validate_csrf_token(
+    request: Request,
+    csrf_protect: CsrfProtect = Depends(),
+) -> None:
+    """
+    FastAPI dependency to validate CSRF token for protected endpoints.
+
+    Usage:
+        @router.post("/upload", dependencies=[Depends(validate_csrf_token)])
+        async def upload_file(...):
+            ...
+
+    Raises:
+        CsrfProtectError: If CSRF validation fails
+    """
+    # Only validate if this endpoint requires CSRF protection
+    if requires_csrf_protection(request):
+        await csrf_protect.validate_csrf(request, secret_key=csrf_settings.secret_key)
