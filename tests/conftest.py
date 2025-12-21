@@ -3,6 +3,7 @@ Pytest fixtures et configuration commune pour les tests
 """
 
 import asyncio
+import asyncpg
 import os
 import tempfile
 from collections.abc import AsyncGenerator, Generator
@@ -13,6 +14,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
+from passlib.context import CryptContext
 
 # Import app
 from app.main import app
@@ -185,10 +187,38 @@ def client(test_data_dir: Path, monkeypatch) -> Generator[TestClient, None, None
 
 
 @pytest.fixture
-async def async_client() -> AsyncGenerator[AsyncClient, None]:
-    """Create async test client"""
+async def async_client(
+    test_data_dir,
+    test_postgres_pool,
+    monkeypatch
+) -> AsyncGenerator[AsyncClient, None]:
+    """Async HTTP client for testing FastAPI endpoints."""
+    from app.services import database, worker
+    from app.services.database import DatabaseService
+
+    monkeypatch.setenv("DATA_DIR", str(test_data_dir))
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        os.getenv("DATABASE_URL", "postgresql://pcap:change_me_in_production@localhost:5432/pcap_analyzer_test")
+    )
+
+    # Reset singletons
+    database._db_service = None
+    worker._worker = None
+
+    # CRITICAL: Initialize database before yielding client
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "postgresql://pcap:change_me_in_production@localhost:5432/pcap_analyzer_test"
+    )
+    db = DatabaseService(database_url=database_url)
+    await db.init_db()
+
     async with AsyncClient(app=app, base_url="http://test") as ac:
         yield ac
+
+    # Cleanup
+    await cleanup_database(db.pool)
 
 
 @pytest.fixture
@@ -324,3 +354,136 @@ def sample_tcp_data_packet():
     pkt = Ether() / IP(src="192.168.1.1", dst="192.168.1.2") / TCP(sport=12345, dport=80, flags="PA", seq=1000, ack=2000) / Raw(load=b"Test data")
     pkt.time = 1.0
     return pkt
+
+
+# =============================================================================
+# PostgreSQL Integration Test Fixtures
+# =============================================================================
+
+
+@pytest.fixture(scope="session")
+async def ensure_postgres_ready():
+    """Wait for PostgreSQL to be ready (max 30s)."""
+    url = os.getenv(
+        "DATABASE_URL",
+        "postgresql://pcap:change_me_in_production@localhost:5432/pcap_analyzer_test"
+    )
+
+    for attempt in range(30):
+        try:
+            conn = await asyncpg.connect(url)
+            await conn.close()
+            return  # PostgreSQL ready
+        except Exception:
+            await asyncio.sleep(1)
+
+    raise RuntimeError("PostgreSQL not ready after 30s")
+
+
+async def cleanup_database(pool):
+    """Truncate all tables for test isolation (fast and reliable)."""
+    try:
+        await pool.execute("""
+            TRUNCATE TABLE progress_snapshots, tasks, users
+            RESTART IDENTITY CASCADE
+        """)
+    except Exception:
+        # Tables might not exist (e.g., after migration downgrade test)
+        pass
+
+
+@pytest.fixture(scope="session")
+async def test_postgres_pool(ensure_postgres_ready):
+    """PostgreSQL connection pool fixture (SHARED across all tests)."""
+    from app.services.postgres_database import DatabasePool
+
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "postgresql://pcap:change_me_in_production@localhost:5432/pcap_analyzer_test"
+    )
+
+    pool = DatabasePool(database_url=database_url)
+    await pool.connect()
+
+    yield pool
+
+    # Cleanup: close pool ONCE at end of session
+    await pool.close()
+
+
+@pytest.fixture(scope="function")
+async def test_postgres_db(test_postgres_pool):
+    """PostgreSQL DatabaseService fixture with TRUNCATE-based isolation."""
+    from app.services.database import DatabaseService
+
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "postgresql://pcap:change_me_in_production@localhost:5432/pcap_analyzer_test"
+    )
+
+    db = DatabaseService(database_url=database_url)
+
+    # Run migrations (idempotent)
+    await db.init_db()
+
+    yield db
+
+    # Cleanup: TRUNCATE all tables
+    await cleanup_database(db.pool)
+
+
+@pytest.fixture
+async def test_users(test_postgres_db):
+    """Create test users for multi-tenant and CASCADE DELETE tests."""
+    import uuid
+
+    users = {
+        "user_a": {
+            "id": str(uuid.uuid4()),
+            "username": "user_a",
+            "email": "a@test.com",
+            "hashed_password": "hashed_password_123",
+            "role": "user",
+            "is_active": True,
+            "is_approved": True,
+        },
+        "user_b": {
+            "id": str(uuid.uuid4()),
+            "username": "user_b",
+            "email": "b@test.com",
+            "hashed_password": "hashed_password_123",
+            "role": "user",
+            "is_active": True,
+            "is_approved": True,
+        },
+        "admin": {
+            "id": str(uuid.uuid4()),
+            "username": "admin",
+            "email": "admin@test.com",
+            "hashed_password": "hashed_admin_123",
+            "role": "admin",
+            "is_active": True,
+            "is_approved": True,
+        },
+    }
+
+    # Insert users
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    for user_data in users.values():
+        await test_postgres_db.pool.execute(
+            """
+            INSERT INTO users (id, username, email, hashed_password, role, is_active, is_approved, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            """,
+            user_data["id"],
+            user_data["username"],
+            user_data["email"],
+            user_data["hashed_password"],
+            user_data["role"],
+            user_data["is_active"],
+            user_data["is_approved"],
+            now,
+        )
+
+    return users  # Return for easy access: test_users["user_a"]["id"]
