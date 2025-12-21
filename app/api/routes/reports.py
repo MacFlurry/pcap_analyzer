@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from app.auth import get_current_user, get_current_user_sse, verify_ownership
 from app.models.user import User
+from app.security.csrf import validate_csrf_token
 from app.services.database import get_db_service
 from app.utils.path_validator import validate_task_id, validate_path_in_directory
 
@@ -148,7 +149,7 @@ async def get_json_report(task_id: str, current_user: User = Depends(get_current
     )
 
 
-@router.delete("/reports/{task_id}")
+@router.delete("/reports/{task_id}", dependencies=[Depends(validate_csrf_token)])
 async def delete_report(task_id: str, current_user: User = Depends(get_current_user)):
     """
     Supprime les rapports d'une tâche (HTML et JSON).

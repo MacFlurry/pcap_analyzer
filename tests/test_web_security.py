@@ -125,6 +125,10 @@ class TestPathTraversal:
         VULNERABILITY: app/api/routes/upload.py:49
         FIX: Extract basename only from filename
         """
+        # Get auth tokens (upload requires authentication AND CSRF)
+        jwt_token = await get_test_jwt_token(client)
+        csrf_token = await get_csrf_token(client, jwt_token)
+
         # Create a fake PCAP file
         pcap_magic = b'\xa1\xb2\xc3\xd4'  # PCAP magic number
         pcap_content = pcap_magic + b'\x00' * 1000
@@ -133,28 +137,40 @@ class TestPathTraversal:
         malicious_filename = "../../etc/cron.d/evil.pcap"
 
         files = {"file": (malicious_filename, pcap_content, "application/vnd.tcpdump.pcap")}
-        response = await client.post("/api/upload", files=files)
+        headers = {
+            "Authorization": f"Bearer {jwt_token}",
+            "X-CSRF-Token": csrf_token
+        }
+        response = await client.post("/api/upload", files=files, headers=headers)
 
         # File should be saved with basename only (evil.pcap), not full path
-        # This test will need auth once #15 is fixed
-        # For now, check that server doesn't crash
-        assert response.status_code in [200, 201, 401], "Should handle malicious filename gracefully"
+        # Server should accept the upload (202) after sanitizing the filename
+        assert response.status_code == 202, \
+            f"Should handle malicious filename gracefully (got {response.status_code}: {response.text})"
 
     async def test_delete_with_path_traversal_rejected(self, client: AsyncClient):
-        """Test that DELETE with path traversal is rejected."""
+        """Test that DELETE with non-UUID task_id (potential path traversal) is rejected."""
         # Get auth tokens (delete requires authentication AND CSRF)
         jwt_token = await get_test_jwt_token(client)
         csrf_token = await get_csrf_token(client, jwt_token)
 
-        malicious_task_id = "../../../data/pcap_analyzer.db"
+        # Use malicious IDs that aren't valid UUIDs (no slashes to avoid routing issues)
+        malicious_task_ids = [
+            "not-a-uuid-at-all",
+            "12345",
+            "admin",
+            "x" * 50,
+        ]
 
         headers = {
             "Authorization": f"Bearer {jwt_token}",
             "X-CSRF-Token": csrf_token
         }
-        response = await client.delete(f"/api/reports/{malicious_task_id}", headers=headers)
 
-        assert response.status_code == 400, "Should reject path traversal in DELETE"
+        for malicious_id in malicious_task_ids:
+            response = await client.delete(f"/api/reports/{malicious_id}", headers=headers)
+            assert response.status_code == 400, \
+                f"Should reject non-UUID task_id in DELETE: {malicious_id} (got {response.status_code})"
 
 
 # =============================================================================
