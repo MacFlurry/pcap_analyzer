@@ -37,7 +37,7 @@ async def get_test_jwt_token(client: AsyncClient) -> str:
         JWT token string
     """
     # Login with test admin credentials (same as fixture)
-    credentials = {"username": "admin", "password": "TestPassword123"}
+    credentials = {"username": "admin", "password": "testpass1234"}
     response = await client.post("/api/token", data=credentials)
 
     if response.status_code != 200:
@@ -77,22 +77,33 @@ class TestPathTraversal:
 
     async def test_task_id_with_path_traversal_rejected(self, client: AsyncClient):
         """
-        Test that task_id with ../ sequences is rejected.
+        Test that task_id with non-UUID format (potential path traversal) is rejected.
 
         VULNERABILITY: app/api/routes/reports.py:47
-        FIX: Validate task_id is UUID v4 format
+        FIX: Validate task_id is UUID v4 format before file operations
         """
         # Get auth token (reports require authentication)
         jwt_token = await get_test_jwt_token(client)
 
-        # Try to access /etc/passwd via path traversal
-        malicious_task_id = "../../../etc/passwd"
+        # Test various malicious task_ids that aren't valid UUIDs
+        # Note: Avoid IDs with slashes as FastAPI normalizes them at routing level (404)
+        malicious_task_ids = [
+            "not-a-uuid",        # Invalid format
+            "12345",             # Number only
+            "..invalid..",       # Dots (potential traversal)
+            "admin",             # Simple string
+            "x" * 100,           # Too long
+        ]
 
         headers = {"Authorization": f"Bearer {jwt_token}"}
-        response = await client.get(f"/api/reports/{malicious_task_id}/html", headers=headers)
 
-        assert response.status_code == 400, "Should reject path traversal in task_id"
-        assert "Invalid task_id format" in response.json()["detail"]
+        for malicious_id in malicious_task_ids:
+            response = await client.get(f"/api/reports/{malicious_id}/html", headers=headers)
+            # Should reject non-UUID formats with 400
+            assert response.status_code == 400, \
+                f"Should reject malicious task_id '{malicious_id}' (got {response.status_code})"
+            assert "Invalid task_id format" in response.json()["detail"], \
+                f"Expected 'Invalid task_id format' in error message for '{malicious_id}'"
 
     async def test_task_id_valid_uuid_accepted(self, client: AsyncClient):
         """Test that valid UUID v4 task_id is accepted (even if task doesn't exist)."""
@@ -552,10 +563,15 @@ async def client():
     tmpdir = Path(tempfile.mkdtemp(prefix="pcap_test_"))
 
     try:
-        # Set DATA_DIR environment variable to temp directory
+        # Set environment variables to temp directory
         # This must be done BEFORE importing app
         original_data_dir = os.environ.get("DATA_DIR")
+        original_database_url = os.environ.get("DATABASE_URL")
+        original_secret_key = os.environ.get("SECRET_KEY")
+
         os.environ["DATA_DIR"] = str(tmpdir)
+        os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/pcap_analyzer.db"
+        os.environ["SECRET_KEY"] = "test-secret-key-for-jwt-signing-in-tests-minimum-32-chars"
 
         # Clear singletons
         import sys
@@ -576,11 +592,14 @@ async def client():
         user_db_service = get_user_db_service()
         await user_db_service.init_db()
 
+        # Run tasks table migration to add owner_id column (multi-tenant)
+        await user_db_service.migrate_tasks_table()
+
         # Create test admin user
         admin_user = UserCreate(
             username="admin",
             email="admin@example.com",
-            password="TestPassword123"
+            password="testpass1234"  # 12 chars minimum for NIST SP 800-63B
         )
         await user_db_service.create_user(admin_user, role=UserRole.ADMIN, auto_approve=True)
 
@@ -592,11 +611,21 @@ async def client():
         # Cleanup
         shutil.rmtree(tmpdir, ignore_errors=True)
 
-        # Restore original DATA_DIR
+        # Restore original environment variables
         if original_data_dir:
             os.environ["DATA_DIR"] = original_data_dir
         elif "DATA_DIR" in os.environ:
             del os.environ["DATA_DIR"]
+
+        if original_database_url:
+            os.environ["DATABASE_URL"] = original_database_url
+        elif "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
+
+        if original_secret_key:
+            os.environ["SECRET_KEY"] = original_secret_key
+        elif "SECRET_KEY" in os.environ:
+            del os.environ["SECRET_KEY"]
 
         # Reset singletons
         database._db_service = None

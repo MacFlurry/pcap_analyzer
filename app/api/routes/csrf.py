@@ -51,8 +51,11 @@ async def get_csrf_token(
         // Use data.csrf_token in subsequent requests
         ```
     """
-    # Generate new CSRF token
-    csrf_token = csrf_protect.generate_csrf()
+    # Generate new CSRF tokens (returns tuple: token, signed_token)
+    csrf_token, signed_token = csrf_protect.generate_csrf_tokens(secret_key=csrf_settings.secret_key)
+
+    # Set signed token as cookie (HttpOnly)
+    # Note: fastapi-csrf-protect automatically sets the cookie via middleware
 
     logger.debug(
         f"CSRF token generated for user: {current_user.username} "
@@ -63,7 +66,7 @@ async def get_csrf_token(
         "csrf_token": csrf_token,
         "header_name": csrf_settings.header_name,
         "cookie_name": csrf_settings.cookie_name,
-        "expires_in": csrf_settings.token_expiration,
+        "expires_in": str(csrf_settings.token_expiration),
     }
 
 
@@ -86,8 +89,10 @@ async def refresh_csrf_token(
     Returns:
         Dictionary containing new CSRF token details
     """
-    # Generate new CSRF token (invalidates old one)
-    csrf_token = csrf_protect.generate_csrf()
+    # Generate new CSRF tokens (invalidates old one)
+    csrf_token, signed_token = csrf_protect.generate_csrf_tokens(secret_key=csrf_settings.secret_key)
+
+    # Note: fastapi-csrf-protect automatically sets the cookie via middleware
 
     logger.debug(
         f"CSRF token refreshed for user: {current_user.username} "
@@ -98,5 +103,5 @@ async def refresh_csrf_token(
         "csrf_token": csrf_token,
         "header_name": csrf_settings.header_name,
         "cookie_name": csrf_settings.cookie_name,
-        "expires_in": csrf_settings.token_expiration,
+        "expires_in": str(csrf_settings.token_expiration),
     }

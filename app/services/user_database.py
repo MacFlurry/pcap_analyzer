@@ -19,15 +19,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from passlib.context import CryptContext
+import bcrypt
 
 from app.models.user import User, UserCreate, UserRole
 from app.services.postgres_database import DatabasePool
 
 logger = logging.getLogger(__name__)
 
-# Password hashing context (bcrypt with cost factor 12)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+# Bcrypt cost factor (12 rounds = recommended for 2025)
+BCRYPT_ROUNDS = 12
 
 
 def _parse_timestamp(value) -> Optional[datetime]:
@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS users (
     is_approved BOOLEAN NOT NULL DEFAULT 0,
     approved_by TEXT,
     approved_at TIMESTAMP,
+    password_must_change BOOLEAN NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL,
     last_login TIMESTAMP,
     CONSTRAINT role_check CHECK (role IN ('admin', 'user'))
@@ -140,81 +141,100 @@ class UserDatabaseService:
 
     async def create_admin_breakglass_if_not_exists(self) -> Optional[str]:
         """
-        Create admin brise-glace account if no admin exists.
+        Create or update admin brise-glace account.
 
         Returns:
-            Generated password (to display in logs), or None if admin already exists
+            Admin password (to display in logs), or None if admin exists and no secrets file
 
-        Behavior (like Grafana):
-        1. Check if any admin user exists
-        2. If not, create admin with random password
-        3. Return password to display in startup logs
-        4. Admin can change password via /users/me endpoint
-        """
-        # Check if admin already exists
-        query, params = self.pool.translate_query(
-            "SELECT COUNT(*) as count FROM users WHERE role = ?",
-            ("admin",),
-        )
-        row = await self.pool.fetch_one(query, *params)
-        admin_count = row["count"] if row else 0
+        Behavior:
+        1. If no admin exists → create admin with password from secrets or random
+        2. If admin exists AND secrets file exists → update password from secrets file
+        3. If admin exists AND no secrets file → do nothing (keep existing password)
+        4. Return password to display in startup logs
 
-        if admin_count > 0:
-            logger.info("Admin account already exists")
-            return None
-
-        # Read password from Docker secrets or generate random
-        admin_password = self._get_admin_password()
-
-        # Create admin user
-        admin_user = UserCreate(
-            username="admin",
-            email="omegabk@gmail.com",
-            password=admin_password,
-        )
-
-        await self.create_user(admin_user, role=UserRole.ADMIN)
-
-        logger.warning("=" * 80)
-        logger.warning("🔒 ADMIN BRISE-GLACE ACCOUNT CREATED")
-        logger.warning("=" * 80)
-        logger.warning(f"Username: admin")
-        logger.warning(f"Password: {admin_password}")
-        logger.warning("")
-        logger.warning("⚠️  CHANGE THIS PASSWORD IMMEDIATELY AFTER FIRST LOGIN!")
-        logger.warning("   Use: PUT /api/users/me with new password")
-        logger.warning("=" * 80)
-
-        return admin_password
-
-    def _get_admin_password(self) -> str:
-        """
-        Get admin password from Docker secrets or generate random fallback.
-
-        Priority:
-        1. /var/run/secrets/admin_password (Docker/Kubernetes)
-        2. Generate random password (dev/fallback)
-
-        Returns:
-            Admin password string
+        This ensures that rebuilding the container with a new secrets file will
+        automatically update the admin password.
         """
         from pathlib import Path
 
-        # Try to read from Docker/Kubernetes secrets
+        # Check if secrets file exists
         secrets_file = Path("/var/run/secrets/admin_password")
+        secrets_password = None
         if secrets_file.exists():
             try:
-                password = secrets_file.read_text().strip()
-                if password:
-                    logger.info("✅ Admin password loaded from /var/run/secrets/admin_password")
-                    return password
-                else:
-                    logger.warning("⚠️  Admin password file is empty, generating random password")
+                secrets_password = secrets_file.read_text().strip()
+                if not secrets_password:
+                    logger.warning("⚠️  Admin password file is empty")
+                    secrets_password = None
             except Exception as e:
-                logger.warning(f"⚠️  Failed to read {secrets_file}: {e}, generating random password")
+                logger.warning(f"⚠️  Failed to read {secrets_file}: {e}")
+                secrets_password = None
 
-        # Fallback: generate random password (dev mode or secrets not available)
-        logger.info("🔐 Generating random admin password (no secrets file found)")
+        # Check if admin user already exists
+        query, params = self.pool.translate_query(
+            "SELECT id, username FROM users WHERE username = ?",
+            ("admin",),
+        )
+        admin_user = await self.pool.fetch_one(query, *params)
+
+        if admin_user:
+            # Admin exists
+            if secrets_password:
+                # Update admin password with secrets file
+                admin_id = str(admin_user["id"])
+                hashed_password = self.hash_password(secrets_password)
+
+                query, params = self.pool.translate_query(
+                    "UPDATE users SET hashed_password = ? WHERE id = ?",
+                    (hashed_password, admin_id),
+                )
+                await self.pool.execute(query, *params)
+
+                logger.warning("=" * 80)
+                logger.warning("🔐 ADMIN PASSWORD UPDATED FROM SECRETS FILE")
+                logger.warning("=" * 80)
+                logger.warning(f"Username: admin")
+                logger.warning(f"Password: {secrets_password}")
+                logger.warning("")
+                logger.warning("📝 Password synchronized with /var/run/secrets/admin_password")
+                logger.warning("=" * 80)
+
+                return secrets_password
+            else:
+                # Admin exists but no secrets file → keep existing password
+                logger.info("Admin account already exists (password unchanged)")
+                return None
+        else:
+            # No admin exists → create new admin
+            admin_password = secrets_password if secrets_password else self._generate_random_password()
+
+            admin_user_create = UserCreate(
+                username="admin",
+                email="omegabk@gmail.com",
+                password=admin_password,
+            )
+
+            await self.create_user(admin_user_create, role=UserRole.ADMIN, auto_approve=True)
+
+            logger.warning("=" * 80)
+            logger.warning("🔒 ADMIN BRISE-GLACE ACCOUNT CREATED")
+            logger.warning("=" * 80)
+            logger.warning(f"Username: admin")
+            logger.warning(f"Password: {admin_password}")
+            logger.warning("")
+            if secrets_password:
+                logger.warning("📝 Password loaded from /var/run/secrets/admin_password")
+            else:
+                logger.warning("🔐 Random password generated (no secrets file found)")
+            logger.warning("")
+            logger.warning("⚠️  CHANGE THIS PASSWORD IMMEDIATELY AFTER FIRST LOGIN!")
+            logger.warning("   Use: PUT /api/users/me with new password")
+            logger.warning("=" * 80)
+
+            return admin_password
+
+    def _generate_random_password(self) -> str:
+        """Generate secure random password (24 chars)."""
         return secrets.token_urlsafe(24)[:24]
 
     def hash_password(self, password: str) -> str:
@@ -227,7 +247,11 @@ class UserDatabaseService:
         Returns:
             Hashed password (bcrypt format)
         """
-        return pwd_context.hash(password)
+        # Truncate password to 72 bytes (bcrypt limitation)
+        password_bytes = password.encode('utf-8')[:72]
+        salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+        hashed = bcrypt.hashpw(password_bytes, salt)
+        return hashed.decode('utf-8')
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """
@@ -240,7 +264,10 @@ class UserDatabaseService:
         Returns:
             True if password matches
         """
-        return pwd_context.verify(plain_password, hashed_password)
+        # Truncate password to 72 bytes (bcrypt limitation)
+        password_bytes = plain_password.encode('utf-8')[:72]
+        hashed_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
 
     async def create_user(
         self, user_data: UserCreate, role: UserRole = UserRole.USER, auto_approve: bool = False, password_must_change: bool = False
