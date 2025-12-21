@@ -13,7 +13,7 @@ from typing import Dict
 from fastapi import APIRouter, Depends, Request
 from fastapi_csrf_protect import CsrfProtect
 
-from app.api.dependencies import get_current_user
+from app.auth import get_current_user
 from app.security.csrf import csrf_settings
 from app.services.user_database import User
 
