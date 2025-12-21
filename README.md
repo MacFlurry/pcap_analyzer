@@ -2,8 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20|%203.12-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](.github/workflows/test.yml)
-[![Security](https://img.shields.io/badge/security-91.5%25-brightgreen.svg)](SECURITY.md)
+[![Tests](https://img.shields.io/badge/tests-730%2B%20passing-brightgreen.svg)](.github/workflows/test.yml)
+[![Security](https://img.shields.io/badge/security-100%25%20OWASP%20ASVS-brightgreen.svg)](SECURITY.md)
+[![Coverage](https://img.shields.io/badge/coverage-49.75%25-yellow.svg)](htmlcov/index.html)
 
 Analyseur automatisé de fichiers PCAP pour diagnostiquer les problèmes de latence et de performance réseau.
 
@@ -184,12 +185,15 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 - **Support complet IPv4/IPv6**
 - **Messages contextuels** basés sur RFC (SSH, mDNS, HTTP...)
 
-### Sécurité (v4.21.0)
-- **Score de sécurité** : 91.5% (production ready)
-- **Conformité** : OWASP ASVS, NIST SP 800-53, CWE Top 25, GDPR (100%)
-- **Protection** : Path traversal, XSS, injection, decompression bombs
-- **Audit** : Logging sécurisé avec redaction PII
-- **Documentation** : [SECURITY.md](SECURITY.md) (24.5 KB, 20 sections)
+### Sécurité (v5.0)
+- **Compliance** : OWASP ASVS 4.0 (100%), CWE Top 25 (100%), GDPR
+- **Authentication** : JWT avec bcrypt, admin approval workflow, rate limiting
+- **Multi-tenant** : Isolation CWE-639 compliant, ownership tracking
+- **Protection** : Path traversal, CSRF, XSS, injection, decompression bombs
+- **TLS/SSL** : PostgreSQL encryption support (configurable)
+- **Audit** : Logging sécurisé avec PII redaction, admin action tracking
+- **Tests** : 730+ tests (49.75% coverage), 100% security test pass rate
+- **Documentation** : [SECURITY.md](SECURITY.md) - Threat model & controls
 
 ### Interface Web (optionnelle)
 - **Upload drag & drop** de fichiers PCAP
@@ -197,6 +201,19 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 - **Rapports interactifs** HTML/JSON avec mode sombre
 - **Historique** des analyses (rétention 24h)
 - **API REST** complète
+
+### Authentication & Admin Workflow (v5.0)
+- **User Registration** : Self-service avec approbation admin requise
+- **Admin Approval** : Les nouveaux comptes doivent être approuvés par un admin
+- **Role-Based Access Control** : Roles `admin` et `user` avec permissions distinctes
+- **Password Policy** : Minimum 12 caractères, bcrypt cost factor 12
+- **Rate Limiting** : Protection brute force (1s → 2s → 5s après 4-6 échecs)
+- **Multi-Tenant** : Isolation stricte des données par `owner_id` (CWE-639)
+- **Admin Actions** : Approve/block/unblock/delete users, view all tasks
+- **Session Security** : JWT avec expiration 30min, SECRET_KEY enforced en production
+- **Audit Logging** : Toutes les actions admin sont loggées
+
+📖 [Admin Approval Workflow Guide](docs/ADMIN_APPROVAL_WORKFLOW.md)
 
 ### Performance
 - **Architecture hybride** dpkt + Scapy (1.7x plus rapide)
@@ -270,44 +287,100 @@ Configuration complète : voir `config.yaml.example`
 
 ## 📊 API REST (Interface web)
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/upload` | Upload fichier PCAP |
-| `GET /api/progress/{task_id}` | Progression temps réel (SSE) |
-| `GET /api/status/{task_id}` | Statut d'une tâche |
-| `GET /api/history` | Historique des analyses |
-| `GET /reports/{task_id}.html` | Rapport HTML |
-| `GET /reports/{task_id}.json` | Rapport JSON |
-| `GET /api/health` | Health check |
+### Authentication Endpoints
+| Endpoint | Description | Auth Required |
+|----------|-------------|---------------|
+| `POST /api/register` | User registration (requires admin approval) | No |
+| `POST /api/token` | Login (OAuth2 password flow) | No |
+| `GET /api/users/me` | Get current user info | Yes |
+| `PUT /api/users/me` | Update password | Yes |
+| `GET /api/csrf/token` | Get CSRF token | Yes |
 
-**Exemple :**
+### Analysis Endpoints
+| Endpoint | Description | Auth Required |
+|----------|-------------|---------------|
+| `POST /api/upload` | Upload PCAP file | Yes |
+| `GET /api/progress/{task_id}` | Real-time progress (SSE) | Yes |
+| `GET /api/status/{task_id}` | Task status | Yes |
+| `GET /api/history` | Analysis history (filtered by owner) | Yes |
+| `GET /api/reports/{task_id}/html` | HTML report | Yes |
+| `GET /api/reports/{task_id}/json` | JSON report | Yes |
+| `DELETE /api/reports/{task_id}` | Delete report | Yes |
+
+### Admin Endpoints
+| Endpoint | Description | Admin Only |
+|----------|-------------|------------|
+| `GET /api/users` | List all users | Yes |
+| `POST /api/admin/users` | Create user with temp password | Yes |
+| `PUT /api/admin/users/{id}/approve` | Approve user registration | Yes |
+| `PUT /api/admin/users/{id}/block` | Block user account | Yes |
+| `PUT /api/admin/users/{id}/unblock` | Unblock user account | Yes |
+| `DELETE /api/admin/users/{id}` | Delete user account | Yes |
+
+### System Endpoints
+| Endpoint | Description | Auth Required |
+|----------|-------------|---------------|
+| `GET /api/health` | Health check | No |
+| `GET /` | Homepage | No |
+| `GET /login` | Login page | No |
+| `GET /admin` | Admin panel | Admin only |
+
+**Authentication Example:**
 ```bash
-curl -X POST http://localhost:8000/api/upload -F "file=@capture.pcap"
-# → {"task_id": "abc123", "status": "pending"}
+# Register
+curl -X POST http://localhost:8000/api/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "john", "email": "john@example.com", "password": "SecurePass123!"}'
 
-curl http://localhost:8000/api/status/abc123
+# Login (after admin approval)
+curl -X POST http://localhost:8000/api/token \
+  -d "username=john&password=SecurePass123!"
+# → {"access_token": "eyJ...", "token_type": "bearer"}
+
+# Upload PCAP (with auth)
+curl -X POST http://localhost:8000/api/upload \
+  -H "Authorization: Bearer eyJ..." \
+  -F "file=@capture.pcap"
+# → {"task_id": "abc123", "status": "pending"}
 ```
+
+📖 [Complete API Documentation](docs/API_DOCUMENTATION.md)
 
 ## 🧪 Tests
 
 ```bash
-# Tous les tests
-pytest
+# Tous les tests (SQLite)
+pytest -k "not postgresql"
+
+# Tests avec PostgreSQL (requires DATABASE_URL)
+DATABASE_URL=postgresql://pcap:password@localhost:5432/pcap_analyzer_test pytest
 
 # Tests de sécurité uniquement
-pytest tests/test_security.py -v
+pytest tests/security/ -v
+
+# Tests d'authentification
+pytest tests/test_auth.py -v
 
 # Avec couverture
-pytest --cov=src --cov-report=html
+pytest --cov=app --cov=src --cov-report=html
+open htmlcov/index.html
 
-# Tests unitaires seulement
-pytest -m unit
+# Tests par marker
+pytest -m unit        # Tests unitaires
+pytest -m integration # Tests d'intégration
+pytest -m security    # Tests de sécurité
 ```
 
-**Résultats v4.21.0** :
-- Tests de sécurité : 16/16 passing ✅
-- Tests principaux : 64/65 passing ✅
-- Couverture : 90%+ sur modules de sécurité
+**Résultats v5.0** :
+- **Total** : 730+ tests ✅
+- **Auth** : 31/31 passing ✅
+- **Database** : 18/18 parametrized (SQLite + PostgreSQL) ✅
+- **Security** : 49/49 passing ✅ (100% pass rate)
+- **PostgreSQL Integration** : 27/27 passing ✅
+- **Coverage** : 49.75% global, 73%+ on security modules
+- **No regressions** : 0 failed tests
+
+📖 [Testing Guide](docs/TESTING.md)
 
 ## 📦 Déploiement
 
