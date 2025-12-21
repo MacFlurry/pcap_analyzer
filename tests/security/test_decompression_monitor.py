@@ -324,5 +324,77 @@ class TestErrorMessages:
         assert stats.expansion_ratio == 1500
 
 
+class TestMonitorStateControl:
+    """Test enable/disable state control."""
+
+    def test_disabled_monitor_returns_none(self):
+        """Disabled monitor returns None and skips checks."""
+        monitor = DecompressionMonitor()
+        monitor.disable()
+
+        # High expansion ratio but monitoring disabled
+        stats = monitor.check_expansion_ratio(
+            file_size=1024 * 1024,  # 1 MB
+            bytes_processed=1500 * 1024 * 1024,  # 1500 MB (1500:1)
+            packets_count=10000
+        )
+
+        assert stats is None  # Monitoring disabled, no stats returned
+
+    def test_enable_resumes_monitoring(self):
+        """Re-enabling monitor resumes checks."""
+        monitor = DecompressionMonitor()
+        monitor.disable()
+        monitor.enable()
+
+        # Now monitoring should work
+        stats = monitor.check_expansion_ratio(
+            file_size=1024 * 1024,  # 1 MB
+            bytes_processed=1500 * 1024 * 1024,  # 1500 MB
+            packets_count=10000
+        )
+
+        assert stats is not None
+        assert stats.is_warning is True
+
+
+class TestConvenienceFunctions:
+    """Test convenience utility functions."""
+
+    def test_check_expansion_safe_returns_true_for_safe_ratio(self):
+        """check_expansion_safe() returns True for safe ratios."""
+        from src.utils.decompression_monitor import check_expansion_safe
+
+        # 500:1 ratio is safe (default max is 1000:1)
+        result = check_expansion_safe(
+            file_size=1000,
+            bytes_processed=500_000
+        )
+        assert result is True
+
+    def test_check_expansion_safe_returns_false_for_unsafe_ratio(self):
+        """check_expansion_safe() returns False for unsafe ratios."""
+        from src.utils.decompression_monitor import check_expansion_safe
+
+        # 5000:1 ratio is unsafe (exceeds 1000:1 default)
+        result = check_expansion_safe(
+            file_size=1000,
+            bytes_processed=5_000_000
+        )
+        assert result is False
+
+    def test_check_expansion_safe_custom_max_ratio(self):
+        """check_expansion_safe() respects custom max_ratio."""
+        from src.utils.decompression_monitor import check_expansion_safe
+
+        # 500:1 ratio, but custom max is 100:1
+        result = check_expansion_safe(
+            file_size=1000,
+            bytes_processed=500_000,
+            max_ratio=100
+        )
+        assert result is False  # Exceeds custom 100:1 limit
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

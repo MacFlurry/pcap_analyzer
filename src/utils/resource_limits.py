@@ -27,6 +27,7 @@ import logging
 import platform
 import signal
 import sys
+from dataclasses import dataclass
 from typing import Optional
 
 # Platform detection
@@ -39,6 +40,35 @@ except ImportError:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ResourceLimitConfig:
+    """
+    Configuration object for resource limits.
+
+    This provides a structured way to define resource limits that will be enforced
+    by the OS to prevent resource exhaustion attacks (CWE-770, NIST SC-5).
+
+    Attributes:
+        memory_limit_gb: Maximum virtual memory in gigabytes (default: 4GB)
+        cpu_time_limit_seconds: Maximum CPU time in seconds (default: 3600s = 1 hour)
+        max_file_size_gb: Maximum file size in gigabytes (default: 10GB)
+        max_open_files: Maximum number of open file descriptors (default: 1024)
+
+    Example:
+        >>> # Use defaults
+        >>> config = ResourceLimitConfig()
+        >>> set_resource_limits(config)
+
+        >>> # Custom limits
+        >>> config = ResourceLimitConfig(memory_limit_gb=8.0, cpu_time_limit_seconds=7200)
+        >>> set_resource_limits(config)
+    """
+    memory_limit_gb: float = 4.0
+    cpu_time_limit_seconds: int = 3600
+    max_file_size_gb: float = 10.0
+    max_open_files: int = 1024
 
 
 def _bytes_to_human(bytes_value: int) -> str:
@@ -94,10 +124,11 @@ def _handle_memory_limit_exceeded():
 
 
 def set_resource_limits(
-    memory_gb: float = 4.0,
-    cpu_seconds: int = 3600,
-    max_file_size_gb: float = 10.0,
-    max_open_files: int = 1024,
+    config: Optional[ResourceLimitConfig] = None,
+    memory_gb: Optional[float] = None,
+    cpu_seconds: Optional[int] = None,
+    max_file_size_gb: Optional[float] = None,
+    max_open_files: Optional[int] = None,
 ) -> None:
     """
     Set OS-level resource limits to prevent resource exhaustion attacks.
@@ -127,6 +158,7 @@ def set_resource_limits(
     - Windows: Not supported (resource module unavailable, logs warning)
 
     Args:
+        config: ResourceLimitConfig object with all settings (preferred method)
         memory_gb: Maximum virtual memory in gigabytes (default: 4GB)
         cpu_seconds: Maximum CPU time in seconds (default: 3600s = 1 hour)
         max_file_size_gb: Maximum file size in gigabytes (default: 10GB)
@@ -137,15 +169,39 @@ def set_resource_limits(
         ValueError: If invalid limit values provided
 
     Example:
-        >>> # Use defaults (4GB RAM, 1 hour CPU, 10GB files, 1024 fds)
+        >>> # Use defaults with config object (recommended)
+        >>> config = ResourceLimitConfig()
+        >>> set_resource_limits(config)
+
+        >>> # Custom limits with config object
+        >>> config = ResourceLimitConfig(memory_limit_gb=8.0, cpu_time_limit_seconds=7200)
+        >>> set_resource_limits(config)
+
+        >>> # Legacy: Use defaults with direct parameters (4GB RAM, 1 hour CPU, 10GB files, 1024 fds)
         >>> set_resource_limits()
 
-        >>> # Custom limits for resource-constrained environment
+        >>> # Legacy: Custom limits for resource-constrained environment
         >>> set_resource_limits(memory_gb=2.0, cpu_seconds=1800, max_file_size_gb=5.0)
 
-        >>> # Allow more memory for analyzing very large PCAPs
+        >>> # Legacy: Allow more memory for analyzing very large PCAPs
         >>> set_resource_limits(memory_gb=8.0)
     """
+    # If config object provided, extract parameters from it
+    if config is not None:
+        memory_gb = config.memory_limit_gb
+        cpu_seconds = config.cpu_time_limit_seconds
+        max_file_size_gb = config.max_file_size_gb
+        max_open_files = config.max_open_files
+    else:
+        # Use defaults if not specified (backward compatibility)
+        if memory_gb is None:
+            memory_gb = 4.0
+        if cpu_seconds is None:
+            cpu_seconds = 3600
+        if max_file_size_gb is None:
+            max_file_size_gb = 10.0
+        if max_open_files is None:
+            max_open_files = 1024
     # Check platform support
     if not RESOURCE_MODULE_AVAILABLE:
         logger.warning(
@@ -161,6 +217,20 @@ def set_resource_limits(
             file=sys.stderr
         )
         return
+
+    # Save original limits if not already saved (for restore_default_limits())
+    global _ORIGINAL_LIMITS
+    if not _ORIGINAL_LIMITS:
+        try:
+            _ORIGINAL_LIMITS = {
+                "RLIMIT_AS": resource.getrlimit(resource.RLIMIT_AS),
+                "RLIMIT_CPU": resource.getrlimit(resource.RLIMIT_CPU),
+                "RLIMIT_FSIZE": resource.getrlimit(resource.RLIMIT_FSIZE),
+                "RLIMIT_NOFILE": resource.getrlimit(resource.RLIMIT_NOFILE),
+            }
+            logger.debug("Saved original resource limits for potential restoration")
+        except Exception as e:
+            logger.warning("Failed to save original limits: %s", e)
 
     # Validate inputs
     if memory_gb <= 0:
@@ -353,3 +423,125 @@ def handle_memory_error():
         ...     handle_memory_error()
     """
     _handle_memory_limit_exceeded()
+
+
+def get_current_limits() -> dict:
+    """
+    Get current resource limits set by the OS.
+
+    This is an alias for get_current_resource_usage() for backward compatibility.
+    Returns the current resource limits as a dictionary.
+
+    Returns:
+        Dictionary with current resource limits:
+        - RLIMIT_AS: Memory limit (soft, hard) in bytes
+        - RLIMIT_CPU: CPU time limit (soft, hard) in seconds
+        - RLIMIT_FSIZE: File size limit (soft, hard) in bytes
+        - RLIMIT_NOFILE: File descriptor limit (soft, hard)
+
+    Example:
+        >>> limits = get_current_limits()
+        >>> print(f"Memory limit: {limits['RLIMIT_AS']}")
+    """
+    if not RESOURCE_MODULE_AVAILABLE:
+        return {
+            "platform": platform.system(),
+            "resource_module_available": False,
+            "message": "Resource limits not available on this platform"
+        }
+
+    try:
+        return {
+            "platform": platform.system(),
+            "resource_module_available": True,
+            "RLIMIT_AS": resource.getrlimit(resource.RLIMIT_AS),
+            "RLIMIT_CPU": resource.getrlimit(resource.RLIMIT_CPU),
+            "RLIMIT_FSIZE": resource.getrlimit(resource.RLIMIT_FSIZE),
+            "RLIMIT_NOFILE": resource.getrlimit(resource.RLIMIT_NOFILE),
+        }
+    except Exception as e:
+        logger.warning("Failed to get current limits: %s", e)
+        return {
+            "platform": platform.system(),
+            "resource_module_available": True,
+            "error": str(e)
+        }
+
+
+# Store original limits for restoration
+_ORIGINAL_LIMITS = {}
+
+
+def restore_default_limits() -> None:
+    """
+    Restore resource limits to their original system defaults.
+
+    This function restores limits to the values that were in place before
+    set_resource_limits() was called. If limits were never modified, this
+    will attempt to set them to very high values (close to system maximum).
+
+    SECURITY NOTE: Only call this when you're certain the process is exiting
+    or when you need to temporarily remove resource restrictions for a specific
+    operation. Removing limits reduces DoS protection.
+
+    Example:
+        >>> # Set custom limits
+        >>> config = ResourceLimitConfig(memory_limit_gb=2.0)
+        >>> set_resource_limits(config)
+        >>> # ... do work ...
+        >>> # Restore original limits
+        >>> restore_default_limits()
+    """
+    if not RESOURCE_MODULE_AVAILABLE:
+        logger.warning(
+            "Resource limits not available on this platform (%s). "
+            "Cannot restore limits.",
+            platform.system()
+        )
+        return
+
+    try:
+        # If we have stored original limits, restore them
+        if _ORIGINAL_LIMITS:
+            logger.info("Restoring original resource limits")
+
+            # Restore each limit, handling errors individually
+            for limit_name in ["RLIMIT_AS", "RLIMIT_CPU", "RLIMIT_FSIZE", "RLIMIT_NOFILE"]:
+                if limit_name in _ORIGINAL_LIMITS:
+                    try:
+                        limit_const = getattr(resource, limit_name)
+                        resource.setrlimit(limit_const, _ORIGINAL_LIMITS[limit_name])
+                    except (ValueError, OSError) as e:
+                        # Some limits can't be restored (e.g., macOS RLIMIT_AS)
+                        logger.warning(
+                            "Could not restore %s to original value: %s. This is expected on some platforms.",
+                            limit_name, e
+                        )
+        else:
+            # No original limits stored - try to set to high values
+            logger.info("No original limits stored. Attempting to set to system defaults")
+
+            # Get current hard limits and set soft limits to match them
+            for limit_name in ["RLIMIT_AS", "RLIMIT_CPU", "RLIMIT_FSIZE", "RLIMIT_NOFILE"]:
+                try:
+                    limit_const = getattr(resource, limit_name)
+                    soft, hard = resource.getrlimit(limit_const)
+                    # Set soft limit to hard limit (most permissive without raising hard limit)
+                    if hard != resource.RLIM_INFINITY:
+                        resource.setrlimit(limit_const, (hard, hard))
+                    else:
+                        # Hard limit is already infinite, just set soft to infinite
+                        resource.setrlimit(limit_const, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+                except (ValueError, OSError) as e:
+                    # Some limits can't be set (e.g., macOS RLIMIT_AS)
+                    logger.warning(
+                        "Could not set %s to default: %s. This is expected on some platforms.",
+                        limit_name, e
+                    )
+
+        logger.info("Resource limits restoration completed")
+
+    except Exception as e:
+        logger.error("Unexpected error restoring resource limits: %s", e)
+        # Don't raise - this is a best-effort operation
+        logger.warning("Continuing despite restore failure")

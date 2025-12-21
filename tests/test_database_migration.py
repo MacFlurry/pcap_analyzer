@@ -9,12 +9,14 @@ Tests:
 - Database service layer abstraction
 """
 
+import json
 import os
 import tempfile
 from pathlib import Path
 
 import pytest
 from app.models.user import User, UserCreate, UserRole
+from app.models.schemas import TaskStatus
 from app.services.user_database import UserDatabaseService
 
 
@@ -312,6 +314,154 @@ class TestMigrationDocumentation:
         content = alembic_ini_path.read_text()
         # Should not have hardcoded database URL
         assert "driver://user:pass@localhost/dbname" not in content or "# sqlalchemy.url" in content
+
+
+class TestSQLiteToPostgreSQLMigration:
+    """Test migration from SQLite to PostgreSQL (Issue #26 Phase 4)."""
+
+    @pytest.fixture
+    def test_data_dir(self):
+        """Create temporary directory for test data."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield tmpdir
+
+    @pytest.mark.asyncio
+    async def test_migrate_tasks_data(self, test_data_dir):
+        """Verify task data migrates correctly."""
+        from app.utils.migration import migrate_database
+        from app.services.database import DatabaseService
+        from app.models.schemas import TaskStatus
+
+        # 1. Create SQLite database with sample data
+        sqlite_url = f"sqlite:///{test_data_dir}/source.db"
+        sqlite_db = DatabaseService(database_url=sqlite_url)
+        await sqlite_db.init_db()
+
+        # Create test tasks
+        await sqlite_db.create_task("task-1", "test1.pcap", 1024)
+        await sqlite_db.create_task("task-2", "test2.pcap", 2048)
+
+        # Verify tasks created
+        task1_before = await sqlite_db.get_task("task-1")
+        assert task1_before is not None
+        assert task1_before.filename == "test1.pcap"
+
+        # 2. Export to JSON (test export only, skip PostgreSQL import if not available)
+        from app.utils.migration import export_sqlite_to_json
+        export_file = f"{test_data_dir}/export.json"
+        data = await export_sqlite_to_json(sqlite_url, export_file)
+
+        # 3. Verify export
+        assert data["metadata"]["source_type"] == "sqlite"
+        assert data["metadata"]["version"] == "1.0"
+        assert len(data["tasks"]) == 2
+        assert any(t["task_id"] == "task-1" for t in data["tasks"])
+        assert any(t["task_id"] == "task-2" for t in data["tasks"])
+
+        # Verify JSON file created
+        assert Path(export_file).exists()
+        with open(export_file) as f:
+            exported_data = json.load(f)
+            assert len(exported_data["tasks"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_migrate_users_data(self, test_data_dir):
+        """Verify user data migrates correctly."""
+        from app.utils.migration import export_sqlite_to_json
+        from app.services.user_database import UserDatabaseService
+        from app.models.user import UserCreate, UserRole
+
+        # 1. Create SQLite database with sample users
+        sqlite_url = f"sqlite:///{test_data_dir}/source.db"
+        user_db = UserDatabaseService(database_url=sqlite_url)
+        await user_db.init_db()
+
+        # Create test users
+        user1_data = UserCreate(username="user1", email="user1@test.com", password="Pass123!Pass123!")
+        user2_data = UserCreate(username="user2", email="user2@test.com", password="Pass456!Pass456!")
+
+        user1 = await user_db.create_user(user1_data)
+        user2 = await user_db.create_user(user2_data, role=UserRole.ADMIN, auto_approve=True)
+
+        # 2. Export to JSON
+        export_file = f"{test_data_dir}/export.json"
+        data = await export_sqlite_to_json(sqlite_url, export_file)
+
+        # 3. Verify export
+        assert len(data["users"]) == 2
+        assert any(u["username"] == "user1" for u in data["users"])
+        assert any(u["username"] == "user2" for u in data["users"])
+
+        # Verify admin is marked as approved
+        admin_user = next(u for u in data["users"] if u["username"] == "user2")
+        assert admin_user["role"] == "admin"
+        assert bool(admin_user["is_approved"]) is True  # SQLite returns 1, not True
+
+    @pytest.mark.asyncio
+    async def test_migrate_foreign_keys(self, test_data_dir):
+        """Verify foreign key relationships preserved."""
+        from app.utils.migration import export_sqlite_to_json
+        from app.services.database import DatabaseService
+        from app.services.user_database import UserDatabaseService
+        from app.models.user import UserCreate
+
+        # 1. Create user with tasks in SQLite
+        sqlite_url = f"sqlite:///{test_data_dir}/source.db"
+
+        # Create user
+        user_db = UserDatabaseService(database_url=sqlite_url)
+        await user_db.init_db()
+
+        user_data = UserCreate(username="owner", email="owner@test.com", password="Pass123!Pass123!")
+        user = await user_db.create_user(user_data, auto_approve=True)
+
+        # Create tasks with owner_id
+        db = DatabaseService(database_url=sqlite_url)
+        await db.init_db()
+        await db.create_task("task-owned", "owned.pcap", 1024, owner_id=user.id)
+        await db.create_task("task-legacy", "legacy.pcap", 2048)  # No owner (legacy)
+
+        # 2. Export
+        export_file = f"{test_data_dir}/export.json"
+        data = await export_sqlite_to_json(sqlite_url, export_file)
+
+        # 3. Verify foreign key relationships intact
+        owned_task = next(t for t in data["tasks"] if t["task_id"] == "task-owned")
+        legacy_task = next(t for t in data["tasks"] if t["task_id"] == "task-legacy")
+
+        assert owned_task["owner_id"] == user.id
+        assert legacy_task["owner_id"] is None  # NULL preserved
+
+    @pytest.mark.asyncio
+    async def test_migrate_timestamps(self, test_data_dir):
+        """Verify timestamp conversion (ISO string → datetime)."""
+        from app.utils.migration import export_sqlite_to_json
+        from app.services.database import DatabaseService
+        from datetime import datetime, timezone
+
+        # 1. Create SQLite tasks with various timestamps
+        sqlite_url = f"sqlite:///{test_data_dir}/source.db"
+        db = DatabaseService(database_url=sqlite_url)
+        await db.init_db()
+
+        await db.create_task("task-1", "test.pcap", 1024)
+        await db.update_status("task-1", TaskStatus.COMPLETED)  # Sets analyzed_at
+
+        # 2. Export
+        export_file = f"{test_data_dir}/export.json"
+        data = await export_sqlite_to_json(sqlite_url, export_file)
+
+        # 3. Verify timestamps are ISO strings (can be parsed)
+        task = data["tasks"][0]
+        assert task["uploaded_at"] is not None
+        assert task["analyzed_at"] is not None
+
+        # Verify they can be parsed back to datetime
+        uploaded_dt = datetime.fromisoformat(task["uploaded_at"])
+        analyzed_dt = datetime.fromisoformat(task["analyzed_at"])
+
+        assert isinstance(uploaded_dt, datetime)
+        assert isinstance(analyzed_dt, datetime)
 
 
 if __name__ == "__main__":

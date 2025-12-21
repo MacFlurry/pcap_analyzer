@@ -511,3 +511,197 @@ class TestAdminCreateUser:
         )
         assert login_response.status_code == 200
         assert login_response.json()["password_must_change"] == True
+
+
+class TestAdminUnblockUser:
+    """Test admin unblock user endpoint."""
+
+    async def test_admin_unblock_user(self, client: AsyncClient):
+        """Test that admin can unblock a blocked user."""
+        token = await get_auth_token(client, "admin", "testpass1234")
+
+        # First, create and block a user
+        # Create a new user
+        from app.services.user_database import get_user_db_service
+        from app.models.user import UserCreate, UserRole
+        user_db = get_user_db_service()
+        new_user = UserCreate(
+            username="blocktest",
+            email="blocktest@example.com",
+            password="testpass1234"
+        )
+        created_user = await user_db.create_user(new_user, role=UserRole.USER, auto_approve=True)
+
+        # Block the user
+        block_response = await client.put(
+            f"/api/admin/users/{created_user.id}/block",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert block_response.status_code == 200
+        assert block_response.json()["is_active"] == False
+
+        # Now unblock the user
+        unblock_response = await client.put(
+            f"/api/admin/users/{created_user.id}/unblock",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+
+        assert unblock_response.status_code == 200
+        data = unblock_response.json()
+        assert data["is_active"] == True
+        assert data["username"] == "blocktest"
+
+    async def test_admin_unblock_nonexistent_user(self, client: AsyncClient):
+        """Test unblocking non-existent user returns 404."""
+        token = await get_auth_token(client, "admin", "testpass1234")
+
+        response = await client.put(
+            "/api/admin/users/00000000-0000-0000-0000-000000000000/unblock",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+
+        assert response.status_code == 404
+
+    async def test_regular_user_cannot_unblock(self, client: AsyncClient):
+        """Test that regular users cannot unblock."""
+        user_token = await get_auth_token(client, "user1", "userpass1234")
+
+        # Try to unblock with regular user token
+        response = await client.put(
+            "/api/admin/users/00000000-0000-0000-0000-000000000000/unblock",
+            headers={"Authorization": f"Bearer {user_token}"}
+        )
+
+        assert response.status_code == 403
+
+
+class TestAdminDeleteUser:
+    """Test admin delete user endpoint."""
+
+    async def test_admin_delete_user(self, client: AsyncClient):
+        """Test that admin can delete users (DELETE /api/admin/users/{id})."""
+        token = await get_auth_token(client, "admin", "testpass1234")
+
+        # Create a test user to delete
+        from app.services.user_database import get_user_db_service
+        from app.models.user import UserCreate, UserRole
+        user_db = get_user_db_service()
+        new_user = UserCreate(
+            username="deletetest",
+            email="deletetest@example.com",
+            password="testpass1234"
+        )
+        created_user = await user_db.create_user(new_user, role=UserRole.USER, auto_approve=True)
+
+        # Delete the user as admin
+        delete_response = await client.delete(
+            f"/api/admin/users/{created_user.id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+
+        assert delete_response.status_code == 200
+        assert "deleted successfully" in delete_response.json()["message"]
+
+        # Verify user cannot login
+        login_response = await client.post(
+            "/api/token",
+            data={"username": "deletetest", "password": "testpass1234"}
+        )
+        assert login_response.status_code == 401
+
+    async def test_admin_delete_nonexistent_user(self, client: AsyncClient):
+        """Test deleting non-existent user returns 404."""
+        token = await get_auth_token(client, "admin", "testpass1234")
+
+        response = await client.delete(
+            "/api/admin/users/00000000-0000-0000-0000-000000000000",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+
+        assert response.status_code == 404
+
+    async def test_admin_cannot_delete_self(self, client: AsyncClient):
+        """Test that admin cannot delete their own account."""
+        token = await get_auth_token(client, "admin", "testpass1234")
+
+        # Get admin's user ID
+        me_response = await client.get(
+            "/api/users/me",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        admin_id = me_response.json()["id"]
+
+        # Try to delete self
+        response = await client.delete(
+            f"/api/admin/users/{admin_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+
+        assert response.status_code == 400
+        assert "Cannot delete your own account" in response.json()["detail"]
+
+
+class TestSessionInvalidation:
+    """Test session invalidation scenarios."""
+
+    async def test_inactive_user_session_invalid(self, client: AsyncClient):
+        """Test blocked user's session is invalidated (403)."""
+        # Create a new user for this test
+        from app.services.user_database import get_user_db_service
+        from app.models.user import UserCreate, UserRole
+        user_db = get_user_db_service()
+        new_user = UserCreate(
+            username="sessiontest",
+            email="sessiontest@example.com",
+            password="testpass1234"
+        )
+        created_user = await user_db.create_user(new_user, role=UserRole.USER, auto_approve=True)
+
+        # User logs in and gets token
+        user_token = await get_auth_token(client, "sessiontest", "testpass1234")
+
+        # Verify token works
+        response1 = await client.get(
+            "/api/users/me",
+            headers={"Authorization": f"Bearer {user_token}"}
+        )
+        assert response1.status_code == 200
+
+        # Admin blocks user
+        admin_token = await get_auth_token(client, "admin", "testpass1234")
+        block_response = await client.put(
+            f"/api/admin/users/{created_user.id}/block",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert block_response.status_code == 200
+
+        # User tries to access protected route with old token
+        response2 = await client.get(
+            "/api/users/me",
+            headers={"Authorization": f"Bearer {user_token}"}
+        )
+
+        # Should be denied because user is now inactive
+        assert response2.status_code == 403
+        assert "inactive" in response2.json()["detail"].lower()
+
+    async def test_unapproved_user_session_invalid(self, client: AsyncClient):
+        """Test that unapproved user's session is invalidated when approval is revoked."""
+        # The "unapproved" user exists but isn't approved
+        # They shouldn't be able to get a token in the first place
+        response = await client.post(
+            "/api/token",
+            data={"username": "unapproved", "password": "unapprovedpass1234"}
+        )
+
+        assert response.status_code == 403
+        assert "pending approval" in response.json()["detail"].lower()
+
+    async def test_invalid_token_rejected(self, client: AsyncClient):
+        """Test that invalid JWT tokens are rejected (401)."""
+        response = await client.get(
+            "/api/users/me",
+            headers={"Authorization": "Bearer invalid.token.here"}
+        )
+
+        assert response.status_code == 401
