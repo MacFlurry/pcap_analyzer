@@ -473,6 +473,10 @@ class HistoryManager {
             window.toast.error(`❌ ${errorCount} analyse(s) n'ont pas pu être supprimée(s)`);
         }
 
+        // Clear selections before reloading
+        this.selectedTasks.clear();
+        this.updateSelectionUI();
+
         // Reload history
         this.loadHistory();
     }
