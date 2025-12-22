@@ -76,3 +76,11 @@ async def change_password(request: Request):
     Affichée quand password_must_change=True
     """
     return templates.TemplateResponse("change-password.html", {"request": request, "version": __version__})
+
+
+@router.get("/register", response_class=HTMLResponse)
+async def register(request: Request):
+    """
+    Page d'inscription (user registration)
+    """
+    return templates.TemplateResponse("register.html", {"request": request, "version": __version__})

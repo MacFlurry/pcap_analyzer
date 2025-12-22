@@ -48,3 +48,39 @@ env:
   dataDir: "/data"
   logLevel: "INFO"
   maxQueueSize: "5"
+
+# Secret key for JWT tokens (auto-generated if not provided)
+secretKey: ""
+
+# PostgreSQL configuration
+postgresql:
+  enabled: true  # Use PostgreSQL (official image from Docker Hub)
+
+  # External PostgreSQL (use existing database)
+  external:
+    enabled: false  # Set to true to use external PostgreSQL
+    url: ""  # postgresql://user:password@host:port/database
+
+  # Internal PostgreSQL (official postgres image) - used if external.enabled=false
+  auth:
+    username: pcap
+    password: change_me_in_production  # CHANGE THIS IN PRODUCTION!
+    database: pcap_analyzer
+
+  image:
+    repository: postgres
+    tag: 16-alpine
+    pullPolicy: IfNotPresent
+
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: standard
+
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: "1"
+    requests:
+      memory: 256Mi
+      cpu: "0.5"

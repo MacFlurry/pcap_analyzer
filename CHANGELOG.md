@@ -7,6 +7,43 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.25.0] - 2025-12-22
+
+### 🚀 Kubernetes/Helm + Page d'inscription
+
+**Ajouté**:
+- **Intégration Kubernetes/Helm avec PostgreSQL officiel**
+  - StatefulSet PostgreSQL personnalisé (postgres:16-alpine)
+  - Support 3 modes : SQLite (dev), PostgreSQL interne, PostgreSQL externe
+  - Secret Kubernetes pour DATABASE_URL + SECRET_KEY (auto-généré)
+  - Helm Chart v1.0.6 avec dépendances PostgreSQL
+
+- **Migrations automatiques au démarrage**
+  - docker-entrypoint.sh exécute `alembic upgrade head` pour PostgreSQL
+  - Health check PostgreSQL (max 30s wait)
+  - Compatible docker-compose et Kubernetes
+
+- **Page d'inscription utilisateur** (`/register`)
+  - Template register.html avec validation frontend
+  - Workflow d'approbation admin requis
+  - Validation mot de passe fort (12+ caractères)
+  - Confirmation de mot de passe
+
+**Modifié**:
+- **Page de connexion** : Suppression du bloc d'instructions admin (sécurité)
+- **Versions** : Application 4.25.0, Helm Chart 1.0.6
+
+**Corrigé**:
+- **404 sur /register** : Route et template manquants créés
+- **Erreur PostgreSQL "relation does not exist"** : Migrations automatiques
+
+**Fichiers Kubernetes**:
+- `helm-chart/pcap-analyzer/templates/postgresql-statefulset.yaml` - StatefulSet + Service
+- `helm-chart/pcap-analyzer/templates/secret.yaml` - DATABASE_URL + SECRET_KEY
+- `helm-chart/pcap-analyzer/values.yaml` - Configuration PostgreSQL 3 modes
+
+---
+
 ## [5.0.0] - 2025-12-21
 
 ### 🎉 MILESTONE - Production-Grade Multi-Tenant Platform
