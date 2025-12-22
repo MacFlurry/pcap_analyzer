@@ -11,9 +11,10 @@ import pytest
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_complete_workflow_upload_to_report(client, sample_pcap_file, test_db):
+@pytest.mark.db_parametrize
+async def test_complete_workflow_upload_to_report(client, sample_pcap_file, test_db, db_type):
     """
-    Test du workflow complet:
+    Test du workflow complet (SQLite and PostgreSQL):
     1. Upload fichier PCAP
     2. Vérifier task créée en DB
     3. Vérifier progression

@@ -14,10 +14,23 @@ spec:
       labels:
         {{- include "pcap-analyzer.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: pcap-analyzer
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: false
         ports:
         - name: http
           containerPort: 8000
@@ -33,6 +46,19 @@ spec:
           value: "{{ .Values.env.logLevel }}"
         - name: MAX_QUEUE_SIZE
           value: "{{ .Values.env.maxQueueSize }}"
+        {{- if .Values.postgresql.enabled }}
+        # PostgreSQL database connection
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "pcap-analyzer.fullname" . }}
+              key: DATABASE_URL
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "pcap-analyzer.fullname" . }}
+              key: SECRET_KEY
+        {{- end }}
         volumeMounts:
         - name: data
           mountPath: /data

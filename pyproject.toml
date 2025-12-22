@@ -49,12 +49,24 @@ dependencies = [
     "python-multipart>=0.0.6",  # Upload multipart/form-data
     "aiofiles>=23.2.1",  # Async file operations
     "apscheduler>=3.10.0,<4.0",  # Cleanup scheduler
+    # Database (SQLite + PostgreSQL)
     "aiosqlite>=0.19.0,<1.0",  # SQLite async wrapper
+    "alembic>=1.13.0",  # Database migrations
+    "asyncpg>=0.29.0",  # PostgreSQL async driver
+    "psycopg2-binary>=2.9.9",  # PostgreSQL adapter for Alembic
+    # Authentication & Security
+    "python-jose[cryptography]>=3.3.0",  # JWT token generation/validation
+    "passlib[bcrypt]>=1.7.4",  # Password hashing with bcrypt
+    "bcrypt>=3.2.0,<4.0",  # Pin to 3.x for passlib compatibility
+    "email-validator>=2.0.0",  # EmailStr validation in Pydantic
+    "fastapi-csrf-protect>=0.3.4,<1.0",  # CSRF protection (OWASP ASVS 4.2.2)
+    "zxcvbn>=4.5.0,<5.0",  # Password strength estimation (Issue #23)
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "pytest-xdist>=3.5.0",
     "flake8>=7.0.0",

@@ -7,12 +7,17 @@ import os
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 
+from app.auth import get_current_user
 from app.models.schemas import UploadResponse
+from app.models.user import User
+from app.security.csrf import validate_csrf_token
 from app.services.database import get_db_service
 from app.services.worker import get_worker
+from app.utils.path_validator import validate_filename, validate_path_in_directory
+from app.utils.file_validator import validate_pcap_upload_complete
 
 logger = logging.getLogger(__name__)
 
@@ -83,36 +88,55 @@ def validate_pcap_magic_bytes(file_content: bytes) -> None:
         )
 
 
-@router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
-async def upload_pcap(file: UploadFile = File(...)):  # noqa: B008
+@router.post(
+    "/upload",
+    response_model=UploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(validate_csrf_token)],
+)
+async def upload_pcap(
+    file: UploadFile = File(...),  # noqa: B008
+    current_user: User = Depends(get_current_user),
+):
     """
     Upload un fichier PCAP et démarre l'analyse en arrière-plan.
 
+    **Authentification requise**: Bearer token dans Authorization header
+
     Args:
         file: Fichier PCAP uploadé (multipart/form-data)
+        current_user: Current authenticated user (from JWT token)
 
     Returns:
         UploadResponse avec task_id et URL de progression
 
     Raises:
-        HTTPException: Si la validation échoue ou si la queue est pleine
+        HTTPException 401: If not authenticated
+        HTTPException 400: Si la validation échoue
+        HTTPException 503: Si la queue est pleine
     """
     logger.info(f"Upload request received: {file.filename} ({file.content_type})")
 
-    # Lire le contenu du fichier
+    # Validation Step 1: Sanitize filename (path traversal protection)
+    sanitized_filename = validate_filename(file.filename)
+
+    # Validation Step 2: Stream-based validation (size + magic + decompression bomb)
+    # This replaces the old vulnerable pattern of reading entire file then validating
     try:
-        content = await file.read()
+        content, pcap_type = await validate_pcap_upload_complete(file)
         file_size = len(content)
+        logger.info(
+            f"Upload validated: {sanitized_filename}, size: {file_size} bytes, type: {pcap_type}"
+        )
+    except HTTPException:
+        # Re-raise validation errors (400, 413)
+        raise
     except Exception as e:
-        logger.error(f"Error reading uploaded file: {e}")
+        logger.error(f"Error during upload validation: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erreur lors de la lecture du fichier",
+            detail="Erreur lors de la validation du fichier",
         )
-
-    # Validation
-    validate_pcap_file(file.filename, file_size)
-    validate_pcap_magic_bytes(content)
 
     # Générer un task_id unique
     task_id = str(uuid.uuid4())
@@ -121,7 +145,11 @@ async def upload_pcap(file: UploadFile = File(...)):  # noqa: B008
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Sauvegarder le fichier dans uploads/
-    upload_path = UPLOADS_DIR / f"{task_id}{Path(file.filename).suffix}"
+    upload_path = UPLOADS_DIR / f"{task_id}{Path(sanitized_filename).suffix}"
+
+    # Defense-in-depth: Verify resolved path is within UPLOADS_DIR
+    upload_path = validate_path_in_directory(upload_path, UPLOADS_DIR)
+
     try:
         with open(upload_path, "wb") as f:
             f.write(content)
@@ -133,13 +161,14 @@ async def upload_pcap(file: UploadFile = File(...)):  # noqa: B008
             detail="Erreur lors de la sauvegarde du fichier",
         )
 
-    # Créer l'entrée dans la base de données
+    # Créer l'entrée dans la base de données (with owner_id for multi-tenant)
     db_service = get_db_service()
     try:
         task_info = await db_service.create_task(
             task_id=task_id,
             filename=file.filename,
             file_size_bytes=file_size,
+            owner_id=current_user.id,
         )
     except Exception as e:
         logger.error(f"Error creating task in database: {e}")
@@ -177,9 +206,14 @@ async def upload_pcap(file: UploadFile = File(...)):  # noqa: B008
 
 
 @router.get("/queue/status")
-async def get_queue_status():
+async def get_queue_status(current_user: User = Depends(get_current_user)):
     """
     Retourne le statut de la queue de traitement.
+
+    **Authentification requise**: Bearer token dans Authorization header
+
+    Args:
+        current_user: Current authenticated user
 
     Returns:
         Informations sur la queue et statistiques globales

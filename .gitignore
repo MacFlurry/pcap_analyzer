@@ -21,6 +21,7 @@ pcap-dir/
 *$py.class
 # Configuration locale
 config.yaml
+.env
 # IDE
 # Logs
 # OS
@@ -68,3 +69,10 @@ ISSUE_*.md
 helm-chart/*.tgz
 .coverage
 .claude/debugging-methodology.md
+
+# Test scripts (contiennent potentiellement des mots de passe de test)
+test_*.py
+generate_*.py
+analyze_*.py
+poc_*.py
+*.html

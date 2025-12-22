@@ -59,6 +59,7 @@ class TaskInfo(BaseModel):
     report_json_url: Optional[str] = None
     error_message: Optional[str] = None  # Message d'erreur si échec
     expires_at: Optional[datetime] = None  # Date d'expiration (uploaded_at + 24h)
+    owner_id: Optional[str] = None  # User ID (multi-tenant)
 
     @validator("expires_at", always=True)
     def calculate_expiry(cls, v, values):

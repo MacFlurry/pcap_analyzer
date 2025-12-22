@@ -20,8 +20,62 @@ class UploadManager {
         this.maxFileSize = 500 * 1024 * 1024; // 500 MB
         this.allowedExtensions = ['.pcap', '.pcapng'];
 
-        this.init();
-        this.loadQueueStatus();
+        // Check authentication before initializing
+        this.checkAuthentication().then(isAuth => {
+            if (isAuth) {
+                this.init();
+                this.loadQueueStatus();
+            }
+        });
+    }
+
+    async checkAuthentication() {
+        const token = localStorage.getItem('access_token');
+        console.log('CheckAuth - Token présent:', !!token);
+        console.log('CheckAuth - Token length:', token ? token.length : 0);
+
+        if (!token) {
+            // No token, redirect to login
+            console.log('CheckAuth - No token, redirecting to login');
+            window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            return false;
+        }
+
+        // Verify token is still valid
+        try {
+            console.log('CheckAuth - Verifying token with /api/users/me');
+            const response = await fetch('/api/users/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            console.log('CheckAuth - /api/users/me response status:', response.status);
+
+            if (!response.ok) {
+                // Token invalid or expired
+                console.log('CheckAuth - Token invalid, clearing and redirecting');
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('token_type');
+                localStorage.removeItem('current_user');
+                window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+
+            console.log('CheckAuth - Token valid, initializing page');
+            return true;
+        } catch (error) {
+            console.error('CheckAuth - Error:', error);
+            window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            return false;
+        }
+    }
+
+    getAuthHeaders() {
+        const token = localStorage.getItem('access_token');
+        return {
+            'Authorization': `Bearer ${token}`
+        };
     }
 
     init() {
@@ -141,6 +195,19 @@ class UploadManager {
             return;
         }
 
+        // Check if we have a token
+        const token = localStorage.getItem('access_token');
+        console.log('Upload - Token présent:', !!token);
+        console.log('Upload - Token length:', token ? token.length : 0);
+
+        if (!token) {
+            window.toast.error('Session expirée. Reconnexion requise...');
+            setTimeout(() => {
+                window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            }, 1500);
+            return;
+        }
+
         // Afficher loading overlay au centre
         window.loadingOverlay.show(
             '📤 Upload en cours...',
@@ -155,9 +222,18 @@ class UploadManager {
         const formData = new FormData();
         formData.append('file', this.selectedFile);
 
+        // Get CSRF headers and merge with auth headers
+        const csrfHeaders = await window.csrfManager.getHeaders();
+        const headers = {
+            ...this.getAuthHeaders(),
+            ...csrfHeaders
+        };
+        console.log('Upload - Headers:', headers);
+
         try {
             const response = await fetch('/api/upload', {
                 method: 'POST',
+                headers: headers,
                 body: formData
             });
 
@@ -177,6 +253,20 @@ class UploadManager {
                 setTimeout(() => {
                     window.location.href = `/progress/${data.task_id}`;
                 }, 1500);
+            } else if (response.status === 401) {
+                // Not authenticated - redirect to login
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('token_type');
+                localStorage.removeItem('current_user');
+                window.csrfManager.clear();
+                window.loadingOverlay.hide();
+                window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            } else if (response.status === 403) {
+                // CSRF validation failed
+                window.loadingOverlay.hide();
+                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                // Revenir à l'état initial
+                this.clearFile();
             } else {
                 // Erreur
                 throw new Error(data.detail || 'Erreur lors de l\'upload');
@@ -197,7 +287,19 @@ class UploadManager {
 
     async loadQueueStatus() {
         try {
-            const response = await fetch('/api/queue/status');
+            const response = await fetch('/api/queue/status', {
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                // If not authenticated, redirect to login
+                if (response.status === 401) {
+                    window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+
             const data = await response.json();
 
             // Mettre à jour les stats

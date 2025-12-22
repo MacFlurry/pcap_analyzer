@@ -27,7 +27,7 @@ References:
 
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional, List
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -322,3 +322,136 @@ def validate_pcap_file(
 
     logger.info(f"Comprehensive validation passed: type={pcap_type}, size={file_size} bytes")
     return pcap_type, file_size
+
+
+def validate_file_path(file_path: str, allowed_dirs: Optional[List[str]] = None) -> str:
+    """
+    Validate file path to prevent path traversal attacks (CWE-22).
+
+    This function implements defense-in-depth with three validation layers:
+    1. Pre-processing detection: Reject dangerous patterns (.. ~ null-bytes)
+    2. Path resolution: Resolve symlinks and relative paths to absolute paths
+    3. Directory containment: Verify path is within allowed directories (if specified)
+
+    This approach prevents:
+    - Path traversal attacks (CWE-22 - Rank 6 in 2025)
+    - Directory traversal via symbolic links
+    - Access to sensitive system files
+    - Bypassing directory restrictions
+
+    Args:
+        file_path: File path to validate (can be relative or absolute)
+        allowed_dirs: Optional list of allowed directory paths. If provided,
+                     the resolved file path must be within one of these directories.
+                     If None, only basic path traversal checks are performed.
+
+    Returns:
+        str: Validated absolute path with symlinks resolved
+
+    Raises:
+        ValueError: If path contains traversal patterns or is outside allowed directories
+                   Error messages are sanitized to prevent information disclosure
+
+    Security notes:
+    - Defense-in-depth: Multiple layers of validation for robust protection
+    - Symlink resolution: Path.resolve() follows symlinks to actual location
+    - No information leakage: Error messages do not reveal system paths
+    - Empty paths rejected: Prevents processing of invalid input
+
+    Examples:
+        >>> # Basic validation (no directory restriction)
+        >>> path = validate_file_path('/tmp/capture.pcap')
+        >>> print(path)  # '/tmp/capture.pcap' (absolute, resolved)
+
+        >>> # Reject path traversal
+        >>> validate_file_path('../../../etc/passwd')
+        ValueError: Path traversal detected: illegal path patterns
+
+        >>> # Reject tilde expansion
+        >>> validate_file_path('~/secrets.pcap')
+        ValueError: Path traversal detected: illegal path patterns
+
+        >>> # Directory containment check
+        >>> allowed = ['/var/uploads']
+        >>> validate_file_path('/var/uploads/file.pcap', allowed_dirs=allowed)
+        '/var/uploads/file.pcap'
+
+        >>> # Reject path outside allowed directory
+        >>> validate_file_path('/etc/passwd', allowed_dirs=['/var/uploads'])
+        ValueError: Access denied: path is outside allowed directories
+
+        >>> # Symlink following with containment check
+        >>> # If /var/uploads/link -> /tmp/outside.pcap
+        >>> validate_file_path('/var/uploads/link', allowed_dirs=['/var/uploads'])
+        ValueError: Access denied: path is outside allowed directories
+
+    References:
+    - CWE-22: https://cwe.mitre.org/data/definitions/22.html
+    - OWASP Path Traversal: https://owasp.org/www-community/attacks/Path_Traversal
+    - OWASP ASVS 5.2.3: Path Traversal Prevention
+    """
+    logger.debug(f"Validating file path (allowed_dirs: {len(allowed_dirs) if allowed_dirs else 'none'})")
+
+    # Layer 1: Pre-processing detection
+    # Reject dangerous patterns before any path operations
+    if not file_path or file_path.strip() == "":
+        logger.warning("Empty path rejected during validation")
+        raise ValueError("Path traversal detected: empty path not allowed")
+
+    # Detect path traversal patterns
+    dangerous_patterns = ["..", "~"]
+    for pattern in dangerous_patterns:
+        if pattern in file_path:
+            logger.warning(f"Dangerous pattern '{pattern}' detected in path")
+            raise ValueError("Path traversal detected: illegal path patterns")
+
+    # Detect null bytes (path injection)
+    if "\0" in file_path:
+        logger.warning("Null byte detected in path")
+        raise ValueError("Path traversal detected: illegal path patterns")
+
+    # Layer 2: Path resolution
+    # Resolve symlinks and relative paths to absolute paths
+    try:
+        resolved_path = Path(file_path).resolve()
+        logger.debug(f"Path resolved to: {resolved_path}")
+    except (OSError, RuntimeError) as e:
+        # Catch resolution errors (e.g., circular symlinks, permission issues)
+        logger.error(f"Path resolution failed: {type(e).__name__}")
+        raise ValueError("Path validation failed: cannot resolve path") from e
+
+    # Layer 3: Directory containment check
+    # If allowed_dirs specified, verify path is within one of them
+    if allowed_dirs is not None and len(allowed_dirs) > 0:
+        # Resolve all allowed directories to absolute paths
+        resolved_allowed_dirs = []
+        for allowed_dir in allowed_dirs:
+            try:
+                resolved_allowed_dir = Path(allowed_dir).resolve()
+                resolved_allowed_dirs.append(resolved_allowed_dir)
+            except (OSError, RuntimeError) as e:
+                logger.error(f"Cannot resolve allowed directory '{allowed_dir}': {type(e).__name__}")
+                # Skip invalid allowed directories
+                continue
+
+        # Check if resolved path is within any allowed directory
+        is_within_allowed = False
+        for allowed_dir in resolved_allowed_dirs:
+            try:
+                # Check if resolved_path is relative to allowed_dir
+                # This will raise ValueError if not a subpath
+                resolved_path.relative_to(allowed_dir)
+                is_within_allowed = True
+                logger.debug(f"Path is within allowed directory: {allowed_dir}")
+                break
+            except ValueError:
+                # Not within this allowed directory, try next
+                continue
+
+        if not is_within_allowed:
+            logger.warning("Path is outside all allowed directories")
+            raise ValueError("Access denied: path is outside allowed directories")
+
+    # All validations passed
+    logger.info("Path validation passed")
+    return str(resolved_path)

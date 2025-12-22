@@ -42,3 +42,45 @@ async def history(request: Request):
     Page d'historique des analyses
     """
     return templates.TemplateResponse("history.html", {"request": request, "version": __version__})
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login(request: Request):
+    """
+    Page de connexion
+    """
+    return templates.TemplateResponse("login.html", {"request": request, "version": __version__})
+
+
+@router.get("/logout", response_class=HTMLResponse)
+async def logout(request: Request):
+    """
+    Page de déconnexion (efface le localStorage)
+    """
+    return templates.TemplateResponse("logout.html", {"request": request, "version": __version__})
+
+
+@router.get("/admin", response_class=HTMLResponse)
+async def admin(request: Request):
+    """
+    Page d'administration (admin only)
+    Gestion des utilisateurs et permissions
+    """
+    return templates.TemplateResponse("admin.html", {"request": request, "version": __version__})
+
+
+@router.get("/change-password", response_class=HTMLResponse)
+async def change_password(request: Request):
+    """
+    Page de changement de mot de passe obligatoire
+    Affichée quand password_must_change=True
+    """
+    return templates.TemplateResponse("change-password.html", {"request": request, "version": __version__})
+
+
+@router.get("/register", response_class=HTMLResponse)
+async def register(request: Request):
+    """
+    Page d'inscription (user registration)
+    """
+    return templates.TemplateResponse("register.html", {"request": request, "version": __version__})

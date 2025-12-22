@@ -12,8 +12,9 @@ from app.services.worker import AnalysisWorker, ProgressUpdate
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_worker_initialization(test_data_dir, test_db):
-    """Test worker initialization"""
+@pytest.mark.db_parametrize
+async def test_worker_initialization(test_data_dir, test_db, db_type):
+    """Test worker initialization (SQLite and PostgreSQL)"""
     worker = AnalysisWorker(max_queue_size=5, data_dir=str(test_data_dir), db_service=test_db)
 
     assert worker.get_queue_size() == 0

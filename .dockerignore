@@ -82,6 +82,7 @@ docker-compose*.yml
 # Scripts (not needed in runtime)
 scripts/
 *.sh
+!docker-entrypoint.sh
 install.sh
 test_ssh.py
 

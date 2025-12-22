@@ -1,6 +1,6 @@
 """
-Service de gestion de la base de données SQLite pour tracking des analyses.
-Utilise aiosqlite pour opérations asynchrones.
+Service de gestion de la base de données pour tracking des analyses.
+Supporte SQLite et PostgreSQL via auto-détection (DATABASE_URL).
 """
 
 import logging
@@ -9,13 +9,34 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-import aiosqlite
-
 from app.models.schemas import TaskInfo, TaskStatus
+from app.services.postgres_database import DatabasePool
 
 logger = logging.getLogger(__name__)
 
-# SQLite schema
+
+def _parse_timestamp(value) -> Optional[datetime]:
+    """
+    Parse timestamp from database (handles both SQLite strings and PostgreSQL datetime objects).
+
+    Args:
+        value: Timestamp value from database (str or datetime)
+
+    Returns:
+        datetime object or None
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        # PostgreSQL returns datetime objects directly
+        return value
+    if isinstance(value, str):
+        # SQLite returns ISO format strings
+        return datetime.fromisoformat(value)
+    return None
+
+
+# SQLite schema (mirrors PostgreSQL schema for compatibility)
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
     task_id TEXT PRIMARY KEY,
@@ -32,12 +53,14 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_heartbeat TIMESTAMP,
     progress_percent INTEGER DEFAULT 0,
-    current_phase TEXT
+    current_phase TEXT,
+    owner_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_uploaded_at ON tasks(uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_heartbeat ON tasks(last_heartbeat);
+CREATE INDEX IF NOT EXISTS idx_owner_id ON tasks(owner_id);
 
 CREATE TABLE IF NOT EXISTS progress_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,39 +82,42 @@ CREATE INDEX IF NOT EXISTS idx_progress_timestamp ON progress_snapshots(timestam
 
 class DatabaseService:
     """
-    Service pour opérations CRUD sur la base de données SQLite.
+    Service pour opérations CRUD sur la base de données.
 
-    Thread-safe via aiosqlite (async SQLite wrapper).
+    Supporte SQLite et PostgreSQL via DatabasePool (auto-détection DATABASE_URL).
     """
 
-    def __init__(self, db_path: str = "/data/pcap_analyzer.db"):
+    def __init__(self, database_url: Optional[str] = None):
         """
         Args:
-            db_path: Chemin vers le fichier SQLite
+            database_url: Database URL (sqlite:/// or postgresql://). If None, uses DATABASE_URL env var.
         """
-        self.db_path = db_path
-        self._ensure_data_dir()
-
-    def _ensure_data_dir(self):
-        """Crée le répertoire parent si nécessaire"""
-        db_dir = Path(self.db_path).parent
-        db_dir.mkdir(parents=True, exist_ok=True)
+        self.pool = DatabasePool(database_url)
 
     async def init_db(self):
         """
         Initialise la base de données avec le schéma.
         Idempotent: peut être appelé plusieurs fois sans problème.
+
+        Note: For PostgreSQL, schema should be managed by Alembic migrations.
+              For SQLite, we create schema directly.
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.executescript(SCHEMA)
-            await db.commit()
-        logger.info(f"Database initialized at {self.db_path}")
+        await self.pool.connect()
+
+        if self.pool.db_type == "sqlite":
+            # SQLite: create schema directly
+            await self.pool.execute_script(SCHEMA)
+            logger.info("SQLite database initialized")
+        else:
+            # PostgreSQL: schema managed by Alembic migrations
+            logger.info("PostgreSQL database connected (schema managed by Alembic)")
 
     async def create_task(
         self,
         task_id: str,
         filename: str,
         file_size_bytes: int,
+        owner_id: str = None,
     ) -> TaskInfo:
         """
         Crée une nouvelle tâche d'analyse (status=PENDING).
@@ -100,24 +126,24 @@ class DatabaseService:
             task_id: ID unique de la tâche (UUID)
             filename: Nom du fichier PCAP uploadé
             file_size_bytes: Taille du fichier en octets
+            owner_id: User ID of the owner (multi-tenant)
 
         Returns:
             TaskInfo object
         """
         uploaded_at = datetime.now(timezone.utc)
 
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """
-                INSERT INTO tasks (
-                    task_id, filename, status, uploaded_at, file_size_bytes
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                (task_id, filename, TaskStatus.PENDING.value, uploaded_at, file_size_bytes),
-            )
-            await db.commit()
+        query, params = self.pool.translate_query(
+            """
+            INSERT INTO tasks (
+                task_id, filename, status, uploaded_at, file_size_bytes, owner_id
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (task_id, filename, TaskStatus.PENDING.value, uploaded_at, file_size_bytes, owner_id),
+        )
+        await self.pool.execute(query, *params)
 
-        logger.info(f"Task created: {task_id} ({filename}, {file_size_bytes} bytes)")
+        logger.info(f"Task created: {task_id} ({filename}, {file_size_bytes} bytes, owner: {owner_id})")
 
         return TaskInfo(
             task_id=task_id,
@@ -125,6 +151,7 @@ class DatabaseService:
             status=TaskStatus.PENDING,
             uploaded_at=uploaded_at,
             file_size_bytes=file_size_bytes,
+            owner_id=owner_id,
         )
 
     async def get_task(self, task_id: str) -> Optional[TaskInfo]:
@@ -137,37 +164,36 @@ class DatabaseService:
         Returns:
             TaskInfo si trouvée, None sinon
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                """
-                SELECT task_id, filename, status, uploaded_at, analyzed_at,
-                       file_size_bytes, total_packets, health_score,
-                       report_html_path, report_json_path, error_message
-                FROM tasks WHERE task_id = ?
-                """,
-                (task_id,),
-            ) as cursor:
-                row = await cursor.fetchone()
+        query, params = self.pool.translate_query(
+            """
+            SELECT task_id, filename, status, uploaded_at, analyzed_at,
+                   file_size_bytes, total_packets, health_score,
+                   report_html_path, report_json_path, error_message, owner_id
+            FROM tasks WHERE task_id = ?
+            """,
+            (task_id,),
+        )
+        row = await self.pool.fetch_one(query, *params)
 
         if not row:
             return None
 
         # Convert to TaskInfo
         return TaskInfo(
-            task_id=row["task_id"],
+            task_id=str(row["task_id"]),  # Convert UUID to string
             filename=row["filename"],
             status=TaskStatus(row["status"]),
             uploaded_at=(
-                datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc)
+                _parse_timestamp(row["uploaded_at"]) or datetime.now(timezone.utc)
             ),
-            analyzed_at=datetime.fromisoformat(row["analyzed_at"]) if row["analyzed_at"] else None,
+            analyzed_at=_parse_timestamp(row["analyzed_at"]),
             file_size_bytes=row["file_size_bytes"],
             total_packets=row["total_packets"],
             health_score=row["health_score"],
             report_html_url=f"/api/reports/{task_id}/html" if row["report_html_path"] else None,
             report_json_url=f"/api/reports/{task_id}/json" if row["report_json_path"] else None,
             error_message=row["error_message"],
+            owner_id=str(row["owner_id"]) if row["owner_id"] else None,  # Convert UUID to string
         )
 
     async def update_status(self, task_id: str, status: TaskStatus, error_message: Optional[str] = None):
@@ -181,18 +207,17 @@ class DatabaseService:
         """
         analyzed_at = datetime.now(timezone.utc) if status in [TaskStatus.COMPLETED, TaskStatus.FAILED] else None
 
-        async with aiosqlite.connect(self.db_path) as db:
-            if analyzed_at:
-                await db.execute(
-                    "UPDATE tasks SET status = ?, analyzed_at = ?, error_message = ? WHERE task_id = ?",
-                    (status.value, analyzed_at, error_message, task_id),
-                )
-            else:
-                await db.execute(
-                    "UPDATE tasks SET status = ?, error_message = ? WHERE task_id = ?",
-                    (status.value, error_message, task_id),
-                )
-            await db.commit()
+        if analyzed_at:
+            query, params = self.pool.translate_query(
+                "UPDATE tasks SET status = ?, analyzed_at = ?, error_message = ? WHERE task_id = ?",
+                (status.value, analyzed_at, error_message, task_id),
+            )
+        else:
+            query, params = self.pool.translate_query(
+                "UPDATE tasks SET status = ?, error_message = ? WHERE task_id = ?",
+                (status.value, error_message, task_id),
+            )
+        await self.pool.execute(query, *params)
 
         logger.info(f"Task {task_id} status updated: {status.value}")
 
@@ -214,62 +239,79 @@ class DatabaseService:
             report_html_path: Chemin vers le rapport HTML
             report_json_path: Chemin vers le rapport JSON
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """
-                UPDATE tasks
-                SET total_packets = ?, health_score = ?,
-                    report_html_path = ?, report_json_path = ?
-                WHERE task_id = ?
-                """,
-                (total_packets, health_score, report_html_path, report_json_path, task_id),
-            )
-            await db.commit()
+        query, params = self.pool.translate_query(
+            """
+            UPDATE tasks
+            SET total_packets = ?, health_score = ?,
+                report_html_path = ?, report_json_path = ?
+            WHERE task_id = ?
+            """,
+            (total_packets, health_score, report_html_path, report_json_path, task_id),
+        )
+        await self.pool.execute(query, *params)
 
         logger.info(f"Task {task_id} results updated: {total_packets} packets, score {health_score:.1f}")
 
-    async def get_recent_tasks(self, limit: int = 20) -> list[TaskInfo]:
+    async def get_recent_tasks(self, limit: int = 20, owner_id: str = None) -> list[TaskInfo]:
         """
         Récupère les tâches récentes (historique).
 
         Args:
             limit: Nombre maximum de tâches à retourner
+            owner_id: Filter by owner ID (multi-tenant). If None, returns all tasks.
 
         Returns:
             Liste de TaskInfo, triée par date décroissante
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
+        if owner_id:
+            # Filter by owner_id (regular users)
+            query, params = self.pool.translate_query(
                 """
                 SELECT task_id, filename, status, uploaded_at, analyzed_at,
                        file_size_bytes, total_packets, health_score,
-                       report_html_path, report_json_path, error_message
+                       report_html_path, report_json_path, error_message, owner_id
+                FROM tasks
+                WHERE owner_id = ?
+                ORDER BY uploaded_at DESC
+                LIMIT ?
+                """,
+                (owner_id, limit),
+            )
+        else:
+            # No filter (admin users)
+            query, params = self.pool.translate_query(
+                """
+                SELECT task_id, filename, status, uploaded_at, analyzed_at,
+                       file_size_bytes, total_packets, health_score,
+                       report_html_path, report_json_path, error_message, owner_id
                 FROM tasks
                 ORDER BY uploaded_at DESC
                 LIMIT ?
                 """,
                 (limit,),
-            ) as cursor:
-                rows = await cursor.fetchall()
+            )
+
+        rows = await self.pool.fetch_all(query, *params)
 
         tasks = []
         for row in rows:
+            task_id_str = str(row["task_id"])  # Convert UUID to string
             tasks.append(
                 TaskInfo(
-                    task_id=row["task_id"],
+                    task_id=task_id_str,
                     filename=row["filename"],
                     status=TaskStatus(row["status"]),
                     uploaded_at=(
-                        datetime.fromisoformat(row["uploaded_at"]) if row["uploaded_at"] else datetime.now(timezone.utc)
+                        _parse_timestamp(row["uploaded_at"]) or datetime.now(timezone.utc)
                     ),
-                    analyzed_at=datetime.fromisoformat(row["analyzed_at"]) if row["analyzed_at"] else None,
+                    analyzed_at=_parse_timestamp(row["analyzed_at"]),
                     file_size_bytes=row["file_size_bytes"],
                     total_packets=row["total_packets"],
                     health_score=row["health_score"],
-                    report_html_url=f"/api/reports/{row['task_id']}/html" if row["report_html_path"] else None,
-                    report_json_url=f"/api/reports/{row['task_id']}/json" if row["report_json_path"] else None,
+                    report_html_url=f"/api/reports/{task_id_str}/html" if row["report_html_path"] else None,
+                    report_json_url=f"/api/reports/{task_id_str}/json" if row["report_json_path"] else None,
                     error_message=row["error_message"],
+                    owner_id=str(row["owner_id"]) if row["owner_id"] else None,  # Convert UUID to string
                 )
             )
 
@@ -287,21 +329,29 @@ class DatabaseService:
         """
         cutoff_time = datetime.now(timezone.utc) - timedelta(hours=retention_hours)
 
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                """
-                UPDATE tasks
-                SET status = ?
-                WHERE uploaded_at < ?
-                  AND status NOT IN (?, ?)
-                """,
-                (TaskStatus.EXPIRED.value, cutoff_time, TaskStatus.EXPIRED.value, TaskStatus.PROCESSING.value),
-            )
-            count = cursor.rowcount
-            await db.commit()
+        query, params = self.pool.translate_query(
+            """
+            UPDATE tasks
+            SET status = ?
+            WHERE uploaded_at < ?
+              AND status NOT IN (?, ?)
+            """,
+            (TaskStatus.EXPIRED.value, cutoff_time, TaskStatus.EXPIRED.value, TaskStatus.PROCESSING.value),
+        )
+
+        # Execute and get affected rows (not all DB backends return rowcount reliably)
+        await self.pool.execute(query, *params)
+
+        # Query to get count of expired tasks
+        count_query, count_params = self.pool.translate_query(
+            "SELECT COUNT(*) as count FROM tasks WHERE status = ?",
+            (TaskStatus.EXPIRED.value,),
+        )
+        result = await self.pool.fetch_one(count_query, *count_params)
+        count = result["count"] if result else 0
 
         if count > 0:
-            logger.info(f"Marked {count} tasks as expired (cutoff: {cutoff_time.isoformat()})")
+            logger.info(f"Tasks marked as expired (cutoff: {cutoff_time.isoformat()})")
 
         return count
 
@@ -312,12 +362,8 @@ class DatabaseService:
         Returns:
             Dictionnaire avec statistiques (total, completed, failed, pending, etc.)
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-
-            # Count by status
-            async with db.execute("SELECT status, COUNT(*) as count FROM tasks GROUP BY status") as cursor:
-                rows = await cursor.fetchall()
+        # Count by status
+        rows = await self.pool.fetch_all("SELECT status, COUNT(*) as count FROM tasks GROUP BY status")
 
         stats = {
             "total": 0,
@@ -353,40 +399,40 @@ class DatabaseService:
         """
         timestamp = datetime.now(timezone.utc)
 
-        async with aiosqlite.connect(self.db_path) as db:
-            if progress_percent is not None and current_phase is not None:
-                await db.execute(
-                    """
-                    UPDATE tasks
-                    SET last_heartbeat = ?, progress_percent = ?, current_phase = ?
-                    WHERE task_id = ?
-                    """,
-                    (timestamp, progress_percent, current_phase, task_id),
-                )
-            elif progress_percent is not None:
-                await db.execute(
-                    """
-                    UPDATE tasks
-                    SET last_heartbeat = ?, progress_percent = ?
-                    WHERE task_id = ?
-                    """,
-                    (timestamp, progress_percent, task_id),
-                )
-            elif current_phase is not None:
-                await db.execute(
-                    """
-                    UPDATE tasks
-                    SET last_heartbeat = ?, current_phase = ?
-                    WHERE task_id = ?
-                    """,
-                    (timestamp, current_phase, task_id),
-                )
-            else:
-                await db.execute(
-                    "UPDATE tasks SET last_heartbeat = ? WHERE task_id = ?",
-                    (timestamp, task_id),
-                )
-            await db.commit()
+        if progress_percent is not None and current_phase is not None:
+            query, params = self.pool.translate_query(
+                """
+                UPDATE tasks
+                SET last_heartbeat = ?, progress_percent = ?, current_phase = ?
+                WHERE task_id = ?
+                """,
+                (timestamp, progress_percent, current_phase, task_id),
+            )
+        elif progress_percent is not None:
+            query, params = self.pool.translate_query(
+                """
+                UPDATE tasks
+                SET last_heartbeat = ?, progress_percent = ?
+                WHERE task_id = ?
+                """,
+                (timestamp, progress_percent, task_id),
+            )
+        elif current_phase is not None:
+            query, params = self.pool.translate_query(
+                """
+                UPDATE tasks
+                SET last_heartbeat = ?, current_phase = ?
+                WHERE task_id = ?
+                """,
+                (timestamp, current_phase, task_id),
+            )
+        else:
+            query, params = self.pool.translate_query(
+                "UPDATE tasks SET last_heartbeat = ? WHERE task_id = ?",
+                (timestamp, task_id),
+            )
+
+        await self.pool.execute(query, *params)
 
         logger.debug(f"Heartbeat updated for task {task_id}")
 
@@ -414,38 +460,37 @@ class DatabaseService:
         """
         timestamp = datetime.now(timezone.utc)
 
-        async with aiosqlite.connect(self.db_path) as db:
-            # Sauvegarder dans progress_snapshots
-            await db.execute(
-                """
-                INSERT INTO progress_snapshots (
-                    task_id, phase, progress_percent, packets_processed,
-                    total_packets, current_analyzer, message, timestamp
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    task_id,
-                    phase,
-                    progress_percent,
-                    packets_processed,
-                    total_packets,
-                    current_analyzer,
-                    message,
-                    timestamp,
-                ),
-            )
+        # Sauvegarder dans progress_snapshots
+        query1, params1 = self.pool.translate_query(
+            """
+            INSERT INTO progress_snapshots (
+                task_id, phase, progress_percent, packets_processed,
+                total_packets, current_analyzer, message, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task_id,
+                phase,
+                progress_percent,
+                packets_processed,
+                total_packets,
+                current_analyzer,
+                message,
+                timestamp,
+            ),
+        )
+        await self.pool.execute(query1, *params1)
 
-            # Mettre à jour les champs de progression dans tasks
-            await db.execute(
-                """
-                UPDATE tasks
-                SET progress_percent = ?, current_phase = ?
-                WHERE task_id = ?
-                """,
-                (progress_percent, phase, task_id),
-            )
-
-            await db.commit()
+        # Mettre à jour les champs de progression dans tasks
+        query2, params2 = self.pool.translate_query(
+            """
+            UPDATE tasks
+            SET progress_percent = ?, current_phase = ?
+            WHERE task_id = ?
+            """,
+            (progress_percent, phase, task_id),
+        )
+        await self.pool.execute(query2, *params2)
 
         logger.debug(f"Progress snapshot created for task {task_id}: {phase} {progress_percent}%")
 
@@ -460,34 +505,32 @@ class DatabaseService:
         Returns:
             Liste de dictionnaires contenant les snapshots de progression
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                """
-                SELECT id, task_id, phase, progress_percent, packets_processed,
-                       total_packets, current_analyzer, message, timestamp
-                FROM progress_snapshots
-                WHERE task_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-                """,
-                (task_id, limit),
-            ) as cursor:
-                rows = await cursor.fetchall()
+        query, params = self.pool.translate_query(
+            """
+            SELECT id, task_id, phase, progress_percent, packets_processed,
+                   total_packets, current_analyzer, message, timestamp
+            FROM progress_snapshots
+            WHERE task_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            (task_id, limit),
+        )
+        rows = await self.pool.fetch_all(query, *params)
 
         snapshots = []
         for row in rows:
             snapshots.append(
                 {
                     "id": row["id"],
-                    "task_id": row["task_id"],
+                    "task_id": str(row["task_id"]),  # Convert UUID to string
                     "phase": row["phase"],
                     "progress_percent": row["progress_percent"],
                     "packets_processed": row["packets_processed"],
                     "total_packets": row["total_packets"],
                     "current_analyzer": row["current_analyzer"],
                     "message": row["message"],
-                    "timestamp": datetime.fromisoformat(row["timestamp"]) if row["timestamp"] else None,
+                    "timestamp": _parse_timestamp(row["timestamp"]),
                 }
             )
 
@@ -505,20 +548,18 @@ class DatabaseService:
         """
         cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=heartbeat_timeout_minutes)
 
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                """
-                SELECT task_id
-                FROM tasks
-                WHERE status = ?
-                  AND (last_heartbeat IS NULL OR last_heartbeat < ?)
-                """,
-                (TaskStatus.PROCESSING.value, cutoff_time),
-            ) as cursor:
-                rows = await cursor.fetchall()
+        query, params = self.pool.translate_query(
+            """
+            SELECT task_id
+            FROM tasks
+            WHERE status = ?
+              AND (last_heartbeat IS NULL OR last_heartbeat < ?)
+            """,
+            (TaskStatus.PROCESSING.value, cutoff_time),
+        )
+        rows = await self.pool.fetch_all(query, *params)
 
-        orphaned_task_ids = [row["task_id"] for row in rows]
+        orphaned_task_ids = [str(row["task_id"]) for row in rows]  # Convert UUIDs to strings
 
         if orphaned_task_ids:
             logger.warning(f"Found {len(orphaned_task_ids)} orphaned tasks: {orphaned_task_ids}")
@@ -535,16 +576,15 @@ class DatabaseService:
         error_message = "Task processing failed: worker died or was killed (orphaned task)"
         analyzed_at = datetime.now(timezone.utc)
 
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """
-                UPDATE tasks
-                SET status = ?, analyzed_at = ?, error_message = ?
-                WHERE task_id = ?
-                """,
-                (TaskStatus.FAILED.value, analyzed_at, error_message, task_id),
-            )
-            await db.commit()
+        query, params = self.pool.translate_query(
+            """
+            UPDATE tasks
+            SET status = ?, analyzed_at = ?, error_message = ?
+            WHERE task_id = ?
+            """,
+            (TaskStatus.FAILED.value, analyzed_at, error_message, task_id),
+        )
+        await self.pool.execute(query, *params)
 
         logger.info(f"Marked orphaned task {task_id} as FAILED")
 
@@ -562,7 +602,7 @@ def get_db_service() -> DatabaseService:
     """
     global _db_service
     if _db_service is None:
-        data_dir = os.getenv("DATA_DIR", "/data")
-        db_path = f"{data_dir}/pcap_analyzer.db"
-        _db_service = DatabaseService(db_path=db_path)
+        # Auto-detect database from DATABASE_URL environment variable
+        # Defaults to SQLite if not set
+        _db_service = DatabaseService()
     return _db_service

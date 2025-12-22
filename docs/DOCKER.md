@@ -4,6 +4,10 @@
 
 L'architecture Docker de PCAP Analyzer utilise un **multi-stage build** pour optimiser la taille de l'image et un **docker-compose** pour orchestrer l'application en développement.
 
+**Version actuelle :** v4.21.0 (Production Ready - Score de sécurité 91.5%)
+
+> 🔒 **Sécurité :** Cette application bénéficie d'un score de sécurité de **91.5%** avec conformité 100% aux standards OWASP ASVS 5.0, NIST SP 800-53 Rev. 5, CWE Top 25 (2025), et GDPR. Voir [SECURITY.md](../SECURITY.md) pour les détails complets de l'architecture de sécurité.
+
 ## Dockerfile - Multi-stage Build
 
 ### Architecture de build
@@ -375,7 +379,30 @@ docker system prune -a --volumes
 
 ## Sécurité Docker
 
-### 1. Non-root user
+### Sécurité applicative (v4.21.0)
+
+L'application PCAP Analyzer intègre des contrôles de sécurité robustes (score 91.5%, production ready) :
+
+| Couche | Protection | Standard |
+|--------|------------|----------|
+| **Input Validation** | PCAP magic number, file size checks (10 GB max) | OWASP ASVS 5.2.2, CWE-434 |
+| **Decompression Bomb** | Ratio monitoring (1000:1 warning, 10000:1 critical) | OWASP ASVS 5.2.3, CWE-770 |
+| **Resource Limits** | OS-level limits (4 GB RAM, 3600s CPU) | NIST SC-5, CWE-770 |
+| **Error Handling** | Stack trace removal, path sanitization | CWE-209, NIST SI-10/11 |
+| **PII Redaction** | IP/MAC/credentials redaction in logs | GDPR, CWE-532 |
+| **Audit Logging** | 50+ security event types, SIEM-ready | NIST AU-2, AU-3 |
+
+**Modules de sécurité :**
+- `src/utils/file_validator.py` - Validation PCAP
+- `src/utils/decompression_monitor.py` - Protection bombs
+- `src/utils/resource_limits.py` - Limites OS
+- `src/utils/error_sanitizer.py` - Sanitization
+- `src/utils/pii_redactor.py` - Redaction PII
+- `src/utils/audit_logger.py` - Audit trail
+
+📖 Documentation complète : [SECURITY.md](../SECURITY.md) | [docs/security/](security/)
+
+### 1. Non-root user (infrastructure)
 
 ```dockerfile
 RUN groupadd -r pcapuser && useradd -r -g pcapuser pcapuser

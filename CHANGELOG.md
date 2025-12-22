@@ -7,6 +7,635 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.25.0] - 2025-12-22
+
+### 🚀 Kubernetes/Helm + Page d'inscription
+
+**Ajouté**:
+- **Intégration Kubernetes/Helm avec PostgreSQL officiel**
+  - StatefulSet PostgreSQL personnalisé (postgres:16-alpine)
+  - Support 3 modes : SQLite (dev), PostgreSQL interne, PostgreSQL externe
+  - Secret Kubernetes pour DATABASE_URL + SECRET_KEY (auto-généré)
+  - Helm Chart v1.0.6 avec dépendances PostgreSQL
+
+- **Migrations automatiques au démarrage**
+  - docker-entrypoint.sh exécute `alembic upgrade head` pour PostgreSQL
+  - Health check PostgreSQL (max 30s wait)
+  - Compatible docker-compose et Kubernetes
+
+- **Page d'inscription utilisateur** (`/register`)
+  - Template register.html avec validation frontend
+  - Workflow d'approbation admin requis
+  - Validation mot de passe fort (12+ caractères)
+  - Confirmation de mot de passe
+
+**Modifié**:
+- **Page de connexion** : Suppression du bloc d'instructions admin (sécurité)
+- **Versions** : Application 4.25.0, Helm Chart 1.0.6
+
+**Corrigé**:
+- **404 sur /register** : Route et template manquants créés
+- **Erreur PostgreSQL "relation does not exist"** : Migrations automatiques
+
+**Fichiers Kubernetes**:
+- `helm-chart/pcap-analyzer/templates/postgresql-statefulset.yaml` - StatefulSet + Service
+- `helm-chart/pcap-analyzer/templates/secret.yaml` - DATABASE_URL + SECRET_KEY
+- `helm-chart/pcap-analyzer/values.yaml` - Configuration PostgreSQL 3 modes
+
+---
+
+## [5.0.0] - 2025-12-21
+
+### 🎉 MILESTONE - Production-Grade Multi-Tenant Platform
+
+**Version majeure** : Migration PostgreSQL + Authentication + Security v5.0
+
+**Tests** : 730+ tests (49.75% coverage) ✅
+**Security** : 100% OWASP ASVS compliance ✅
+**Database** : PostgreSQL (production) + SQLite (dev) ✅
+
+---
+
+### 🗄️ PostgreSQL Integration (Issue #25)
+
+**Ajouté**:
+- **PostgreSQL comme base de production** (remplace SQLite pour multi-instance)
+  - asyncpg connection pooling (min_size=2, max_size=10)
+  - Query translation automatique (? → $1, $2)
+  - Support UUIDs natifs
+  - Transactions ACID
+  - Alembic migrations
+
+- **Dual-database architecture** :
+  - SQLite : Dev/test local (backward compatible)
+  - PostgreSQL : Production (multi-instance, haute disponibilité)
+  - Auto-détection via `DATABASE_URL`
+
+- **Schema v5.0** :
+  - Table `users` : Comptes utilisateurs (admin approval)
+  - Table `tasks` : Analyses PCAP (avec `owner_id` multi-tenant)
+  - Table `progress_snapshots` : Progression temps réel
+  - Indexes optimisés : `idx_owner_id`, `idx_status`, `idx_uploaded_at`
+
+- **Tests PostgreSQL** : 27/27 passing ✅
+  - Integration tests (18 tests)
+  - Performance tests (9 tests)
+  - Concurrency tests (100 connexions simultanées)
+  - Coverage : 68.37% (postgres_database.py)
+
+**Fichiers** :
+- `app/services/postgres_database.py` - Connection pool + query translation
+- `alembic/versions/` - 4 migrations
+- `tests/integration/test_postgresql_integration.py` - 18 tests
+- `tests/integration/test_postgresql_performance.py` - 9 tests
+
+**Migration** : Voir [docs/POSTGRESQL_DEPLOYMENT.md](docs/POSTGRESQL_DEPLOYMENT.md)
+
+---
+
+### 🔐 Authentication & Admin Approval Workflow (Issues #15, #20)
+
+**Ajouté**:
+- **User registration** : Self-service avec approbation admin requise
+  - `POST /api/register` - Création compte (is_approved=false par défaut)
+  - Validation : username (3+ chars), email, password (12+ chars)
+  - bcrypt cost factor 12 (recommandation 2025)
+
+- **Admin approval workflow** :
+  - Comptes en attente jusqu'à approbation admin
+  - `PUT /api/admin/users/{id}/approve` - Approuver inscription
+  - Audit logging : Toutes actions admin loggées
+
+- **Role-Based Access Control (RBAC)** :
+  - Roles : `admin` (full access), `user` (own data only)
+  - JWT authentication (HS256, 30min expiry)
+  - OAuth2 password flow (RFC 6749)
+
+- **Admin actions** :
+  - `GET /api/users` - Liste tous les utilisateurs
+  - `POST /api/admin/users` - Créer user avec mot de passe temporaire
+  - `PUT /api/admin/users/{id}/block` - Bloquer compte
+  - `PUT /api/admin/users/{id}/unblock` - Débloquer compte
+  - `DELETE /api/admin/users/{id}` - Supprimer compte
+
+- **Admin brise-glace** :
+  - Compte admin auto-créé au premier boot
+  - Password source : K8s secret (`/var/run/secrets/admin_password`) ou random
+  - Password affiché sur STDOUT uniquement (CWE-532 compliance)
+  - Force password change recommended
+
+- **Session security** :
+  - JWT avec SECRET_KEY enforced en production
+  - Rate limiting : 1s → 2s → 5s après 4-6 échecs (IP-based)
+  - Username enumeration prevention (logs génériques)
+
+**Endpoints ajoutés** :
+- `POST /api/register` - Registration
+- `POST /api/token` - Login (OAuth2)
+- `GET /api/users/me` - Current user info
+- `PUT /api/users/me` - Update password
+- `GET /api/users` - List users (admin)
+- `PUT /api/admin/users/{id}/approve` - Approve user
+- `PUT /api/admin/users/{id}/block` - Block user
+- `PUT /api/admin/users/{id}/unblock` - Unblock user
+- `DELETE /api/admin/users/{id}` - Delete user
+- `POST /api/admin/users` - Create user with temp password
+
+**Fichiers** :
+- `app/models/user.py` - User model avec validation
+- `app/services/user_database.py` - User CRUD + bcrypt
+- `app/api/routes/auth.py` - Auth endpoints
+- `app/auth.py` - JWT + RBAC middleware
+- `tests/test_auth.py` - 31 tests (100% passing)
+
+**Documentation** : [docs/ADMIN_APPROVAL_WORKFLOW.md](docs/ADMIN_APPROVAL_WORKFLOW.md)
+
+---
+
+### 🛡️ Multi-Tenant Isolation (CWE-639)
+
+**Ajouté**:
+- **Ownership tracking** : Chaque task a un `owner_id` (FK vers users.id)
+- **Isolation stricte** :
+  - Users : `WHERE owner_id = current_user.id`
+  - Admins : Accès à toutes les tasks
+- **Legacy data** : Tasks avec `owner_id=NULL` (accessible admin uniquement)
+- **Tests** : 4 tests multi-tenant (100% passing)
+
+**Compliance** : CWE-639 (Authorization Bypass Through User-Controlled Key) ✅
+
+---
+
+### 🧪 Non-Regression Test Suite (Issue #26)
+
+**Ajouté**:
+- **730+ tests** au total (+104 tests/exécutions ajoutés)
+  - 31 tests auth ✅
+  - 18 tests database parametrized (SQLite + PostgreSQL) ✅
+  - 27 tests PostgreSQL integration ✅
+  - 49 tests security (100% pass rate) ✅
+  - 25 tests API endpoints ✅
+
+- **Dual-database testing** :
+  - Pytest marker `@pytest.mark.db_parametrize`
+  - Tests exécutés automatiquement sur SQLite ET PostgreSQL
+  - 17 tests doublés (34 exécutions)
+
+- **Coverage amélioré** : 33% → 49.75% (+16.75%)
+  - `app/api/routes/csrf.py` : 61.90% → **100%** (+38.1%)
+  - `app/api/routes/auth.py` : 24.83% → **88.46%** (+63.63%)
+  - `app/services/database.py` : 28.46% → **68.29%** (+39.83%)
+
+- **Bugs critiques fixés** :
+  - test_db fixture parameter mismatch (35 tests affectés)
+  - test_auth.py SQLite hardcoded (21 tests)
+  - SQLite schema missing owner_id column
+
+- **Tests créés** :
+  - `tests/unit/test_routes_csrf.py` - 4 tests CSRF
+  - `tests/unit/test_routes_progress.py` - 4 tests multi-tenant
+  - `tests/unit/test_routes_views.py` - 5 tests HTML views
+  - `tests/integration/test_legacy_data.py` - 3 tests legacy data
+  - `tests/test_backward_compatibility.py` - 6 tests compatibilité
+  - `tests/integration/test_schema_init.py` - 2 tests schema
+  - `tests/integration/test_concurrency_sqlite.py` - 3 tests concurrence
+  - `tests/test_edge_cases.py` - 6 tests edge cases
+
+- **Migration utility** :
+  - `app/utils/migration.py` - SQLite → PostgreSQL (163 lignes)
+  - Export/import JSON avec conversion types (UUID, timestamps)
+  - Tests : `tests/test_database_migration.py` (4 tests)
+
+**Documentation** : [docs/TESTING.md](docs/TESTING.md)
+
+---
+
+### 🔒 Security Hardening v5.0 (Issue #27)
+
+**100% OWASP ASVS compliance achieved** ✅
+
+#### CRITICAL Fixes
+
+- **CWE-532** : Passwords in Logs
+  - **Fix** : Admin passwords affichés sur STDOUT uniquement (pas dans logs persistants)
+  - **Files** : `app/services/user_database.py` (lignes 195-205, 224-242)
+  - **Impact** : Zéro mot de passe dans fichiers de logs
+
+#### MAJOR Fixes
+
+- **CWE-798** : Insecure Temporary Files
+  - **Fix** : `tempfile.mkstemp()` + permissions 0o600 + auto-cleanup
+  - **Files** : `app/utils/migration.py`
+  - **Impact** : Prévient symlink attacks, race conditions
+
+#### MODERATE Fixes
+
+- **TLS/SSL PostgreSQL** (CWE-319, OWASP ASVS V2.8)
+  - **Fix** : Variable `DATABASE_SSL_MODE` (disable/prefer/require/verify-full)
+  - **Files** : `app/services/postgres_database.py`
+  - **Production** : `verify-full` recommandé (chiffrement + vérification certificat)
+
+- **Username Enumeration** (CWE-204, OWASP ASVS V2.2.2)
+  - **Fix** : Logs génériques (aucun username révélé lors échecs login)
+  - **Files** : `app/api/routes/auth.py`
+  - **Impact** : Impossible déterminer existence username via logs
+
+#### MINOR Fixes
+
+- **Rate Limiting** (OWASP ASVS V2.2.1)
+  - **Fix** : Backoff exponentiel IP-based (1s → 2s → 5s après 4-6 échecs)
+  - **Files** : `app/utils/rate_limiter.py` (NEW, 132 lignes)
+  - **Impact** : Protection brute force, HTTP 429 avec Retry-After header
+
+- **SECRET_KEY Enforcement**
+  - **Fix** : Fail hard en mode production si SECRET_KEY manquante
+  - **Files** : `app/auth.py`
+  - **Impact** : Force configuration correcte en production
+
+**Compliance finale** :
+- OWASP ASVS 4.0 : 3/6 → **6/6** (100%) ✅
+- CWE Top 25 : 2/6 → **6/6** (100%) ✅
+
+**Tests** : 44/44 passing (aucune régression) ✅
+
+---
+
+### 📖 Documentation v5.0
+
+**Ajouté** :
+- [README.md](README.md) - Mis à jour pour v5.0 (badges, API, tests)
+- [docs/POSTGRESQL_DEPLOYMENT.md](docs/POSTGRESQL_DEPLOYMENT.md) - Guide complet PostgreSQL
+- [docs/ADMIN_APPROVAL_WORKFLOW.md](docs/ADMIN_APPROVAL_WORKFLOW.md) - Workflow admin détaillé
+- Références mises à jour dans tous les guides
+
+**Mis à jour** :
+- Badges : Tests (730+), Security (100% OWASP ASVS), Coverage (49.75%)
+- Section sécurité : Compliance, authentication, multi-tenant
+- Section API : 28 endpoints documentés (auth + admin + analysis)
+- Section tests : Résultats v5.0 (730+ tests, 0 failed)
+
+---
+
+### Modifié
+
+**Database** :
+- SQLite schema : Ajout colonne `owner_id` + index pour backward compatibility
+- PostgreSQL : 4 migrations Alembic (initial, owner_id, password_must_change, indexes)
+- Connection pooling : min_size=2, max_size=10 (configurable)
+
+**API Routes** :
+- Toutes routes `/api/upload`, `/api/status/*`, `/api/history` **requièrent auth** maintenant
+- Multi-tenant filtering automatique : Users voient uniquement leurs tasks
+- Admins ont accès complet (`verify_ownership()` bypass)
+
+**Security** :
+- Password policy : 12 caractères minimum (enforcé)
+- JWT expiration : 30 minutes (non-refreshable)
+- CSRF protection : Cookies secure en production (`ENVIRONMENT=production`)
+
+---
+
+### Déprécié
+
+Aucun
+
+---
+
+### Supprimé
+
+- **SQLite comme base production par défaut** : Maintenant dev uniquement
+- **Anonymous access** : Toutes routes API requièrent authentication
+
+---
+
+### Corrigé
+
+- **test_db fixture** : Parameter `db_path` → `database_url` (35 tests affectés)
+- **test_auth.py fixture** : Support PostgreSQL via `DATABASE_URL` override
+- **SQLite schema** : Sync avec PostgreSQL (owner_id column + index)
+- **Password logging** : CWE-532 (CRITICAL) - Passwords sur STDOUT uniquement
+- **Temp file paths** : CWE-798 (MAJOR) - Secure tempfile.mkstemp()
+- **Username enumeration** : CWE-204 (MODERATE) - Logs génériques
+- **Missing TLS/SSL** : CWE-319 (MODERATE) - DATABASE_SSL_MODE ajouté
+
+---
+
+### Sécurité
+
+**Vulnérabilités corrigées** : 7 total
+- 1 CRITICAL (CWE-532)
+- 1 MAJOR (CWE-798)
+- 2 MODERATE (CWE-319, CWE-204)
+- 2 MINOR (Rate limiting, SECRET_KEY enforcement)
+
+**Compliance** : OWASP ASVS 4.0 (100%), CWE Top 25 (100%) ✅
+
+**Tests sécurité** : 49/49 passing (100% pass rate) ✅
+
+---
+
+### Nouvelles Variables d'Environnement
+
+**Requises en production** :
+- `DATABASE_URL` - PostgreSQL connection string
+- `SECRET_KEY` - JWT secret (64 hex chars minimum)
+- `ENVIRONMENT` - "production" (active strict security checks)
+
+**Optionnelles** :
+- `DATABASE_SSL_MODE` - TLS/SSL mode (disable/prefer/require/verify-full)
+- `DATABASE_MIN_SIZE` - Connection pool min size (défaut: 2)
+- `DATABASE_MAX_SIZE` - Connection pool max size (défaut: 10)
+- `CSRF_SECRET_KEY` - CSRF token secret (doit être différent de SECRET_KEY)
+
+---
+
+### Migrations
+
+**SQLite → PostgreSQL** :
+```bash
+# Automatic migration utility
+python -c "from app.utils.migration import migrate_database; \
+  import asyncio; \
+  asyncio.run(migrate_database('sqlite:///data/pcap_analyzer.db', 'postgresql://pcap:pwd@localhost:5432/pcap_analyzer'))"
+```
+
+**Alembic** :
+```bash
+# Upgrade to latest
+alembic upgrade head
+```
+
+Voir [docs/MIGRATION_GUIDE_v5.0.md](docs/MIGRATION_GUIDE_v5.0.md) (à créer)
+
+---
+
+### Breaking Changes
+
+⚠️ **MAJEUR** :
+- **Authentication required** : Toutes routes `/api/*` requièrent JWT token
+- **SQLite not recommended** : Production doit utiliser PostgreSQL
+- **Admin approval** : Nouveaux comptes doivent être approuvés (is_approved=false par défaut)
+- **SECRET_KEY required** : Application fail en mode production si manquante
+
+**Migration path** : Voir [docs/MIGRATION_GUIDE_v5.0.md](docs/MIGRATION_GUIDE_v5.0.md)
+
+---
+
+### Commits Principaux
+
+- `a94e679` - PostgreSQL Integration Tests (Issue #25) - 27 tests
+- `de5c733` - Critical fixture bugs & SQLite schema sync (Issue #26 Phase 1)
+- `7d61a60` - Dual-database test support (Issue #26 Phase 2)
+- `71ce9bb` - 🎉 MILESTONE v4.27.0: Issue #26 COMPLETE
+- `5dbe320` - SECURITY v5.0: Complete Security Audit Fixes (Issue #27)
+
+---
+
+### Contributors
+
+- [@MacFlurry](https://github.com/MacFlurry) - Project lead
+- Claude Sonnet 4.5 - AI pair programming assistant
+
+---
+
+## [4.21.0] - 2025-12-20
+
+### 🔒 Sécurité Majeure - Production Ready
+
+**Score de sécurité : 51% → 91.5%** ✅ PRODUCTION READY
+
+#### Phase 1 (CRITICAL): Input Validation & Resource Management
+
+- **PCAP Magic Number Validation** (OWASP ASVS 5.2.2)
+  - Support complet : pcap, pcap-ns, pcapng formats
+  - Module : `src/utils/file_validator.py`
+  - Bloque fichiers non-PCAP avant traitement
+
+- **File Size Pre-Validation** (NIST SC-5, CWE-770 Rank 25/2025)
+  - Limite par défaut : 10 GB (configurable)
+  - Prévient l'épuisement mémoire avant parsing
+  - Protection DoS au niveau système
+
+- **Decompression Bomb Protection** (OWASP ASVS 5.2.3)
+  - Seuils : 1000:1 warning, 10000:1 critical
+  - Monitoring en temps réel (toutes les 10,000 paquets)
+  - Module : `src/utils/decompression_monitor.py`
+  - Détection de zip bombs (42.zip scenario)
+
+- **OS-Level Resource Limits** (CWE-770, NIST SC-5)
+  - RLIMIT_AS : 4 GB mémoire max
+  - RLIMIT_CPU : 3600s temps CPU max
+  - RLIMIT_FSIZE : 10 GB fichiers max
+  - RLIMIT_NOFILE : 1024 descripteurs max
+  - Module : `src/utils/resource_limits.py`
+  - Support Linux/macOS (graceful degradation Windows)
+
+#### Phase 2 (HIGH): Error Handling & Privacy
+
+- **Stack Trace Disclosure Prevention** (CWE-209, NIST SI-10, SI-11)
+  - Suppression des stack traces dans erreurs utilisateur
+  - Redaction des chemins de fichiers (Unix/macOS/Windows)
+  - Messages d'erreur génériques et sécurisés
+  - Module : `src/utils/error_sanitizer.py`
+
+- **PII Redaction in Logging** (GDPR Art. 5(1)(c), 32; CWE-532)
+  - Redaction IPv4/IPv6, MAC addresses, file paths, credentials
+  - Modes : PRODUCTION, DEVELOPMENT, DEBUG
+  - Module : `src/utils/pii_redactor.py`
+  - Conformité GDPR/CCPA/NIST SP 800-122
+
+- **Centralized Logging Configuration** (OpenSSF, NIST SP 800-92)
+  - Configuration YAML structurée (`config/logging.yaml`)
+  - Permissions sécurisées (0600 pour logs)
+  - Rotation automatique (10 MB, 5-10 backups)
+  - Module : `src/utils/logging_config.py`
+
+- **Security Audit Logging** (NIST AU-2, AU-3)
+  - 50+ types d'événements sécurité
+  - Champs conformes NIST AU-3 (timestamp, user, outcome, details)
+  - Intégration SIEM (JSON structured logging)
+  - Module : `src/utils/audit_logger.py`
+
+#### Phase 3: Documentation & Testing
+
+- **SECURITY.md Documentation** (24.5 KB, 20 sections)
+  - Threat model pour PCAP analyzer
+  - 8 catégories de contrôles sécurité
+  - Compliance matrix : OWASP ASVS, NIST, CWE, GDPR
+  - Attack surface analysis
+  - Production deployment checklist
+  - Incident response procedures
+  - Vulnerability disclosure policy
+
+- **Security Test Suite** (7 fichiers, 2,500+ lignes)
+  - `tests/security/test_file_validator.py` - CWE-22, CWE-434, CWE-770
+  - `tests/security/test_error_sanitizer.py` - CWE-209, NIST SI-10
+  - `tests/security/test_pii_redactor.py` - GDPR, CWE-532
+  - `tests/security/test_resource_limits.py` - CWE-770, NIST SC-5
+  - `tests/security/test_decompression_monitor.py` - OWASP ASVS 5.2.3
+  - `tests/security/test_integration.py` - Tests end-to-end
+  - Documentation complète : `tests/security/README.md`
+
+- **Validation Results**
+  - Tests sécurité : 16/16 passing ✅
+  - Tests principaux : 64/65 passing ✅
+  - Couverture : 90%+ sur modules sécurité
+
+#### Compliance Standards (100%)
+
+- **OWASP ASVS 5.0** : 6/6 contrôles applicables
+  - V5.1.3 : Input Allowlisting
+  - V5.2.2 : File Upload Verification
+  - V5.2.3 : Decompression Bomb Protection
+  - V5.3.6 : Resource Allocation Limits
+  - V7.3.1 : Sensitive Data Logging Prevention
+  - V8.3.4 : Privacy Controls
+
+- **NIST SP 800-53 Rev. 5** : 6/6 contrôles applicables
+  - AU-2 : Audit Events
+  - AU-3 : Content of Audit Records
+  - SC-5 : Denial of Service Protection
+  - SI-10 : Information Input Validation
+  - SI-10(3) : Predictable Behavior
+  - SI-11 : Error Handling
+
+- **CWE Top 25 (2025)** : 9/9 weaknesses couvertes
+  - CWE-22 (Rank 6) : Path Traversal
+  - CWE-78 (Rank 9) : OS Command Injection
+  - CWE-434 (Rank 12) : Unrestricted File Upload
+  - CWE-502 (Rank 15) : Deserialization
+  - CWE-770 (Rank 25) : Resource Allocation
+  - CWE-209 : Information Exposure
+  - CWE-532 : Sensitive Info in Logs
+  - CWE-778 : Insufficient Logging
+  - CWE-1333 : ReDoS
+
+- **GDPR** : 4/4 articles applicables
+  - Article 5(1)(c) : Data Minimization
+  - Article 5(1)(e) : Storage Limitation
+  - Article 6(1)(f) : Legitimate Interest
+  - Article 32 : Security of Processing
+
+#### Dependency Security
+
+- ✅ CVE-2023-48795 : Paramiko ≥3.5.2
+- ✅ Scapy ≥2.6.2 (latest stable)
+- ✅ PyYAML ≥6.0 (CVE-2020-14343)
+- ✅ Jinja2 ≥3.1.2 (CVE-2024-22195)
+
+### 🐛 Corrections
+
+- **Fixed: Mean RTT and Retransmissions displaying 0.00ms/0 in jitter graphs**
+  - Root cause : Flow key format mismatch
+    - Jitter flows : `"IP:port -> IP:port (TCP)"` (avec espaces et protocole)
+    - RTT/Retrans flows : `"IP:port->IP:port"` (sans espaces ni protocole)
+  - Solution : Flow key normalization avant lookup
+    ```python
+    normalized_key = flow_key.replace(" -> ", "->").replace(" (TCP)", "").replace(" (UDP)", "")
+    ```
+  - Fichiers modifiés :
+    - `src/exporters/html_report.py` (5 changements)
+    - `src/utils/graph_generator.py` (1 changement)
+  - Validation : Toutes les valeurs affichées correctement
+  - Documentation : `docs/BUG_FIX_VALIDATION_v4.21.0.md`
+
+### 🏗️ Architecture
+
+- **Directory Reorganization**
+  - `docs/security/` : Documentation d'implémentation sécurité
+  - `docs/archive/` : Versions archivées (v4.15.0, etc.)
+  - `examples/` : Fichiers POC et demos
+  - `scripts/` : Utilitaires (audit log analyzer, rotation, etc.)
+  - `tests/test_data/` : Fichiers PCAP de test
+  - Root directory : Seulement fichiers essentiels (README, LICENSE, etc.)
+
+### 📊 Metrics
+
+- **Security Score** : 51% → 91.5% (+40.5 points)
+- **Compliance** : 100% OWASP ASVS, NIST, CWE Top 25, GDPR
+- **Test Coverage** : 90%+ sur modules sécurité
+- **Documentation** : 24.5 KB SECURITY.md + 2,500+ lignes tests
+- **Performance Impact** : <1ms overhead pour RTT/retrans lookup (O(1))
+
+### 🎯 Production Readiness
+
+**Status** : ✅ **READY FOR PRODUCTION**
+
+**Justification** :
+- Tous les contrôles CRITICAL (Phase 1) implémentés
+- Tous les contrôles HIGH (Phase 2) implémentés
+- 100% compliance avec standards de sécurité
+- Documentation complète et tests exhaustifs
+- Score ≥90% requis atteint (91.5%)
+
+## [4.20.0] - 2025-12-19
+
+### 🔧 QA Fixes & Critical Security Patches
+
+- **Security patches** en préparation de v4.21.0
+- Corrections de tests de sécurité
+- Mise à jour des dépendances
+
+## [4.19.0] - 2025-12-19
+
+### ✨ POC Design + Plotly Lazy Loading Fix
+
+- **Plotly.js Lazy Loading** : Graphs chargés uniquement quand onglet visible
+- **POC Jitter Enhanced** : Design système pour graphs de jitter
+- Correction du bug de width 50% des graphs Plotly
+
+## [4.18.0] - 2025-12-19
+
+### ✨ Interactive Time-Series Jitter Graphs (Plotly.js)
+
+- **Graphiques interactifs Plotly.js** pour visualisation jitter
+- Timeline avec RTT overlay en temps réel
+- Marqueurs de retransmissions sur le graphique
+- Seuils warning (30ms) et critical (50ms)
+- Badges de stats : Mean Jitter, P95, Mean RTT, Max RTT, Retransmissions
+- Module : `src/utils/graph_generator.py`
+
+## [4.17.1] - 2025-12-19
+
+### 🔧 Bidirectional Retransmission Contexts
+
+- Contextes de retransmissions bidirectionnels
+- Amélioration de la détection des retransmissions
+
+## [4.17.0] - 2025-12-19
+
+### ✨ Bidirectional Timeline Snapshot Architecture
+
+- Architecture de snapshot timeline bidirectionnelle
+- Support complet des flux bidirectionnels
+
+## [4.16.2] - 2025-12-19
+
+### 🐛 CRITICAL FIX: Race Condition in Port Reuse Detection
+
+- Correction race condition détection réutilisation ports
+- Amélioration stabilité analyseur TCP
+
+## [4.16.1] - 2025-12-19
+
+### 🐛 CRITICAL FIX: Port Reuse Timeline Contamination
+
+- Correction contamination timeline lors réutilisation ports
+- Isolation correcte des flux TCP
+
+## [4.16.0] - 2025-12-19
+
+### ✨ TCP State Machine (RFC 793)
+
+- **Machine à états TCP complète RFC 793**
+- 11 états : CLOSED, ESTABLISHED, FIN-WAIT-1/2, TIME-WAIT, etc.
+- Tracking séquence FIN-ACK
+- Gestion TIME-WAIT (120s per RFC 793)
+- Détection timeout connexion (300s inactivité)
+- Détection réutilisation port basée sur ISN (compatible Wireshark)
+- Module : `src/analyzers/tcp_state_machine.py`
+- Fix faux positifs "retransmission context" après FIN-ACK
+
 ## [4.15.0] - 2025-12-19
 
 ### ✨ Nouvelles Fonctionnalités

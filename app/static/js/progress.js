@@ -29,6 +29,25 @@ class ProgressMonitor {
         this.init();
     }
 
+    getAuthHeaders() {
+        const token = localStorage.getItem('access_token');
+        return {
+            'Authorization': `Bearer ${token}`
+        };
+    }
+
+    addTokenToUrl(url) {
+        /**
+         * Add authentication token to URL as query parameter.
+         * Used for navigation links (reports) where we can't send headers.
+         */
+        const token = localStorage.getItem('access_token');
+        if (!token) return url;
+
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}token=${encodeURIComponent(token)}`;
+    }
+
     async init() {
         // Set initial message immediately
         this.currentMessage.textContent = 'Initialisation...';
@@ -57,10 +76,15 @@ class ProgressMonitor {
          * après que l'analyse soit terminée.
          */
         try {
-            const response = await fetch(`/api/status/${this.taskId}`);
+            const response = await fetch(`/api/status/${this.taskId}`, {
+                headers: this.getAuthHeaders()
+            });
 
             if (!response.ok) {
                 console.error('Failed to fetch initial status:', response.status);
+                if (response.status === 401) {
+                    window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+                }
                 return;
             }
 
@@ -104,10 +128,10 @@ class ProgressMonitor {
                 // Afficher les boutons d'action seulement si les rapports existent encore
                 if (taskData.report_html_url && taskData.status === 'completed') {
                     this.actionButtons.classList.remove('hidden');
-                    document.getElementById('view-report-btn').href = taskData.report_html_url;
+                    document.getElementById('view-report-btn').href = this.addTokenToUrl(taskData.report_html_url);
 
                     if (taskData.report_json_url) {
-                        document.getElementById('download-json-btn').href = taskData.report_json_url;
+                        document.getElementById('download-json-btn').href = this.addTokenToUrl(taskData.report_json_url);
                     }
                 } else if (taskData.status === 'expired') {
                     // Pour les tâches expirées, afficher un message
@@ -198,7 +222,9 @@ class ProgressMonitor {
          * This allows users to see the progress timeline even after refreshing the page.
          */
         try {
-            const response = await fetch(`/api/progress/history/${this.taskId}`);
+            const response = await fetch(`/api/progress/history/${this.taskId}`, {
+                headers: this.getAuthHeaders()
+            });
 
             if (!response.ok) {
                 console.error('Failed to fetch progress history:', response.status);
@@ -268,7 +294,15 @@ class ProgressMonitor {
     }
 
     connectSSE() {
-        const url = `/api/progress/${this.taskId}`;
+        // EventSource doesn't support custom headers, so we pass token as query param
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            console.error('SSE: No access token found, redirecting to login');
+            window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
+            return;
+        }
+
+        const url = `/api/progress/${this.taskId}?token=${encodeURIComponent(token)}`;
         this.eventSource = new EventSource(url);
 
         this.eventSource.onmessage = (event) => {
@@ -282,10 +316,17 @@ class ProgressMonitor {
 
         this.eventSource.onerror = (error) => {
             console.error('SSE connection error:', error);
+
+            // Check if it's an auth error (EventSource closes on 401)
+            if (this.eventSource.readyState === EventSource.CLOSED) {
+                console.error('SSE: Connection closed, possibly auth failure');
+                // Don't redirect immediately, let fallback polling handle it
+            }
+
             this.handleConnectionError();
         };
 
-        console.log(`SSE connected to ${url}`);
+        console.log(`SSE connected to /api/progress/${this.taskId} (with token)`);
     }
 
     handleProgressUpdate(data) {
@@ -324,9 +365,20 @@ class ProgressMonitor {
         } else if (data.phase) {
             // Si pas de message spécifique, toujours utiliser un message basé sur la phase
             const phaseMessages = {
+                // New granular phases
+                counting: 'Comptage des paquets...',
+                metadata_extraction: 'Extraction des métadonnées avec dpkt...',
+                scapy_loading: 'Chargement des paquets avec Scapy...',
+                protocol_analysis: 'Analyse de la distribution des protocoles...',
+                security_detection: 'Détection des menaces de sécurité...',
+                finalization: 'Calcul des statistiques finales...',
+
+                // Legacy phases (backward compatibility)
                 metadata: 'Extraction des métadonnées...',
                 analysis: 'Analyse des paquets en cours...',
                 finalize: 'Finalisation du rapport...',
+
+                // Completion states
                 completed: 'Analyse terminée avec succès',
                 failed: 'Analyse échouée'
             };
@@ -421,9 +473,20 @@ class ProgressMonitor {
 
     updatePhase(phase) {
         const phases = {
+            // New granular phases
+            counting: 'Comptage des paquets',
+            metadata_extraction: 'Extraction métadonnées (dpkt)',
+            scapy_loading: 'Chargement paquets Scapy',
+            protocol_analysis: 'Analyse protocoles',
+            security_detection: 'Détection menaces',
+            finalization: 'Finalisation',
+
+            // Legacy phases (backward compatibility)
             metadata: 'Extraction métadonnées',
             analysis: 'Analyse des paquets',
             finalize: 'Finalisation',
+
+            // Completion states
             completed: 'Terminé',
             failed: 'Échec',
             pending: 'En attente'
@@ -514,12 +577,12 @@ class ProgressMonitor {
         // Show action buttons
         this.actionButtons.classList.remove('hidden');
 
-        // Set report URLs
+        // Set report URLs (with auth token for navigation)
         if (data.report_html_url) {
-            document.getElementById('view-report-btn').href = data.report_html_url;
+            document.getElementById('view-report-btn').href = this.addTokenToUrl(data.report_html_url);
         }
         if (data.report_json_url) {
-            document.getElementById('download-json-btn').href = data.report_json_url;
+            document.getElementById('download-json-btn').href = this.addTokenToUrl(data.report_json_url);
         }
 
         // Add completion log
@@ -620,7 +683,9 @@ class ProgressMonitor {
          */
         this.fallbackTimer = setInterval(async () => {
             try {
-                const response = await fetch(`/api/status/${this.taskId}`);
+                const response = await fetch(`/api/status/${this.taskId}`, {
+                    headers: this.getAuthHeaders()
+                });
                 if (!response.ok) return;
 
                 const taskData = await response.json();
@@ -684,9 +749,20 @@ class ProgressMonitor {
 
     getPhaseType(phase) {
         const types = {
+            // New granular phases
+            counting: 'info',
+            metadata_extraction: 'info',
+            scapy_loading: 'info',
+            protocol_analysis: 'info',
+            security_detection: 'info',
+            finalization: 'info',
+
+            // Legacy phases
             metadata: 'info',
             analysis: 'info',
             finalize: 'info',
+
+            // Completion states
             completed: 'success',
             failed: 'error'
         };
