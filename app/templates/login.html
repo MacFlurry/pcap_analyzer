@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Login - PCAP Analyzer{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4 py-12">
+    <div class="max-w-md w-full space-y-8">
+        <!-- Header -->
+        <div class="text-center">
+            <div class="bg-gradient-primary p-4 rounded-2xl inline-block mb-4">
+                <i class="fas fa-lock text-white text-4xl"></i>
+            </div>
+            <h2 class="text-3xl font-extrabold text-gray-900 dark:text-white">
+                Connexion
+            </h2>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                Authentification requise pour uploader des fichiers PCAP
+            </p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 space-y-6">
+            <form id="login-form" class="space-y-6">
+                <!-- Username -->
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-user mr-2 text-primary"></i>Nom d'utilisateur
+                    </label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        required
+                        autocomplete="username"
+                        class="appearance-none relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
+                        placeholder="username"
+                    >
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-key mr-2 text-primary"></i>Mot de passe
+                    </label>
+                    <div class="relative">
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            required
+                            autocomplete="current-password"
+                            class="appearance-none relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors pr-12"
+                            placeholder="••••••••••••"
+                        >
+                        <button
+                            type="button"
+                            id="toggle-password"
+                            class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        >
+                            <i class="fas fa-eye" id="password-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="error-message" class="hidden p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-circle text-red-500 mr-3"></i>
+                        <p class="text-sm text-red-700 dark:text-red-300" id="error-text"></p>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button
+                    type="submit"
+                    id="login-button"
+                    class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-primary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <span class="absolute left-0 inset-y-0 flex items-center pl-4">
+                        <i class="fas fa-sign-in-alt text-white/80"></i>
+                    </span>
+                    <span id="login-button-text">Se connecter</span>
+                    <span id="login-spinner" class="hidden ml-3">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </span>
+                </button>
+            </form>
+
+            <!-- Register Link -->
+            <div class="text-center mt-4">
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Pas encore de compte ?
+                    <a href="/register" class="font-medium text-primary hover:text-primary/80 transition-colors">
+                        S'inscrire
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Toggle password visibility
+document.getElementById('toggle-password').addEventListener('click', function() {
+    const passwordInput = document.getElementById('password');
+    const icon = document.getElementById('password-icon');
+
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        passwordInput.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+});
+
+// Handle login form submission
+document.getElementById('login-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const errorMessage = document.getElementById('error-message');
+    const errorText = document.getElementById('error-text');
+    const loginButton = document.getElementById('login-button');
+    const buttonText = document.getElementById('login-button-text');
+    const spinner = document.getElementById('login-spinner');
+
+    // Hide previous errors
+    errorMessage.classList.add('hidden');
+
+    // Disable button and show spinner
+    loginButton.disabled = true;
+    buttonText.textContent = 'Connexion en cours...';
+    spinner.classList.remove('hidden');
+
+    try {
+        // Send login request
+        const formData = new FormData();
+        formData.append('username', username);
+        formData.append('password', password);
+
+        const response = await fetch('/api/token', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Login successful - store token
+            localStorage.setItem('access_token', data.access_token);
+            localStorage.setItem('token_type', data.token_type);
+
+            // Check if password must be changed
+            if (data.password_must_change === true) {
+                console.log('Password must be changed - redirecting to /change-password');
+
+                if (window.toast) {
+                    window.toast.warning('⚠️ Changement de mot de passe obligatoire', 2000);
+                }
+
+                // Redirect to password change page after short delay
+                setTimeout(() => {
+                    window.location.href = '/change-password';
+                }, 1500);
+                return;
+            }
+
+            // Get user info
+            const userResponse = await fetch('/api/users/me', {
+                headers: {
+                    'Authorization': `Bearer ${data.access_token}`
+                }
+            });
+
+            if (userResponse.ok) {
+                const user = await userResponse.json();
+                localStorage.setItem('current_user', JSON.stringify(user));
+
+                // Debug logs
+                console.log('Login - Token stored:', data.access_token.substring(0, 20) + '...');
+                console.log('Login - Token in localStorage:', localStorage.getItem('access_token') ? 'YES' : 'NO');
+
+                // Initialize CSRF protection after successful login
+                console.log('Login - Initializing CSRF protection...');
+                if (window.csrfManager) {
+                    await window.csrfManager.init();
+                    console.log('Login - CSRF protection initialized');
+                } else {
+                    console.warn('Login - CSRF manager not available');
+                }
+
+                // Show success notification (if toast is available)
+                if (window.toast) {
+                    window.toast.success('Connexion réussie ! Redirection...', 3000);
+                }
+
+                // Redirect to upload page or returnUrl
+                const urlParams = new URLSearchParams(window.location.search);
+                const returnUrl = urlParams.get('returnUrl') || '/';
+
+                // Wait a bit longer to ensure localStorage is persisted
+                setTimeout(() => {
+                    console.log('Login - Redirecting to:', returnUrl);
+                    window.location.href = returnUrl;
+                }, 1500);
+            } else {
+                // User info fetch failed
+                console.error('Failed to fetch user info:', userResponse.status);
+                throw new Error('Failed to fetch user information');
+            }
+        } else {
+            // Login failed
+            errorText.textContent = data.detail || 'Identifiants incorrects';
+            errorMessage.classList.remove('hidden');
+
+            // Re-enable button
+            loginButton.disabled = false;
+            buttonText.textContent = 'Se connecter';
+            spinner.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        errorText.textContent = 'Erreur de connexion au serveur';
+        errorMessage.classList.remove('hidden');
+
+        // Re-enable button
+        loginButton.disabled = false;
+        buttonText.textContent = 'Se connecter';
+        spinner.classList.add('hidden');
+    }
+});
+
+// Check if already logged in
+window.addEventListener('DOMContentLoaded', function() {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+        // Verify token is still valid
+        fetch('/api/users/me', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                // Already logged in, redirect to upload
+                const urlParams = new URLSearchParams(window.location.search);
+                const returnUrl = urlParams.get('returnUrl') || '/';
+                window.location.href = returnUrl;
+            } else {
+                // Token expired, clear storage
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('token_type');
+                localStorage.removeItem('current_user');
+            }
+        })
+        .catch(error => {
+            console.error('Token validation error:', error);
+        });
+    }
+});
+</script>
+{% endblock %}
