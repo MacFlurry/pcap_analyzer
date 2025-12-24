@@ -349,10 +349,17 @@ class UserDatabaseService:
 
         except Exception as e:
             error_str = str(e).lower()
-            if "username" in error_str or "unique" in error_str:
+            if "idx_users_email" in error_str or "users_email_key" in error_str:
+                raise ValueError("Email already exists")
+            elif "idx_users_username" in error_str or "users_username_key" in error_str:
+                raise ValueError("Username already exists")
+            elif "username" in error_str:
                 raise ValueError("Username already exists")
             elif "email" in error_str:
                 raise ValueError("Email already exists")
+            elif "unique" in error_str:
+                # Fallback for other unique constraints or SQLite
+                raise ValueError("Username already exists")
             else:
                 raise ValueError(f"Database error: {e}")
 
