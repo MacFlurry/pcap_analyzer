@@ -1,68 +1,10 @@
 """
-Integration tests for Authentication API endpoints (Fully Async).
+Integration tests for Authentication and Admin User Management API endpoints.
 """
 
 import pytest
 import uuid
-import asyncio
-from httpx import AsyncClient, ASGITransport
-from app.main import app
-from app.models.user import UserRole, UserCreate
-from app.services.user_database import UserDatabaseService
-from tests.integration.postgres_conftest import postgres_container, postgres_db_url, apply_migrations
-
-@pytest.fixture
-async def user_db(postgres_db_url, apply_migrations):
-    """
-    Fixture to provide a UserDatabaseService connected to the test container.
-    """
-    service = UserDatabaseService(database_url=postgres_db_url)
-    await service.init_db()
-    return service
-
-@pytest.fixture
-async def api_client(postgres_db_url, apply_migrations, test_data_dir, monkeypatch):
-    """
-    Async HTTP client for testing FastAPI endpoints.
-    """
-    monkeypatch.setenv("DATABASE_URL", postgres_db_url)
-    monkeypatch.setenv("SECRET_KEY", "test_secret_key_must_be_32_chars_long_min")
-    monkeypatch.setenv("DATA_DIR", str(test_data_dir))
-    
-    # Reset singletons
-    from app.services import user_database, database, worker, analyzer, postgres_database
-    user_database._user_db_service = None
-    database._db_service = None
-    worker._worker = None
-    analyzer._analyzer_service = None
-    postgres_database._db_pool = None
-    
-    # Patch DATA_DIR
-    from app.api.routes import health, reports, upload
-    monkeypatch.setattr(upload, "DATA_DIR", test_data_dir)
-    monkeypatch.setattr(upload, "UPLOADS_DIR", test_data_dir / "uploads")
-    monkeypatch.setattr(reports, "DATA_DIR", test_data_dir)
-    monkeypatch.setattr(reports, "REPORTS_DIR", test_data_dir / "reports")
-    monkeypatch.setattr(health, "DATA_DIR", test_data_dir)
-    
-    # Explicitly initialize pools to be safe
-    from app.services.database import get_db_service
-    from app.services.user_database import get_user_db_service
-    
-    db = get_db_service()
-    await db.init_db()
-    
-    udb = get_user_db_service()
-    await udb.init_db()
-    
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        yield ac
-    
-    # Cleanup
-    if udb.pool.pool:
-        await udb.pool.close()
-    if db.pool.pool:
-        await db.pool.close()
+from app.models.user import UserCreate, UserRole, UserResponse
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -370,3 +312,108 @@ class TestAuthAPI:
         )
         assert response.status_code == 200
         assert response.json()["password_must_change"] is False
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+class TestAdminAPI:
+    """
+    Tests for Admin-only User Management API endpoints.
+    """
+    @pytest.fixture
+    async def admin_headers(self, user_db):
+        from app.auth import create_access_token
+        admin = await user_db.create_user(
+            UserCreate(username=f"admin_{uuid.uuid4().hex[:4]}", email=f"admin_{uuid.uuid4().hex[:4]}@test.com", password="AdminPassword123!"),
+            role=UserRole.ADMIN,
+            auto_approve=True
+        )
+        token = create_access_token(admin)
+        return {"Authorization": f"Bearer {token}"}, admin
+
+    async def test_get_all_users(self, api_client, admin_headers):
+        headers, _ = admin_headers
+        response = await api_client.get("/api/users", headers=headers)
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+        assert len(response.json()) >= 1
+
+    async def test_admin_approve_block_unblock_flow(self, api_client, admin_headers, user_db):
+        headers, admin = admin_headers
+        
+        # 1. Create a user needing approval
+        user_name = f"flowuser_{uuid.uuid4().hex[:4]}"
+        user = await user_db.create_user(
+            UserCreate(username=user_name, email=f"{user_name}@test.com", password="SecurePassword123!"),
+            auto_approve=False
+        )
+        assert user.is_approved is False
+        
+        # 2. Approve user
+        response = await api_client.put(f"/api/admin/users/{user.id}/approve", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["is_approved"] is True
+        
+        # 3. Block user
+        response = await api_client.put(f"/api/admin/users/{user.id}/block", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["is_active"] is False
+        
+        # 4. Unblock user
+        response = await api_client.put(f"/api/admin/users/{user.id}/unblock", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["is_active"] is True
+
+    async def test_bulk_actions(self, api_client, admin_headers, user_db):
+        headers, _ = admin_headers
+        
+        # Create 2 users
+        u1 = await user_db.create_user(
+            UserCreate(username=f"u1_{uuid.uuid4().hex[:4]}", email=f"u1_{uuid.uuid4().hex[:4]}@test.com", password="SecurePassword123!"),
+            auto_approve=False
+        )
+        u2 = await user_db.create_user(
+            UserCreate(username=f"u2_{uuid.uuid4().hex[:4]}", email=f"u2_{uuid.uuid4().hex[:4]}@test.com", password="SecurePassword123!"),
+            auto_approve=False
+        )
+        
+        # Bulk Approve
+        response = await api_client.post(
+            "/api/admin/users/bulk/approve",
+            headers=headers,
+            json={"user_ids": [u1.id, u2.id]}
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] == 2
+        
+        # Bulk Block
+        response = await api_client.post(
+            "/api/admin/users/bulk/block",
+            headers=headers,
+            json={"user_ids": [u1.id, u2.id]}
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] == 2
+        
+        # Bulk Unblock
+        response = await api_client.post(
+            "/api/admin/users/bulk/unblock",
+            headers=headers,
+            json={"user_ids": [u1.id, u2.id]}
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] == 2
+
+    async def test_delete_user(self, api_client, admin_headers, user_db):
+        headers, _ = admin_headers
+        user = await user_db.create_user(
+            UserCreate(username=f"del_{uuid.uuid4().hex[:4]}", email=f"del_{uuid.uuid4().hex[:4]}@test.com", password="SecurePassword123!"),
+            auto_approve=True
+        )
+        
+        response = await api_client.delete(f"/api/admin/users/{user.id}", headers=headers)
+        assert response.status_code == 200
+        assert "deleted successfully" in response.json()["message"]
+        
+        # Verify gone
+        check = await user_db.get_user_by_id(user.id)
+        assert check is None
