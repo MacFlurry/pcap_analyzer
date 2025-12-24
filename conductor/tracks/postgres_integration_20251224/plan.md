@@ -17,13 +17,13 @@
 - [x] Task: Implement tests for the temporary password flow (Red Phase) (ae422c6)
 - [x] Task: Conductor - User Manual Verification 'User Management & Security Policies' (Protocol in workflow.md) (ae422c6)
 
-## Phase 3: Task Lifecycle & Multi-Tenancy
+## Phase 3: Task Lifecycle & Multi-Tenancy [checkpoint: 42da962]
 
-- [ ] Task: Implement integration tests for Task creation and retrieval (Red Phase)
-- [ ] Task: Implement tests for Task status transitions and result persistence (Red Phase)
-- [ ] Task: Implement cascade delete tests (user deletion → tasks cleanup) (Red Phase)
-- [ ] Task: Implement multi-tenant isolation tests (verify users cannot access others' tasks) (Red Phase)
-- [ ] Task: Conductor - User Manual Verification 'Task Lifecycle & Multi-Tenancy' (Protocol in workflow.md)
+- [x] Task: Implement integration tests for Task creation and retrieval (Red Phase) (42da962)
+- [x] Task: Implement tests for Task status transitions and result persistence (Red Phase) (42da962)
+- [x] Task: Implement cascade delete tests (user deletion → tasks cleanup) (Red Phase) (42da962)
+- [x] Task: Implement multi-tenant isolation tests (verify users cannot access others' tasks) (Red Phase) (42da962)
+- [x] Task: Conductor - User Manual Verification 'Task Lifecycle & Multi-Tenancy' (Protocol in workflow.md) (42da962)
 
 ## Phase 4: Migration & Concurrency
 
