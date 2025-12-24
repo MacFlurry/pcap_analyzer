@@ -570,7 +570,7 @@ class UserDatabaseService:
 
         # Check if new password matches any of the last 5
         for row in rows:
-            old_hashed_password = row[0]
+            old_hashed_password = row["hashed_password"]
             if self.verify_password(new_password, old_hashed_password):
                 return True  # Reuse detected!
 
