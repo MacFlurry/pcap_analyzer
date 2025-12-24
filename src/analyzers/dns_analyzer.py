@@ -204,6 +204,11 @@ class DNSAnalyzer:
         if not dns.qd:  # Pas de question
             return
 
+        # Scapy v2.5+ uses PacketListField for qd, which might be truthy but contain empty DNSQR
+        qd = dns.qd[0] if isinstance(dns.qd, list) and len(dns.qd) > 0 else dns.qd
+        if qd is None or not hasattr(qd, "qname") or qd.qname is None:
+            return
+
         # Vérifier que le paquet a les couches IP et UDP requises
         if not packet.haslayer(IP) or not packet.haslayer(UDP):
             return
@@ -214,8 +219,8 @@ class DNSAnalyzer:
 
         # Extraire qname de manière sécurisée (certains paquets DNS n'ont pas de qname)
         try:
-            query_name = dns.qd.qname.decode("utf-8") if isinstance(dns.qd.qname, bytes) else dns.qd.qname
-            query_type = self.DNS_TYPES.get(dns.qd.qtype, f"TYPE{dns.qd.qtype}")
+            query_name = qd.qname.decode("utf-8") if isinstance(qd.qname, bytes) else qd.qname
+            query_type = self.DNS_TYPES.get(qd.qtype, f"TYPE{qd.qtype}")
         except (AttributeError, IndexError):
             # Paquet DNS malformé sans qname, ignorer
             return

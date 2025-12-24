@@ -650,6 +650,38 @@ class RetransmissionAnalyzer:
         flow_key = f"{metadata.src_ip}:{metadata.src_port}->{metadata.dst_ip}:{metadata.dst_port}"
         reverse_key = f"{metadata.dst_ip}:{metadata.dst_port}->{metadata.src_ip}:{metadata.src_port}"
 
+        # Initialize tracking for new flows (both directions)
+        for key in [flow_key, reverse_key]:
+            if key not in self._seen_segments:
+                # Note: _seen_segments is defaultdict(lambda: defaultdict(list)) but
+                # direct initialization is safer for clarity here.
+                # However, for reverse key, we might not have all metadata fields.
+                # Use current metadata as best guess for reverse direction ports/ips.
+                is_reverse = (key == reverse_key)
+                src_ip = metadata.dst_ip if is_reverse else metadata.src_ip
+                dst_ip = metadata.src_ip if is_reverse else metadata.dst_ip
+                src_port = metadata.dst_port if is_reverse else metadata.src_port
+                dst_port = metadata.src_port if is_reverse else metadata.dst_port
+
+                self.flow_stats[key] = FlowStats(
+                    flow_key=key,
+                    src_ip=src_ip,
+                    dst_ip=dst_ip,
+                    src_port=src_port,
+                    dst_port=dst_port,
+                    total_packets=0,
+                    retransmissions=0,
+                    dup_acks=0,
+                    out_of_order=0,
+                    zero_windows=0,
+                )
+                self._last_ack[key] = 0
+                self._dup_ack_count[key] = 0
+                self._last_ack_packet_num[key] = 0
+                self._last_ack_timestamp[key] = 0.0
+                # Initialize segments dict for this flow
+                self._seen_segments[key] = {}
+
         self._flow_counters[flow_key]["total"] += 1
 
         # v4.15.0: Buffer packets for hybrid sampled timeline
@@ -715,6 +747,22 @@ class RetransmissionAnalyzer:
             ack = metadata.tcp_ack
             if flow_key not in self._max_ack_seen or ack > self._max_ack_seen[flow_key]:
                 self._max_ack_seen[flow_key] = ack
+
+            # v4.18.0: Track Duplicate ACKs for Fast Retransmission detection
+            if flow_key in self._last_ack and ack == self._last_ack[flow_key]:
+                # Pure duplicate ACK (no window update, no payload)
+                if metadata.tcp_payload_len == 0:
+                    self._dup_ack_count[flow_key] += 1
+                    
+                    # Track where this DUP ACK occurred
+                    self._last_ack_packet_num[flow_key] = packet_num
+                    self._last_ack_timestamp[flow_key] = timestamp
+            else:
+                # New ACK seen, reset DUP ACK counter
+                self._last_ack[flow_key] = ack
+                self._dup_ack_count[flow_key] = 0
+                self._last_ack_packet_num[flow_key] = packet_num
+                self._last_ack_timestamp[flow_key] = timestamp
 
         # Calcul de la longueur logique TCP (RFC 793: payload + SYN + FIN)
         seq = metadata.tcp_seq
@@ -832,6 +880,13 @@ class RetransmissionAnalyzer:
                     max_ack_seen=max_ack,
                     receiver_window=metadata.tcp_window,
                 )
+
+                # v4.18.0: Align retrans_type with diagnosis confidence
+                if confidence == "high":
+                    retrans_type = "Spurious Retransmission"
+                elif confidence == "medium":
+                    retrans_type = "Fast Retransmission"
+                # RTO is already set by delay heuristics if confidence is low
 
                 retrans = TCPRetransmission(
                     packet_num=packet_num,
@@ -1204,6 +1259,12 @@ class RetransmissionAnalyzer:
                     max_ack_seen=max_ack,
                     receiver_window=tcp.window,
                 )
+
+                # v4.18.0: Align retrans_type with diagnosis confidence
+                if confidence == "high":
+                    retrans_type = "Spurious Retransmission"
+                elif confidence == "medium":
+                    retrans_type = "Fast Retransmission"
 
                 retrans = TCPRetransmission(
                     packet_num=packet_num,
