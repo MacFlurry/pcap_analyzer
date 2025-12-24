@@ -8,14 +8,14 @@
 - [x] Task: Verify that migrations apply successfully to a fresh PostgreSQL container (61404ae)
 - [x] Task: Conductor - User Manual Verification 'Infrastructure & Scaffolding' (Protocol in workflow.md) (61404ae)
 
-## Phase 2: User Management & Security Policies
+## Phase 2: User Management & Security Policies [checkpoint: ae422c6]
 
-- [ ] Task: Implement integration tests for User CRUD operations (Red Phase)
-- [ ] Task: Implement authentication state persistence tests (JWT token validation, session retrieval in PostgreSQL) (Red Phase)
-- [ ] Task: Implement tests for password strength validation (zxcvbn) in PostgreSQL context (Red Phase)
-- [ ] Task: Implement tests for password history tracking and reuse prevention (Red Phase)
-- [ ] Task: Implement tests for the temporary password flow (Red Phase)
-- [ ] Task: Conductor - User Manual Verification 'User Management & Security Policies' (Protocol in workflow.md)
+- [x] Task: Implement integration tests for User CRUD operations (Red Phase) (ae422c6)
+- [x] Task: Implement authentication state persistence tests (JWT token validation, session retrieval in PostgreSQL) (Red Phase) (ae422c6)
+- [x] Task: Implement tests for password strength validation (zxcvbn) in PostgreSQL context (Red Phase) (ae422c6)
+- [x] Task: Implement tests for password history tracking and reuse prevention (Red Phase) (ae422c6)
+- [x] Task: Implement tests for the temporary password flow (Red Phase) (ae422c6)
+- [x] Task: Conductor - User Manual Verification 'User Management & Security Policies' (Protocol in workflow.md) (ae422c6)
 
 ## Phase 3: Task Lifecycle & Multi-Tenancy
 
