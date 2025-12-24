@@ -25,11 +25,11 @@
 - [x] Task: Implement multi-tenant isolation tests (verify users cannot access others' tasks) (Red Phase) (42da962)
 - [x] Task: Conductor - User Manual Verification 'Task Lifecycle & Multi-Tenancy' (Protocol in workflow.md) (42da962)
 
-## Phase 4: Migration & Concurrency
+## Phase 4: Migration & Concurrency [checkpoint: b311adf]
 
-- [ ] Task: Implement data preservation tests during Alembic upgrades (Red Phase)
-- [ ] Task: Implement ACID compliance tests (transaction rollback on failure, atomicity) (Red Phase)
-- [ ] Task: Implement concurrency tests for simultaneous task updates (Red Phase)
-- [ ] Task: Implement concurrency tests for parallel user logins and session management (Red Phase)
-- [ ] Task: Run complete test suite and verify 60%+ coverage for postgres integration tests
-- [ ] Task: Conductor - User Manual Verification 'Migration & Concurrency' (Protocol in workflow.md)
+- [x] Task: Implement data preservation tests during Alembic upgrades (Red Phase) (b311adf)
+- [x] Task: Implement ACID compliance tests (transaction rollback on failure, atomicity) (Red Phase) (b311adf)
+- [x] Task: Implement concurrency tests for simultaneous task updates (Red Phase) (b311adf)
+- [x] Task: Implement concurrency tests for parallel user logins and session management (Red Phase) (b311adf)
+- [x] Task: Run complete test suite and verify 60%+ coverage for postgres integration tests (b311adf)
+- [x] Task: Conductor - User Manual Verification 'Migration & Concurrency' (Protocol in workflow.md) (b311adf)
