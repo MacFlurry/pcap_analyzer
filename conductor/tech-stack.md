@@ -33,7 +33,7 @@
 - **Web Server:** Uvicorn (ASGI) with Nginx reverse proxy
 
 ## Quality Assurance
-- **Testing:** pytest with Hypothesis (property-based testing)
+- **Testing:** pytest with Hypothesis and Testcontainers (PostgreSQL integration testing)
 - **Coverage:** coverage.py
 - **Linting & Formatting:** Black, isort, Flake8
 - **CI/CD:** GitHub Actions, pre-commit hooks

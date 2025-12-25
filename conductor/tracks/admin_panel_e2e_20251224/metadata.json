@@ -1,0 +1,8 @@
+{
+  "track_id": "admin_panel_e2e_20251224",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2025-12-24T22:30:00Z",
+  "updated_at": "2025-12-24T22:30:00Z",
+  "description": "Implement the Admin Panel UI (HTML/JS) to interface with the new admin API endpoints, featuring a user table, filters, and bulk action controls."
+}

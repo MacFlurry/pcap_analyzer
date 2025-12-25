@@ -15,7 +15,7 @@ References:
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -27,6 +27,7 @@ from app.models.user import (
     BulkActionResult,
     BulkUserActionRequest,
     BulkUserActionResponse,
+    PaginatedUsersResponse,
     Token,
     User,
     UserCreate,
@@ -358,10 +359,13 @@ async def update_password(
     )
 
 
-@router.get("/users", response_model=List[UserResponse])
+@router.get("/users", response_model=list[UserResponse] | PaginatedUsersResponse)
 async def get_all_users(
     admin: User = Depends(get_current_admin_user),
     limit: int = 100,
+    offset: Optional[int] = None,
+    status: Optional[str] = None,
+    role: Optional[str] = None,
 ):
     """
     Get all users (admin only).
@@ -369,27 +373,33 @@ async def get_all_users(
     Args:
         admin: Current admin user
         limit: Maximum users to return (default: 100)
+        offset: Number of users to skip (if provided, returns PaginatedUsersResponse)
+        status: Filter by status (pending, approved, blocked)
+        role: Filter by role (admin, user)
 
     Returns:
-        List of all users (without passwords)
+        List of users (legacy) or PaginatedUsersResponse (if offset provided)
 
     Requires:
         Admin role
-
-    Usage (JavaScript):
-        const token = localStorage.getItem('access_token');
-        const response = await fetch('/api/users?limit=50', {
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        const users = await response.json();
     """
     user_db = get_user_db_service()
-    users = await user_db.get_all_users(limit=limit)
+    
+    # If offset is None, we assume legacy behavior (list only)
+    # But UserDatabaseService now returns a tuple, so we handle both
+    effective_offset = offset if offset is not None else 0
+    
+    users, total = await user_db.get_all_users(
+        limit=limit, 
+        offset=effective_offset,
+        status_filter=status,
+        role_filter=role
+    )
 
-    logger.info(f"Admin {admin.username} fetched {len(users)} users")
+    logger.info(f"Admin {admin.username} fetched {len(users)} users (Total: {total}, Offset: {effective_offset})")
 
-    # Return users without passwords
-    return [
+    # Map to UserResponse
+    user_responses = [
         UserResponse(
             id=user.id,
             username=user.username,
@@ -404,6 +414,18 @@ async def get_all_users(
         )
         for user in users
     ]
+
+    # Backward compatibility: if offset was NOT provided in query, return plain list
+    if offset is None:
+        return user_responses
+
+    # Otherwise return paginated wrapper
+    return PaginatedUsersResponse(
+        users=user_responses,
+        total=total,
+        offset=effective_offset,
+        limit=limit
+    )
 
 
 @router.put("/admin/users/{user_id}/approve", response_model=UserResponse)

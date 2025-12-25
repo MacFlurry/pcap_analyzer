@@ -76,7 +76,7 @@ An automated PCAP file analyzer for diagnosing network latency and performance i
 ### Development Workflow
 - **Docker Compose:** One-command local development environment (`docker-compose up`).
 - **Hot Reload:** Flask debug mode for rapid iteration.
-- **Test Suite:** pytest with unit, integration, and security tests (70%+ coverage goal for security modules).
+- **Test Suite:** pytest with unit, integration (ephemeral PostgreSQL via Testcontainers), and security tests (70%+ coverage goal for security modules).
 
 ## Differentiation from Wireshark
 - **Multi-User Web Platform:** Persistent analysis accessible from any browser vs. desktop-only GUI.

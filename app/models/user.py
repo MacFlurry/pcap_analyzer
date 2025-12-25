@@ -187,3 +187,12 @@ class BulkUserActionResponse(BaseModel):
     success: int = Field(..., description="Number of successful actions")
     failed: int = Field(..., description="Number of failed actions")
     results: list[BulkActionResult] = Field(..., description="Detailed results for each user")
+
+
+class PaginatedUsersResponse(BaseModel):
+    """Schema for paginated user list response."""
+
+    users: list[UserResponse] = Field(..., description="List of users for the current page")
+    total: int = Field(..., description="Total number of users matching filters")
+    offset: int = Field(..., description="Current offset")
+    limit: int = Field(..., description="Current limit")

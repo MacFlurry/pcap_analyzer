@@ -583,21 +583,62 @@ class UserDatabaseService:
 
         return False  # Password not reused
 
-    async def get_all_users(self, limit: int = 100) -> list[User]:
+    async def get_all_users(
+        self, 
+        limit: int = 100, 
+        offset: int = 0, 
+        status_filter: Optional[str] = None, 
+        role_filter: Optional[str] = None
+    ) -> tuple[list[User], int]:
         """
-        Get all users (admin only).
+        Get all users with pagination and filtering (admin only).
 
         Args:
             limit: Maximum number of users to return
+            offset: Number of users to skip
+            status_filter: Filter by approval status ("pending", "approved", "blocked")
+            role_filter: Filter by user role ("admin", "user")
 
         Returns:
-            List of users
+            Tuple of (list of users, total count matching filters)
         """
-        query, params = self.pool.translate_query(
-            "SELECT * FROM users ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        )
-        rows = await self.pool.fetch_all(query, *params)
+        effective_offset = offset
+        base_query = "FROM users"
+        conditions = []
+        params = []
+
+        if status_filter:
+            if status_filter == "pending":
+                conditions.append("is_approved = ?")
+                params.append(False)
+            elif status_filter == "approved":
+                conditions.append("is_approved = ?")
+                params.append(True)
+                conditions.append("is_active = ?")
+                params.append(True)
+            elif status_filter == "blocked":
+                conditions.append("is_active = ?")
+                params.append(False)
+
+        if role_filter:
+            conditions.append("role = ?")
+            params.append(role_filter)
+
+        where_clause = ""
+        if conditions:
+            where_clause = " WHERE " + " AND ".join(conditions)
+
+        # 1. Get total count
+        count_query = f"SELECT COUNT(*) as total {base_query}{where_clause}"
+        count_query, count_params = self.pool.translate_query(count_query, tuple(params))
+        count_row = await self.pool.fetch_one(count_query, *count_params)
+        total = int(count_row["total"]) if count_row else 0
+
+        # 2. Get paginated results
+        query = f"SELECT * {base_query}{where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        all_params = params + [limit, effective_offset]
+        query, all_params = self.pool.translate_query(query, tuple(all_params))
+        rows = await self.pool.fetch_all(query, *all_params)
 
         users = []
         for row in rows:
@@ -617,7 +658,7 @@ class UserDatabaseService:
                 )
             )
 
-        return users
+        return users, total
 
     async def approve_user(self, user_id: str, approver_id: str) -> bool:
         """

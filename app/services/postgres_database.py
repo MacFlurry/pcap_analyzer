@@ -225,6 +225,8 @@ class DatabasePool:
                     param_count += 1
                 else:
                     translated_query += char
+            
+            logger.debug(f"SQL TRANSLATE: original='{query}' -> translated='{translated_query}', params={params}")
             return translated_query, params
         else:
             # SQLite: no translation needed
