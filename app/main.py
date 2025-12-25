@@ -20,6 +20,7 @@ from app.services.cleanup import CleanupScheduler
 from app.services.database import get_db_service
 from app.services.user_database import get_user_db_service
 from app.services.worker import get_worker
+from src.__version__ import __version__
 
 # Configuration logging
 logging.basicConfig(
@@ -86,7 +87,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="PCAP Analyzer Web API",
     description="Interface web pour l'analyse automatisée de fichiers PCAP",
-    version="1.0.0",
+    version=__version__,
     lifespan=lifespan,
     docs_url=None,  # Désactiver le /docs par défaut pour le customiser
     redoc_url=None,  # Pas besoin de ReDoc

@@ -7,6 +7,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.27.2] - 2025-12-25
+
+### 🔧 Fixes & Refactoring
+
+**Amélioré**:
+- **Versionnement**: Synchronisation de la version de l'API FastAPI avec `src/__version__.py` pour éviter les versions hardcodées divergentes.
+
 ## [4.27.1] - 2025-12-25
 
 ### 🔧 Fixes
