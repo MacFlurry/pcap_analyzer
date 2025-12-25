@@ -7,8 +7,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 ## [x] Track: Documentation v5.0 (#28)
 *Link: [./conductor/archive/v5_0_documentation/](./conductor/archive/v5_0_documentation/)*
 
-## [~] Track: Audit de Sécurité v5.0 (#27)
-*Link: [./conductor/tracks/v5_0_security_audit/](./conductor/tracks/v5_0_security_audit/)*
+## [x] Track: Audit de Sécurité v5.0 (#27)
+*Link: [./conductor/archive/v5_0_security_audit/](./conductor/archive/v5_0_security_audit/)*
 
 ## [~] Track: Implémentation Authentification à deux facteurs (2FA) (#29)
 *Link: [./conductor/tracks/v5_0_2fa_implementation/](./conductor/tracks/v5_0_2fa_implementation/)*

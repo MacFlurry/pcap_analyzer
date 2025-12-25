@@ -213,10 +213,15 @@ class AdminPanel {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
         const canSelect = user.role !== 'admin';
+        
+        const escapedUsername = window.utils.escapeHtml(user.username);
+        const escapedEmail = window.utils.escapeHtml(user.email);
+        const userInitial = escapedUsername.charAt(0).toUpperCase();
+
         tr.innerHTML = `
             <td class="px-6 py-4">${canSelect ? `<input type="checkbox" class="user-checkbox w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" data-user-id="${user.id}" />` : ''}</td>
-            <td class="px-6 py-4"><div class="flex items-center space-x-3"><div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-lg">${user.username.charAt(0).toUpperCase()}</div><div><div class="font-semibold text-gray-900 dark:text-white">${user.username}</div>${user.role === 'admin' ? '<div class="text-xs text-purple-600 dark:text-purple-400 font-semibold"><i class="fas fa-crown mr-1"></i>Administrator</div>' : ''}</div></div></td>
-            <td class="px-6 py-4 text-gray-700 dark:text-gray-300">${user.email}</td>
+            <td class="px-6 py-4"><div class="flex items-center space-x-3"><div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-lg">${userInitial}</div><div><div class="font-semibold text-gray-900 dark:text-white">${escapedUsername}</div>${user.role === 'admin' ? '<div class="text-xs text-purple-600 dark:text-purple-400 font-semibold"><i class="fas fa-crown mr-1"></i>Administrator</div>' : ''}</div></div></td>
+            <td class="px-6 py-4 text-gray-700 dark:text-gray-300">${escapedEmail}</td>
             <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-semibold ${user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">${user.role.toUpperCase()}</span></td>
             <td class="px-6 py-4">${this.getStatusBadge(user)}</td>
             <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">${this.formatDate(user.created_at)}</td>
@@ -272,7 +277,8 @@ class AdminPanel {
     }
 
     async deleteUser(userId, username) {
-        if (!confirm(`Delete ${username}?`)) return;
+        const escapedUsername = window.utils.escapeHtml(username);
+        if (!confirm(`Delete ${escapedUsername}?`)) return;
         try {
             const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
             const resp = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE', headers: { ...this.getAuthHeaders(), ...csrf } });

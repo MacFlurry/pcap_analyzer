@@ -1,16 +1,15 @@
-# Production dependencies for PCAP Analyzer
-# These match the install_requires in setup.py with upper bounds to prevent breaking changes
+# Production dependencies for PCAP Analyzer (Pinned for security)
 
-scapy>=2.6.2,<3.0  # Security: Updated to latest stable (was 2.5.0)
-dpkt>=1.9.8,<2.0  # Fast packet parsing (3-5x faster than Scapy)
-paramiko>=3.5.2,<4.0  # Security: CVE-2023-48795 (Terrapin Attack) fixed in 3.5.2
-pyyaml>=6.0,<7.0
-jinja2>=3.1.2,<4.0
-rich>=13.7.0,<14.0
-click>=8.1.7,<9.0
-numpy>=1.24.0  # NumPy 2.x compatible (tested with 2.0.2)
-psutil>=5.9.0,<6.0  # Sprint 10: Memory monitoring and system resource tracking
+scapy==2.6.1
+dpkt==1.9.8
+paramiko==3.5.0
+pyyaml==6.0.2
+jinja2==3.1.5
+rich==13.9.4
+click==8.3.1
+numpy==2.0.2
+psutil==6.1.1
 
 # Test dependencies (required for CI)
-hypothesis>=6.92.0
+hypothesis==6.123.17
 pytest-playwright==0.5.2

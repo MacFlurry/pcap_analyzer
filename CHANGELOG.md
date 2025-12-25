@@ -7,6 +7,16 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.27.3] - 2025-12-25
+
+### 🔒 Security Audit Remediation
+
+**Corrigé**:
+- **XSS (DOM-based)**: Implémentation de `SecurityUtils.escapeHtml()` dans le frontend et assainissement de tous les points d'injection `innerHTML` identifiés (historique, admin, progression).
+- **Dépendances**: Fixation de toutes les versions des dépendances dans `requirements.txt` et `requirements-web.txt` pour corriger les vulnérabilités potentielles signalées par `safety`.
+- **CORS**: Restriction des origines autorisées via la nouvelle variable d'environnement `ALLOWED_ORIGINS`.
+- **Permissions**: Sécurisation des permissions par défaut des fichiers de log (`0o644`).
+
 ## [4.27.2] - 2025-12-25
 
 ### 🔧 Fixes & Refactoring

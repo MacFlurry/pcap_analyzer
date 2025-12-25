@@ -722,14 +722,16 @@ class ProgressMonitor {
         };
 
         const { icon, color } = config[type] || config.info;
+        const escapedMessage = window.utils.escapeHtml(message);
+        const escapedTimestamp = window.utils.escapeHtml(timestamp);
 
         const eventElement = document.createElement('div');
         eventElement.className = 'flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg animate-slide-in-right';
         eventElement.innerHTML = `
             <i class="${icon} ${color} mt-0.5"></i>
             <div class="flex-1">
-                <p class="text-sm text-gray-900 dark:text-gray-100">${message}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${timestamp}</p>
+                <p class="text-sm text-gray-900 dark:text-gray-100">${escapedMessage}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${escapedTimestamp}</p>
             </div>
         `;
 

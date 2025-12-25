@@ -145,9 +145,10 @@ async def csrf_middleware(request: Request, call_next):
 
 
 # CORS middleware (AFTER CSRF middleware!)
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restreindre en production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

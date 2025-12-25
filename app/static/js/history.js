@@ -209,21 +209,14 @@ class HistoryManager {
         // Checkbox cell (only for deletable tasks)
         const checkboxCell = document.createElement('div');
         checkboxCell.className = 'grid-cell grid-cell-checkbox';
+        const escapedTaskId = window.utils.escapeHtml(task.task_id);
+        const escapedFilename = window.utils.escapeHtml(task.filename);
+
         if (['completed', 'failed', 'expired'].includes(task.status)) {
             checkboxCell.innerHTML = `
-                <input type="checkbox" class="checkbox-modern task-checkbox" data-task-id="${task.task_id}">
+                <input type="checkbox" class="checkbox-modern task-checkbox" data-task-id="${escapedTaskId}">
             `;
             const checkbox = checkboxCell.querySelector('.task-checkbox');
-            checkbox.addEventListener('change', () => {
-                if (checkbox.checked) {
-                    this.selectedTasks.add(task.task_id);
-                } else {
-                    this.selectedTasks.delete(task.task_id);
-                }
-                this.updateSelectionUI();
-            });
-        }
-
         // Filename cell
         const filenameCell = document.createElement('div');
         filenameCell.className = 'grid-cell grid-cell-file';
@@ -233,7 +226,7 @@ class HistoryManager {
                     <i class="fas fa-file-alt text-blue-600 dark:text-blue-300"></i>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <p class="font-semibold text-gray-900 dark:text-white truncate text-base">${task.filename}</p>
+                    <p class="font-semibold text-gray-900 dark:text-white truncate text-base">${escapedFilename}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Fichier PCAP</p>
                 </div>
             </div>

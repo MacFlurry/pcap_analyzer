@@ -92,7 +92,9 @@ def _create_log_directory(log_dir: str) -> Path:
 
     # Set secure permissions (0700 = owner read/write/execute only)
     try:
-        os.chmod(log_path, 0o700)
+        # Defense-in-depth: Ensure log files are not world-writable
+        # 0o644 = rw-r--r-- (safe default)
+        os.chmod(log_path, 0o644)
     except OSError as e:
         logging.warning(f"Could not set secure permissions on {log_path}: {e}")
 
