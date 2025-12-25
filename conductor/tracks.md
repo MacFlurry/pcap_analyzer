@@ -4,7 +4,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Vérification et Tests E2E v4.27.3
+## [x] Track: Vérification et Tests E2E v4.27.3
 *Link: [./conductor/tracks/v4_27_3_verification/](./conductor/tracks/v4_27_3_verification/)*
 
 ## [x] Track: Documentation v5.0 (#28)
