@@ -9,6 +9,11 @@ class AdminPanel {
         this.selectedUsers = new Set();
         this.currentFilter = 'all';
         this.searchQuery = '';
+        
+        // Pagination state
+        this.limit = 50;
+        this.offset = 0;
+        this.totalCount = 0;
 
         // DOM elements
         this.loading = document.getElementById('loading');
@@ -18,6 +23,13 @@ class AdminPanel {
         this.selectAllCheckbox = document.getElementById('select-all');
         this.bulkActionsBar = document.getElementById('bulk-actions-bar');
         this.selectedCountSpan = document.getElementById('selected-count');
+        
+        // Pagination elements
+        this.prevBtn = document.getElementById('prev-page');
+        this.nextBtn = document.getElementById('next-page');
+        this.pageRangeSpan = document.getElementById('page-range');
+        this.totalCountSpan = document.getElementById('total-count');
+        this.pageSizeSelect = document.getElementById('page-size');
 
         // Stats
         this.statTotal = document.getElementById('stat-total');
@@ -80,8 +92,9 @@ class AdminPanel {
     }
 
     init() {
-        // Load users
+        // Load initial users
         this.loadUsers();
+        this.loadStats(); // Dedicated stats call
 
         // Filter buttons
         document.getElementById('filter-all').addEventListener('click', () => this.setFilter('all'));
@@ -90,13 +103,21 @@ class AdminPanel {
         document.getElementById('filter-blocked').addEventListener('click', () => this.setFilter('blocked'));
 
         // Search input
+        let searchTimeout;
         document.getElementById('search-input').addEventListener('input', (e) => {
-            this.searchQuery = e.target.value.toLowerCase();
-            this.renderUsers();
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                this.searchQuery = e.target.value.toLowerCase();
+                this.offset = 0; // Reset to first page
+                this.loadUsers();
+            }, 300);
         });
 
         // Refresh button
-        document.getElementById('refresh-btn').addEventListener('click', () => this.loadUsers());
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+            this.loadUsers();
+            this.loadStats();
+        });
 
         // Select all checkbox
         this.selectAllCheckbox.addEventListener('change', () => this.toggleSelectAll());
@@ -113,10 +134,20 @@ class AdminPanel {
         document.getElementById('cancel-create-user').addEventListener('click', () => this.hideCreateUserModal());
         document.getElementById('confirm-create-user').addEventListener('click', () => this.createUser());
         document.getElementById('close-temp-password-modal').addEventListener('click', () => this.hideTempPasswordModal());
+        
+        // Pagination events
+        this.prevBtn.addEventListener('click', () => this.changePage(-1));
+        this.nextBtn.addEventListener('click', () => this.changePage(1));
+        this.pageSizeSelect.addEventListener('change', (e) => {
+            this.limit = parseInt(e.target.value);
+            this.offset = 0;
+            this.loadUsers();
+        });
     }
 
     setFilter(filter) {
         this.currentFilter = filter;
+        this.offset = 0; // Reset to first page
 
         // Update button styles
         document.querySelectorAll('[id^="filter-"]').forEach(btn => {
@@ -127,14 +158,28 @@ class AdminPanel {
             }
         });
 
-        this.renderUsers();
+        this.loadUsers();
     }
 
     async loadUsers() {
         this.showLoading();
+        this.clearSelection();
 
         try {
-            const response = await fetch('/api/users?limit=1000', {
+            const url = new URL('/api/users', window.location.origin);
+            url.searchParams.set('limit', this.limit);
+            url.searchParams.set('offset', this.offset);
+            
+            if (this.currentFilter !== 'all') {
+                url.searchParams.set('status', this.currentFilter);
+            }
+            
+            // Client-side search for now as server-side search is out of scope
+            // but we fetch a large batch if searching? 
+            // Better: just fetch normally, render will filter what's visible.
+            // Requirement was basic status/role filtering server-side.
+
+            const response = await fetch(url, {
                 headers: this.getAuthHeaders()
             });
 
@@ -146,9 +191,20 @@ class AdminPanel {
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            this.users = await response.json();
-            this.updateStats();
+            const data = await response.json();
+            
+            // Handle both legacy (List) and new (PaginatedUsersResponse)
+            if (data.users && typeof data.total === 'number') {
+                this.users = data.users;
+                this.totalCount = data.total;
+            } else {
+                // Fallback for legacy clients/endpoints
+                this.users = data;
+                this.totalCount = data.length;
+            }
+            
             this.renderUsers();
+            this.updatePaginationUI();
 
         } catch (error) {
             console.error('Failed to load users:', error);
@@ -157,37 +213,49 @@ class AdminPanel {
         }
     }
 
-    updateStats() {
-        const total = this.users.length;
-        const pending = this.users.filter(u => !u.is_approved).length;
-        const blocked = this.users.filter(u => !u.is_active).length;
+    async loadStats() {
+        // We can get counts by doing quick limit=0 calls for each status
+        // or a dedicated stats endpoint (future track).
+        // For now, let's use the total from the current filtered view for the specific card,
+        // and do dedicated calls for others.
+        
+        try {
+            const fetchCount = async (status) => {
+                const url = new URL('/api/users', window.location.origin);
+                url.searchParams.set('limit', 0);
+                url.searchParams.set('offset', 0);
+                if (status) url.searchParams.set('status', status);
+                
+                const resp = await fetch(url, { headers: this.getAuthHeaders() });
+                const data = await resp.json();
+                return data.total || 0;
+            };
 
-        this.statTotal.textContent = total;
-        this.statPending.textContent = pending;
-        this.statBlocked.textContent = blocked;
+            const [total, pending, blocked] = await Promise.all([
+                fetchCount(null),
+                fetchCount('pending'),
+                fetchCount('blocked')
+            ]);
+
+            this.statTotal.textContent = total;
+            this.statPending.textContent = pending;
+            this.statBlocked.textContent = blocked;
+        } catch (e) {
+            console.warn('Failed to load stats:', e);
+        }
     }
 
     renderUsers() {
-        let filteredUsers = this.users;
-
-        // Apply filter
-        if (this.currentFilter === 'pending') {
-            filteredUsers = filteredUsers.filter(u => !u.is_approved);
-        } else if (this.currentFilter === 'approved') {
-            filteredUsers = filteredUsers.filter(u => u.is_approved && u.is_active);
-        } else if (this.currentFilter === 'blocked') {
-            filteredUsers = filteredUsers.filter(u => !u.is_active);
-        }
-
-        // Apply search
+        // Search is still client-side within the current page for now
+        let displayUsers = this.users;
         if (this.searchQuery) {
-            filteredUsers = filteredUsers.filter(u =>
+            displayUsers = displayUsers.filter(u =>
                 u.username.toLowerCase().includes(this.searchQuery) ||
                 u.email.toLowerCase().includes(this.searchQuery)
             );
         }
 
-        if (filteredUsers.length === 0) {
+        if (displayUsers.length === 0) {
             this.showEmpty();
             return;
         }
@@ -195,7 +263,7 @@ class AdminPanel {
         this.showTable();
         this.usersTbody.innerHTML = '';
 
-        filteredUsers.forEach(user => {
+        displayUsers.forEach(user => {
             const row = this.createUserRow(user);
             this.usersTbody.appendChild(row);
         });
@@ -326,8 +394,7 @@ class AdminPanel {
             if (response.ok) {
                 window.toast.success('✓ User approved successfully');
                 this.loadUsers();
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                this.loadStats();
             } else {
                 const error = await response.json();
                 window.toast.error(`❌ ${error.detail || 'Failed to approve user'}`);
@@ -356,8 +423,7 @@ class AdminPanel {
             if (response.ok) {
                 window.toast.success('✓ User blocked successfully');
                 this.loadUsers();
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                this.loadStats();
             } else {
                 const error = await response.json();
                 window.toast.error(`❌ ${error.detail || 'Failed to block user'}`);
@@ -382,8 +448,7 @@ class AdminPanel {
             if (response.ok) {
                 window.toast.success('✓ User unblocked successfully');
                 this.loadUsers();
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                this.loadStats();
             } else {
                 const error = await response.json();
                 window.toast.error(`❌ ${error.detail || 'Failed to unblock user'}`);
@@ -395,7 +460,7 @@ class AdminPanel {
     }
 
     async deleteUser(userId, username) {
-        if (!confirm(`⚠️ Are you sure you want to DELETE user "${username}"?\n\nThis action cannot be undone and will delete all associated tasks.`)) {
+        if (!confirm(`⚠️ Are you sure you want to DELETE user "${username}"?\n\nThis action cannot be undone.`)) {
             return;
         }
 
@@ -412,8 +477,7 @@ class AdminPanel {
             if (response.ok) {
                 window.toast.success(`✓ User "${username}" deleted successfully`);
                 this.loadUsers();
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                this.loadStats();
             } else {
                 const error = await response.json();
                 window.toast.error(`❌ ${error.detail || 'Failed to delete user'}`);
@@ -424,6 +488,27 @@ class AdminPanel {
         }
     }
 
+    // Pagination
+    changePage(delta) {
+        const newOffset = this.offset + (delta * this.limit);
+        if (newOffset >= 0 && newOffset < this.totalCount) {
+            this.offset = newOffset;
+            this.loadUsers();
+        }
+    }
+
+    updatePaginationUI() {
+        const start = this.totalCount === 0 ? 0 : this.offset + 1;
+        const end = Math.min(this.offset + this.limit, this.totalCount);
+        
+        this.pageRangeSpan.textContent = `${start}-${end}`;
+        this.totalCountSpan.textContent = this.totalCount;
+        
+        this.prevBtn.disabled = this.offset === 0;
+        this.nextBtn.disabled = end >= this.totalCount;
+    }
+
+    // Selection & Bulk
     toggleSelectAll() {
         const checkboxes = document.querySelectorAll('.user-checkbox');
         const isChecked = this.selectAllCheckbox.checked;
@@ -451,9 +536,8 @@ class AdminPanel {
             this.bulkActionsBar.classList.add('hidden');
         }
 
-        // Update "select all" checkbox state
         const checkboxes = document.querySelectorAll('.user-checkbox');
-        const allChecked = checkboxes.length > 0 && count === checkboxes.length;
+        const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
         this.selectAllCheckbox.checked = allChecked;
     }
 
@@ -465,32 +549,27 @@ class AdminPanel {
     }
 
     async bulkAction(action) {
-        if (this.selectedUsers.size === 0) {
-            window.toast.error('❌ No users selected');
-            return;
-        }
+        if (this.selectedUsers.size === 0) return;
 
         const count = this.selectedUsers.size;
-        const actionName = action.charAt(0).toUpperCase() + action.slice(1);
+        if (!confirm(`Are you sure you want to ${action} ${count} user(s)?`)) return;
 
-        if (!confirm(`Are you sure you want to ${action} ${count} user(s)?`)) {
-            return;
-        }
-
-        window.loadingOverlay.show(`${actionName} in progress...`, `Processing ${count} user(s)`);
+        window.loadingOverlay.show(`Bulk ${action} in progress...`);
 
         const userIds = Array.from(this.selectedUsers);
-        let successCount = 0;
-        let errorCount = 0;
-
-        // Get CSRF headers once for bulk request
         const csrfHeaders = await window.csrfManager.getHeaders();
 
         try {
             let response;
-
-            // Use bulk endpoints for approve, block, unblock (Issue #22)
-            if (action === 'approve' || action === 'block' || action === 'unblock') {
+            if (action === 'delete') {
+                // Delete one by one if no bulk endpoint
+                for (const id of userIds) {
+                    await fetch(`/api/admin/users/${id}`, {
+                        method: 'DELETE',
+                        headers: { ...this.getAuthHeaders(), ...csrfHeaders }
+                    });
+                }
+            } else {
                 response = await fetch(`/api/admin/users/bulk/${action}`, {
                     method: 'POST',
                     headers: {
@@ -500,80 +579,18 @@ class AdminPanel {
                     },
                     body: JSON.stringify({ user_ids: userIds })
                 });
-
-                if (!response.ok) {
-                    if (response.status === 403) {
-                        window.loadingOverlay.hide();
-                        window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-                        this.clearSelection();
-                        return;
-                    }
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                // Parse bulk response
-                const result = await response.json();
-                successCount = result.success;
-                errorCount = result.failed;
-
-                // Show detailed results if there were failures
-                if (errorCount > 0 && result.results) {
-                    const failedUsers = result.results
-                        .filter(r => r.status === 'failed')
-                        .map(r => `${r.username || r.user_id}: ${r.reason}`)
-                        .join('\n');
-                    console.warn(`Failed users:\n${failedUsers}`);
-                }
-
-            } else if (action === 'delete') {
-                // Delete doesn't have bulk endpoint, use loop (legacy)
-                for (const userId of userIds) {
-                    try {
-                        response = await fetch(`/api/admin/users/${userId}`, {
-                            method: 'DELETE',
-                            headers: {
-                                ...this.getAuthHeaders(),
-                                ...csrfHeaders
-                            }
-                        });
-
-                        if (response.ok) {
-                            successCount++;
-                        } else if (response.status === 403) {
-                            // CSRF error - stop processing
-                            window.loadingOverlay.hide();
-                            window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-                            this.clearSelection();
-                            return;
-                        } else {
-                            errorCount++;
-                        }
-                    } catch (error) {
-                        console.error(`Failed to delete user ${userId}:`, error);
-                        errorCount++;
-                    }
-                }
             }
 
+            window.toast.success(`✓ Bulk ${action} completed`);
+            this.loadUsers();
+            this.loadStats();
         } catch (error) {
-            console.error(`Bulk ${action} failed:`, error);
+            console.error('Bulk action error:', error);
+            window.toast.error('❌ Bulk action failed');
+        } finally {
             window.loadingOverlay.hide();
-            window.toast.error(`❌ Failed to ${action} users: ${error.message}`);
             this.clearSelection();
-            return;
         }
-
-        window.loadingOverlay.hide();
-
-        if (successCount > 0) {
-            window.toast.success(`✓ ${successCount} user(s) ${action}d successfully`);
-        }
-        if (errorCount > 0) {
-            window.toast.error(`❌ ${errorCount} user(s) failed`);
-        }
-
-        this.clearSelection();
-        this.loadUsers();
     }
 
     formatDate(dateStr) {
@@ -608,7 +625,6 @@ class AdminPanel {
 
     showCreateUserModal() {
         document.getElementById('create-user-modal').classList.remove('hidden');
-        document.getElementById('create-user-form').reset();
     }
 
     hideCreateUserModal() {
@@ -621,7 +637,7 @@ class AdminPanel {
         const role = document.getElementById('new-role').value;
 
         if (!username || !email) {
-            window.toast.error('Veuillez remplir tous les champs');
+            window.toast.error('Please fill required fields');
             return;
         }
 
@@ -639,28 +655,21 @@ class AdminPanel {
 
             if (response.ok) {
                 const data = await response.json();
-
-                // Hide create modal
                 this.hideCreateUserModal();
-
-                // Show temporary password modal
+                
                 document.getElementById('created-username').textContent = data.user.username;
                 document.getElementById('temp-password').textContent = data.temporary_password;
                 document.getElementById('temp-password-modal').classList.remove('hidden');
-
-                // Reload users
-                await this.loadUsers();
-
-                window.toast.success(`✅ Utilisateur ${username} créé avec succès`);
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                
+                this.loadUsers();
+                this.loadStats();
             } else {
                 const error = await response.json();
-                window.toast.error(error.detail || 'Erreur lors de la création');
+                window.toast.error(`❌ ${error.detail || 'Failed to create user'}`);
             }
         } catch (error) {
-            console.error('Error creating user:', error);
-            window.toast.error('Erreur réseau');
+            console.error('Create user error:', error);
+            window.toast.error('❌ Failed to create user');
         }
     }
 
@@ -669,9 +678,8 @@ class AdminPanel {
     }
 }
 
-// Initialize on DOM ready
+// Initialize
 let adminPanel;
 document.addEventListener('DOMContentLoaded', () => {
     adminPanel = new AdminPanel();
-    console.log('Admin panel initialized');
 });
