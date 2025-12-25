@@ -15,9 +15,11 @@ References:
 """
 
 import logging
+import os
+from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, validator
 from zxcvbn import zxcvbn
@@ -34,7 +36,9 @@ from app.models.user import (
     UserResponse,
     UserRole,
 )
+from app.services.email_service import get_email_service
 from app.services.user_database import get_user_db_service
+from app.services.database import get_db_service
 from app.utils.rate_limiter import get_rate_limiter
 
 logger = logging.getLogger(__name__)
@@ -194,12 +198,18 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate):
+async def register(
+    user_data: UserCreate,
+    background_tasks: BackgroundTasks,
+    email_service=Depends(get_email_service),
+):
     """
     User registration endpoint.
 
     Args:
         user_data: User registration data (username, email, password)
+        background_tasks: FastAPI background tasks
+        email_service: Email service dependency
 
     Returns:
         Created user (without password)
@@ -231,6 +241,9 @@ async def register(user_data: UserCreate):
         user = await user_db.create_user(user_data, role=UserRole.USER)
 
         logger.info(f"New user registered: {user.username}")
+
+        # Send registration confirmation email
+        background_tasks.add_task(email_service.send_registration_email, user)
 
         # Return user without password
         return UserResponse(
@@ -431,14 +444,18 @@ async def get_all_users(
 @router.put("/admin/users/{user_id}/approve", response_model=UserResponse)
 async def approve_user(
     user_id: str,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(get_current_admin_user),
+    email_service=Depends(get_email_service),
 ):
     """
     Approve a user account (admin only).
 
     Args:
         user_id: User ID to approve
+        background_tasks: FastAPI background tasks
         admin: Current admin user (from JWT token)
+        email_service: Email service dependency
 
     Returns:
         Updated user info
@@ -488,6 +505,9 @@ async def approve_user(
     updated_user = await user_db.get_user_by_id(user_id)
 
     logger.warning(f"🔓 AUDIT: Admin {admin.username} approved user {user.username} (id: {user_id})")
+
+    # Send approval notification email
+    background_tasks.add_task(email_service.send_approval_email, updated_user, admin.username)
 
     return UserResponse(
         id=updated_user.id,
@@ -729,7 +749,46 @@ async def delete_user(
             detail="Cannot delete admin accounts. Contact system administrator.",
         )
 
-    # Delete user (CASCADE will delete associated tasks)
+    # NEW: Get all tasks for this user to delete associated files
+    db_service = get_db_service()
+    user_tasks = await db_service.get_recent_tasks(limit=10000, owner_id=user_id)
+
+    # NEW: Delete physical files before deleting database records
+    data_dir = Path(os.getenv("DATA_DIR", "/data"))
+    uploads_dir = data_dir / "uploads"
+    reports_dir = data_dir / "reports"
+
+    files_deleted = {"uploads": 0, "reports": 0}
+    deletion_errors = []
+
+    for task in user_tasks:
+        task_id = task.task_id
+
+        # Delete PCAP file (multiple extensions possible)
+        pcap_files = list(uploads_dir.glob(f"{task_id}.*"))
+        for pcap_file in pcap_files:
+            try:
+                if pcap_file.exists():
+                    pcap_file.unlink()
+                    files_deleted["uploads"] += 1
+                    logger.info(f"Deleted PCAP for user {user.username}: {pcap_file.name}")
+            except Exception as e:
+                deletion_errors.append(f"Failed to delete {pcap_file.name}: {str(e)}")
+                logger.error(f"Error deleting PCAP {pcap_file}: {e}")
+
+        # Delete HTML and JSON reports
+        for ext in ["html", "json"]:
+            report_file = reports_dir / f"{task_id}.{ext}"
+            try:
+                if report_file.exists():
+                    report_file.unlink()
+                    files_deleted["reports"] += 1
+                    logger.info(f"Deleted report for user {user.username}: {report_file.name}")
+            except Exception as e:
+                deletion_errors.append(f"Failed to delete {report_file.name}: {str(e)}")
+                logger.error(f"Error deleting report {report_file}: {e}")
+
+    # Delete user (CASCADE will delete associated database records: tasks, progress, etc.)
     try:
         # Execute DELETE query
         query, params = user_db.pool.translate_query(
@@ -738,12 +797,17 @@ async def delete_user(
         )
         await user_db.pool.execute(query, *params)
 
-        logger.warning(f"🗑️  AUDIT: Admin {admin.username} deleted user {user.username} (id: {user_id})")
+        logger.warning(
+            f"🗑️  AUDIT: Admin {admin.username} deleted user {user.username} (id: {user_id}). "
+            f"Files removed: {files_deleted['uploads']} uploads, {files_deleted['reports']} reports."
+        )
 
         return {
             "message": f"User {user.username} deleted successfully",
             "user_id": user_id,
             "username": user.username,
+            "files_deleted": files_deleted,
+            "errors": deletion_errors if deletion_errors else None
         }
 
     except Exception as e:
@@ -866,7 +930,9 @@ async def create_user_by_admin(
 @router.post("/admin/users/bulk/approve", response_model=BulkUserActionResponse)
 async def bulk_approve_users(
     request: BulkUserActionRequest,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(get_current_admin_user),
+    email_service=Depends(get_email_service),
 ):
     """
     Bulk approve multiple user accounts (admin only).
@@ -876,7 +942,9 @@ async def bulk_approve_users(
 
     Args:
         request: List of user IDs to approve
+        background_tasks: FastAPI background tasks
         admin: Current admin user (from JWT token)
+        email_service: Email service dependency
 
     Returns:
         Summary of bulk operation (success count, failed count, detailed results)
@@ -971,6 +1039,9 @@ async def bulk_approve_users(
                 )
             )
             success_count += 1
+
+            # Send approval notification email
+            background_tasks.add_task(email_service.send_approval_email, user, admin.username)
 
             # Audit log
             logger.warning(f"🔓 AUDIT: Admin {admin.username} approved user {user.username} (id: {user_id}) [BULK]")

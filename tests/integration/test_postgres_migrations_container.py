@@ -1,6 +1,6 @@
 import pytest
 from sqlalchemy import create_engine, inspect
-from tests.integration.postgres_conftest import postgres_container, postgres_db_url, apply_migrations
+# Fixtures provided by conftest.py
 
 @pytest.mark.integration
 def test_migrations_apply_successfully(postgres_db_url, apply_migrations):

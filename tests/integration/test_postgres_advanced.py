@@ -6,7 +6,7 @@ from alembic.config import Config
 from alembic import command
 from app.services.database import DatabaseService
 from app.models.schemas import TaskStatus
-from tests.integration.postgres_conftest import postgres_container, postgres_db_url, apply_migrations
+# Fixtures (postgres_container, postgres_db_url, apply_migrations) are automatically provided by conftest.py
 
 @pytest.fixture
 def alembic_config(postgres_db_url):

@@ -1,3 +1,3 @@
 """Version information for PCAP Analyzer."""
 
-__version__ = "4.26.1"
+__version__ = "4.27.0"

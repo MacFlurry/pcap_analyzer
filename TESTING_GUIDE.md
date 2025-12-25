@@ -1,138 +1,88 @@
-# Test Scripts - Admin Approval Workflow
+# Guide de Test - PCAP Analyzer
 
-Scripts de test pour valider le workflow d'approbation admin (Issue #20).
+Ce guide décrit les procédures de test pour le PCAP Analyzer, incluant les tests unitaires, d'intégration et les tests de sécurité.
 
-## Configuration
+## 1. Tests Unitaires & Mocking
 
-Les scripts utilisent des **variables d'environnement** pour les credentials (sécurité : pas de mots de passe en dur).
+Les tests unitaires utilisent `pytest` et `unittest.mock` pour isoler les composants.
 
-### Variables requises
+### Mocking de Tshark & Système
+Pour tester l'analyse PCAP sans dépendre de binaires externes (`tshark`, `tcpdump`) :
+- Utiliser la stratégie de mocking définie dans `tests/unit/services/test_analyzer_mocking.py`.
+- Les analyseurs complexes et le parser `FastPacketParser` doivent être patchés pour retourner des données simulées.
+
+**Usage :**
+```bash
+pytest tests/unit/services/test_analyzer_mocking.py
+```
+
+### Sanitization PII (GDPR)
+Vérifier que les informations sensibles (IPs, mots de passe, chemins) sont correctement masquées dans les logs et rapports.
+
+**Usage :**
+```bash
+pytest tests/unit/utils/test_pii_sanitization.py
+```
+
+## 2. Tests d'Intégration (API & Worker)
+
+Les tests d'intégration utilisent **Testcontainers** pour lancer une base de données PostgreSQL réelle dans Docker.
+
+### Configuration Requise
+- Docker doit être installé et démarré.
+- L'utilisateur doit avoir les permissions pour lancer des conteneurs.
+
+### Cycle de Vie Upload
+Teste le workflow complet : Upload -> Validation -> Création de tâche.
+- Fichiers valides (202 Accepted)
+- Fichiers non-PCAP (400 Bad Request)
+- Fichiers trop volumineux (413 Payload Too Large)
+
+**Usage :**
+```bash
+pytest tests/integration/test_upload_lifecycle.py
+```
+
+### Analysis Worker
+Teste le traitement en arrière-plan et les transitions de statut (PENDING -> PROCESSING -> COMPLETED/FAILED).
+
+**Usage :**
+```bash
+pytest tests/integration/test_analysis_worker.py
+```
+
+### Isolation Multi-Tenant
+Vérifie que les utilisateurs ne peuvent accéder qu'à leurs propres rapports.
+
+**Usage :**
+```bash
+pytest tests/integration/test_reports_access.py
+```
+
+## 3. Couverture de Code
+
+Pour générer un rapport de couverture détaillé :
 
 ```bash
-export ADMIN_PASSWORD="your_admin_password_here"
-export USER_PASSWORD="your_user_password_here"
+pytest --cov=app --cov=src --cov-report=html
 ```
+Le rapport sera disponible dans le répertoire `htmlcov/`.
 
-### Variables optionnelles
+## 4. Troubleshooting
 
-```bash
-export USER_USERNAME="testuser"  # Défaut: "testuser"
-export USER_EMAIL="test@example.com"  # Défaut: "testuser@example.com"
-```
+### Erreur "Too many open files" (OSError 24)
+Cette erreur survient lors de l'exécution de la suite complète de tests (700+ tests) à cause de l'accumulation de descripteurs de fichiers non fermés.
+**Solution :**
+- Augmenter la limite système : `ulimit -n 4096`.
+- Lancer les tests par modules plutôt que la suite complète.
 
-## Scripts disponibles
+### Erreur "Runner.run() cannot be called from a running event loop"
+Survient souvent avec `pytest-asyncio` lors de l'utilisation de fixtures asynchrones mal configurées.
+**Solution :**
+- S'assurer qu'une seule boucle d'événements est utilisée par session.
+- Vérifier la fixture `event_loop` dans `tests/conftest.py`.
 
-### 1. `test_approval_workflow.py`
-Test complet du workflow d'approbation.
-
-**Teste** :
-- Inscription utilisateur avec `is_approved=False`
-- Login bloqué pour utilisateur non approuvé (403)
-- Approbation par admin
-- Login réussi après approbation
-- Blocage utilisateur par admin
-- Login bloqué pour utilisateur désactivé (403)
-
-**Usage** :
-```bash
-export ADMIN_PASSWORD="your_admin_password"
-python3 test_approval_workflow.py
-```
-
-### 2. `test_user_obk.py`
-Test du workflow avec un utilisateur spécifique.
-
-**Teste** :
-- Inscription/recherche utilisateur
-- Workflow complet : inscription → approbation → login → accès profil
-
-**Usage** :
-```bash
-export ADMIN_PASSWORD="your_admin_password"
-export USER_USERNAME="myuser"
-export USER_EMAIL="myuser@example.com"
-export USER_PASSWORD="mypassword"
-python3 test_user_obk.py
-```
-
-### 3. `test_multitenant.py`
-Test de l'isolation multi-tenant.
-
-**Teste** :
-- Admin voit toutes les tâches
-- Utilisateur voit uniquement ses tâches
-- Utilisateur ne peut pas accéder aux rapports d'autres utilisateurs (403)
-
-**Usage** :
-```bash
-export ADMIN_PASSWORD="your_admin_password"
-export USER_USERNAME="testuser"
-export USER_PASSWORD="testpassword"
-python3 test_multitenant.py
-```
-
-## Exemple complet
-
-```bash
-# 1. Obtenir le mot de passe admin breakglass
-docker logs pcap-analyzer 2>&1 | grep -A 10 "ADMIN BRISE-GLACE"
-
-# 2. Configurer les variables d'environnement
-export ADMIN_PASSWORD="your_admin_password_here"
-export USER_USERNAME="testuser"
-export USER_EMAIL="testuser@example.com"
-export USER_PASSWORD="SecurePassword123!"
-
-# 3. Lancer les tests
-python3 test_approval_workflow.py
-python3 test_user_obk.py
-python3 test_multitenant.py
-```
-
-## Résultats attendus
-
-Tous les tests doivent afficher :
-```
-✅ ALL TESTS PASSED - [TEST NAME] WORKING CORRECTLY
-```
-
-## Sécurité
-
-⚠️ **IMPORTANT** :
-- Ne jamais commiter de mots de passe dans Git
-- Utiliser toujours des variables d'environnement
-- Ne pas logger les mots de passe en clair
-- Changer le mot de passe admin breakglass après le premier déploiement
-
-## Dépendances
-
-```bash
-pip install httpx
-```
-
-## Logs et debugging
-
-Pour voir les logs du serveur pendant les tests :
-```bash
-docker logs -f pcap-analyzer
-```
-
-Pour débugger un test spécifique :
-```bash
-# Activer le mode verbose (ajouter print statements)
-python3 test_approval_workflow.py
-```
-
-## Troubleshooting
-
-### Erreur "Missing required environment variables"
-→ Les variables d'environnement ne sont pas définies. Vérifier avec `echo $ADMIN_PASSWORD`.
-
-### Erreur "Admin login failed: 401"
-→ Mot de passe admin incorrect. Récupérer le mot de passe breakglass dans les logs Docker.
-
-### Erreur "Connection refused"
-→ Le serveur n'est pas démarré. Vérifier avec `docker ps` et `curl http://localhost:8000/api/health`.
-
-### Test échoue à l'étape d'approbation
-→ Vérifier que l'utilisateur n'est pas déjà approuvé. Vérifier les logs : `docker logs pcap-analyzer | grep -i approve`.
+### Échec de connexion PostgreSQL dans Testcontainers
+**Solution :**
+- Vérifier que Docker est démarré.
+- Augmenter le timeout `ensure_postgres_ready` dans `conftest.py` si nécessaire.

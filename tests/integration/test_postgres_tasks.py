@@ -4,7 +4,7 @@ from app.services.database import DatabaseService
 from app.services.user_database import UserDatabaseService
 from app.models.user import UserCreate, UserRole
 from app.models.schemas import TaskStatus
-from tests.integration.postgres_conftest import postgres_container, postgres_db_url, apply_migrations
+# Fixtures provided by conftest.py
 
 @pytest.fixture
 async def task_db(postgres_db_url, apply_migrations):

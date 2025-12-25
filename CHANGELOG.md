@@ -7,6 +7,17 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.27.0] - 2025-12-25
+
+### 📧 Features & GDPR Compliance
+
+**Ajouté**:
+- **Notifications Email**: Intégration de `fastapi-mail` pour envoyer des emails de confirmation lors de l'inscription et de notification lors de l'approbation du compte.
+- **Cleanup de Sécurité**: Ajout d'un job de nettoyage périodique (`cleanup_orphaned_files`) pour supprimer les fichiers physiques n'ayant plus de référence en base de données.
+
+**Corrigé**:
+- **Fuite de Stockage (RGPD)**: Correction du bug où la suppression d'un utilisateur laissait les fichiers PCAP et les rapports sur le disque. Désormais, tous les fichiers associés sont supprimés avant la suppression du compte en base.
+
 ## [4.26.1] - 2025-12-25
 
 ### 🔧 Fixes & UX Improvements

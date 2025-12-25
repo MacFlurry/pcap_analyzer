@@ -53,6 +53,15 @@ class CleanupScheduler:
             replace_existing=True,
         )
 
+        # Configurer job de cleanup des fichiers orphelins (tous les jours à 3h du matin)
+        self.scheduler.add_job(
+            self.cleanup_orphaned_files,
+            CronTrigger(hour=3, minute=0),
+            id="cleanup_orphaned_files",
+            name="Cleanup orphaned files (no DB record)",
+            replace_existing=True,
+        )
+
     def start(self):
         """Démarre le scheduler"""
         if not self.scheduler.running:
@@ -158,6 +167,51 @@ class CleanupScheduler:
         except Exception as e:
             logger.error(f"Error during orphan cleanup: {e}", exc_info=True)
             # Don't raise - allow scheduler to continue
+
+    async def cleanup_orphaned_files(self):
+        """
+        Supprime les fichiers physiques qui n'ont plus de référence en base de données.
+        Sert de filet de sécurité pour les suppressions échouées ou manuelles.
+        """
+        logger.info("Starting orphaned files cleanup safety net...")
+        
+        try:
+            # Récupérer tous les IDs de tâches valides en base
+            query = "SELECT task_id FROM tasks"
+            rows = await self.db_service.pool.fetch_all(query)
+            valid_task_ids = {str(row["task_id"]) for row in rows}
+            
+            deleted_count = 0
+            freed_bytes = 0
+            
+            # Vérifier reports/ et uploads/
+            for dir_name in ["reports", "uploads"]:
+                dir_path = self.data_dir / dir_name
+                if not dir_path.exists():
+                    continue
+                
+                for file_path in dir_path.iterdir():
+                    if not file_path.is_file():
+                        continue
+                    
+                    # L'ID de la tâche est le nom du fichier (sans extension)
+                    task_id = file_path.stem
+                    
+                    # Si l'ID n'est pas en base, c'est un fichier orphelin
+                    if task_id not in valid_task_ids:
+                        file_size = file_path.stat().st_size
+                        file_path.unlink()
+                        deleted_count += 1
+                        freed_bytes += file_size
+                        logger.warning(f"Deleted orphaned file: {file_path.name} (no DB record)")
+            
+            if deleted_count > 0:
+                logger.info(f"Orphaned cleanup completed: {deleted_count} files deleted, {freed_bytes / (1024**2):.2f} MB freed")
+            else:
+                logger.info("No orphaned files found")
+                
+        except Exception as e:
+            logger.error(f"Error during orphaned files cleanup: {e}", exc_info=True)
 
     async def delete_file(self, file_path: Path):
         """

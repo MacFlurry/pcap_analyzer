@@ -10,6 +10,7 @@ email-validator>=2.0.0  # EmailStr validation in Pydantic
 # File handling
 python-multipart>=0.0.6  # Upload multipart/form-data
 aiofiles>=23.2.1         # Async file operations
+fastapi-mail>=1.4.1      # Email notifications (Feature #v4.27.0)
 
 # Scheduling
 apscheduler>=3.10.0,<4.0  # Cleanup scheduler
