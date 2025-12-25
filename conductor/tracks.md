@@ -4,6 +4,18 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
+## [x] Track: Documentation v5.0 (#28)
+*Link: [./conductor/archive/v5_0_documentation/](./conductor/archive/v5_0_documentation/)*
+
+## [~] Track: Audit de Sécurité v5.0 (#27)
+*Link: [./conductor/tracks/v5_0_security_audit/](./conductor/tracks/v5_0_security_audit/)*
+
+## [~] Track: Implémentation Authentification à deux facteurs (2FA) (#29)
+*Link: [./conductor/tracks/v5_0_2fa_implementation/](./conductor/tracks/v5_0_2fa_implementation/)*
+
+## [x] Track: Setup Environnement de Test Email avec MailHog.
+*Link: [./conductor/archive/email_testing_setup_mailhog/](./conductor/archive/email_testing_setup_mailhog/)*
+
 ## [x] Track: Améliorations de la gestion utilisateur et notifications (v4.27.0).
 *Link: [./conductor/archive/user_management_updates_v4_27_0/](./conductor/archive/user_management_updates_v4_27_0/)*
 
