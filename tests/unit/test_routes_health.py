@@ -23,6 +23,6 @@ def test_health_check(client: TestClient):
 
     # Values
     assert data["status"] == "healthy"
-    assert data["version"] == "4.15.0"
+    assert data["version"] == "4.27.3"
     assert data["uptime_seconds"] >= 0
     assert 0 <= data["memory_usage_percent"] <= 100

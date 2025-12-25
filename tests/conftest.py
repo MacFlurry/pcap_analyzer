@@ -13,11 +13,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
+from fastapi_csrf_protect import CsrfProtect
 from httpx import AsyncClient
 from passlib.context import CryptContext
 
 # Import app
 from app.main import app
+from app.models.user import User, UserRole
+from app.auth import get_current_user, get_current_user_sse
 from app.services.analyzer import ProgressCallback
 from app.services.database import DatabaseService
 from app.services.worker import AnalysisWorker
@@ -253,10 +256,29 @@ def client(test_data_dir: Path, monkeypatch) -> Generator[TestClient, None, None
 
     monkeypatch.setattr(worker, "get_worker", mock_get_worker)
 
+    # Mock authentication
+    mock_admin = User(
+        id="admin-test-id",
+        username="admin",
+        email="admin@test.com",
+        hashed_password="hash",
+        role=UserRole.ADMIN,
+        is_active=True,
+        is_approved=True
+    )
+    app.dependency_overrides[get_current_user] = lambda: mock_admin
+    app.dependency_overrides[get_current_user_sse] = lambda: mock_admin
+
+    # Mock CSRF
+    mock_csrf = AsyncMock()
+    mock_csrf.validate_csrf = AsyncMock(return_value=None)
+    app.dependency_overrides[CsrfProtect] = lambda: mock_csrf
+
     with TestClient(app) as test_client:
         yield test_client
 
-    # Cleanup: reset worker singleton
+    # Cleanup: reset worker singleton and overrides
+    app.dependency_overrides = {}
     worker._worker = None
 
 
