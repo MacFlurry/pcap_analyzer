@@ -7,6 +7,23 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.26.1] - 2025-12-25
+
+### 🔧 Fixes & UX Improvements
+
+**Corrigé**:
+- **Modal Création Utilisateur**: Restauration des event listeners manquants pour les boutons "Annuler" et "Créer".
+- **Validation**: Ajout de messages d'erreur si les champs requis sont vides.
+- **Feedback**: Ajout de toasts de succès/erreur lors de la création d'un utilisateur.
+- **Bug Cleanup**: Fix `CleanupScheduler` missing `db_service` error in logs.
+
+**Amélioré**:
+- **UX Modal**:
+  - Fermeture du modal via la touche **Escape**.
+  - Fermeture du modal en cliquant à l'extérieur.
+  - Focus automatique sur le champ "Nom d'utilisateur" à l'ouverture.
+  - Support de la touche **Entrée** pour soumettre le formulaire.
+
 ## [4.26.0] - 2025-12-25
 
 ### 📊 Admin Panel Pagination & E2E Testing

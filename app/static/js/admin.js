@@ -88,6 +88,42 @@ class AdminPanel {
 
         const createBtn = document.getElementById('create-user-btn');
         if (createBtn) createBtn.addEventListener('click', () => this.showCreateUserModal());
+
+        const cancelCreateBtn = document.getElementById('cancel-create-user');
+        if (cancelCreateBtn) cancelCreateBtn.addEventListener('click', () => this.hideCreateUserModal());
+
+        const confirmCreateBtn = document.getElementById('confirm-create-user');
+        if (confirmCreateBtn) confirmCreateBtn.addEventListener('click', () => this.createUser());
+
+        const createUserForm = document.getElementById('create-user-form');
+        if (createUserForm) {
+            createUserForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.createUser();
+            });
+        }
+
+        // Close modal on Escape or click outside
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.hideCreateUserModal();
+                this.hideTempPasswordModal();
+            }
+        });
+        
+        const modal = document.getElementById('create-user-modal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) this.hideCreateUserModal();
+            });
+        }
+
+        const tempPasswordModal = document.getElementById('temp-password-modal');
+        if (tempPasswordModal) {
+            tempPasswordModal.addEventListener('click', (e) => {
+                if (e.target === tempPasswordModal) this.hideTempPasswordModal();
+            });
+        }
         
         // Pagination
         if (this.prevBtn) this.prevBtn.addEventListener('click', () => this.changePage(-1));
@@ -303,15 +339,31 @@ class AdminPanel {
     showLoading() { if (this.loading) this.loading.classList.remove('hidden'); if (this.emptyState) this.emptyState.classList.add('hidden'); if (this.tableContainer) this.tableContainer.classList.add('hidden'); }
     showEmpty() { if (this.loading) this.loading.classList.add('hidden'); if (this.emptyState) this.emptyState.classList.remove('hidden'); if (this.tableContainer) this.tableContainer.classList.add('hidden'); }
     showTable() { if (this.loading) this.loading.classList.add('hidden'); if (this.emptyState) this.emptyState.classList.add('hidden'); if (this.tableContainer) this.tableContainer.classList.remove('hidden'); }
-    showCreateUserModal() { const el = document.getElementById('create-user-modal'); if (el) el.classList.remove('hidden'); }
-    hideCreateUserModal() { const el = document.getElementById('create-user-modal'); if (el) el.classList.add('hidden'); }
+    showCreateUserModal() { 
+        const el = document.getElementById('create-user-modal'); 
+        if (el) {
+            el.classList.remove('hidden'); 
+            const form = document.getElementById('create-user-form');
+            if (form) form.reset();
+            const usernameInput = document.getElementById('new-username');
+            if (usernameInput) usernameInput.focus();
+        }
+    }
+    
+    hideCreateUserModal() { 
+        const el = document.getElementById('create-user-modal'); 
+        if (el) el.classList.add('hidden'); 
+    }
     hideTempPasswordModal() { const el = document.getElementById('temp-password-modal'); if (el) el.classList.add('hidden'); }
 
     async createUser() {
         const username = document.getElementById('new-username').value;
         const email = document.getElementById('new-email').value;
         const role = document.getElementById('new-role').value;
-        if (!username || !email) return;
+        if (!username || !email) {
+            if (window.toast) window.toast.error('Veuillez remplir tous les champs');
+            return;
+        }
         try {
             const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
             const resp = await fetch('/api/admin/users', {
@@ -325,9 +377,16 @@ class AdminPanel {
                 document.getElementById('created-username').textContent = data.user.username;
                 document.getElementById('temp-password').textContent = data.temporary_password;
                 document.getElementById('temp-password-modal').classList.remove('hidden');
+                if (window.toast) window.toast.success(`✅ Utilisateur ${username} créé avec succès`);
                 this.loadUsers(); this.loadStats();
+            } else {
+                const err = await resp.json(); 
+                if (window.toast) window.toast.error(`❌ ${err.detail || 'Erreur lors de la création'}`);
             }
-        } catch (e) {}
+        } catch (e) { 
+            console.error('Error creating user:', e);
+            if (window.toast) window.toast.error('❌ Erreur réseau'); 
+        }
     }
 }
 
