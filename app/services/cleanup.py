@@ -11,6 +11,8 @@ from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.services.database import get_db_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +33,7 @@ class CleanupScheduler:
         self.data_dir = Path(data_dir)
         self.retention_hours = retention_hours
         self.scheduler = AsyncIOScheduler()
+        self.db_service = get_db_service()
 
         # Configurer job de cleanup (toutes les heures)
         self.scheduler.add_job(
@@ -126,14 +129,10 @@ class CleanupScheduler:
         3. Logger l'événement pour monitoring
         """
         try:
-            # Import dynamique pour éviter circular dependencies
-            from app.services.database import get_db_service
-
-            db_service = get_db_service()
-
-            # Trouver les tâches orphelines (no heartbeat for 120 seconds)
-            orphaned_task_ids = await db_service.find_orphaned_tasks(
-                heartbeat_timeout_seconds=120
+            # 1. Tasks where worker died (timeout heartbeat)
+            # Use 2 minutes timeout for orphan detection
+            orphaned_task_ids = await self.db_service.find_orphaned_tasks(
+                heartbeat_timeout_minutes=2
             )
 
             if not orphaned_task_ids:
@@ -146,7 +145,7 @@ class CleanupScheduler:
 
             # Marquer chaque tâche comme FAILED
             for task_id in orphaned_task_ids:
-                await db_service.mark_task_as_failed_orphan(
+                await self.db_service.mark_task_as_failed_orphan(
                     task_id=task_id,
                     error_message=(
                         "Analysis terminated unexpectedly. "

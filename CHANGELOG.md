@@ -7,6 +7,34 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.26.0] - 2025-12-25
+
+### 📊 Admin Panel Pagination & E2E Testing
+
+**Ajouté**:
+- **Pagination Admin Backend**:
+  - Endpoint `GET /api/users` supporte maintenant `limit` et `offset`.
+  - Nouveau schéma `PaginatedUsersResponse` avec métadonnées (total, limit, offset).
+  - Optimisation des requêtes DB (COUNT + LIMIT/OFFSET) et index sur `created_at`.
+  - Rétrocompatibilité maintenue (retourne liste si offset=None).
+
+- **Pagination Admin Frontend**:
+  - Interface Admin UI mise à jour avec contrôles de pagination (Précédent/Suivant, Taille de page).
+  - Intégration transparente avec la recherche et les filtres.
+  - Chargement efficace des stats (Total/Pending/Blocked) indépendant de la vue courante.
+
+- **Infrastructure de Tests E2E (Playwright)**:
+  - Suite de tests End-to-End complète avec Playwright.
+  - Scénarios "Happy Path" (Login, Création, Approbation, Blocage, Bulk Actions).
+  - Scénarios "Edge Cases" (Erreurs 500, Accès non autorisé, Listes vides).
+  - Isolation totale via Testcontainers (PostgreSQL) et helpers DB process-isolated.
+
+**Modifié**:
+- **Architecture de Test**: Adoption de `pytest-playwright` et gestion avancée des boucles d'événements asyncio pour éviter les conflits lors des tests synchrones/asynchrones mixtes.
+
+**Corrigé**:
+- **Conflits Asyncio/Playwright**: Résolution des `RuntimeError` dans les tests E2E via isolation par processus pour les opérations DB.
+
 ## [4.25.0] - 2025-12-22
 
 ### 🚀 Kubernetes/Helm + Page d'inscription

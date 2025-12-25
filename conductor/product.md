@@ -29,7 +29,7 @@ An automated PCAP file analyzer for diagnosing network latency and performance i
 - **Wireshark Compatibility:** Reads standard PCAP/PCAPNG formats.
 
 ### User Interface
-- **Web Application (FastAPI):** Multi-user interface with drag-and-drop PCAP uploads, analysis history, and user management.
+- **Web Application (FastAPI):** Multi-user interface with drag-and-drop PCAP uploads, analysis history, and scalable user management with server-side pagination.
 - **Interactive Reports:** Persistent HTML reports with Plotly.js visualizations (timeline graphs, protocol distribution, retransmission heatmaps).
 - **RESTful API:** Programmatic access for CI/CD integration and automated workflows.
 - **CLI Tool:** `pcap_analyzer analyze` command for scripting and batch processing.

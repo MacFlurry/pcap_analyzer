@@ -13,3 +13,4 @@ psutil>=5.9.0,<6.0  # Sprint 10: Memory monitoring and system resource tracking
 
 # Test dependencies (required for CI)
 hypothesis>=6.92.0
+pytest-playwright==0.5.2

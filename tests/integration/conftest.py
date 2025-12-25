@@ -19,10 +19,6 @@ from app.services.database import DatabaseService
 from app.auth import create_access_token
 
 @pytest.fixture(scope="session")
-def anyio_backend():
-    return "asyncio"
-
-@pytest.fixture(scope="session")
 def postgres_container():
     """
     Spins up a PostgreSQL container for integration tests.
