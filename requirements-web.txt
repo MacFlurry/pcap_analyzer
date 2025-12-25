@@ -4,7 +4,7 @@
 fastapi==0.115.6
 uvicorn==0.34.0
 httpx==0.28.1
-email-validator==2.2.0
+email-validator==2.3.0
 
 # File handling
 python-multipart==0.0.20
@@ -25,7 +25,7 @@ python-jose==3.3.0
 passlib==1.7.4
 bcrypt==4.2.1
 fastapi-csrf-protect==0.3.4
-zxcvbn==4.4.2
+zxcvbn==4.4.28
 
 # Optional: Monitoring (uncomment if needed)
 # prometheus-client>=0.19.0  # Prometheus metrics

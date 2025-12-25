@@ -13,7 +13,9 @@ import uuid
 sys.path.append(os.getcwd())
 
 from app.services.user_database import UserDatabaseService
+from app.services.database import DatabaseService
 from app.models.user import UserCreate, UserRole
+from app.models.schemas import TaskStatus
 
 async def main():
     if len(sys.argv) < 2:
@@ -23,9 +25,12 @@ async def main():
     action = sys.argv[1]
     db_url = sys.argv[2]
     
-    service = UserDatabaseService(database_url=db_url)
+    user_service = UserDatabaseService(database_url=db_url)
+    task_service = DatabaseService(database_url=db_url)
+    
     try:
-        await service.init_db()
+        await user_service.init_db()
+        await task_service.init_db()
         
         if action == "create_user":
             username = sys.argv[3]
@@ -34,13 +39,38 @@ async def main():
             role = sys.argv[6] if len(sys.argv) > 6 else "user"
             auto_approve = sys.argv[7] == "true" if len(sys.argv) > 7 else False
             
-            user = await service.create_user(
+            user = await user_service.create_user(
                 UserCreate(username=username, email=email, password=password),
                 role=UserRole(role),
                 auto_approve=auto_approve
             )
             print(user.json())
             
+        elif action == "create_task":
+            # task_id, filename, file_size, owner_id
+            task_id = sys.argv[3]
+            filename = sys.argv[4]
+            file_size = int(sys.argv[5])
+            owner_id = sys.argv[6]
+            
+            task = await task_service.create_task(
+                task_id=task_id,
+                filename=filename,
+                file_size_bytes=file_size,
+                owner_id=owner_id
+            )
+            # Mark as completed to show in history
+            await task_service.update_status(task_id, TaskStatus.COMPLETED)
+            print("success")
+
+        elif action == "raw_execute":
+            query = sys.argv[3]
+            # Convert args to tuple if present
+            params = tuple(sys.argv[4:])
+            query, params = user_service.pool.translate_query(query, params)
+            await user_service.pool.execute(query, *params)
+            print("success")
+
         elif action == "block_user":
             user_id = sys.argv[3]
             await service.block_user(user_id)
