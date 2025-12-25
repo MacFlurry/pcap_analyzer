@@ -49,6 +49,7 @@ dependencies = [
     "python-multipart>=0.0.6",  # Upload multipart/form-data
     "aiofiles>=23.2.1",  # Async file operations
     "apscheduler>=3.10.0,<4.0",  # Cleanup scheduler
+    "fastapi-mail>=1.4.1",  # Email notifications (Feature #v4.27.0)
     # Database (SQLite + PostgreSQL)
     "aiosqlite>=0.19.0,<1.0",  # SQLite async wrapper
     "alembic>=1.13.0",  # Database migrations

@@ -7,6 +7,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.27.1] - 2025-12-25
+
+### 🔧 Fixes
+
+**Corrigé**:
+- **Build**: Ajout de la dépendance manquante `fastapi-mail` dans `pyproject.toml` pour corriger l'échec du déploiement Docker.
+
 ## [4.27.0] - 2025-12-25
 
 ### 📧 Features & GDPR Compliance
