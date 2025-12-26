@@ -17,11 +17,17 @@ An investigation revealed that while API endpoints are secure and data is isolat
 
 ## Implementation Plan (Option A)
 
-### Phase 1: Authentication Mechanism Update
+### Phase 1: Authentication Mechanism Update (Completed) [checkpoint: 98ce433]
 Since standard browser navigation does not send `Authorization` headers (which utilize the `localStorage` token), we must implement a Cookie-based approach or a Hybrid approach.
 
-- [ ] **Modify Login Endpoint**: Update `/api/v1/auth/login` to set an `access_token` cookie (HttpOnly, Secure, SameSite) in addition to returning the JWT in the body.
-- [ ] **Update Logout**: Ensure logout clears this cookie.
+- [x] **Modify Login Endpoint**: Update `/api/token` to set an `access_token` cookie (HttpOnly, Secure, SameSite) in addition to returning the JWT in the body. (98ce433)
+- [x] **Update Logout**: Ensure logout clears this cookie. (98ce433)
+
+**Implementation Notes (Phase 1):**
+- Updated `app/api/routes/auth.py` to set `access_token` cookie in `login`.
+- Added `POST /api/logout` endpoint to clear the cookie.
+- Fixed `tests/conftest.py` initialization errors related to dual-database and dynamic paths.
+- Verified via `tests/security/test_cookie_auth.py`.
 
 ### Phase 2: Route Protection
 - [ ] **Middleware / Dependency**: Create a dependency `get_current_user_optional` or similar that checks for the Cookie.
