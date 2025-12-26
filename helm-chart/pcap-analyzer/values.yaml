@@ -3,7 +3,7 @@ replicaCount: 1
 
 image:
   repository: pcap-analyzer
-  tag: v4.28.1
+  tag: v4.28.2
   pullPolicy: Never  # Use local image for kind
 
 service:
@@ -17,7 +17,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/proxy-body-size: "500m"  # Match max upload size
   hosts:
-    - host: pcap.local
+    - host: pcaplab.com
       paths:
         - path: /
           pathType: Prefix
@@ -26,7 +26,7 @@ ingress:
   # tls:
   #   - secretName: pcap-analyzer-tls
   #     hosts:
-  #       - pcap.local
+  #       - pcaplab.com
 
 persistence:
   enabled: true

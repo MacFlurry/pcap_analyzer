@@ -2,8 +2,8 @@ apiVersion: v2
 name: pcap-analyzer
 description: A Helm chart for PCAP Analyzer - Network packet capture analysis tool
 type: application
-version: 1.1.1
-appVersion: "4.28.1"
+version: 1.1.2
+appVersion: "4.28.2"
 keywords:
   - pcap
   - network

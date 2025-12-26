@@ -43,20 +43,73 @@ MAIL_FROM_NAME: "PCAP Analyzer - Dev"
 
 ## Environnement de Production
 
-En production, vous devez utiliser un vrai fournisseur SMTP (AWS SES, SendGrid, Gmail, etc.).
+En production, nous utilisons **Proton Mail SMTP** avec un domaine personnalisé (pcaplab.com).
 
-### Configuration recommandée (Variables d'Environnement)
+### Configuration Proton Mail (Configuration Actuelle)
 
-| Variable | Description | Exemple |
-|----------|-------------|---------|
-| `SMTP_HOST` | Serveur SMTP | `smtp.sendgrid.net` |
-| `SMTP_PORT` | Port SMTP | `587` (TLS) ou `465` (SSL) |
-| `SMTP_USERNAME` | Nom d'utilisateur SMTP | `apikey` |
-| `SMTP_PASSWORD` | Mot de passe ou Clé API | `SG.xxx...` |
-| `SMTP_TLS` | Utiliser STARTTLS | `true` |
-| `SMTP_SSL` | Utiliser SSL direct | `false` |
-| `MAIL_FROM` | Adresse d'expédition | `noreply@votre-domaine.com` |
-| `APP_BASE_URL` | URL de base pour les liens | `https://pcap.votre-domaine.com` |
+PCAP Analyzer est configuré pour utiliser Proton Mail avec le domaine `pcaplab.com`.
+
+#### Variables d'Environnement
+
+| Variable | Valeur | Description |
+|----------|--------|-------------|
+| `SMTP_HOST` | `smtp.protonmail.ch` | Serveur SMTP Proton Mail |
+| `SMTP_PORT` | `587` | Port SMTP avec STARTTLS |
+| `SMTP_TLS` | `true` | Utiliser STARTTLS |
+| `SMTP_USERNAME` | `contact@pcaplab.com` | Adresse email d'envoi |
+| `SMTP_PASSWORD` | `<SMTP Token>` | Token SMTP (généré dans Proton Mail) |
+| `MAIL_ENABLED` | `true` | Activer les notifications email |
+| `MAIL_FROM` | `contact@pcaplab.com` | Adresse d'expédition |
+| `MAIL_FROM_NAME` | `PCAP Analyzer` | Nom de l'expéditeur |
+| `SUPPORT_EMAIL` | `support@pcaplab.com` | Email de support (affiché dans les templates) |
+| `APP_BASE_URL` | `http://pcaplab.com` | URL de base pour les liens dans les emails |
+
+#### Configuration Kubernetes
+
+Les credentials SMTP sont stockés dans un secret Kubernetes :
+
+```bash
+kubectl create secret generic proton-smtp-credentials \
+  --from-literal=username=contact@pcaplab.com \
+  --from-literal=password=<VOTRE_TOKEN_SMTP> \
+  -n pcap-analyzer
+```
+
+**Note importante** : Le token SMTP Proton Mail se génère dans les paramètres de votre compte Proton Mail, section "IMAP/SMTP". Il s'agit d'un token d'application, pas de votre mot de passe principal.
+
+#### Configuration Helm Chart
+
+Le Helm chart inclut la configuration email dans `values.yaml` :
+
+```yaml
+email:
+  enabled: true
+  smtp:
+    host: smtp.protonmail.ch
+    port: 587
+    tls: true
+    from: contact@pcaplab.com
+    fromName: "PCAP Analyzer"
+  credentials:
+    existingSecret: proton-smtp-credentials
+    usernameKey: username
+    passwordKey: password
+  supportEmail: support@pcaplab.com
+  appBaseUrl: http://pcaplab.com
+```
+
+Le déploiement injecte automatiquement ces variables dans les pods.
+
+### Autres Fournisseurs SMTP
+
+Si vous souhaitez utiliser un autre fournisseur (AWS SES, SendGrid, Gmail, etc.), modifiez les variables d'environnement dans le Helm chart :
+
+| Fournisseur | SMTP_HOST | SMTP_PORT | Notes |
+|-------------|-----------|-----------|-------|
+| **AWS SES** | `email-smtp.us-east-1.amazonaws.com` | `587` | Nécessite des credentials IAM SMTP |
+| **SendGrid** | `smtp.sendgrid.net` | `587` | Username: `apikey`, Password: Clé API |
+| **Gmail** | `smtp.gmail.com` | `587` | Nécessite un mot de passe d'application |
+| **Mailgun** | `smtp.mailgun.org` | `587` | Credentials depuis le dashboard Mailgun |
 
 ## Templates d'Emails
 

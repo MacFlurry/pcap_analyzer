@@ -7,6 +7,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.28.2] - 2025-12-26
+
+### 📝 Documentation & Configuration
+- **Documentation Email**: Mise à jour de `docs/EMAIL_SETUP.md` pour refléter la configuration réelle de Proton Mail SMTP avec domaine personnalisé.
+- **Domaine de production**: Changement du domaine d'ingress de `pcap.local` à `pcaplab.com` dans le Helm chart.
+- **Configuration Kubernetes**: Documentation détaillée de la création du secret `proton-smtp-credentials` et de la configuration Helm.
+
 ## [4.28.1] - 2025-12-26
 
 ### 📧 Email Configuration
