@@ -7,6 +7,21 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.0.0-rc1] - 2025-12-26
+
+### ✨ New Features
+- **Suite de Tests E2E complète**: Implémentation d'une suite de tests End-to-End avec Playwright couvrant tout le parcours utilisateur : Inscription, Approbation Admin, 2FA, Analyse PCAP et Nettoyage.
+- **Support DLT_IPV4**: Ajout du support pour les fichiers PCAP sans couche Ethernet (datalink type 228/DLT_IPV4) dans le parseur rapide dpkt.
+
+### 🔒 Security & Robustness
+- **Validation 2FA renforcée**: Correction de bugs dans le workflow d'activation du 2FA et amélioration du feedback utilisateur.
+- **Protection Division par Zéro**: Sécurisation des calculs de progression dans le CLI lors du traitement de fichiers vides ou malformés.
+
+### 🔧 Fixes & Refactoring
+- **Fix Rendu Admin Panel**: Correction d'un bug JavaScript majeur dans `common.js` qui écrasait les fonctions de sécurité et empêchait l'affichage de la liste des utilisateurs.
+- **Isolation des Tests**: Refactorisation de la gestion de `DATA_DIR` et `DATABASE_URL` pour garantir une isolation parfaite entre les tests unitaires et les tests système (E2E).
+- **Stabilisation Lifespan**: Initialisation dynamique des services lors du démarrage de l'API pour mieux prendre en compte les variables d'environnement.
+
 ## [4.28.3] - 2025-12-26
 
 ### 🔧 Fixes

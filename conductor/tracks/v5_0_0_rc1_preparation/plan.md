@@ -21,8 +21,8 @@ Cette version inclut toutes les fonctionnalités de sécurité (2FA, Password Po
     - [x] Simuler le parcours complet : Inscription -> Email -> Approbation Admin -> Email -> Login 2FA -> Analyse -> Cleanup. (fc3af98)
 
 3. **Documentation** :
-    - Mettre à jour `README.md` avec le statut v5.0.0-rc1.
-    - Vérifier `docs/EMAIL_SETUP.md` (déjà fait en v4.28.2).
+    - [x] Mettre à jour `README.md` avec le statut v5.0.0-rc1. (aa6e7c8)
+    - [x] Vérifier `docs/EMAIL_SETUP.md` (déjà fait en v4.28.2).
 
 4. **Release** :
     - Tagger `v5.0.0-rc1`.
