@@ -4,6 +4,13 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
+## [ ] Track: Deploy to VPS & Promote to v5.0.0 Stable
+*Context: Requires VPS with public IP for Let's Encrypt validation. Current status: v5.0.0-rc2 (local).*
+*Link: [./conductor/tracks/v5_0_0_vps_deployment/](./conductor/tracks/v5_0_0_vps_deployment/)*
+
+## [x] Track: Version Synchronization & v5.0.0-rc2 Release
+*Link: [./conductor/archive/tracks/version_sync_v5_0_0_rc2/](./conductor/archive/tracks/version_sync_v5_0_0_rc2/)*
+
 ## [x] Track: Let's Encrypt with cert-manager on Kubernetes
 *Link: [./conductor/archive/tracks/letsencrypt_certmanager/](./conductor/archive/tracks/letsencrypt_certmanager/)*
 
