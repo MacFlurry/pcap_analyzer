@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import ValidationError
@@ -33,11 +34,30 @@ logger = logging.getLogger(__name__)
 
 # OAuth2 password bearer for token extraction
 # tokenUrl: where client gets token (POST /api/token)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
 
 # JWT configuration
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+
+def get_token_from_request(request: Request, token: Optional[str] = None) -> Optional[str]:
+    """
+    Extract token from multiple sources:
+    1. Direct argument (e.g. from oauth2_scheme)
+    2. Authorization Header (if not already extracted)
+    3. access_token Cookie
+    """
+    if token:
+        return token
+
+    # 1. Check Authorization Header
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header.replace("Bearer ", "")
+
+    # 2. Check Cookie
+    return request.cookies.get("access_token")
 
 
 def get_secret_key() -> str:
@@ -157,23 +177,86 @@ async def get_current_user_from_token(token: str, user_db) -> User:
     return user
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+async def get_current_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme)
+) -> User:
     """
-    Extract and validate current user from JWT token.
+    Extract and validate current user from JWT token (Header or Cookie).
 
     Args:
-        token: JWT token from Authorization header
+        request: FastAPI request object
+        token: JWT token (auto-extracted by oauth2_scheme if present in header)
 
     Returns:
         Current authenticated user
 
     Raises:
-        HTTPException 401: If token is invalid or user doesn't exist
+        HTTPException 401: If token is missing, invalid, or user doesn't exist
     """
-    from app.services.user_database import get_user_db_service
+    effective_token = get_token_from_request(request, token)
+    
+    if not effective_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
+    from app.services.user_database import get_user_db_service
     user_db = get_user_db_service()
-    return await get_current_user_from_token(token, user_db)
+    return await get_current_user_from_token(effective_token, user_db)
+
+
+async def get_current_user_optional(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme)
+) -> Optional[User]:
+    """
+    Optional version of get_current_user. Does not raise 401 if missing.
+    Returns None if unauthenticated or token invalid.
+    """
+    effective_token = get_token_from_request(request, token)
+    if not effective_token:
+        return None
+
+    try:
+        from app.services.user_database import get_user_db_service
+        user_db = get_user_db_service()
+        return await get_current_user_from_token(effective_token, user_db)
+    except HTTPException:
+        return None
+
+
+async def get_current_user_cookie_or_redirect(
+    request: Request,
+    user: Optional[User] = Depends(get_current_user_optional)
+) -> User:
+    """
+    Dependency for HTML routes.
+    If not authenticated, returns a RedirectResponse to /login.
+    Otherwise returns the User.
+    
+    NOTE: This must be handled carefully in routes as it might return 
+    a RedirectResponse instead of a User if not caught by a custom exception.
+    """
+    if not user:
+        # Construct returnUrl
+        return_url = request.url.path
+        if request.url.query:
+            return_url += f"?{request.url.query}"
+        
+        # We can't easily return a RedirectResponse from a dependency 
+        # that is expected to return a User unless we raise a custom exception 
+        # or handle it in the route.
+        # Let's raise an exception that we can catch or just redirect here if FastAPI allows.
+        # Actually, raising an exception is better.
+        raise HTTPException(
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            detail="Redirect to login",
+            headers={"Location": f"/login?returnUrl={return_url}"}
+        )
+    return user
 
 
 async def get_current_user_sse(
@@ -185,85 +268,23 @@ async def get_current_user_sse(
 
     EventSource API doesn't support custom headers, so we accept token via:
     1. Query parameter ?token=xxx (for SSE compatibility)
-    2. Authorization header (fallback for fetch() calls)
-
-    Args:
-        request: FastAPI request object
-        token: JWT token from query parameter
-
-    Returns:
-        Current authenticated user
-
-    Raises:
-        HTTPException 401: If token is invalid/expired or user not found
-
-    Security Note:
-    - Tokens in URLs are logged by proxies/servers (less secure than headers)
-    - Only use for SSE where headers aren't possible
-    - Tokens should be short-lived (30 min default)
+    2. access_token Cookie (Defense in Depth)
+    3. Authorization header (fallback for fetch() calls)
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    # Try to get token from query param first, then Authorization header
-    if not token:
-        # Fallback to Authorization header
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.replace("Bearer ", "")
-        else:
-            logger.warning("SSE: No token in query param or Authorization header")
-            raise credentials_exception
-
-    try:
-        # Decode and validate JWT
-        secret_key = get_secret_key()
-        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
-
-        # Extract user info from token
-        user_id: str = payload.get("sub")
-        username: str = payload.get("username")
-        role_str: str = payload.get("role")
-
-        if user_id is None or username is None or role_str is None:
-            logger.warning("SSE: Invalid token payload (missing fields)")
-            raise credentials_exception
-
-        # Create TokenData for validation
-        token_data = TokenData(
-            sub=user_id,
-            username=username,
-            role=UserRole(role_str),
-            exp=datetime.fromtimestamp(payload.get("exp"), tz=timezone.utc),
-        )
-
-    except JWTError as e:
-        logger.warning(f"SSE: JWT validation failed: {e}")
-        raise credentials_exception
-
-    except ValidationError as e:
-        logger.warning(f"SSE: Token data validation failed: {e}")
-        raise credentials_exception
-
-    # Get user from database (verify still exists and active)
-    user_db = get_user_db_service()
-    user = await user_db.get_user_by_id(token_data.sub)
-
-    if user is None:
-        logger.warning(f"SSE: User from token not found: {token_data.sub}")
-        raise credentials_exception
-
-    if not user.is_active:
-        logger.warning(f"SSE: User from token is inactive: {user.username}")
+    # Try to get token from multiple sources
+    effective_token = token or get_token_from_request(request)
+    
+    if not effective_token:
+        logger.warning("SSE: No token found in query, cookie, or header")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return user
+    from app.services.user_database import get_user_db_service
+    user_db = get_user_db_service()
+    return await get_current_user_from_token(effective_token, user_db)
 
 
 async def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:

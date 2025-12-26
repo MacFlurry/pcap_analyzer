@@ -18,7 +18,7 @@ async def test_login_sets_cookie(async_client: AsyncClient, test_user):
         "/api/token",
         data=login_data,
         headers={"Content-Type": "application/x-www-form-urlencoded"}
-    )    
+    )
     # 2. Verify success
     assert response.status_code == 200
     data = response.json()
@@ -37,17 +37,60 @@ async def test_logout_clears_cookie(async_client: AsyncClient, test_user_token_h
     # 1. Manually set a cookie
     async_client.cookies.set("access_token", "fake_token", domain="localhost")
 
-    # 2. Call logout (New endpoint we need to create)
-    # Note: We assume /api/logout will be created.
-    # Current behavior might be 404.
+    # 2. Call logout
     response = await async_client.post(
         "/api/logout",
         headers=test_user_token_headers
-    )    
+    )
     assert response.status_code == 200
     
-    # 3. Verify cookie is cleared
-    # In httpx, checking if key exists or value is empty
-    val = response.cookies.get("access_token")
-    # Either the key is gone, or value is empty
-    assert not val
+    # 3. Verify cookie is cleared in response headers
+    # response.delete_cookie sets the cookie with an empty value and Max-Age=0
+    set_cookie = response.headers.get("set-cookie", "")
+    assert 'access_token="";' in set_cookie or 'access_token=;' in set_cookie or 'access_token=deleted' in set_cookie
+    assert "Max-Age=0" in set_cookie
+
+@pytest.mark.asyncio
+async def test_protected_html_route_redirects_anonymous(async_client: AsyncClient):
+    """
+    Test that protected HTML routes redirect anonymous users to login.
+    """
+    protected_routes = ["/", "/history", "/admin", "/profile", "/change-password"]
+    
+    for route in protected_routes:
+        response = await async_client.get(route, follow_redirects=False)
+        
+        # Should return 307 Temporary Redirect
+        assert response.status_code == 307
+        assert "Location" in response.headers
+        assert "/login" in response.headers["Location"]
+        assert f"returnUrl={route}" in response.headers["Location"]
+
+@pytest.mark.asyncio
+async def test_protected_html_route_loads_with_cookie(async_client: AsyncClient, test_user):
+    """
+    Test that protected HTML routes load correctly when access_token cookie is present.
+    """
+    # 1. Login to get a valid token
+    login_data = {
+        "username": test_user.username,
+        "password": "CorrectHorseBatteryStaple123!@#"
+    }
+    login_resp = await async_client.post(
+        "/api/token",
+        data=login_data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    assert login_resp.status_code == 200
+    
+    # async_client should now have the cookie from the login response
+    assert "access_token" in async_client.cookies
+    
+    # 2. Access a protected route
+    response = await async_client.get("/history")
+    
+    # 3. Should return 200 OK (no redirect)
+    assert response.status_code == 200
+    assert "text/html" in response.headers["Content-Type"]
+    # Verify it's the actual page (check for common elements)
+    assert "pcap" in response.text.lower()
