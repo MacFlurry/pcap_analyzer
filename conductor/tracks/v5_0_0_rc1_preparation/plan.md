@@ -18,7 +18,7 @@ Cette version inclut toutes les fonctionnalités de sécurité (2FA, Password Po
 
 2. **Tests Système (E2E)** :
     - [x] Tenter de corriger les erreurs de la suite de tests (Too many open files / Event loop). (4e3c9d0)
-    - [x] Simuler le parcours complet : Inscription -> Email -> Approbation Admin -> Email -> Login 2FA -> Analyse -> Cleanup. (6952)
+    - [x] Simuler le parcours complet : Inscription -> Email -> Approbation Admin -> Email -> Login 2FA -> Analyse -> Cleanup. (fc3af98)
 
 3. **Documentation** :
     - Mettre à jour `README.md` avec le statut v5.0.0-rc1.
