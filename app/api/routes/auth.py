@@ -23,7 +23,7 @@ from typing import List, Optional
 
 import pyotp
 import qrcode
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, validator
 from zxcvbn import zxcvbn
@@ -95,11 +95,14 @@ class PasswordUpdate(BaseModel):
 @router.post("/token", response_model=Token)
 async def login(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     totp_code: Optional[str] = Form(None)
 ):
     """
     Login endpoint (OAuth2 password flow) with rate limiting.
+    
+    Now sets an HttpOnly cookie for session-like access to HTML pages.
 
     Args:
         request: HTTP request (for IP-based rate limiting)
@@ -234,9 +237,33 @@ async def login(
     # Create access token
     access_token = create_access_token(user)
 
+    # Set cookie for HTML page access (Defense in Depth)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+        max_age=1800,  # 30 minutes, same as JWT expiry
+    )
+
     logger.info(f"User logged in: {user.username} (role: {user.role.value}, password_must_change: {user.password_must_change})")
 
     return Token(access_token=access_token, token_type="bearer", expires_in=1800, password_must_change=user.password_must_change)
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """
+    Logout endpoint.
+    Clears the access_token cookie.
+    """
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="lax",
+    )
+    return {"message": "Logged out successfully"}
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

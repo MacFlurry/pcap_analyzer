@@ -31,6 +31,7 @@ from app.models.user import User, UserRole
 from app.auth import get_current_user, get_current_user_sse
 from app.services.analyzer import ProgressCallback
 from app.services.database import DatabaseService
+from app.services.user_database import UserDatabaseService
 from app.services.worker import AnalysisWorker
 
 
@@ -342,13 +343,10 @@ def client(test_data_dir: Path, monkeypatch, request) -> Generator[TestClient, N
     monkeypatch.setenv("DATABASE_URL", database_url)
 
     # Patch DATA_DIR in all modules that define it at module level
-    from app.api.routes import health, reports, upload
-
-    monkeypatch.setattr(upload, "DATA_DIR", test_data_dir)
-    monkeypatch.setattr(upload, "UPLOADS_DIR", test_data_dir / "uploads")
-    monkeypatch.setattr(reports, "DATA_DIR", test_data_dir)
-    monkeypatch.setattr(reports, "REPORTS_DIR", test_data_dir / "reports")
-    monkeypatch.setattr(health, "DATA_DIR", test_data_dir)
+    # from app.api.routes import health, reports, upload
+    # Note: These modules now use dynamic config via app.utils.config, 
+    # so we don't need to patch module attributes anymore.
+    # The setenv above is sufficient.
 
     # Reset all singletons to pick up new DATA_DIR and ensure clean state
     from app.services import database, worker, user_database, postgres_database, analyzer
@@ -439,12 +437,8 @@ async def async_client(
     analyzer._analyzer_service = None
 
     # Patch DATA_DIR
-    from app.api.routes import health, reports, upload
-    monkeypatch.setattr(upload, "DATA_DIR", test_data_dir)
-    monkeypatch.setattr(upload, "UPLOADS_DIR", test_data_dir / "uploads")
-    monkeypatch.setattr(reports, "DATA_DIR", test_data_dir)
-    monkeypatch.setattr(reports, "REPORTS_DIR", test_data_dir / "reports")
-    monkeypatch.setattr(health, "DATA_DIR", test_data_dir)
+    # from app.api.routes import health, reports, upload
+    # Note: Using dynamic config now.
 
     # Mock get_worker
     def mock_get_worker():
