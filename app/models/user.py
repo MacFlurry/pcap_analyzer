@@ -54,6 +54,11 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
 
+    # 2FA (Two-Factor Authentication)
+    is_2fa_enabled: bool = False
+    totp_secret: Optional[str] = None
+    backup_codes: Optional[list[str]] = None  # Hashed backup codes
+
     @validator("username")
     def username_alphanumeric(cls, v):
         """Username must be alphanumeric (+ underscore, hyphen)."""
@@ -124,6 +129,7 @@ class UserResponse(BaseModel):
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
     password_must_change: bool = False
+    is_2fa_enabled: bool = False
     created_at: datetime
     last_login: Optional[datetime]
 

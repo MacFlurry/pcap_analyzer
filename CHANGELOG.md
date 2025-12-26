@@ -7,6 +7,17 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.28.0] - 2025-12-26
+
+### ✨ New Features
+- **Authentification à deux facteurs (2FA)**: Support de TOTP (Google Authenticator, Authy, etc.) pour sécuriser les comptes utilisateurs.
+- **Codes de secours**: Génération de 10 codes de secours lors de l'activation du 2FA.
+- **Gestion du profil**: Nouvelle page de profil permettant d'activer/désactiver le 2FA et de changer son mot de passe.
+
+### 🔧 Fixes & Refactoring
+- Amélioration de la robustesse des tests d'authentification.
+- Mise à jour des dépendances (`pyotp`, `qrcode`, `Pillow`).
+
 ## [4.27.3] - 2025-12-25
 
 ### 🔒 Security Audit Remediation

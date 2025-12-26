@@ -16,10 +16,14 @@ References:
 
 import logging
 import os
+import io
+import base64
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+import pyotp
+import qrcode
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, validator
 from zxcvbn import zxcvbn
@@ -88,13 +92,18 @@ class PasswordUpdate(BaseModel):
 
 
 @router.post("/token", response_model=Token)
-async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    totp_code: Optional[str] = Form(None)
+):
     """
     Login endpoint (OAuth2 password flow) with rate limiting.
 
     Args:
         request: HTTP request (for IP-based rate limiting)
         form_data: OAuth2 form with username and password
+        totp_code: Optional 2FA code (required if 2FA enabled)
 
     Returns:
         Access token (JWT)
@@ -182,6 +191,38 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Check 2FA (Two-Factor Authentication)
+    if user.is_2fa_enabled:
+        if not totp_code:
+            # Indicate MFA required
+            # We return 401 but with a specific detail or header so the frontend knows to prompt for code
+            logger.info(f"2FA required for user {user.username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Two-factor authentication required",
+                headers={"WWW-Authenticate": "Bearer", "X-MFA-Required": "true"},
+            )
+        
+        # Verify TOTP
+        if not user.totp_secret:
+             logger.error(f"User {user.username} has 2FA enabled but no secret")
+             raise HTTPException(status_code=500, detail="Internal 2FA error")
+
+        totp = pyotp.TOTP(user.totp_secret)
+        # Allow window of 1 (30s before/after) to account for clock drift
+        if not totp.verify(totp_code, valid_window=1):
+            # Try backup codes
+            is_valid_backup = await user_db.consume_backup_code(user.id, totp_code)
+            
+            if not is_valid_backup:
+                logger.warning("Failed login attempt: invalid 2FA code")
+                rate_limiter.record_failure(client_ip)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid 2FA code",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
     # Success - reset rate limiter
     rate_limiter.record_success(client_ip)
@@ -1353,3 +1394,113 @@ async def bulk_unblock_users(
         failed=failed_count,
         results=results,
     )
+
+
+# ========================================
+# 2FA ENDPOINTS
+# ========================================
+
+class TwoFASetupResponse(BaseModel):
+    """Response for 2FA setup initiation."""
+    secret: str
+    qr_code: str
+
+class TwoFAEnableRequest(BaseModel):
+    """Request to enable 2FA."""
+    secret: str
+    code: str
+
+class TwoFADisableRequest(BaseModel):
+    """Request to disable 2FA."""
+    password: str
+
+@router.post("/users/me/2fa/setup", response_model=TwoFASetupResponse)
+async def setup_2fa(current_user: User = Depends(get_current_user)):
+    """
+    Initiate 2FA setup.
+    Generates a secret and QR code.
+    Does NOT enable 2FA yet (user must verify).
+    
+    Returns:
+        Secret key and QR code image (base64)
+    """
+    if current_user.is_2fa_enabled:
+        raise HTTPException(status_code=400, detail="2FA is already enabled")
+        
+    # Generate secret
+    secret = pyotp.random_base32()
+    
+    # Create provisioning URI
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(
+        name=current_user.email,
+        issuer_name="PCAP Analyzer"
+    )
+    
+    # Generate QR code
+    img = qrcode.make(uri)
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    qr_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    
+    return TwoFASetupResponse(
+        secret=secret,
+        qr_code=f"data:image/png;base64,{qr_b64}"
+    )
+
+@router.post("/users/me/2fa/enable")
+async def enable_2fa(
+    request: TwoFAEnableRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Enable 2FA after setup.
+    Verifies the code against the secret.
+    Returns backup codes.
+    
+    Returns:
+        Backup codes (save these!)
+    """
+    if current_user.is_2fa_enabled:
+        raise HTTPException(status_code=400, detail="2FA is already enabled")
+        
+    # Verify code
+    totp = pyotp.TOTP(request.secret)
+    # Allow window of 1 (30s before/after)
+    if not totp.verify(request.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid 2FA code")
+        
+    # Generate backup codes (10 codes, 8 hex chars each)
+    import secrets
+    backup_codes = [secrets.token_hex(4) for _ in range(10)]
+    
+    user_db = get_user_db_service()
+    await user_db.enable_2fa(current_user.id, request.secret, backup_codes)
+    
+    logger.info(f"2FA enabled for user {current_user.username}")
+    
+    return {"message": "2FA enabled successfully", "backup_codes": backup_codes}
+
+@router.post("/users/me/2fa/disable")
+async def disable_2fa(
+    request: TwoFADisableRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Disable 2FA.
+    Requires password for security.
+    """
+    if not current_user.is_2fa_enabled:
+        raise HTTPException(status_code=400, detail="2FA is not enabled")
+        
+    user_db = get_user_db_service()
+    
+    # Verify password
+    if not user_db.verify_password(request.password, current_user.hashed_password):
+        logger.warning(f"Failed to disable 2FA for {current_user.username}: incorrect password")
+        raise HTTPException(status_code=401, detail="Incorrect password")
+        
+    await user_db.disable_2fa(current_user.id)
+    
+    logger.info(f"2FA disabled for user {current_user.username}")
+    
+    return {"message": "2FA disabled successfully"}

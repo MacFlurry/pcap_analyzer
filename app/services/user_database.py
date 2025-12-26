@@ -15,6 +15,7 @@ References:
 import logging
 import os
 import secrets
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -50,6 +51,17 @@ def _parse_timestamp(value) -> Optional[datetime]:
         return datetime.fromisoformat(value)
     return None
 
+
+def _parse_backup_codes(value) -> Optional[list[str]]:
+    """Parse backup codes from JSON string."""
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return []
+
+
 # Database schema for users table
 # NOTE: For PostgreSQL, use Alembic migrations instead of this schema
 USER_SCHEMA = """
@@ -64,6 +76,9 @@ CREATE TABLE IF NOT EXISTS users (
     approved_by TEXT,
     approved_at TIMESTAMP,
     password_must_change BOOLEAN NOT NULL DEFAULT 0,
+    is_2fa_enabled BOOLEAN NOT NULL DEFAULT 0,
+    totp_secret TEXT,
+    backup_codes TEXT,
     created_at TIMESTAMP NOT NULL,
     last_login TIMESTAMP,
     CONSTRAINT role_check CHECK (role IN ('admin', 'user'))
@@ -292,7 +307,15 @@ class UserDatabaseService:
         # Truncate password to 72 bytes (bcrypt limitation)
         password_bytes = plain_password.encode('utf-8')[:72]
         hashed_bytes = hashed_password.encode('utf-8')
-        return bcrypt.checkpw(password_bytes, hashed_bytes)
+        try:
+            return bcrypt.checkpw(password_bytes, hashed_bytes)
+        except Exception as e:
+            logger.error(f"Error during password verification: {e}")
+            return False
+
+
+
+
 
     async def create_user(
         self, user_data: UserCreate, role: UserRole = UserRole.USER, auto_approve: bool = False, password_must_change: bool = False
@@ -408,6 +431,9 @@ class UserDatabaseService:
             approved_by=str(row["approved_by"]) if row.get("approved_by") else None,
             approved_at=_parse_timestamp(row.get("approved_at")),
             password_must_change=bool(row.get("password_must_change", False)),
+            is_2fa_enabled=bool(row.get("is_2fa_enabled", False)),
+            totp_secret=row.get("totp_secret"),
+            backup_codes=_parse_backup_codes(row.get("backup_codes")),
             created_at=_parse_timestamp(row.get("created_at")) or datetime.now(timezone.utc),
             last_login=_parse_timestamp(row.get("last_login")),
         )
@@ -434,6 +460,9 @@ class UserDatabaseService:
             approved_by=str(row["approved_by"]) if row.get("approved_by") else None,
             approved_at=_parse_timestamp(row.get("approved_at")),
             password_must_change=bool(row.get("password_must_change", False)),
+            is_2fa_enabled=bool(row.get("is_2fa_enabled", False)),
+            totp_secret=row.get("totp_secret"),
+            backup_codes=_parse_backup_codes(row.get("backup_codes")),
             created_at=_parse_timestamp(row.get("created_at")) or datetime.now(timezone.utc),
             last_login=_parse_timestamp(row.get("last_login")),
         )
@@ -653,6 +682,7 @@ class UserDatabaseService:
                     is_approved=bool(row.get("is_approved", False)),
                     approved_by=str(row["approved_by"]) if row.get("approved_by") else None,
                     approved_at=_parse_timestamp(row.get("approved_at")),
+                    is_2fa_enabled=bool(row.get("is_2fa_enabled", False)),
                     created_at=_parse_timestamp(row.get("created_at")) or datetime.now(timezone.utc),
                     last_login=_parse_timestamp(row.get("last_login")),
                 )
@@ -741,6 +771,56 @@ class UserDatabaseService:
             logger.info(f"User {user_id} unblocked (is_active=True)")
 
         return updated
+
+    async def enable_2fa(self, user_id: str, totp_secret: str, backup_codes: list[str]):
+        """
+        Enable 2FA for a user.
+        
+        Args:
+            user_id: User ID
+            totp_secret: The TOTP secret key
+            backup_codes: List of backup codes
+        """
+        backup_codes_json = json.dumps(backup_codes)
+        query, params = self.pool.translate_query(
+            "UPDATE users SET is_2fa_enabled = ?, totp_secret = ?, backup_codes = ? WHERE id = ?",
+            (True, totp_secret, backup_codes_json, user_id),
+        )
+        await self.pool.execute(query, *params)
+        logger.info(f"2FA enabled for user {user_id}")
+
+    async def disable_2fa(self, user_id: str):
+        """Disable 2FA for a user."""
+        query, params = self.pool.translate_query(
+            "UPDATE users SET is_2fa_enabled = ?, totp_secret = NULL, backup_codes = NULL WHERE id = ?",
+            (False, user_id),
+        )
+        await self.pool.execute(query, *params)
+        logger.info(f"2FA disabled for user {user_id}")
+
+    async def consume_backup_code(self, user_id: str, code: str) -> bool:
+        """
+        Verify and consume a backup code.
+        Returns True if code was valid and consumed.
+        """
+        user = await self.get_user_by_id(user_id)
+        if not user or not user.backup_codes:
+            return False
+            
+        if code in user.backup_codes:
+            # Remove used code
+            new_codes = [c for c in user.backup_codes if c != code]
+            new_codes_json = json.dumps(new_codes)
+            
+            query, params = self.pool.translate_query(
+                "UPDATE users SET backup_codes = ? WHERE id = ?",
+                (new_codes_json, user_id),
+            )
+            await self.pool.execute(query, *params)
+            logger.info(f"Backup code consumed for user {user_id}")
+            return True
+            
+        return False
 
 
 # Singleton instance

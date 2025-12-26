@@ -84,3 +84,12 @@ async def register(request: Request):
     Page d'inscription (user registration)
     """
     return templates.TemplateResponse("register.html", {"request": request, "version": __version__})
+
+
+@router.get("/profile", response_class=HTMLResponse)
+async def profile(request: Request):
+    """
+    Page de profil utilisateur (2FA, etc.)
+    """
+    return templates.TemplateResponse("profile.html", {"request": request, "version": __version__})
+

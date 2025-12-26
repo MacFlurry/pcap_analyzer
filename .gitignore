@@ -75,4 +75,5 @@ test_*.py
 generate_*.py
 analyze_*.py
 poc_*.py
-*.html
+reports/*.html
+local_data/reports/*.html
