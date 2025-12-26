@@ -65,12 +65,6 @@ class SecurityUtils {
     }
 }
 
-// Export utilities
-window.utils = {
-    SecurityUtils: SecurityUtils,
-    escapeHtml: SecurityUtils.escapeHtml
-};
-
 // ========================================
 // 3. TOAST NOTIFICATIONS
 // ========================================
@@ -199,6 +193,13 @@ class HealthMonitor {
 // ========================================
 
 const Utils = {
+    /**
+     * Escape HTML special characters to prevent XSS attacks.
+     */
+    escapeHtml(text) {
+        return SecurityUtils.escapeHtml(text);
+    },
+
     /**
      * Formate une taille de fichier en octets vers une chaîne lisible
      */
