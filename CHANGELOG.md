@@ -7,6 +7,15 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.28.1] - 2025-12-26
+
+### 📧 Email Configuration
+- **Domaine personnalisé**: Utilisation de `contact@pcaplab.com` comme adresse d'envoi.
+- **Support email**: Mise à jour vers `support@pcaplab.com`.
+- **URL de l'application**: Changement de `localhost:8000` vers `pcaplab.com` dans les templates d'email.
+- **Configuration Helm**: Ajout des variables `SUPPORT_EMAIL`, `APP_BASE_URL`, `MAIL_FROM_NAME` dans le chart Helm.
+- **Templates email**: Mise à jour des URLs et adresses email dans les templates de registration et d'approbation.
+
 ## [4.28.0] - 2025-12-26
 
 ### ✨ New Features

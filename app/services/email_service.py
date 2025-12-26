@@ -42,8 +42,8 @@ class EmailService:
         )
         
         self.fastmail = FastMail(self.conf)
-        self.support_email = os.getenv("SUPPORT_EMAIL", "support@pcap-analyzer.com")
-        self.app_base_url = os.getenv("APP_BASE_URL", "http://localhost:8000")
+        self.support_email = os.getenv("SUPPORT_EMAIL", "support@pcaplab.com")
+        self.app_base_url = os.getenv("APP_BASE_URL", "http://pcaplab.com")
 
     async def _send_email(
         self, 

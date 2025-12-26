@@ -3,7 +3,7 @@ replicaCount: 1
 
 image:
   repository: pcap-analyzer
-  tag: latest
+  tag: v4.28.1
   pullPolicy: Never  # Use local image for kind
 
 service:
@@ -48,6 +48,23 @@ env:
   dataDir: "/data"
   logLevel: "INFO"
   maxQueueSize: "5"
+
+# Email configuration (Proton Mail SMTP)
+email:
+  enabled: true
+  smtp:
+    host: smtp.protonmail.ch
+    port: 587
+    tls: true
+    from: contact@pcaplab.com
+    fromName: "PCAP Analyzer"
+  credentials:
+    existingSecret: proton-smtp-credentials
+    usernameKey: username
+    passwordKey: password
+  # Application URLs for email templates
+  supportEmail: support@pcaplab.com
+  appBaseUrl: http://pcaplab.com
 
 # Secret key for JWT tokens (auto-generated if not provided)
 secretKey: ""
