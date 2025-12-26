@@ -169,6 +169,34 @@ class UserDatabaseService:
             # PostgreSQL: migrations handled by Alembic
             logger.debug("PostgreSQL detected: skipping manual migration (use Alembic)")
 
+    async def migrate_users_table(self):
+        """
+        Migrate users table to add 2FA columns.
+        Safe to call multiple times.
+        """
+        if self.pool.db_type == "sqlite":
+            try:
+                result = await self.pool.fetch_all("PRAGMA table_info(users)")
+                column_names = [col["name"] if "name" in col else col[1] for col in result]
+
+                if "is_2fa_enabled" not in column_names:
+                    await self.pool.execute("ALTER TABLE users ADD COLUMN is_2fa_enabled BOOLEAN NOT NULL DEFAULT 0")
+                    logger.info("Added is_2fa_enabled column to users table")
+                
+                if "totp_secret" not in column_names:
+                    await self.pool.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+                    logger.info("Added totp_secret column to users table")
+                
+                if "backup_codes" not in column_names:
+                    await self.pool.execute("ALTER TABLE users ADD COLUMN backup_codes TEXT")
+                    logger.info("Added backup_codes column to users table")
+
+            except Exception as e:
+                logger.error(f"Error migrating users table: {e}")
+        else:
+            logger.debug("PostgreSQL detected: skipping manual migration (use Alembic)")
+
+
     async def create_admin_breakglass_if_not_exists(self) -> Optional[str]:
         """
         Create or update admin brise-glace account.

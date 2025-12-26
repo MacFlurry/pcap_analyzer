@@ -55,6 +55,9 @@ async def lifespan(app: FastAPI):
 
     # Migrer la table tasks pour ajouter owner_id (multi-tenant)
     await user_db_service.migrate_tasks_table()
+    # Migrer la table users pour ajouter les colonnes 2FA
+    await user_db_service.migrate_users_table()
+
 
     # Créer compte admin brise-glace si aucun admin n'existe
     admin_password = await user_db_service.create_admin_breakglass_if_not_exists()

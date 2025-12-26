@@ -14,7 +14,12 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Link: [./conductor/archive/v5_0_security_audit/](./conductor/archive/v5_0_security_audit/)*
 
 ## [x] Track: Implémentation Authentification à deux facteurs (2FA) (#29)
-*Link: [./conductor/tracks/v5_0_2fa_implementation/](./conductor/tracks/v5_0_2fa_implementation/)*
+*Link: [./conductor/archive/tracks/v5_0_2fa_implementation/](./conductor/archive/tracks/v5_0_2fa_implementation/)*
+
+## [x] Track: Fix User Deletion Orphaned Files
+*Link: [./conductor/tracks/fix_user_deletion_orphaned_files/](./conductor/tracks/fix_user_deletion_orphaned_files/)*
+
+
 
 
 ## [x] Track: Setup Environnement de Test Email avec MailHog.
