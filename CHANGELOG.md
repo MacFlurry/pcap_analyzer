@@ -7,6 +7,18 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.0.0-rc2] - 2025-12-26
+
+### ✨ New Features
+- **Automated TLS**: Intégration complète de cert-manager pour l'émission et le renouvellement automatique des certificats Let's Encrypt (ClusterIssuer staging + production).
+- **Cluster Recreation**: Support "Zero-Touch" pour la recréation de cluster Kubernetes avec réémission automatique des certificats.
+
+### 🔒 Security
+- **Server-Side Route Protection**: Protection renforcée des pages HTML (`/history`, `/admin`, etc.) avec redirection HTTP 307 vers `/login` pour les utilisateurs anonymes.
+- **Hybrid Authentication**: Support unifié de l'authentification par Header (`Authorization: Bearer`) et Cookie (`access_token`) pour une sécurité en profondeur.
+- **HttpOnly Cookies**: Stockage sécurisé du token JWT dans un cookie HttpOnly/Secure/SameSite=Lax pour les sessions navigateur.
+- **Enhanced Logout**: Endpoint `/api/logout` pour le nettoyage sécurisé des cookies et de la session.
+
 ## [5.0.0-rc1] - 2025-12-26
 
 ### ✨ New Features
