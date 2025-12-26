@@ -43,6 +43,7 @@ An automated PCAP file analyzer for diagnosing network latency and performance i
 
 ### Authentication & Authorization
 - **JWT Token Authentication:** Secure stateless authentication with configurable expiration.
+- **Two-Factor Authentication (2FA):** Support for TOTP-based second factor (Google Authenticator, Authy) with backup codes.
 - **Role-Based Access Control (RBAC):** Admin and User roles with granular permissions.
 - **Password Security:** Passlib with bcrypt/Argon2id hashing and zxcvbn-based strength validation.
 - **Temporary Passwords:** First-login flow forcing password change for admin-created accounts.
@@ -76,7 +77,8 @@ An automated PCAP file analyzer for diagnosing network latency and performance i
 ### Development Workflow
 - **Docker Compose:** One-command local development environment (`docker-compose up`).
 - **Hot Reload:** Flask debug mode for rapid iteration.
-- **Test Suite:** pytest with unit, integration (ephemeral PostgreSQL via Testcontainers), and security tests (70%+ coverage goal for security modules).
+- **Test Suite:** pytest with unit, integration (ephemeral PostgreSQL via Testcontainers), and security tests (60%+ global coverage goal, 70%+ for security modules).
+- **E2E Testing:** Full user journey validation with Playwright (registration, approval, 2FA, analysis).
 
 ## Differentiation from Wireshark
 - **Multi-User Web Platform:** Persistent analysis accessible from any browser vs. desktop-only GUI.

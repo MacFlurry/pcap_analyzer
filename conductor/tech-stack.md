@@ -18,6 +18,7 @@
 
 ## Security
 - **Authentication:** JWT for stateless authentication
+- **Two-Factor Authentication (2FA):** pyotp for TOTP generation and verification, qrcode for QR code generation
 - **Password Hashing:** Passlib (bcrypt/Argon2id) with zxcvbn strength validation
 - **CSRF Protection:** fastapi-csrf-protect library
 - **Input Validation:**

@@ -25,7 +25,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 ---
 
 ## [x] Track: Vérification et Tests E2E v4.27.3
-*Link: [./conductor/tracks/v4_27_3_verification/](./conductor/tracks/v4_27_3_verification/)*
+*Link: [./conductor/archive/tracks/v4_27_3_verification/](./conductor/archive/tracks/v4_27_3_verification/)*
 
 ## [x] Track: Documentation v5.0 (#28)
 *Link: [./conductor/archive/v5_0_documentation/](./conductor/archive/v5_0_documentation/)*
@@ -39,8 +39,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 ## [x] Track: Fix User Deletion Orphaned Files
 *Link: [./conductor/archive/tracks/fix_user_deletion_orphaned_files/](./conductor/archive/tracks/fix_user_deletion_orphaned_files/)*
 
-## [~] Track: Release Candidate v5.0.0-rc1 Preparation
-*Link: [./conductor/tracks/v5_0_0_rc1_preparation/](./conductor/tracks/v5_0_0_rc1_preparation/)*
+## [x] Track: Release Candidate v5.0.0-rc1 Preparation
+*Link: [./conductor/archive/tracks/v5_0_0_rc1_preparation/](./conductor/archive/tracks/v5_0_0_rc1_preparation/)*
 
 
 
