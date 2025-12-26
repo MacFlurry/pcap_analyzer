@@ -24,6 +24,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
+## [ ] Track: Hardening Client-Side Authentication (Defense in Depth)
+*Link: [./conductor/tracks/client_side_auth_hardening/](./conductor/tracks/client_side_auth_hardening/)*
+
 ## [x] Track: Vérification et Tests E2E v4.27.3
 *Link: [./conductor/archive/tracks/v4_27_3_verification/](./conductor/archive/tracks/v4_27_3_verification/)*
 
