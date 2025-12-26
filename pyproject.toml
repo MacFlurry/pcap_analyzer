@@ -62,6 +62,9 @@ dependencies = [
     "email-validator>=2.0.0",  # EmailStr validation in Pydantic
     "fastapi-csrf-protect>=0.3.4,<1.0",  # CSRF protection (OWASP ASVS 4.2.2)
     "zxcvbn>=4.5.0,<5.0",  # Password strength estimation (Issue #23)
+    "pyotp>=2.9.0,<3.0",  # TOTP 2FA (v4.28.0)
+    "qrcode>=7.4.0,<8.0",  # QR code generation for 2FA setup (v4.28.0)
+    "Pillow>=10.0.0",  # Image library for QR code generation (v4.28.0)
 ]
 
 [project.optional-dependencies]

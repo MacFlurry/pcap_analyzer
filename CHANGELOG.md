@@ -7,6 +7,11 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [4.28.3] - 2025-12-26
+
+### 🔧 Fixes
+- **Dependencies**: Ajout des dépendances 2FA manquantes (`pyotp`, `qrcode`, `Pillow`) dans `pyproject.toml` pour corriger le crash au démarrage.
+
 ## [4.28.2] - 2025-12-26
 
 ### 📝 Documentation & Configuration

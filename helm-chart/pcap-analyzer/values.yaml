@@ -3,7 +3,7 @@ replicaCount: 1
 
 image:
   repository: pcap-analyzer
-  tag: v4.28.2
+  tag: v4.28.3
   pullPolicy: Never  # Use local image for kind
 
 service:
