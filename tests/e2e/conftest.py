@@ -18,7 +18,6 @@ from alembic import command
 from alembic.config import Config
 from testcontainers.postgres import PostgresContainer
 
-from app.main import app
 from app.models.user import User
 
 from tests.conftest import test_data_dir
@@ -43,11 +42,13 @@ def postgres_container():
             async_db_url = db_url.replace("postgresql+psycopg2://", "postgresql://")
         else:
             async_db_url = db_url
+        
+        # Set it early for the session
+        os.environ["DATABASE_URL"] = async_db_url
         yield async_db_url
 
 @pytest.fixture(scope="session")
 def postgres_db_url(postgres_container):
-    os.environ["DATABASE_URL"] = postgres_container
     return postgres_container
 
 @pytest.fixture(scope="session")
@@ -82,7 +83,19 @@ class UvicornThread(threading.Thread):
 def server_url(postgres_db_url, apply_migrations, tmp_path_factory) -> Generator[str, None, None]:
     data_dir = tmp_path_factory.mktemp("e2e_data")
     os.environ["DATA_DIR"] = str(data_dir)
+    os.environ["DATABASE_URL"] = postgres_db_url
     os.environ["SECRET_KEY"] = "test_secret_key_must_be_32_chars_long_min"
+    
+    # Import app here after env vars are set
+    from app.main import app
+    
+    # Reset all singletons to pick up new environment variables
+    from app.services import database, worker, user_database, postgres_database, analyzer
+    database._db_service = None
+    worker._worker = None
+    user_database._user_db_service = None
+    postgres_database._db_pool = None
+    analyzer._analyzer_service = None
     
     port = get_free_port()
     host = "127.0.0.1"

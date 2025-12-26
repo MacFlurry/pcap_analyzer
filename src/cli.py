@@ -431,7 +431,7 @@ def analyze_pcap_hybrid(
 
             if packet_count % PROGRESS_UPDATE_INTERVAL == 0:
                 # Update progress: 5-50% range for Phase 1
-                percent = 5 + int((packet_count / total_packets) * 45)
+                percent = 5 + int((packet_count / max(1, total_packets)) * 45)
                 progress_callback("metadata_extraction", percent, f"{packet_count:,}/{total_packets:,} paquets")
     else:
         # CLI mode: Rich Progress bars
@@ -573,7 +573,7 @@ def analyze_pcap_hybrid(
 
                         if i % PROGRESS_UPDATE_INTERVAL == 0:
                             # Update progress: 50-75% range for Phase 2 loading
-                            percent = 50 + int((i / total_packets) * 25)
+                            percent = 50 + int((i / max(1, total_packets)) * 25)
                             progress_callback("scapy_loading", percent, f"{i:,}/{total_packets:,} paquets")
             else:
                 # CLI mode
@@ -627,7 +627,7 @@ def analyze_pcap_hybrid(
 
                         if packet_idx % PROGRESS_UPDATE_INTERVAL == 0:
                             # Update progress: 50-75% range for Phase 2 loading
-                            percent = 50 + int((packet_idx / total_packets) * 25)
+                            percent = 50 + int((packet_idx / max(1, total_packets)) * 25)
                             progress_callback("scapy_loading", percent, f"{packet_idx:,}/{total_packets:,} paquets")
 
                     # Trigger GC after each chunk if under memory pressure (Fix for Issue #4)

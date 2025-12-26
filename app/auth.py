@@ -129,6 +129,34 @@ def create_access_token(user: User, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+async def get_current_user_from_token(token: str, user_db) -> User:
+    """Helper to validate token and return user."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        secret_key = get_secret_key()
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except (JWTError, ValidationError):
+        raise credentials_exception
+
+    user = await user_db.get_user_by_id(user_id)
+    if user is None:
+        raise credentials_exception
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive",
+        )
+    return user
+
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     """
     Extract and validate current user from JWT token.
@@ -140,65 +168,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
         Current authenticated user
 
     Raises:
-        HTTPException 401: If token is invalid/expired or user not found
-
-    Security:
-    - Validates JWT signature
-    - Checks expiration
-    - Verifies user still exists and is active
+        HTTPException 401: If token is invalid or user doesn't exist
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    from app.services.user_database import get_user_db_service
 
-    try:
-        # Decode and validate JWT
-        secret_key = get_secret_key()
-        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
-
-        # Extract user info from token
-        user_id: str = payload.get("sub")
-        username: str = payload.get("username")
-        role_str: str = payload.get("role")
-
-        if user_id is None or username is None or role_str is None:
-            logger.warning("Invalid token payload (missing fields)")
-            raise credentials_exception
-
-        # Create TokenData for validation
-        token_data = TokenData(
-            sub=user_id,
-            username=username,
-            role=UserRole(role_str),
-            exp=datetime.fromtimestamp(payload.get("exp"), tz=timezone.utc),
-        )
-
-    except JWTError as e:
-        logger.warning(f"JWT validation failed: {e}")
-        raise credentials_exception
-
-    except ValidationError as e:
-        logger.warning(f"Token data validation failed: {e}")
-        raise credentials_exception
-
-    # Get user from database (verify still exists and active)
     user_db = get_user_db_service()
-    user = await user_db.get_user_by_id(token_data.sub)
-
-    if user is None:
-        logger.warning(f"User from token not found: {token_data.sub}")
-        raise credentials_exception
-
-    if not user.is_active:
-        logger.warning(f"User from token is inactive: {user.username}")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive",
-        )
-
-    return user
+    return await get_current_user_from_token(token, user_db)
 
 
 async def get_current_user_sse(

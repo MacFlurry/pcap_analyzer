@@ -59,7 +59,7 @@ async def client():
         admin_user = UserCreate(
             username="admin",
             email="admin@example.com",
-            password="testpass1234"
+            password="Correct-Horse-Battery-Staple-2025!"
         )
         await user_db_service.create_user(admin_user, role=UserRole.ADMIN, auto_approve=True)
 
@@ -136,7 +136,7 @@ class TestLogin:
         """Test successful login with admin credentials."""
         response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
 
         assert response.status_code == 200
@@ -245,7 +245,7 @@ class TestGetCurrentUser:
 
     async def test_get_current_user_with_valid_token(self, client: AsyncClient):
         """Test getting current user info with valid token."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await client.get(
             "/api/users/me",
@@ -332,7 +332,7 @@ class TestAdminListUsers:
 
     async def test_admin_list_users(self, client: AsyncClient):
         """Test that admin can list all users."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await client.get(
             "/api/users",
@@ -350,7 +350,7 @@ class TestAdminListUsers:
 
     async def test_admin_list_users_with_limit(self, client: AsyncClient):
         """Test listing users with limit parameter."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await client.get(
             "/api/users?limit=1",
@@ -378,7 +378,7 @@ class TestAdminApproveUser:
 
     async def test_admin_approve_user(self, client: AsyncClient):
         """Test that admin can approve unapproved user."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Get unapproved user ID
         users_response = await client.get(
@@ -402,7 +402,7 @@ class TestAdminApproveUser:
 
     async def test_approve_nonexistent_user(self, client: AsyncClient):
         """Test approving non-existent user returns 404."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await client.put(
             "/api/admin/users/nonexistent-id/approve",
@@ -417,7 +417,7 @@ class TestAdminBlockUser:
 
     async def test_admin_block_user(self, client: AsyncClient):
         """Test that admin can block a user."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Get user1 ID
         users_response = await client.get(
@@ -447,7 +447,7 @@ class TestAdminBlockUser:
 
     async def test_admin_cannot_block_self(self, client: AsyncClient):
         """Test that admin cannot block their own account."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Get admin ID
         users_response = await client.get(
@@ -469,7 +469,7 @@ class TestAdminBlockUser:
 
     async def test_block_nonexistent_user(self, client: AsyncClient):
         """Test blocking non-existent user returns 404."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await client.put(
             "/api/admin/users/nonexistent-id/block",
@@ -484,7 +484,7 @@ class TestAdminCreateUser:
 
     async def test_admin_create_user_with_temporary_password(self, client: AsyncClient):
         """Test that admin can create user with temporary password."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await client.post(
             "/api/admin/users",
@@ -518,7 +518,7 @@ class TestAdminUnblockUser:
 
     async def test_admin_unblock_user(self, client: AsyncClient):
         """Test that admin can unblock a blocked user."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # First, create and block a user
         # Create a new user
@@ -528,7 +528,7 @@ class TestAdminUnblockUser:
         new_user = UserCreate(
             username="blocktest",
             email="blocktest@example.com",
-            password="testpass1234"
+            password="Correct-Horse-Battery-Staple-2025!"
         )
         created_user = await user_db.create_user(new_user, role=UserRole.USER, auto_approve=True)
 
@@ -553,7 +553,7 @@ class TestAdminUnblockUser:
 
     async def test_admin_unblock_nonexistent_user(self, client: AsyncClient):
         """Test unblocking non-existent user returns 404."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await client.put(
             "/api/admin/users/00000000-0000-0000-0000-000000000000/unblock",
@@ -580,7 +580,7 @@ class TestAdminDeleteUser:
 
     async def test_admin_delete_user(self, client: AsyncClient):
         """Test that admin can delete users (DELETE /api/admin/users/{id})."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Create a test user to delete
         from app.services.user_database import get_user_db_service
@@ -589,7 +589,7 @@ class TestAdminDeleteUser:
         new_user = UserCreate(
             username="deletetest",
             email="deletetest@example.com",
-            password="testpass1234"
+            password="Correct-Horse-Battery-Staple-2025!"
         )
         created_user = await user_db.create_user(new_user, role=UserRole.USER, auto_approve=True)
 
@@ -605,13 +605,13 @@ class TestAdminDeleteUser:
         # Verify user cannot login
         login_response = await client.post(
             "/api/token",
-            data={"username": "deletetest", "password": "testpass1234"}
+            data={"username": "deletetest", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         assert login_response.status_code == 401
 
     async def test_admin_delete_nonexistent_user(self, client: AsyncClient):
         """Test deleting non-existent user returns 404."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await client.delete(
             "/api/admin/users/00000000-0000-0000-0000-000000000000",
@@ -622,7 +622,7 @@ class TestAdminDeleteUser:
 
     async def test_admin_cannot_delete_self(self, client: AsyncClient):
         """Test that admin cannot delete their own account."""
-        token = await get_auth_token(client, "admin", "testpass1234")
+        token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Get admin's user ID
         me_response = await client.get(
@@ -653,12 +653,12 @@ class TestSessionInvalidation:
         new_user = UserCreate(
             username="sessiontest",
             email="sessiontest@example.com",
-            password="testpass1234"
+            password="Correct-Horse-Battery-Staple-2025!"
         )
         created_user = await user_db.create_user(new_user, role=UserRole.USER, auto_approve=True)
 
         # User logs in and gets token
-        user_token = await get_auth_token(client, "sessiontest", "testpass1234")
+        user_token = await get_auth_token(client, "sessiontest", "Correct-Horse-Battery-Staple-2025!")
 
         # Verify token works
         response1 = await client.get(
@@ -668,7 +668,7 @@ class TestSessionInvalidation:
         assert response1.status_code == 200
 
         # Admin blocks user
-        admin_token = await get_auth_token(client, "admin", "testpass1234")
+        admin_token = await get_auth_token(client, "admin", "Correct-Horse-Battery-Staple-2025!")
         block_response = await client.put(
             f"/api/admin/users/{created_user.id}/block",
             headers={"Authorization": f"Bearer {admin_token}"}
@@ -729,7 +729,7 @@ class TestBulkUserActions:
         # Login as admin
         admin_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         admin_token = admin_response.json()["access_token"]
 
@@ -769,7 +769,7 @@ class TestBulkUserActions:
         # Login as admin
         admin_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         admin_token = admin_response.json()["access_token"]
 
@@ -808,7 +808,7 @@ class TestBulkUserActions:
         # Login as admin
         admin_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         admin_token = admin_response.json()["access_token"]
 
@@ -840,13 +840,13 @@ class TestBulkUserActions:
         # Admin approves regular user
         admin_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         admin_token = admin_response.json()["access_token"]
 
         regular_user_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         # Approve regular user first
         users_response = await client.get(
@@ -894,7 +894,7 @@ class TestBulkUserActions:
         # Login as admin and approve users
         admin_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         admin_token = admin_response.json()["access_token"]
 
@@ -923,7 +923,7 @@ class TestBulkUserActions:
         # Login as admin
         admin_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         admin_token = admin_response.json()["access_token"]
 
@@ -967,7 +967,7 @@ class TestBulkUserActions:
         # Login as admin
         admin_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         admin_token = admin_response.json()["access_token"]
 
@@ -1001,7 +1001,7 @@ class TestBulkUserActions:
         # Login as admin
         admin_response = await client.post(
             "/api/token",
-            data={"username": "admin", "password": "testpass1234"}
+            data={"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
         )
         admin_token = admin_response.json()["access_token"]
 

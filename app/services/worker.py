@@ -16,6 +16,8 @@ from app.models.schemas import TaskStatus
 from app.services.analyzer import AnalyzerService, ProgressCallback, get_analyzer_service
 from app.services.database import DatabaseService, get_db_service
 
+from app.utils.config import get_data_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -374,7 +376,7 @@ def get_worker() -> AnalysisWorker:
     """
     global _worker
     if _worker is None:
-        data_dir = os.getenv("DATA_DIR", "/data")
+        data_dir = get_data_dir()
         max_queue_size = int(os.getenv("MAX_QUEUE_SIZE", "5"))
-        _worker = AnalysisWorker(max_queue_size=max_queue_size, data_dir=data_dir)
+        _worker = AnalysisWorker(max_queue_size=max_queue_size, data_dir=str(data_dir))
     return _worker

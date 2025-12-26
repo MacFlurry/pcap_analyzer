@@ -64,9 +64,9 @@ async def client():
 
         # Create test regular user
         regular_user = UserCreate(
-            username="user1",
-            email="user1@example.com",
-            password="user_password"
+            username="regular_user",
+            email="user@example.com",
+            password="Correct-Horse-Battery-Staple-2025!"
         )
         await user_db_service.create_user(regular_user, role=UserRole.USER, auto_approve=True)
 

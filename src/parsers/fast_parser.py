@@ -224,6 +224,19 @@ class FastPacketParser:
             elif datalink == dpkt.pcap.DLT_EN10MB:  # 1 - Ethernet
                 eth = dpkt.ethernet.Ethernet(buf)
                 ip_packet = eth.data
+            elif datalink == 12 or (hasattr(dpkt.pcap, "DLT_RAW") and datalink == dpkt.pcap.DLT_RAW):
+                # 12 - Raw IP (no datalink header)
+                ip_packet = dpkt.ip.IP(buf)
+            elif datalink == 228 or (hasattr(dpkt.pcap, "DLT_IPV4") and datalink == dpkt.pcap.DLT_IPV4):
+                # 228 - Raw IPv4
+                ip_packet = dpkt.ip.IP(buf)
+            elif datalink == 229 or (hasattr(dpkt.pcap, "DLT_IPV6") and datalink == dpkt.pcap.DLT_IPV6):
+                # 229 - Raw IPv6
+                ip_packet = dpkt.ip6.IP6(buf)
+            elif datalink == 0 or (hasattr(dpkt.pcap, "DLT_NULL") and datalink == dpkt.pcap.DLT_NULL):
+                # 0 - BSD loopback
+                # The first 4 bytes are the protocol family (AF_INET, etc.)
+                ip_packet = dpkt.ip.IP(buf[4:])
             else:
                 # Try to guess the format (fallback for other datalink types)
                 try:

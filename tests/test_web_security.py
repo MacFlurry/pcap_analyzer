@@ -37,7 +37,7 @@ async def get_test_jwt_token(client: AsyncClient) -> str:
         JWT token string
     """
     # Login with test admin credentials (same as fixture)
-    credentials = {"username": "admin", "password": "testpass1234"}
+    credentials = {"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
     response = await client.post("/api/token", data=credentials)
 
     if response.status_code != 200:
@@ -193,7 +193,7 @@ class TestAuthentication:
 
     async def test_login_with_valid_credentials(self, client: AsyncClient):
         """Test login with valid credentials returns JWT token."""
-        credentials = {"username": "admin", "password": "testpass1234"}
+        credentials = {"username": "admin", "password": "Correct-Horse-Battery-Staple-2025!"}
 
         response = await client.post("/api/token", data=credentials)
 
@@ -620,7 +620,7 @@ async def client():
         admin_user = UserCreate(
             username="admin",
             email="admin@example.com",
-            password="testpass1234"  # 12 chars minimum for NIST SP 800-63B
+            password="Correct-Horse-Battery-Staple-2025!"  # 12 chars minimum for NIST SP 800-63B
         )
         await user_db_service.create_user(admin_user, role=UserRole.ADMIN, auto_approve=True)
 

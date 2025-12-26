@@ -18,7 +18,7 @@ pytestmark = pytest.mark.asyncio
 @pytest.mark.unit
 def test_get_progress_nonexistent_task(client: TestClient):
     """Test getting progress for non-existent task"""
-    response = client.get("/api/progress/nonexistent-task")
+    response = client.get("/api/progress/12345678-1234-4321-8123-123456789000")
 
     # Should return 404 or start SSE stream with error
     assert response.status_code in [200, 404]
@@ -27,7 +27,7 @@ def test_get_progress_nonexistent_task(client: TestClient):
 @pytest.mark.unit
 def test_get_task_status_nonexistent(client: TestClient):
     """Test getting status for non-existent task"""
-    response = client.get("/api/status/nonexistent-task")
+    response = client.get("/api/status/12345678-1234-4321-8123-123456789000")
 
     assert response.status_code == 404
 
@@ -100,13 +100,13 @@ async def async_client():
         await user_db_service.migrate_tasks_table()
 
         # Create test users
-        admin_user = UserCreate(username="admin", email="admin@example.com", password="testpass1234")
+        admin_user = UserCreate(username="admin", email="admin@example.com", password="Correct-Horse-Battery-Staple-2025!")
         await user_db_service.create_user(admin_user, role=UserRole.ADMIN, auto_approve=True)
 
-        user_a = UserCreate(username="userA", email="userA@example.com", password="testpass1234")
+        user_a = UserCreate(username="userA", email="userA@example.com", password="Correct-Horse-Battery-Staple-2025!")
         await user_db_service.create_user(user_a, role=UserRole.USER, auto_approve=True)
 
-        user_b = UserCreate(username="userB", email="userB@example.com", password="testpass1234")
+        user_b = UserCreate(username="userB", email="userB@example.com", password="Correct-Horse-Battery-Staple-2025!")
         await user_db_service.create_user(user_b, role=UserRole.USER, auto_approve=True)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -171,14 +171,14 @@ async def test_user_cannot_view_other_task_status(async_client):
 
     # User A creates a task
     task_a = await db.create_task(
-        task_id="task-userA-001",
+        task_id="12345678-1234-4321-8123-1234567890a1",
         filename="userA.pcap",
         file_size_bytes=1024,
         owner_id=user_a_obj.id
     )
 
     # User B tries to access User A's task status
-    token_b = await get_auth_token(async_client, "userB", "testpass1234")
+    token_b = await get_auth_token(async_client, "userB", "Correct-Horse-Battery-Staple-2025!")
     response = await async_client.get(
         f"/api/status/{task_a.task_id}",
         headers={"Authorization": f"Bearer {token_b}"}
@@ -202,14 +202,14 @@ async def test_admin_can_view_all_task_status(async_client):
 
     # User A creates a task
     task_a = await db.create_task(
-        task_id="task-userA-002",
+        task_id="12345678-1234-4321-8123-1234567890a2",
         filename="userA2.pcap",
         file_size_bytes=1024,
         owner_id=user_a_obj.id
     )
 
     # Admin accesses User A's task status
-    admin_token = await get_auth_token(async_client, "admin", "testpass1234")
+    admin_token = await get_auth_token(async_client, "admin", "Correct-Horse-Battery-Staple-2025!")
     response = await async_client.get(
         f"/api/status/{task_a.task_id}",
         headers={"Authorization": f"Bearer {admin_token}"}
@@ -233,14 +233,14 @@ async def test_history_filtered_by_owner(async_client):
     user_b_obj = await user_db.get_user_by_username("userB")
 
     # User A creates 2 tasks
-    await db.create_task(task_id="task-A-1", filename="a1.pcap", file_size_bytes=100, owner_id=user_a_obj.id)
-    await db.create_task(task_id="task-A-2", filename="a2.pcap", file_size_bytes=100, owner_id=user_a_obj.id)
+    await db.create_task(task_id="12345678-1234-4321-8123-1234567890a3", filename="a1.pcap", file_size_bytes=100, owner_id=user_a_obj.id)
+    await db.create_task(task_id="12345678-1234-4321-8123-1234567890a4", filename="a2.pcap", file_size_bytes=100, owner_id=user_a_obj.id)
 
     # User B creates 1 task
-    await db.create_task(task_id="task-B-1", filename="b1.pcap", file_size_bytes=100, owner_id=user_b_obj.id)
+    await db.create_task(task_id="12345678-1234-4321-8123-1234567890b1", filename="b1.pcap", file_size_bytes=100, owner_id=user_b_obj.id)
 
     # User A gets history
-    token_a = await get_auth_token(async_client, "userA", "testpass1234")
+    token_a = await get_auth_token(async_client, "userA", "Correct-Horse-Battery-Staple-2025!")
     response_a = await async_client.get(
         "/api/history",
         headers={"Authorization": f"Bearer {token_a}"}
@@ -252,9 +252,9 @@ async def test_history_filtered_by_owner(async_client):
     # User A should only see their own 2 tasks
     task_ids_a = [task["task_id"] for task in data_a["tasks"]]
     assert len(task_ids_a) == 2
-    assert "task-A-1" in task_ids_a
-    assert "task-A-2" in task_ids_a
-    assert "task-B-1" not in task_ids_a
+    assert "12345678-1234-4321-8123-1234567890a3" in task_ids_a
+    assert "12345678-1234-4321-8123-1234567890a4" in task_ids_a
+    assert "12345678-1234-4321-8123-1234567890b1" not in task_ids_a
 
 
 @pytest.mark.unit
@@ -271,14 +271,14 @@ async def test_history_admin_sees_all(async_client):
     user_b_obj = await user_db.get_user_by_username("userB")
 
     # User A creates 2 tasks
-    await db.create_task(task_id="task-admin-A-1", filename="a1.pcap", file_size_bytes=100, owner_id=user_a_obj.id)
-    await db.create_task(task_id="task-admin-A-2", filename="a2.pcap", file_size_bytes=100, owner_id=user_a_obj.id)
+    await db.create_task(task_id="12345678-1234-4321-8123-1234567890c1", filename="a1.pcap", file_size_bytes=100, owner_id=user_a_obj.id)
+    await db.create_task(task_id="12345678-1234-4321-8123-1234567890c2", filename="a2.pcap", file_size_bytes=100, owner_id=user_a_obj.id)
 
     # User B creates 1 task
-    await db.create_task(task_id="task-admin-B-1", filename="b1.pcap", file_size_bytes=100, owner_id=user_b_obj.id)
+    await db.create_task(task_id="12345678-1234-4321-8123-1234567890c3", filename="b1.pcap", file_size_bytes=100, owner_id=user_b_obj.id)
 
     # Admin gets history
-    admin_token = await get_auth_token(async_client, "admin", "testpass1234")
+    admin_token = await get_auth_token(async_client, "admin", "Correct-Horse-Battery-Staple-2025!")
     response_admin = await async_client.get(
         "/api/history",
         headers={"Authorization": f"Bearer {admin_token}"}
@@ -290,6 +290,6 @@ async def test_history_admin_sees_all(async_client):
     # Admin should see all 3 tasks
     task_ids = [task["task_id"] for task in data_admin["tasks"]]
     assert len(task_ids) == 3
-    assert "task-admin-A-1" in task_ids
-    assert "task-admin-A-2" in task_ids
-    assert "task-admin-B-1" in task_ids
+    assert "12345678-1234-4321-8123-1234567890c1" in task_ids
+    assert "12345678-1234-4321-8123-1234567890c2" in task_ids
+    assert "12345678-1234-4321-8123-1234567890c3" in task_ids

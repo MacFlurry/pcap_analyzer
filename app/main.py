@@ -4,6 +4,7 @@ PCAP Analyzer Web API - Main FastAPI Application
 
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -29,10 +30,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Démarrage/arrêt cleanup scheduler
-data_dir = os.getenv("DATA_DIR", "/data")
-retention_hours = int(os.getenv("REPORT_TTL_HOURS", "24"))
-cleanup_scheduler = CleanupScheduler(data_dir=data_dir, retention_hours=retention_hours)
+# temps de démarrage pour calcul uptime
+start_time = time.time()
+
+# Scheduler sera initialisé dans lifespan
+cleanup_scheduler = None
 
 
 @asynccontextmanager
@@ -41,7 +43,13 @@ async def lifespan(app: FastAPI):
     Lifespan context manager pour démarrage/arrêt de l'application.
     Démarre le scheduler de cleanup au démarrage, l'arrête à la fin.
     """
+    global cleanup_scheduler
     logger.info("Starting PCAP Analyzer Web API")
+
+    # Initialisation dynamique du scheduler
+    data_dir = os.getenv("DATA_DIR", "/data")
+    retention_hours = int(os.getenv("REPORT_TTL_HOURS", "24"))
+    cleanup_scheduler = CleanupScheduler(data_dir=data_dir, retention_hours=retention_hours)
 
     # Initialiser la base de données
     db_service = get_db_service()
@@ -83,6 +91,12 @@ async def lifespan(app: FastAPI):
     # Arrêter cleanup scheduler
     cleanup_scheduler.stop()
     logger.info("Cleanup scheduler stopped")
+
+    # Fermer les pools de connexion
+    await db_service.pool.close()
+    await user_db_service.pool.close()
+    logger.info("Database pools closed")
+    
     logger.info("PCAP Analyzer Web API shutdown complete")
 
 

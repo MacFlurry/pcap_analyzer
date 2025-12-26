@@ -59,7 +59,7 @@ async def client():
         admin_user = UserCreate(
             username="admin",
             email="admin@example.com",
-            password="testpass1234"
+            password="Correct-Horse-Battery-Staple-2025!"
         )
         admin = await user_db_service.create_user(admin_user, role=UserRole.ADMIN, auto_approve=True)
 
@@ -147,7 +147,7 @@ class TestGetHTMLReport:
     async def test_get_html_report_with_valid_token(self, client):
         """Test that owner can access their HTML report."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.get(
             f"/api/reports/{task1_id}/html",
@@ -161,7 +161,7 @@ class TestGetHTMLReport:
     async def test_get_html_report_with_token_in_query_param(self, client):
         """Test that HTML report can be accessed via query param token (browser compatibility)."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.get(f"/api/reports/{task1_id}/html?token={token}")
 
@@ -171,7 +171,7 @@ class TestGetHTMLReport:
     async def test_get_html_report_not_found(self, client):
         """Test accessing non-existent report."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Task doesn't exist
         response = await ac.get(
@@ -206,7 +206,7 @@ class TestGetHTMLReport:
     async def test_get_html_report_path_traversal_rejected(self, client):
         """Test that path traversal attempts are rejected."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Try path traversal
         response = await ac.get(
@@ -224,7 +224,7 @@ class TestGetJSONReport:
     async def test_get_json_report_with_valid_token(self, client):
         """Test that owner can access their JSON report."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.get(
             f"/api/reports/{task1_id}/json",
@@ -237,7 +237,7 @@ class TestGetJSONReport:
     async def test_get_json_report_not_found(self, client):
         """Test accessing non-existent JSON report."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.get(
             "/api/reports/550e8400-e29b-41d4-a716-446655440999/json",
@@ -266,7 +266,7 @@ class TestDeleteReport:
     async def test_delete_report_success(self, client):
         """Test that owner can delete their reports."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Get CSRF token
         csrf_response = await ac.get(
@@ -298,7 +298,7 @@ class TestDeleteReport:
     async def test_delete_report_without_csrf_token(self, client):
         """Test that delete requires CSRF token."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.delete(
             f"/api/reports/{task1_id}",
@@ -334,7 +334,7 @@ class TestDeleteReport:
     async def test_delete_nonexistent_report(self, client):
         """Test deleting non-existent report."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         csrf_response = await ac.get(
             "/api/csrf/token",

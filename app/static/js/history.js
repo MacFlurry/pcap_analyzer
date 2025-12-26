@@ -217,6 +217,16 @@ class HistoryManager {
                 <input type="checkbox" class="checkbox-modern task-checkbox" data-task-id="${escapedTaskId}">
             `;
             const checkbox = checkboxCell.querySelector('.task-checkbox');
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    this.selectedTasks.add(task.task_id);
+                } else {
+                    this.selectedTasks.delete(task.task_id);
+                }
+                this.updateSelectionUI();
+            });
+        }
+        
         // Filename cell
         const filenameCell = document.createElement('div');
         filenameCell.className = 'grid-cell grid-cell-file';

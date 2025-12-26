@@ -16,6 +16,7 @@ from app.models.user import User
 from app.security.csrf import validate_csrf_token
 from app.services.database import get_db_service
 from app.services.worker import get_worker
+from app.utils.config import get_uploads_dir
 from app.utils.path_validator import validate_filename, validate_path_in_directory
 from app.utils.file_validator import validate_pcap_upload_complete
 
@@ -26,8 +27,6 @@ router = APIRouter()
 # Configuration via variables d'environnement
 MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "500"))
 ALLOWED_EXTENSIONS = {".pcap", ".pcapng"}
-DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
-UPLOADS_DIR = DATA_DIR / "uploads"
 
 
 def validate_pcap_file(filename: str, file_size: int) -> None:
@@ -141,14 +140,17 @@ async def upload_pcap(
     # Générer un task_id unique
     task_id = str(uuid.uuid4())
 
+    # Récupérer les répertoires dynamiquement (pour supporter les tests)
+    uploads_dir = get_uploads_dir()
+
     # Créer le répertoire uploads si nécessaire
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
 
     # Sauvegarder le fichier dans uploads/
-    upload_path = UPLOADS_DIR / f"{task_id}{Path(sanitized_filename).suffix}"
+    upload_path = uploads_dir / f"{task_id}{Path(sanitized_filename).suffix}"
 
-    # Defense-in-depth: Verify resolved path is within UPLOADS_DIR
-    upload_path = validate_path_in_directory(upload_path, UPLOADS_DIR)
+    # Defense-in-depth: Verify resolved path is within uploads_dir
+    upload_path = validate_path_in_directory(upload_path, uploads_dir)
 
     try:
         with open(upload_path, "wb") as f:

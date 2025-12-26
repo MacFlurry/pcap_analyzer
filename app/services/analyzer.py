@@ -13,6 +13,8 @@ from app.models.schemas import TaskStatus
 from src.cli import analyze_pcap_hybrid as cli_analyze_pcap_hybrid
 from src.config import get_config
 
+from app.utils.config import get_data_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -382,6 +384,6 @@ def get_analyzer_service() -> AnalyzerService:
     """
     global _analyzer_service
     if _analyzer_service is None:
-        data_dir = os.getenv("DATA_DIR", "/data")
-        _analyzer_service = AnalyzerService(data_dir=data_dir)
+        data_dir = get_data_dir()
+        _analyzer_service = AnalyzerService(data_dir=str(data_dir))
     return _analyzer_service

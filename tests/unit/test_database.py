@@ -31,9 +31,9 @@ async def test_init_db(test_db, db_type):
 @pytest.mark.db_parametrize
 async def test_create_task(test_db, db_type):
     """Test task creation (SQLite and PostgreSQL)"""
-    task = await test_db.create_task(task_id="test-123", filename="test.pcap", file_size_bytes=1024)
+    task = await test_db.create_task(task_id="00000000-0000-0000-0000-000000000123", filename="test.pcap", file_size_bytes=1024)
 
-    assert task.task_id == "test-123"
+    assert task.task_id == "00000000-0000-0000-0000-000000000123"
     assert task.filename == "test.pcap"
     assert task.file_size_bytes == 1024
     assert task.status == TaskStatus.PENDING
@@ -45,13 +45,13 @@ async def test_create_task(test_db, db_type):
 async def test_get_task(test_db, db_type):
     """Test retrieving a task (SQLite and PostgreSQL)"""
     # Create task
-    await test_db.create_task(task_id="test-456", filename="test2.pcap", file_size_bytes=2048)
+    await test_db.create_task(task_id="00000000-0000-0000-0000-000000000456", filename="test2.pcap", file_size_bytes=2048)
 
     # Retrieve task
-    task = await test_db.get_task("test-456")
+    task = await test_db.get_task("00000000-0000-0000-0000-000000000456")
 
     assert task is not None
-    assert task.task_id == "test-456"
+    assert task.task_id == "00000000-0000-0000-0000-000000000456"
     assert task.filename == "test2.pcap"
 
 
@@ -60,7 +60,7 @@ async def test_get_task(test_db, db_type):
 @pytest.mark.db_parametrize
 async def test_get_nonexistent_task(test_db, db_type):
     """Test retrieving a non-existent task (SQLite and PostgreSQL)"""
-    task = await test_db.get_task("nonexistent")
+    task = await test_db.get_task("00000000-0000-0000-0000-000000000000")
     assert task is None
 
 
@@ -70,13 +70,13 @@ async def test_get_nonexistent_task(test_db, db_type):
 async def test_update_status(test_db, db_type):
     """Test updating task status (SQLite and PostgreSQL)"""
     # Create task
-    await test_db.create_task(task_id="test-789", filename="test3.pcap", file_size_bytes=4096)
+    await test_db.create_task(task_id="00000000-0000-0000-0000-000000000789", filename="test3.pcap", file_size_bytes=4096)
 
     # Update status
-    await test_db.update_status("test-789", TaskStatus.PROCESSING)
+    await test_db.update_status("00000000-0000-0000-0000-000000000789", TaskStatus.PROCESSING)
 
     # Verify update
-    task = await test_db.get_task("test-789")
+    task = await test_db.get_task("00000000-0000-0000-0000-000000000789")
     assert task.status == TaskStatus.PROCESSING
 
 
@@ -86,11 +86,11 @@ async def test_update_status(test_db, db_type):
 async def test_update_results(test_db, db_type):
     """Test updating analysis results (SQLite and PostgreSQL)"""
     # Create task
-    await test_db.create_task(task_id="test-results", filename="results.pcap", file_size_bytes=8192)
+    await test_db.create_task(task_id="00000000-0000-0000-0000-000000000999", filename="results.pcap", file_size_bytes=8192)
 
     # Update results
     await test_db.update_results(
-        task_id="test-results",
+        task_id="00000000-0000-0000-0000-000000000999",
         total_packets=1000,
         health_score=85.5,
         report_html_path="/data/reports/test-results.html",
@@ -98,11 +98,11 @@ async def test_update_results(test_db, db_type):
     )
 
     # Verify
-    task = await test_db.get_task("test-results")
+    task = await test_db.get_task("00000000-0000-0000-0000-000000000999")
     assert task.total_packets == 1000
     assert task.health_score == 85.5
-    assert "/api/reports/test-results/html" == task.report_html_url
-    assert "/api/reports/test-results/json" == task.report_json_url
+    assert "/api/reports/00000000-0000-0000-0000-000000000999/html" == task.report_html_url
+    assert "/api/reports/00000000-0000-0000-0000-000000000999/json" == task.report_json_url
 
 
 @pytest.mark.unit
@@ -112,14 +112,14 @@ async def test_get_recent_tasks(test_db, db_type):
     """Test retrieving recent tasks (SQLite and PostgreSQL)"""
     # Create multiple tasks
     for i in range(5):
-        await test_db.create_task(task_id=f"task-{i}", filename=f"test{i}.pcap", file_size_bytes=1024 * i)
+        await test_db.create_task(task_id=f"00000000-0000-0000-0000-00000000000{i}", filename=f"test{i}.pcap", file_size_bytes=1024 * i)
 
     # Get recent tasks
     tasks = await test_db.get_recent_tasks(limit=3)
 
     assert len(tasks) == 3
     # Should be sorted by upload date (descending)
-    assert tasks[0].task_id == "task-4"
+    assert tasks[0].task_id == "00000000-0000-0000-0000-000000000004"
 
 
 @pytest.mark.unit
@@ -128,14 +128,14 @@ async def test_get_recent_tasks(test_db, db_type):
 async def test_get_stats(test_db, db_type):
     """Test getting statistics (SQLite and PostgreSQL)"""
     # Create tasks with different statuses
-    await test_db.create_task("pending-1", "p1.pcap", 100)
-    await test_db.create_task("pending-2", "p2.pcap", 100)
+    await test_db.create_task("00000000-0000-0000-0000-000000000011", "p1.pcap", 100)
+    await test_db.create_task("00000000-0000-0000-0000-000000000012", "p2.pcap", 100)
 
-    await test_db.create_task("completed-1", "c1.pcap", 100)
-    await test_db.update_status("completed-1", TaskStatus.COMPLETED)
+    await test_db.create_task("00000000-0000-0000-0000-000000000021", "c1.pcap", 100)
+    await test_db.update_status("00000000-0000-0000-0000-000000000021", TaskStatus.COMPLETED)
 
-    await test_db.create_task("failed-1", "f1.pcap", 100)
-    await test_db.update_status("failed-1", TaskStatus.FAILED)
+    await test_db.create_task("00000000-0000-0000-0000-000000000031", "f1.pcap", 100)
+    await test_db.update_status("00000000-0000-0000-0000-000000000031", TaskStatus.FAILED)
 
     # Get stats
     stats = await test_db.get_stats()

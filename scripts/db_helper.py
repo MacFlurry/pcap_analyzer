@@ -83,8 +83,10 @@ async def main():
         print(f"ERROR: {str(e)}", file=sys.stderr)
         sys.exit(1)
     finally:
-        if service.pool.pool:
-            await service.pool.close()
+        if user_service.pool.pool:
+            await user_service.pool.close()
+        if task_service.pool.pool:
+            await task_service.pool.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

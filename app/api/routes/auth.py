@@ -43,6 +43,7 @@ from app.models.user import (
 from app.services.email_service import get_email_service
 from app.services.user_database import get_user_db_service
 from app.services.database import get_db_service
+from app.utils.config import get_data_dir
 from app.utils.rate_limiter import get_rate_limiter
 
 logger = logging.getLogger(__name__)
@@ -795,7 +796,7 @@ async def delete_user(
     user_tasks = await db_service.get_recent_tasks(limit=10000, owner_id=user_id)
 
     # NEW: Delete physical files before deleting database records
-    data_dir = Path(os.getenv("DATA_DIR", "/data"))
+    data_dir = get_data_dir()
     uploads_dir = data_dir / "uploads"
     reports_dir = data_dir / "reports"
 

@@ -39,13 +39,21 @@ class DatabasePool:
             database_url: Database URL (format: dialect://...)
                          If None, uses DATABASE_URL env var or defaults to SQLite
         """
-        self.database_url = database_url or os.getenv(
-            "DATABASE_URL", "sqlite:///data/pcap_analyzer.db"
-        )
+        if not database_url:
+            database_url = os.getenv("DATABASE_URL")
+            if not database_url:
+                data_dir = os.getenv("DATA_DIR", "/data")
+                database_url = f"sqlite:///{os.path.join(data_dir, 'pcap_analyzer.db')}"
+        
+        self.database_url = database_url
 
         # Parse URL to detect database type
         parsed = urlparse(self.database_url)
         self.db_type = parsed.scheme.split("+")[0]  # Handle postgresql+asyncpg
+        
+        import traceback
+        logger.info(f"Database pool initialized: {self.db_type} from {self.database_url}")
+        # logger.debug("".join(traceback.format_stack()))
 
         # Connection pool (asyncpg for PostgreSQL)
         self.pool: Optional[asyncpg.Pool] = None

@@ -64,7 +64,7 @@ async def client():
         admin_user = UserCreate(
             username="admin",
             email="admin@example.com",
-            password="testpass1234"
+            password="Correct-Horse-Battery-Staple-2025!"
         )
         admin = await user_db_service.create_user(admin_user, role=UserRole.ADMIN, auto_approve=True)
 
@@ -144,7 +144,7 @@ class TestGetTaskStatus:
     async def test_get_task_status_success(self, client):
         """Test that owner can get their task status."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.get(
             f"/api/status/{task1_id}",
@@ -160,7 +160,7 @@ class TestGetTaskStatus:
     async def test_get_task_status_not_found(self, client):
         """Test getting status for non-existent task."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.get(
             "/api/status/550e8400-e29b-41d4-a716-446655440999",
@@ -199,7 +199,7 @@ class TestGetProgress:
     async def test_get_progress_task_not_found(self, client):
         """Test SSE for non-existent task."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        token = await get_auth_token(ac, "admin", "testpass1234")
+        token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         # Use try-except to handle potential timeout from non-existent task
         try:
@@ -249,7 +249,7 @@ class TestGetTaskHistory:
     async def test_get_history_admin_sees_all(self, client):
         """Test that admin sees all tasks in history."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        admin_token = await get_auth_token(ac, "admin", "testpass1234")
+        admin_token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.get(
             "/api/history",
@@ -287,7 +287,7 @@ class TestGetTaskHistory:
     async def test_get_history_with_limit(self, client):
         """Test history with limit parameter."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        admin_token = await get_auth_token(ac, "admin", "testpass1234")
+        admin_token = await get_auth_token(ac, "admin", "Correct-Horse-Battery-Staple-2025!")
 
         response = await ac.get(
             "/api/history?limit=1",

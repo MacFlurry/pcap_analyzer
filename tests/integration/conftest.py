@@ -8,9 +8,6 @@ import os
 import uuid
 import asyncio
 from httpx import AsyncClient, ASGITransport
-from testcontainers.postgres import PostgresContainer
-from alembic.config import Config
-from alembic import command
 
 from app.main import app
 from app.models.user import UserCreate, UserRole
@@ -18,74 +15,28 @@ from app.services.user_database import UserDatabaseService
 from app.services.database import DatabaseService
 from app.auth import create_access_token
 
-@pytest.fixture(scope="session")
-def postgres_container():
-    """
-    Spins up a PostgreSQL container for integration tests.
-    Returns the connection URL.
-    """
-    # Use postgres:15-alpine to match production recommendation
-    with PostgresContainer("postgres:15-alpine") as postgres:
-        # testcontainers waits for the container to be ready
-        
-        # Get connection URL
-        db_url = postgres.get_connection_url()
-        
-        # Ensure compatibility with asyncpg (used by the app)
-        if db_url.startswith("postgresql+psycopg2://"):
-            async_db_url = db_url.replace("postgresql+psycopg2://", "postgresql://")
-        else:
-            async_db_url = db_url
-            
-        yield async_db_url
-
-@pytest.fixture(scope="session")
-def postgres_db_url(postgres_container):
-    """
-    Sets the DATABASE_URL environment variable to the container's URL.
-    This ensures that any code reading os.environ["DATABASE_URL"] gets the test container.
-    """
-    os.environ["DATABASE_URL"] = postgres_container
-    return postgres_container
-
-@pytest.fixture(scope="session")
-def apply_migrations(postgres_db_url):
-    """
-    Applies Alembic migrations to the test container.
-    """
-    # Create Alembic configuration
-    alembic_cfg = Config("alembic.ini")
-    
-    # Override the sqlalchemy.url in the configuration
-    # We need to use the sync driver (psycopg2) for Alembic
-    sync_url = postgres_db_url.replace("postgresql://", "postgresql+psycopg2://")
-    alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
-    
-    # Run migrations
-    command.upgrade(alembic_cfg, "head")
-    
-    yield
-
 @pytest.fixture
-async def user_db(postgres_db_url, apply_migrations):
+async def user_db(postgres_db_url, apply_migrations, test_postgres_pool):
     """
     Fixture to provide a UserDatabaseService connected to the test container.
     """
     service = UserDatabaseService(database_url=postgres_db_url)
+    service.pool = test_postgres_pool
     await service.init_db()
     return service
 
 @pytest.fixture
-async def task_db(postgres_db_url, apply_migrations):
+async def task_db(postgres_db_url, apply_migrations, test_postgres_pool):
     """
     Fixture to provide a DatabaseService connected to the test container.
     """
     service = DatabaseService(database_url=postgres_db_url)
+    service.pool = test_postgres_pool
     await service.init_db()
     return service
 
 @pytest.fixture
-async def api_client(postgres_db_url, apply_migrations, test_data_dir, monkeypatch):
+async def api_client(postgres_db_url, apply_migrations, test_postgres_pool, test_data_dir, monkeypatch):
     """
     Async HTTP client for testing FastAPI endpoints.
     """
@@ -109,21 +60,20 @@ async def api_client(postgres_db_url, apply_migrations, test_data_dir, monkeypat
     monkeypatch.setattr(reports, "REPORTS_DIR", test_data_dir / "reports")
     monkeypatch.setattr(health, "DATA_DIR", test_data_dir)
     
-    # Explicitly initialize pools
+    # Explicitly initialize pools using shared pool
     db = database.get_db_service()
+    db.pool = test_postgres_pool
     await db.init_db()
     
     udb = user_database.get_user_db_service()
+    udb.pool = test_postgres_pool
     await udb.init_db()
     
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     
-    # Cleanup pools
-    if udb.pool.pool:
-        await udb.pool.close()
-    if db.pool.pool:
-        await db.pool.close()
+    # DO NOT Cleanup shared pool here
+    app.dependency_overrides = {}
 
 @pytest.fixture
 async def auth_user(user_db):
