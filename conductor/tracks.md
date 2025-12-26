@@ -17,7 +17,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Link: [./conductor/archive/tracks/v5_0_2fa_implementation/](./conductor/archive/tracks/v5_0_2fa_implementation/)*
 
 ## [x] Track: Fix User Deletion Orphaned Files
-*Link: [./conductor/tracks/fix_user_deletion_orphaned_files/](./conductor/tracks/fix_user_deletion_orphaned_files/)*
+*Link: [./conductor/archive/tracks/fix_user_deletion_orphaned_files/](./conductor/archive/tracks/fix_user_deletion_orphaned_files/)*
+
 
 
 
