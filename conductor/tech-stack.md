@@ -17,7 +17,7 @@
 - **Templating:** Jinja2
 
 ## Security
-- **Authentication:** JWT for stateless authentication
+- **Authentication:** Hybrid JWT (Authorization Headers + HttpOnly Cookies)
 - **Two-Factor Authentication (2FA):** pyotp for TOTP generation and verification, qrcode for QR code generation
 - **Password Hashing:** Passlib (bcrypt/Argon2id) with zxcvbn strength validation
 - **CSRF Protection:** fastapi-csrf-protect library
@@ -30,6 +30,7 @@
 ## Infrastructure & DevOps
 - **Containerization:** Docker (multi-stage builds)
 - **Orchestration:** Kubernetes with Helm charts
+- **Certificate Management:** cert-manager (Let's Encrypt automation)
 - **Local Development:** Docker Compose
 - **Web Server:** Uvicorn (ASGI) with Nginx reverse proxy
 

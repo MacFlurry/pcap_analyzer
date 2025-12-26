@@ -4,6 +4,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
+## [x] Track: Let's Encrypt with cert-manager on Kubernetes
+*Link: [./conductor/archive/tracks/letsencrypt_certmanager/](./conductor/archive/tracks/letsencrypt_certmanager/)*
+
 ## [x] Assistant Work: v4.28.2 & v4.28.3 - Documentation Email + Production Domain + Fix Dépendances 2FA
 *Date: 2025-12-26*
 *Report: [./conductor/ASSISTANT_REPORT_v4_28_2_v4_28_3.md](./conductor/ASSISTANT_REPORT_v4_28_2_v4_28_3.md)*
@@ -24,8 +27,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Hardening Client-Side Authentication (Defense in Depth)
-*Link: [./conductor/tracks/client_side_auth_hardening/](./conductor/tracks/client_side_auth_hardening/)*
+## [x] Track: Hardening Client-Side Authentication (Defense in Depth)
+*Link: [./conductor/archive/tracks/client_side_auth_hardening/](./conductor/archive/tracks/client_side_auth_hardening/)*
 
 ## [x] Track: Vérification et Tests E2E v4.27.3
 *Link: [./conductor/archive/tracks/v4_27_3_verification/](./conductor/archive/tracks/v4_27_3_verification/)*

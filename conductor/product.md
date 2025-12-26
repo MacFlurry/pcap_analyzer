@@ -42,7 +42,7 @@ An automated PCAP file analyzer for diagnosing network latency and performance i
 ## Security & Compliance
 
 ### Authentication & Authorization
-- **JWT Token Authentication:** Secure stateless authentication with configurable expiration.
+- **Hybrid JWT Authentication:** Secure authentication using both `Authorization: Bearer` headers (APIs) and HttpOnly `access_token` cookies (HTML pages) for robust defense-in-depth.
 - **Two-Factor Authentication (2FA):** Support for TOTP-based second factor (Google Authenticator, Authy) with backup codes.
 - **Role-Based Access Control (RBAC):** Admin and User roles with granular permissions.
 - **Password Security:** Passlib with bcrypt/Argon2id hashing and zxcvbn-based strength validation.
@@ -50,6 +50,8 @@ An automated PCAP file analyzer for diagnosing network latency and performance i
 
 ### Security Controls
 - **CSRF Protection:** fastapi-csrf-protect library with token validation.
+- **Server-Side Route Protection:** Automatic HTTP 307 redirection to login for unauthenticated users accessing protected HTML pages.
+- **Automated TLS:** Zero-touch certificate management via Let's Encrypt and cert-manager (auto-renewal).
 - **Path Traversal Prevention:** Validated file operations with magic number verification.
 - **Input Validation:** File size limits, PCAP format validation, decompression bomb protection.
 - **Output Sanitization:** XSS prevention via Jinja2 auto-escaping and CSP headers.
