@@ -111,7 +111,7 @@ Cette track implémente:
 
 **Objectif**: Implémenter réinitialisation admin et templates d'emails
 
-- [ ] **Task 3.1**: Endpoint `POST /api/admin/users/{user_id}/reset-password`
+- [x] **Task 3.1**: Endpoint `POST /api/admin/users/{user_id}/reset-password` (98e4aea)
   - Fichier: `app/api/routes/auth.py`
   - Input: `{"send_email": bool, "notify_user": bool}`
   - Réponse: `{"user_id", "username", "temporary_password", "message"}`
@@ -125,7 +125,7 @@ Cette track implémente:
     7. Si send_email: envoyer email, sinon retourner password
     8. Log AUDIT
 
-- [ ] **Task 3.2**: Ajouter méthodes email `EmailService`
+- [x] **Task 3.2**: Ajouter méthodes email `EmailService` (b64b314)
   - Fichier: `app/services/email_service.py`
   - `send_password_reset_request_email(user, reset_link, ip, timestamp)`
   - `send_password_reset_success_email(user, ip, timestamp)`
@@ -145,7 +145,7 @@ Cette track implémente:
   - Fichier: `app/templates/emails/admin_password_reset.html`
   - Contenu: notification reset admin, temp password (monospace), warning password_must_change, bouton login, détails admin/timestamp
 
-- [ ] **Task 3.6**: Tests intégration admin reset
+- [x] **Task 3.6**: Tests intégration admin reset (98e4aea)
   - Fichier: `tests/integration/test_admin_password_reset.py`
   - Test admin reset user → succès
   - Test admin reset admin → erreur 403
