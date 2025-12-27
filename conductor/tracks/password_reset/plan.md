@@ -132,33 +132,13 @@ Cette track implémente:
   - `send_admin_password_reset_email(user, temp_password, admin_username)`
   - Pattern: suivre `send_approval_email()` existant
 
-- [ ] **Task 3.3**: Template email "Demande de réinitialisation"
-  - Fichier: `app/templates/emails/password_reset_request.html`
-  - Contenu: salutation, explication, bouton reset, expiration 1h, single-use warning, détails IP/timestamp, contact support
-  - Style: suivre `account_approved.html`
-
-- [ ] **Task 3.4**: Template email "Réinitialisation réussie"
-  - Fichier: `app/templates/emails/password_reset_success.html`
-  - Contenu: confirmation, lien login, warning sécurité, détails IP/timestamp
-
-- [ ] **Task 3.5**: Template email "Admin reset"
-  - Fichier: `app/templates/emails/admin_password_reset.html`
-  - Contenu: notification reset admin, temp password (monospace), warning password_must_change, bouton login, détails admin/timestamp
-
+- [x] **Task 3.3**: Template email "Demande de réinitialisation" (bd92d5c)
+- [x] **Task 3.4**: Template email "Réinitialisation réussie" (bd92d5c)
+- [x] **Task 3.5**: Template email "Admin reset" (bd92d5c)
 - [x] **Task 3.6**: Tests intégration admin reset (98e4aea)
-  - Fichier: `tests/integration/test_admin_password_reset.py`
-  - Test admin reset user → succès
-  - Test admin reset admin → erreur 403
-  - Test user reset user → erreur 403
-  - Test password_must_change flag
-  - Test email envoyé vs password retourné
+- [x] **Task 3.7**: Tests unitaires emails (bd92d5c)
 
-- [ ] **Task 3.7**: Tests unitaires emails
-  - Fichier: `tests/unit/services/test_password_reset_emails.py`
-  - Test rendering templates
-  - Test variables substituées
-
-**Checkpoint Phase 3**: Admin reset fonctionnel, emails envoyés, tests passent
+**Checkpoint Phase 3**: Admin reset fonctionnel, emails envoyés, tests passent [checkpoint: bd92d5c]
 
 ---
 
