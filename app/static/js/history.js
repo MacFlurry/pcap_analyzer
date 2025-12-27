@@ -17,6 +17,7 @@ class HistoryManager {
 
         this.currentFilter = 'all';
         this.selectedTasks = new Set();
+        this.isAdmin = false;
 
         // Check authentication before initializing
         this.checkAuthentication().then(isAuth => {
@@ -48,6 +49,10 @@ class HistoryManager {
                 window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname);
                 return false;
             }
+
+            const user = await response.json();
+            this.isAdmin = user.role === 'admin';
+            console.log(`User role: ${user.role}, isAdmin: ${this.isAdmin}`);
 
             return true;
         } catch (error) {
@@ -190,6 +195,23 @@ class HistoryManager {
         this.selectAllCheckbox.checked = false;
         this.updateSelectionUI();
 
+        // Add admin-view class for CSS grid adjustment
+        if (this.isAdmin) {
+            this.historyContainer.classList.add('admin-view');
+        } else {
+            this.historyContainer.classList.remove('admin-view');
+        }
+
+        // Toggle owner column visibility based on admin role
+        const ownerColumnHeader = document.getElementById('owner-column-header');
+        if (ownerColumnHeader) {
+            if (this.isAdmin) {
+                ownerColumnHeader.classList.remove('hidden');
+            } else {
+                ownerColumnHeader.classList.add('hidden');
+            }
+        }
+
         // Add rows
         tasks.forEach(task => {
             const row = this.createRow(task);
@@ -241,6 +263,25 @@ class HistoryManager {
                 </div>
             </div>
         `;
+
+        // Owner cell (only for admins)
+        const ownerCell = document.createElement('div');
+        ownerCell.className = 'grid-cell grid-cell-owner';
+        if (this.isAdmin) {
+            const ownerUsername = window.utils.escapeHtml(task.owner_username || 'Unknown');
+            ownerCell.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900 dark:to-green-800 flex items-center justify-center">
+                        <i class="fas fa-user text-xs text-green-600 dark:text-green-300"></i>
+                    </div>
+                    <span class="text-gray-900 dark:text-white font-medium text-sm">
+                        ${ownerUsername}
+                    </span>
+                </div>
+            `;
+        } else {
+            ownerCell.classList.add('hidden');
+        }
 
         // Status cell
         const statusCell = document.createElement('div');
@@ -367,6 +408,7 @@ class HistoryManager {
         // Append all cells to grid row
         gridRow.appendChild(checkboxCell);
         gridRow.appendChild(filenameCell);
+        gridRow.appendChild(ownerCell);
         gridRow.appendChild(statusCell);
         gridRow.appendChild(dateCell);
         gridRow.appendChild(packetsCell);

@@ -1413,6 +1413,7 @@
 /* Grid Header Row */
 .history-grid-header {
     display: grid;
+    /* Default (User): 7 columns */
     grid-template-columns: 60px minmax(200px, 1fr) 100px 160px 140px 150px 130px;
     gap: 0;
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
@@ -1422,6 +1423,13 @@
     top: 0;
     z-index: 10;
     margin-bottom: 4px;
+}
+
+/* Admin view: 8 columns (with owner) */
+.admin-view .history-grid-header,
+.admin-view .history-grid-row {
+    /* checkbox | file | owner | status | date | packets | score | actions */
+    grid-template-columns: 60px minmax(200px, 1fr) 150px 100px 160px 140px 150px 130px;
 }
 
 .dark .history-grid-header {
@@ -1437,6 +1445,7 @@
 /* Grid Data Row */
 .history-grid-row {
     display: grid;
+    /* Default (User): 7 columns */
     grid-template-columns: 60px minmax(200px, 1fr) 100px 160px 140px 150px 130px;
     gap: 0;
     align-items: center;
@@ -1515,6 +1524,15 @@
 
 .grid-cell-file {
     overflow: hidden;
+}
+
+.grid-cell-owner {
+    justify-content: flex-start;
+    padding: 0 1rem;
+}
+
+.grid-cell-owner.hidden {
+    display: none;
 }
 
 .grid-cell-status {
