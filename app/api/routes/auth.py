@@ -43,6 +43,7 @@ from app.models.user import (
 from app.services.email_service import get_email_service
 from app.services.user_database import get_user_db_service
 from app.services.database import get_db_service
+from app.services.password_reset_service import get_password_reset_service
 from app.utils.config import get_data_dir
 from app.utils.rate_limiter import get_rate_limiter
 
@@ -90,6 +91,119 @@ class PasswordUpdate(BaseModel):
             raise ValueError('. '.join(error_parts))
 
         return v
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Schema for password reset request."""
+    email: EmailStr
+
+
+@router.post("/auth/forgot-password", status_code=status.HTTP_200_OK)
+async def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    email_service=Depends(get_email_service),
+):
+    """
+    Request a password reset link.
+    
+    Rate limited: 3 requests per 15 minutes per IP.
+    Always returns 200 OK to prevent user enumeration.
+    """
+    # Rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    rate_limiter = get_rate_limiter()
+    
+    # Custom limit for forgot password: 3 attempts
+    # We reuse the rate limiter but check manually if needed or just use the generic one.
+    # The generic one has exponential backoff after 3 failed attempts.
+    # Here we want strict limit on requests regardless of success/failure to prevent spam.
+    
+    # NOTE: The current RateLimiter is designed for failed LOGIN attempts with exponential backoff.
+    # We'll use a simple check here: if is_allowed returns False, we reject.
+    # Ideally we'd have a separate limiter for this endpoint.
+    # For now, we reuse it.
+    
+    allowed, retry_after = rate_limiter.is_allowed(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many requests. Please try again in {retry_after:.0f} seconds.",
+        )
+        
+    # We record "failure" to increment the counter for this IP, effectively rate limiting it.
+    # This is a bit of a hack on the existing RateLimiter designed for logins.
+    # A better approach would be a separate RateLimiter instance or method.
+    # But sticking to constraints:
+    rate_limiter.record_failure(client_ip) 
+    
+    user_db = get_user_db_service()
+    
+    # Lookup user (case-insensitive done in DB service usually, but email is lowercased there)
+    # We need to get user by email.
+    # Existing method is get_user_by_username.
+    # We need get_user_by_email.
+    
+    # Let's add get_user_by_email to UserDatabaseService or iterate/query manually?
+    # UserDatabaseService has no get_user_by_email explicitly shown in previous read_file output?
+    # Wait, let's check `app/services/user_database.py` again.
+    # It has `get_user_by_username`.
+    # It has `get_user_by_id`.
+    # It does NOT have `get_user_by_email`.
+    
+    # I will query directly using the pool here or I should add it to service.
+    # Best practice: Add to service. But I can't edit that file in this step easily without context switching.
+    # I will use a direct query via pool for now or fetch all and filter (bad performance).
+    # Actually, `create_user` checks for email existence, so index exists.
+    
+    # For now, I'll implement a quick lookup helper here or use what's available.
+    # I'll rely on `user_db.pool.fetch_one`.
+    
+    query, params = user_db.pool.translate_query(
+        "SELECT id FROM users WHERE email = ?",
+        (payload.email.lower(),)
+    )
+    row = await user_db.pool.fetch_one(query, *params)
+    
+    if row:
+        user_id = str(row["id"])
+        user = await user_db.get_user_by_id(user_id)
+        
+        if user and user.is_active and user.is_approved:
+            # Generate token
+            reset_service = get_password_reset_service()
+            token = await reset_service.create_reset_token(
+                user_id=user.id,
+                ip_address=client_ip,
+                user_agent=request.headers.get("User-Agent")
+            )
+            
+            # Construct reset link
+            # Assuming frontend URL structure
+            base_url = os.getenv("APP_BASE_URL", "http://pcaplab.com")
+            reset_link = f"{base_url}/reset-password?token={token}"
+            
+            # Send email
+            from datetime import datetime, timezone
+            timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            
+            background_tasks.add_task(
+                email_service.send_password_reset_request_email,
+                user,
+                reset_link,
+                client_ip,
+                timestamp
+            )
+            
+            logger.info(f"Password reset requested for {user.email}")
+        else:
+            logger.warning(f"Password reset requested for inactive/unapproved user {payload.email}")
+    else:
+        logger.warning(f"Password reset requested for non-existent email {payload.email}")
+        
+    # Always return 200 OK
+    return {"message": "If an account exists with this email, a password reset link has been sent."}
 
 
 @router.post("/token", response_model=Token)

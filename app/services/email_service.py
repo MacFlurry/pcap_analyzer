@@ -100,6 +100,52 @@ class EmailService:
             },
         )
 
+    async def send_password_reset_request_email(self, user: User, reset_link: str, ip: str, timestamp: str):
+        """Send password reset request email."""
+        await self._send_email(
+            recipients=[user.email],
+            subject="Password Reset Request - PCAP Analyzer",
+            template_name="password_reset_request.html",
+            template_body={
+                "username": user.username,
+                "reset_link": reset_link,
+                "ip_address": ip,
+                "timestamp": timestamp,
+                "support_email": self.support_email,
+                "validity_minutes": 60, # 1 hour
+            },
+        )
+
+    async def send_password_reset_success_email(self, user: User, ip: str, timestamp: str):
+        """Send password reset success confirmation."""
+        await self._send_email(
+            recipients=[user.email],
+            subject="Password Successfully Reset - PCAP Analyzer",
+            template_name="password_reset_success.html",
+            template_body={
+                "username": user.username,
+                "ip_address": ip,
+                "timestamp": timestamp,
+                "login_url": f"{self.app_base_url}/login",
+                "support_email": self.support_email,
+            },
+        )
+
+    async def send_admin_password_reset_email(self, user: User, temp_password: str, admin_username: str):
+        """Send admin password reset notification with temporary password."""
+        await self._send_email(
+            recipients=[user.email],
+            subject="Administrator Password Reset - PCAP Analyzer",
+            template_name="admin_password_reset.html",
+            template_body={
+                "username": user.username,
+                "temporary_password": temp_password,
+                "admin_username": admin_username,
+                "login_url": f"{self.app_base_url}/login",
+                "support_email": self.support_email,
+            },
+        )
+
 
 # Singleton instance
 _email_service: Optional[EmailService] = None
