@@ -146,55 +146,18 @@ Cette track implémente:
 
 **Objectif**: Créer les pages UI et tests end-to-end complets
 
-- [ ] **Task 4.1**: Modifier login - ajouter lien "Mot de passe oublié?"
-  - Fichier: `app/templates/login.html`
-  - Ajouter lien après bouton "Se connecter"
-  - Style cohérent avec lien "S'inscrire"
+- [x] **Task 4.1**: Modifier login - ajouter lien "Mot de passe oublié?" (templates updated)
+- [x] **Task 4.2**: Page "Mot de passe oublié" (templates updated)
+- [x] **Task 4.3**: Page "Réinitialiser mot de passe" (templates updated)
+- [x] **Task 4.4**: Routes pour pages forgot/reset (views updated)
+- [x] **Task 4.5**: Admin panel - bouton "Reset Password" (templates updated)
+- [x] **Task 4.6**: JavaScript admin reset (JS updated)
 
-- [ ] **Task 4.2**: Page "Mot de passe oublié"
-  - Fichier: `app/templates/forgot-password.html`
-  - Éléments: header, input email, bouton, message succès (toujours affiché), lien retour login, CSRF protection
-  - Style: suivre login.html
+- [x] **Task 4.7**: Tests E2E - Self-service flow (c7c2bed)
+- [x] **Task 4.8**: Tests E2E - Admin reset flow (c7c2bed)
+- [x] **Task 4.9**: Tests E2E - Edge cases (c7c2bed)
 
-- [ ] **Task 4.3**: Page "Réinitialiser mot de passe"
-  - Fichier: `app/templates/reset-password.html`
-  - Validation token au chargement (AJAX)
-  - Si invalide: message erreur + lien forgot-password
-  - Si valide: email masqué, inputs password (show/hide toggle), confirmation, indicateur force (zxcvbn), exigences, bouton
-  - Redirect login après succès
-
-- [ ] **Task 4.4**: Routes pour pages forgot/reset
-  - Fichier: `app/api/routes/views.py`
-  - `GET /forgot-password` → render forgot-password.html
-  - `GET /reset-password` → render reset-password.html (token query param)
-  - Pattern: suivre `/login`
-
-- [ ] **Task 4.5**: Admin panel - bouton "Reset Password"
-  - Fichier: `app/templates/admin.html`
-  - Bouton dans menu actions utilisateur
-  - Modal: checkbox "Envoyer par email", "Notifier", bouton confirmer
-  - Si pas email: afficher temp password avec bouton copier
-
-- [ ] **Task 4.6**: JavaScript admin reset
-  - Fichier: `app/static/js/admin.js`
-  - Méthode `resetUserPassword(userId, sendEmail, notifyUser)`
-  - Modal confirmation
-  - Call POST `/api/admin/users/{userId}/reset-password`
-  - Afficher temp password si applicable
-  - Reload liste
-
-- [ ] **Task 4.7**: Tests E2E - Self-service flow
-  - Fichier: `tests/e2e/test_password_reset_flow.py`
-  - Test `test_complete_password_reset_flow`: login → forgot link → email → extract token DB → reset page → nouveau password → login success
-  - Pattern: suivre `test_admin_full_workflow()`
-
-- [ ] **Task 4.8**: Tests E2E - Admin reset flow
-  - Test `test_admin_reset_user_password`: login admin → admin panel → reset user → copy temp password → logout → login user → verify password_must_change
-
-- [ ] **Task 4.9**: Tests E2E - Edge cases
-  - Token expiré, réutilisé, password faible, rate limiting, admin vs admin
-
-**Checkpoint Phase 4**: UI complet, E2E tests passent, parcours fluide
+**Checkpoint Phase 4**: UI complet, E2E tests passent, parcours fluide [checkpoint: c7c2bed]
 
 ---
 
