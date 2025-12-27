@@ -340,6 +340,79 @@ async def validate_reset_token(payload: ValidateTokenRequest):
     return ValidateTokenResponse(valid=True, email=masked_email)
 
 
+class AdminResetPasswordRequest(BaseModel):
+    """Schema for admin-initiated password reset."""
+    send_email: bool = True
+    notify_user: bool = True
+
+@router.post("/admin/users/{user_id}/reset-password", response_model=dict)
+async def admin_reset_user_password(
+    user_id: str,
+    payload: AdminResetPasswordRequest,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(get_current_admin_user),
+    email_service=Depends(get_email_service),
+):
+    """
+    Admin resets a user's password.
+    Generates a temporary password and optionally emails it to the user.
+    """
+    user_db = get_user_db_service()
+    
+    # 1. Get user
+    user = await user_db.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # 2. Prevent resetting another admin
+    if user.role == UserRole.ADMIN and user.id != admin.id:
+        raise HTTPException(
+            status_code=403, 
+            detail="Cannot reset another admin's password. They must use self-service recovery."
+        )
+        
+    # 3. Generate temp password
+    import secrets
+    temp_password = secrets.token_urlsafe(16)
+    
+    # 4. Update user
+    # This sets password_must_change=False in update_password, but we want True.
+    # update_password does: hashed_password = hash(pw), password_must_change = False
+    # We need to set it to True manually or add a param to update_password?
+    # update_password doesn't take a param.
+    # We can call update_password then execute a raw query to set must_change=True.
+    
+    await user_db.update_password(user.id, temp_password)
+    
+    # Force password change
+    query, params = user_db.pool.translate_query(
+        "UPDATE users SET password_must_change = ? WHERE id = ?",
+        (True, user.id)
+    )
+    await user_db.pool.execute(query, *params)
+    
+    logger.warning(f"🔐 AUDIT: Admin {admin.username} reset password for user {user.username}")
+    
+    response = {
+        "user_id": user.id,
+        "username": user.username,
+        "message": "Password reset successful. User will be prompted to change password on next login."
+    }
+    
+    if payload.send_email:
+        background_tasks.add_task(
+            email_service.send_admin_password_reset_email,
+            user,
+            temp_password,
+            admin.username
+        )
+        response["message"] = "Password reset email sent. User will be prompted to change password on next login."
+    else:
+        response["temporary_password"] = temp_password
+        
+    return response
+
+
 @router.post("/token", response_model=Token)
 async def login(
     request: Request,
