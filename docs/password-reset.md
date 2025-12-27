@@ -28,6 +28,8 @@ Administrators can reset passwords for regular users through the Admin Panel.
     -   **Send by Email**: The user receives a temporary password via email.
     -   **Manual**: If unchecked, the temporary password is displayed on the screen for the administrator to copy and communicate manually.
 4.  **Force Password Change**: After an admin reset, the user is **required** to change their password immediately upon their next login.
+    - After successfully changing the password, the user is redirected to the home page.
+    - **Note**: The user menu (profile icon and logout button) will be visible after the password change.
 
 ## Security Features
 

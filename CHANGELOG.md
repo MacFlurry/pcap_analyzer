@@ -7,6 +7,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+### Bug Fixes
+- **UI**: Fixed user menu not appearing after forced password change (admin reset flow)
+  - After changing temporary password, user menu and logout button are now properly visible
+  - `current_user` data is now stored in localStorage after password change
+  - Fixed `beforeunload` listener blocking redirection after password change
+  - Augmented E2E tests to verify user menu visibility and user initials
+
 ## [5.1.0] - 2025-12-27
 
 ### ✨ New Features
