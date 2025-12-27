@@ -206,6 +206,106 @@ async def forgot_password(
     return {"message": "If an account exists with this email, a password reset link has been sent."}
 
 
+class ResetPasswordRequest(BaseModel):
+    """Schema for resetting password with token."""
+    token: str
+    new_password: str = Field(..., min_length=12, max_length=128)
+
+    @validator("new_password")
+    def password_strength(cls, v):
+        """Validate password strength (zxcvbn)."""
+        if len(v) < 12:
+            raise ValueError("Password must be at least 12 characters")
+
+        result = zxcvbn(v)
+        score = result['score']
+        feedback = result['feedback']
+
+        if score < 3:
+            error_parts = [f"Password is too weak (strength: {score}/4, need ≥3)"]
+            if feedback.get('warning'):
+                error_parts.append(f"Warning: {feedback['warning']}")
+            raise ValueError('. '.join(error_parts))
+        return v
+
+
+@router.post("/auth/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(
+    request: Request,
+    payload: ResetPasswordRequest,
+    background_tasks: BackgroundTasks,
+    email_service=Depends(get_email_service),
+):
+    """
+    Reset password using a valid token.
+    """
+    reset_service = get_password_reset_service()
+    
+    # 1. Hash token provided by user
+    import hashlib
+    token_hash = hashlib.sha256(payload.token.encode('utf-8')).hexdigest()
+    
+    # 2. Validate token
+    user = await reset_service.validate_token(token_hash)
+    if not user:
+        # Generic error message for security? 
+        # Actually, for reset, if token is invalid, we should tell them so they can request a new one.
+        # But we shouldn't reveal if the token was "just expired" vs "never existed" if we want to be super strict,
+        # but UX wise, "Invalid or expired token" is standard.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired token. Please request a new password reset link.",
+        )
+    
+    user_db = get_user_db_service()
+    
+    # 3. Check password history (reuse)
+    try:
+        is_reused = await user_db.check_password_reuse(user.id, payload.new_password)
+        if is_reused:
+            raise ValueError("Password was used recently. Please choose a different password (last 5 passwords cannot be reused)")
+            
+        # 4. Update password
+        # Use update_password which handles hashing and history update
+        # This also clears password_must_change flag
+        await user_db.update_password(user.id, payload.new_password)
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Error resetting password for user {user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
+        
+    # 5. Consume token
+    await reset_service.consume_token(token_hash)
+    
+    # 6. Invalidate other tokens for this user?
+    # Security best practice: invalidate all other reset tokens
+    await reset_service.invalidate_user_tokens(user.id)
+    
+    # 7. Send confirmation email
+    client_ip = request.client.host if request.client else "unknown"
+    from datetime import datetime, timezone
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    
+    background_tasks.add_task(
+        email_service.send_password_reset_success_email,
+        user,
+        client_ip,
+        timestamp
+    )
+    
+    logger.info(f"Password reset successful for user {user.username}")
+    
+    return {"message": "Password reset successful. You can now login with your new password."}
+
+
 @router.post("/token", response_model=Token)
 async def login(
     request: Request,
