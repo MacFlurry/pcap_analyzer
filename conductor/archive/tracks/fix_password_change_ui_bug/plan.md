@@ -110,7 +110,7 @@ Après un changement de mot de passe réussi dans `change-password.html`, avant 
 
 ## Phase 1: Correction du Bug
 
-- [~] **Task 1.1**: Modifier change-password.html
+- [x] **Task 1.1**: Modifier change-password.html `b54cfb3`
 
 **Fichier**: `app/templates/change-password.html`
 **Lignes**: 213-219 (section après `response.ok`)
@@ -171,72 +171,10 @@ if (response.ok) {
 ## Phase 2: Tests de Validation
 
 ### Tâche 2.1: Test E2E - Admin Reset Flow Complet
-
-**Fichier**: `tests/e2e/test_password_reset_flow.py`
-**Fonction**: `test_admin_reset_user_password` (existante - à augmenter)
-
-**Ajouts**:
-
-```python
-# ... (après ligne 10: vérifier redirection vers page changement)
-
-# 11. Vérifier que le menu utilisateur est visible
-user_menu = page.locator('#user-menu')
-expect(user_menu).not_to_have_class('hidden')  # Menu doit être visible
-
-# 12. Vérifier que les initiales de l'utilisateur s'affichent
-user_initials = page.locator('#user-initials')
-expect(user_initials).to_be_visible()
-expect(user_initials).to_have_text(test_username[:2].upper())
-
-# 13. Cliquer sur le menu pour ouvrir le dropdown
-page.click('#user-menu-button')
-user_dropdown = page.locator('#user-menu-dropdown')
-expect(user_dropdown).not_to_have_class('hidden')
-
-# 14. Vérifier que le bouton logout est visible et fonctionnel
-logout_btn = page.locator('#logout-btn')
-expect(logout_btn).to_be_visible()
-expect(logout_btn).to_contain_text('Se déconnecter')
-
-# 15. Cliquer sur logout
-page.click('#logout-btn')
-expect(page).to_have_url('/login')  # Redirection vers login
-```
-
-**SHA Commit**: `[ ]` (à remplir après commit)
-
----
+[x] `b54cfb3`
 
 ### Tâche 2.2: Test E2E - Self-Service Flow Non-Régression
-
-**Fichier**: `tests/e2e/test_password_reset_flow.py`
-**Fonction**: `test_complete_password_reset_flow` (existante - à augmenter)
-
-**Objectif**: Vérifier que le flux self-service n'est **PAS régressé** par le fix
-
-**Ajouts**:
-
-```python
-# ... (après ligne 10: Login avec nouveau mot de passe → succès)
-
-# 11. Vérifier que le menu utilisateur est visible après login (self-service doit fonctionner)
-user_menu = page.locator('#user-menu')
-expect(user_menu).not_to_have_class('hidden')
-
-# 12. Vérifier que les initiales s'affichent
-user_initials = page.locator('#user-initials')
-expect(user_initials).to_be_visible()
-
-# 13. Vérifier logout fonctionnel
-page.click('#user-menu-button')
-page.click('#logout-btn')
-expect(page).to_have_url('/login')
-```
-
-**Note**: Ce test est un **test de non-régression**. Le self-service fonctionne déjà, ce test confirme que notre fix n'a rien cassé.
-
-**SHA Commit**: `[ ]` (à remplir après commit)
+[x] `b54cfb3`
 
 ---
 
@@ -307,40 +245,10 @@ expect(page).to_have_url('/login')
 ## Phase 3: Documentation et Changelog
 
 ### Tâche 3.1: Mettre à jour CHANGELOG.md
-
-**Fichier**: `CHANGELOG.md`
-**Section**: Unreleased → Bug Fixes
-
-**Ajout**:
-
-```markdown
-## [Unreleased]
-
-### Bug Fixes
-- **UI**: Fixed user menu not appearing after forced password change (admin reset flow)
-  - After changing temporary password, user menu and logout button are now properly visible
-  - `current_user` data is now stored in localStorage after password change
-  - Closes issue reported in v5.1.0 testing
-```
-
-**SHA Commit**: `[ ]` (à remplir après commit)
-
----
+[x] `40e2b1d`
 
 ### Tâche 3.2: Mettre à jour password-reset.md
-
-**Fichier**: `docs/password-reset.md`
-**Section**: Administrator-Initiated Reset → 4. Force Password Change
-
-**Ajout d'une note**:
-
-```markdown
-4.  **Force Password Change**: After an admin reset, the user is **required** to change their password immediately upon their next login.
-    - After successfully changing the password, the user is redirected to the home page.
-    - **Note**: The user menu (profile icon and logout button) will be visible after the password change. If not visible, refresh the page (F5).
-```
-
-**SHA Commit**: `[ ]` (à remplir après commit)
+[x] `40e2b1d`
 
 ---
 
