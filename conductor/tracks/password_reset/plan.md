@@ -49,7 +49,7 @@ Cette track implémente:
   - `cleanup_expired_tokens()` → count deleted
   - `invalidate_user_tokens(user_id)` → count deleted
 
-- [ ] **Task 1.3**: Tests unitaires `PasswordResetService`
+- [x] **Task 1.3**: Tests unitaires `PasswordResetService` (6c35b66)
   - Fichier: `tests/unit/services/test_password_reset_service.py`
   - Test génération tokens uniques
   - Test hachage déterministe
