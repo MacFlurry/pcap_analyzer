@@ -230,8 +230,9 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 ### Authentication & Admin Workflow (v5.0)
 - **User Registration** : Self-service avec approbation admin requise
 - **Admin Approval** : Les nouveaux comptes doivent être approuvés par un admin
-- **Role-Based Access Control** : Roles `admin` et `user` avec permissions distinctes
-- **Password Policy** : Minimum 12 caractères, bcrypt cost factor 12
+- **Enhanced Password Policy:** NIST-compliant passwords (min 12 chars), zxcvbn strength validation, and password history (prevents reuse of last 5).
+- **Self-Service Password Reset:** Secure token-based recovery via email with anti-enumeration protection.
+- **Role-Based Access Control (RBAC):** Granular permissions for admins and users.
 - **Rate Limiting** : Protection brute force (1s → 2s → 5s après 4-6 échecs)
 - **Multi-Tenant** : Isolation stricte des données par `owner_id` (CWE-639)
 - **Admin Actions** : Approve/block/unblock/delete users, view all tasks

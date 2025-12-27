@@ -7,6 +7,25 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.1.0] - 2025-12-27
+
+### ✨ New Features
+- **Self-Service Password Reset**: Users can now request a password reset link via email.
+- **Admin Password Reset**: Administrators can force a password reset for any user, generating a temporary password and optionally notifying the user via email.
+- **Enhanced Security**: Token-based reset system with 256-bit entropy, SHA-256 hashing, single-use enforcement, and 1-hour expiration.
+- **Email Notifications**: Integration of password reset emails into the notification system.
+
+### 🛡️ Security & Compliance
+- **Anti-Enumeration**: Generic success messages on reset requests to prevent user discovery.
+- **Rate Limiting**: Protection against brute-force attacks on recovery endpoints.
+- **Password History Integration**: Prevent reuse of recent passwords during reset.
+- **NIST Compliance**: Adherence to NIST SP 800-63B guidelines for account recovery.
+
+### 🧪 Quality & Tests
+- **Comprehensive API Tests**: 100% coverage for the new authentication endpoints.
+- **E2E Validation**: Full user and admin recovery journeys tested.
+- **Database Support**: Dual-support for PostgreSQL and SQLite in the new schema.
+
 ## [5.0.0-rc2] - 2025-12-27
 
 ### 🛡️ Security & Authentication
