@@ -60,6 +60,7 @@ class TaskInfo(BaseModel):
     error_message: Optional[str] = None  # Message d'erreur si échec
     expires_at: Optional[datetime] = None  # Date d'expiration (uploaded_at + 24h)
     owner_id: Optional[str] = None  # User ID (multi-tenant)
+    owner_username: Optional[str] = None  # Username du propriétaire (pour admins)
 
     @validator("expires_at", always=True)
     def calculate_expiry(cls, v, values):

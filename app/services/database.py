@@ -265,12 +265,14 @@ class DatabaseService:
             # Filter by owner_id (regular users)
             query, params = self.pool.translate_query(
                 """
-                SELECT task_id, filename, status, uploaded_at, analyzed_at,
-                       file_size_bytes, total_packets, health_score,
-                       report_html_path, report_json_path, error_message, owner_id
-                FROM tasks
-                WHERE owner_id = ?
-                ORDER BY uploaded_at DESC
+                SELECT t.task_id, t.filename, t.status, t.uploaded_at, t.analyzed_at,
+                       t.file_size_bytes, t.total_packets, t.health_score,
+                       t.report_html_path, t.report_json_path, t.error_message,
+                       t.owner_id, u.username as owner_username
+                FROM tasks t
+                LEFT JOIN users u ON t.owner_id = u.id
+                WHERE t.owner_id = ?
+                ORDER BY t.uploaded_at DESC
                 LIMIT ?
                 """,
                 (owner_id, limit),
@@ -279,11 +281,13 @@ class DatabaseService:
             # No filter (admin users)
             query, params = self.pool.translate_query(
                 """
-                SELECT task_id, filename, status, uploaded_at, analyzed_at,
-                       file_size_bytes, total_packets, health_score,
-                       report_html_path, report_json_path, error_message, owner_id
-                FROM tasks
-                ORDER BY uploaded_at DESC
+                SELECT t.task_id, t.filename, t.status, t.uploaded_at, t.analyzed_at,
+                       t.file_size_bytes, t.total_packets, t.health_score,
+                       t.report_html_path, t.report_json_path, t.error_message,
+                       t.owner_id, u.username as owner_username
+                FROM tasks t
+                LEFT JOIN users u ON t.owner_id = u.id
+                ORDER BY t.uploaded_at DESC
                 LIMIT ?
                 """,
                 (limit,),
@@ -308,6 +312,7 @@ class DatabaseService:
                     report_json_url=f"/api/reports/{task_id_str}/json" if row["report_json_path"] else None,
                     error_message=row["error_message"],
                     owner_id=str(row["owner_id"]) if row["owner_id"] else None,  # Convert UUID to string
+                    owner_username=row["owner_username"] if row["owner_username"] else None,
                 )
             )
 
