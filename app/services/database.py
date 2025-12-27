@@ -183,9 +183,7 @@ class DatabaseService:
             task_id=str(row["task_id"]),  # Convert UUID to string
             filename=row["filename"],
             status=TaskStatus(row["status"]),
-            uploaded_at=(
-                _parse_timestamp(row["uploaded_at"]) or datetime.now(timezone.utc)
-            ),
+            uploaded_at=(_parse_timestamp(row["uploaded_at"]) or datetime.now(timezone.utc)),
             analyzed_at=_parse_timestamp(row["analyzed_at"]),
             file_size_bytes=row["file_size_bytes"],
             total_packets=row["total_packets"],
@@ -301,9 +299,7 @@ class DatabaseService:
                     task_id=task_id_str,
                     filename=row["filename"],
                     status=TaskStatus(row["status"]),
-                    uploaded_at=(
-                        _parse_timestamp(row["uploaded_at"]) or datetime.now(timezone.utc)
-                    ),
+                    uploaded_at=(_parse_timestamp(row["uploaded_at"]) or datetime.now(timezone.utc)),
                     analyzed_at=_parse_timestamp(row["analyzed_at"]),
                     file_size_bytes=row["file_size_bytes"],
                     total_packets=row["total_packets"],

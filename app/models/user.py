@@ -97,22 +97,22 @@ class UserCreate(BaseModel):
 
         # Check password strength using zxcvbn (0-4 scale)
         result = zxcvbn(v)
-        score = result['score']
-        feedback = result['feedback']
+        score = result["score"]
+        feedback = result["feedback"]
 
         # Require score ≥ 3 (strong or very strong)
         if score < 3:
             # Build detailed error message from zxcvbn feedback
             error_parts = [f"Password is too weak (strength: {score}/4, need ≥3)"]
 
-            if feedback.get('warning'):
+            if feedback.get("warning"):
                 error_parts.append(f"Warning: {feedback['warning']}")
 
-            if feedback.get('suggestions'):
-                suggestions = '; '.join(feedback['suggestions'])
+            if feedback.get("suggestions"):
+                suggestions = "; ".join(feedback["suggestions"])
                 error_parts.append(f"Suggestions: {suggestions}")
 
-            raise ValueError('. '.join(error_parts))
+            raise ValueError(". ".join(error_parts))
 
         return v
 

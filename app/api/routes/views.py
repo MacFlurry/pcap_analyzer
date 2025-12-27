@@ -109,4 +109,3 @@ async def profile(request: Request, user=Depends(get_current_user_cookie_or_redi
     Page de profil utilisateur (2FA, etc.)
     """
     return templates.TemplateResponse("profile.html", {"request": request, "version": __version__})
-

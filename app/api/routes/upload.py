@@ -124,9 +124,7 @@ async def upload_pcap(
     try:
         content, pcap_type = await validate_pcap_upload_complete(file)
         file_size = len(content)
-        logger.info(
-            f"Upload validated: {sanitized_filename}, size: {file_size} bytes, type: {pcap_type}"
-        )
+        logger.info(f"Upload validated: {sanitized_filename}, size: {file_size} bytes, type: {pcap_type}")
     except HTTPException:
         # Re-raise validation errors (400, 413)
         raise

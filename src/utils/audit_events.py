@@ -292,7 +292,6 @@ EVENT_SEVERITY_MAP: Dict[AuditEventType, AuditEventSeverity] = {
     AuditEventType.FILE_PROCESSING_COMPLETE: AuditEventSeverity.INFO,
     AuditEventType.FILE_PROCESSING_ERROR: AuditEventSeverity.ERROR,
     AuditEventType.FILE_PROCESSING_ABORTED: AuditEventSeverity.CRITICAL,
-
     # Security violations (CRITICAL/ALERT)
     AuditEventType.PATH_TRAVERSAL_ATTEMPT: AuditEventSeverity.CRITICAL,
     AuditEventType.PATH_TRAVERSAL_BLOCKED: AuditEventSeverity.ALERT,
@@ -306,46 +305,39 @@ EVENT_SEVERITY_MAP: Dict[AuditEventType, AuditEventSeverity] = {
     AuditEventType.UNDERSIZED_FILE_REJECTED: AuditEventSeverity.WARNING,
     AuditEventType.COMMAND_INJECTION_ATTEMPT: AuditEventSeverity.CRITICAL,
     AuditEventType.COMMAND_INJECTION_BLOCKED: AuditEventSeverity.ALERT,
-
     # Authentication (INFO/WARNING/CRITICAL)
     AuditEventType.AUTH_SUCCESS: AuditEventSeverity.INFO,
     AuditEventType.AUTH_FAILURE: AuditEventSeverity.WARNING,
     AuditEventType.AUTH_RATE_LIMIT: AuditEventSeverity.CRITICAL,
     AuditEventType.AUTH_TIMEOUT: AuditEventSeverity.WARNING,
     AuditEventType.AUTH_INVALID_CREDENTIALS: AuditEventSeverity.WARNING,
-
     # Access control (WARNING/CRITICAL)
     AuditEventType.ACCESS_GRANTED: AuditEventSeverity.INFO,
     AuditEventType.ACCESS_DENIED: AuditEventSeverity.WARNING,
     AuditEventType.PRIVILEGE_ESCALATION_ATTEMPT: AuditEventSeverity.CRITICAL,
     AuditEventType.PRIVILEGE_ESCALATION_BLOCKED: AuditEventSeverity.ALERT,
     AuditEventType.PERMISSION_ERROR: AuditEventSeverity.WARNING,
-
     # Configuration (INFO/WARNING)
     AuditEventType.CONFIG_LOADED: AuditEventSeverity.INFO,
     AuditEventType.CONFIG_VALIDATION_ERROR: AuditEventSeverity.WARNING,
     AuditEventType.CONFIG_CHANGED: AuditEventSeverity.NOTICE,
     AuditEventType.CONFIG_SECURITY_VIOLATION: AuditEventSeverity.CRITICAL,
-
     # Process tracking (INFO/ERROR)
     AuditEventType.ANALYSIS_STARTED: AuditEventSeverity.INFO,
     AuditEventType.ANALYSIS_COMPLETED: AuditEventSeverity.INFO,
     AuditEventType.ANALYSIS_FAILED: AuditEventSeverity.ERROR,
     AuditEventType.ANALYZER_EXECUTION: AuditEventSeverity.DEBUG,
-
     # System events (ERROR/CRITICAL)
     AuditEventType.SYSTEM_ERROR: AuditEventSeverity.ERROR,
     AuditEventType.MEMORY_ERROR: AuditEventSeverity.CRITICAL,
     AuditEventType.CPU_LIMIT_EXCEEDED: AuditEventSeverity.CRITICAL,
     AuditEventType.FILE_DESCRIPTOR_EXHAUSTION: AuditEventSeverity.CRITICAL,
     AuditEventType.DISK_FULL: AuditEventSeverity.CRITICAL,
-
     # Network events (INFO/WARNING)
     AuditEventType.SSH_CONNECTION_ESTABLISHED: AuditEventSeverity.INFO,
     AuditEventType.SSH_CONNECTION_FAILED: AuditEventSeverity.WARNING,
     AuditEventType.SSH_HOST_KEY_UNKNOWN: AuditEventSeverity.CRITICAL,
     AuditEventType.SSH_COMMAND_EXECUTED: AuditEventSeverity.INFO,
-
     # Data protection (INFO/NOTICE)
     AuditEventType.PII_REDACTION_APPLIED: AuditEventSeverity.INFO,
     AuditEventType.PII_DETECTED: AuditEventSeverity.NOTICE,

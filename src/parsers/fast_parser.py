@@ -106,7 +106,7 @@ class FastPacketParser:
         pcap_file: str,
         enable_bomb_protection: bool = True,
         max_expansion_ratio: int = 1000,
-        critical_expansion_ratio: int = 10000
+        critical_expansion_ratio: int = 10000,
     ):
         """
         Initialize fast parser.
@@ -123,9 +123,7 @@ class FastPacketParser:
 
         # Initialize decompression bomb monitor
         self.decompression_monitor = DecompressionMonitor(
-            max_ratio=max_expansion_ratio,
-            critical_ratio=critical_expansion_ratio,
-            enabled=enable_bomb_protection
+            max_ratio=max_expansion_ratio, critical_ratio=critical_expansion_ratio, enabled=enable_bomb_protection
         )
         self.file_size = os.path.getsize(self.pcap_file)
 
@@ -175,9 +173,7 @@ class FastPacketParser:
                         if packet_num % 10000 == 0 and packet_num > 0:
                             try:
                                 self.decompression_monitor.check_expansion_ratio(
-                                    self.file_size,
-                                    bytes_processed,
-                                    packet_num
+                                    self.file_size, bytes_processed, packet_num
                                 )
                             except DecompressionBombError:
                                 logger.critical(

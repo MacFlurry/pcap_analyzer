@@ -86,7 +86,7 @@ def get_secret_key() -> str:
             error_msg = (
                 "🚨 SECURITY ERROR: SECRET_KEY environment variable is not set!\n"
                 "Production deployment REQUIRES a persistent SECRET_KEY.\n"
-                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"\n"
+                'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"\n'
                 "Set it via environment variable or Kubernetes secret."
             )
             logger.error(error_msg)
@@ -101,7 +101,7 @@ def get_secret_key() -> str:
         print("  - Users must re-login after every deployment", file=sys.stderr)
         print("", file=sys.stderr)
         print("For production, generate and set a persistent SECRET_KEY:", file=sys.stderr)
-        print("  python -c \"import secrets; print(secrets.token_hex(32))\"", file=sys.stderr)
+        print('  python -c "import secrets; print(secrets.token_hex(32))"', file=sys.stderr)
         print("=" * 80, file=sys.stderr)
         logger.warning("SECRET_KEY not set, generating random key (development only)")
         secret_key = secrets.token_urlsafe(32)
@@ -135,10 +135,10 @@ def create_access_token(user: User, expires_delta: Optional[timedelta] = None) -
     expire = datetime.now(timezone.utc) + expires_delta
 
     payload = {
-        "sub": user.id,          # Subject: user ID
+        "sub": user.id,  # Subject: user ID
         "username": user.username,
         "role": user.role.value,
-        "exp": expire,           # Expiration
+        "exp": expire,  # Expiration
     }
 
     secret_key = get_secret_key()
@@ -168,7 +168,7 @@ async def get_current_user_from_token(token: str, user_db) -> User:
     user = await user_db.get_user_by_id(user_id)
     if user is None:
         raise credentials_exception
-    
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -177,10 +177,7 @@ async def get_current_user_from_token(token: str, user_db) -> User:
     return user
 
 
-async def get_current_user(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme)
-) -> User:
+async def get_current_user(request: Request, token: Optional[str] = Depends(oauth2_scheme)) -> User:
     """
     Extract and validate current user from JWT token (Header or Cookie).
 
@@ -195,7 +192,7 @@ async def get_current_user(
         HTTPException 401: If token is missing, invalid, or user doesn't exist
     """
     effective_token = get_token_from_request(request, token)
-    
+
     if not effective_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -204,14 +201,12 @@ async def get_current_user(
         )
 
     from app.services.user_database import get_user_db_service
+
     user_db = get_user_db_service()
     return await get_current_user_from_token(effective_token, user_db)
 
 
-async def get_current_user_optional(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme)
-) -> Optional[User]:
+async def get_current_user_optional(request: Request, token: Optional[str] = Depends(oauth2_scheme)) -> Optional[User]:
     """
     Optional version of get_current_user. Does not raise 401 if missing.
     Returns None if unauthenticated or token invalid.
@@ -222,6 +217,7 @@ async def get_current_user_optional(
 
     try:
         from app.services.user_database import get_user_db_service
+
         user_db = get_user_db_service()
         return await get_current_user_from_token(effective_token, user_db)
     except HTTPException:
@@ -229,15 +225,14 @@ async def get_current_user_optional(
 
 
 async def get_current_user_cookie_or_redirect(
-    request: Request,
-    user: Optional[User] = Depends(get_current_user_optional)
+    request: Request, user: Optional[User] = Depends(get_current_user_optional)
 ) -> User:
     """
     Dependency for HTML routes.
     If not authenticated, returns a RedirectResponse to /login.
     Otherwise returns the User.
-    
-    NOTE: This must be handled carefully in routes as it might return 
+
+    NOTE: This must be handled carefully in routes as it might return
     a RedirectResponse instead of a User if not caught by a custom exception.
     """
     if not user:
@@ -245,16 +240,16 @@ async def get_current_user_cookie_or_redirect(
         return_url = request.url.path
         if request.url.query:
             return_url += f"?{request.url.query}"
-        
-        # We can't easily return a RedirectResponse from a dependency 
-        # that is expected to return a User unless we raise a custom exception 
+
+        # We can't easily return a RedirectResponse from a dependency
+        # that is expected to return a User unless we raise a custom exception
         # or handle it in the route.
         # Let's raise an exception that we can catch or just redirect here if FastAPI allows.
         # Actually, raising an exception is better.
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             detail="Redirect to login",
-            headers={"Location": f"/login?returnUrl={return_url}"}
+            headers={"Location": f"/login?returnUrl={return_url}"},
         )
     return user
 
@@ -273,7 +268,7 @@ async def get_current_user_sse(
     """
     # Try to get token from multiple sources
     effective_token = token or get_token_from_request(request)
-    
+
     if not effective_token:
         logger.warning("SSE: No token found in query, cookie, or header")
         raise HTTPException(
@@ -283,6 +278,7 @@ async def get_current_user_sse(
         )
 
     from app.services.user_database import get_user_db_service
+
     user_db = get_user_db_service()
     return await get_current_user_from_token(effective_token, user_db)
 

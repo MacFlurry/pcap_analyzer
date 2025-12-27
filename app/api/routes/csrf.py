@@ -58,10 +58,7 @@ async def get_csrf_token(
     # Set signed token as HttpOnly cookie (Double Submit Cookie Pattern)
     csrf_protect.set_csrf_cookie(csrf_signed_token=signed_token, response=response)
 
-    logger.debug(
-        f"CSRF token generated for user: {current_user.username} "
-        f"(token_length={len(csrf_token)})"
-    )
+    logger.debug(f"CSRF token generated for user: {current_user.username} " f"(token_length={len(csrf_token)})")
 
     return {
         "csrf_token": csrf_token,  # Unsigned token for client to send in header
@@ -97,10 +94,7 @@ async def refresh_csrf_token(
     # Set signed token as HttpOnly cookie
     csrf_protect.set_csrf_cookie(csrf_signed_token=signed_token, response=response)
 
-    logger.debug(
-        f"CSRF token refreshed for user: {current_user.username} "
-        f"(token_length={len(csrf_token)})"
-    )
+    logger.debug(f"CSRF token refreshed for user: {current_user.username} " f"(token_length={len(csrf_token)})")
 
     return {
         "csrf_token": csrf_token,  # Unsigned token for client to send in header

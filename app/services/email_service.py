@@ -25,7 +25,7 @@ class EmailService:
     def __init__(self):
         # Email configuration from environment variables
         self.mail_enabled = os.getenv("MAIL_ENABLED", "false").lower() == "true"
-        
+
         # SMTP Configuration
         self.conf = ConnectionConfig(
             MAIL_USERNAME=os.getenv("SMTP_USERNAME", ""),
@@ -40,17 +40,13 @@ class EmailService:
             VALIDATE_CERTS=os.getenv("VALIDATE_CERTS", "true").lower() == "true",
             TEMPLATE_FOLDER=Path(__file__).parent.parent / "templates" / "emails",
         )
-        
+
         self.fastmail = FastMail(self.conf)
         self.support_email = os.getenv("SUPPORT_EMAIL", "support@pcaplab.com")
         self.app_base_url = os.getenv("APP_BASE_URL", "http://pcaplab.com")
 
     async def _send_email(
-        self, 
-        recipients: List[EmailStr], 
-        subject: str, 
-        template_name: str, 
-        template_body: Dict[str, Any]
+        self, recipients: List[EmailStr], subject: str, template_name: str, template_body: Dict[str, Any]
     ):
         """Internal helper to send email using FastMail."""
         if not self.mail_enabled:
@@ -112,7 +108,7 @@ class EmailService:
                 "ip_address": ip,
                 "timestamp": timestamp,
                 "support_email": self.support_email,
-                "validity_minutes": 60, # 1 hour
+                "validity_minutes": 60,  # 1 hour
             },
         )
 

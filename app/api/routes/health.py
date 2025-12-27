@@ -37,7 +37,7 @@ async def health_check():
     """
     try:
         data_dir = get_data_dir()
-        
+
         # Uptime
         uptime = time.time() - start_time
 

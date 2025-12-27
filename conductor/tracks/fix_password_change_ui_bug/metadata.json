@@ -1,0 +1,68 @@
+{
+  "track_id": "fix_password_change_ui_bug",
+  "title": "Fix User Menu Not Showing After Password Change",
+  "type": "bug_fix",
+  "priority": "high",
+  "status": "ready_for_implementation",
+  "created_at": "2025-12-27",
+  "created_by": "claude-code",
+  "assignee": "conductor",
+  "estimated_duration_hours": 1,
+  "complexity": "low",
+  "risk_level": "very_low",
+  "target_version": "5.1.1",
+  "tags": [
+    "ui",
+    "ux",
+    "password-reset",
+    "authentication",
+    "bug-fix",
+    "critical"
+  ],
+  "affected_components": [
+    "frontend/templates",
+    "localStorage",
+    "user-menu"
+  ],
+  "files_modified": [
+    "app/templates/change-password.html"
+  ],
+  "files_augmented": [
+    "tests/e2e/test_password_reset_flow.py",
+    "CHANGELOG.md",
+    "docs/password-reset.md"
+  ],
+  "dependencies": [],
+  "blockers": [],
+  "related_tracks": [
+    "password_reset"
+  ],
+  "test_coverage": {
+    "unit_tests": 0,
+    "integration_tests": 0,
+    "e2e_tests": 2,
+    "note": "Admin reset flow (fix) + Self-service flow (non-regression)"
+  },
+  "affected_flows": {
+    "buggy": "admin_reset_password_must_change",
+    "not_affected": "self_service_forgot_password"
+  },
+  "breaking_changes": false,
+  "backward_compatible": true,
+  "requires_migration": false,
+  "requires_deployment": true,
+  "security_impact": "none",
+  "performance_impact": "negligible",
+  "user_impact": "high_positive",
+  "validation_checklist": [
+    "Code modifié: change-password.html",
+    "Tests E2E passent: test_admin_reset_user_password",
+    "Test manuel: Menu visible après password change",
+    "Logout fonctionnel: Redirection vers /login OK",
+    "Documentation: CHANGELOG.md + password-reset.md mis à jour",
+    "localStorage cohérent: access_token + current_user présents",
+    "Aucune régression: Tests existants passent"
+  ],
+  "rollback_plan": "git revert <commit-sha> + rebuild + redeploy (simple revert)",
+  "notes": "Fix critique UX avec 100% repro rate. Pattern identique au login flow pour cohérence. Graceful error handling si fetch échoue."
+}

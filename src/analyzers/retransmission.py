@@ -134,6 +134,7 @@ class SimplePacketInfo:
     This stores only essential packet metadata needed for timeline rendering,
     minimizing memory overhead for the hybrid sampled timeline approach.
     """
+
     frame: int  # Packet/frame number
     timestamp: float  # Relative timestamp
     src_ip: str
@@ -163,6 +164,7 @@ class SampledTimeline:
     - Forward: handshake (10) + contexts + teardown (10) ~5.4 KB
     - Reverse: handshake (10) + teardown (10) ~2.4 KB
     """
+
     handshake: list[SimplePacketInfo]  # First 10 packets (connection setup)
     retrans_context: list[list[SimplePacketInfo]]  # ±5 packets around each retransmission
     teardown: list[SimplePacketInfo]  # Last 10 packets (connection teardown)
@@ -657,7 +659,7 @@ class RetransmissionAnalyzer:
                 # direct initialization is safer for clarity here.
                 # However, for reverse key, we might not have all metadata fields.
                 # Use current metadata as best guess for reverse direction ports/ips.
-                is_reverse = (key == reverse_key)
+                is_reverse = key == reverse_key
                 src_ip = metadata.dst_ip if is_reverse else metadata.src_ip
                 dst_ip = metadata.src_ip if is_reverse else metadata.dst_ip
                 src_port = metadata.dst_port if is_reverse else metadata.src_port
@@ -723,10 +725,10 @@ class RetransmissionAnalyzer:
 
         # RFC 793: Update TCP state machine (AFTER potential reset)
         tcp_flags = {
-            'SYN': metadata.is_syn,
-            'ACK': metadata.is_ack,
-            'FIN': metadata.is_fin,
-            'RST': metadata.is_rst,
+            "SYN": metadata.is_syn,
+            "ACK": metadata.is_ack,
+            "FIN": metadata.is_fin,
+            "RST": metadata.is_rst,
         }
         self._state_machine.process_packet(
             flow_key=flow_key,
@@ -753,7 +755,7 @@ class RetransmissionAnalyzer:
                 # Pure duplicate ACK (no window update, no payload)
                 if metadata.tcp_payload_len == 0:
                     self._dup_ack_count[flow_key] += 1
-                    
+
                     # Track where this DUP ACK occurred
                     self._last_ack_packet_num[flow_key] = packet_num
                     self._last_ack_timestamp[flow_key] = timestamp
@@ -950,8 +952,7 @@ class RetransmissionAnalyzer:
 
                     # Filter reverse packets within time window, take last 5
                     reverse_context = [
-                        p for p in reverse_buffer
-                        if time_window_start <= p.timestamp <= time_window_end
+                        p for p in reverse_buffer if time_window_start <= p.timestamp <= time_window_end
                     ][-5:]
 
                 # Merge bidirectional contexts and bound to 10 packets total
@@ -1116,10 +1117,10 @@ class RetransmissionAnalyzer:
 
         # RFC 793: Update TCP state machine (AFTER potential reset)
         tcp_flags = {
-            'SYN': bool(tcp.flags & 0x02),
-            'ACK': bool(tcp.flags & 0x10),
-            'FIN': bool(tcp.flags & 0x01),
-            'RST': bool(tcp.flags & 0x04),
+            "SYN": bool(tcp.flags & 0x02),
+            "ACK": bool(tcp.flags & 0x10),
+            "FIN": bool(tcp.flags & 0x01),
+            "RST": bool(tcp.flags & 0x04),
         }
         self._state_machine.process_packet(
             flow_key=flow_key,
@@ -1328,8 +1329,7 @@ class RetransmissionAnalyzer:
 
                     # Filter reverse packets within time window, take last 5
                     reverse_context = [
-                        p for p in reverse_buffer
-                        if time_window_start <= p.timestamp <= time_window_end
+                        p for p in reverse_buffer if time_window_start <= p.timestamp <= time_window_end
                     ][-5:]
 
                 # Merge bidirectional contexts and bound to 10 packets total

@@ -48,6 +48,7 @@ class TCPState(Enum):
         LAST_ACK: Received peer's FIN, sent our FIN, waiting for final ACK
         TIME_WAIT: Waiting for 2×MSL to ensure remote received final ACK
     """
+
     CLOSED = "CLOSED"
     LISTEN = "LISTEN"
     SYN_SENT = "SYN_SENT"
@@ -261,10 +262,10 @@ class TCPStateMachine:
         reverse_state = self._get_or_create_state(reverse_key)
 
         # Extract flags
-        is_syn = tcp_flags.get('SYN', False)
-        is_ack = tcp_flags.get('ACK', False)
-        is_fin = tcp_flags.get('FIN', False)
-        is_rst = tcp_flags.get('RST', False)
+        is_syn = tcp_flags.get("SYN", False)
+        is_ack = tcp_flags.get("ACK", False)
+        is_fin = tcp_flags.get("FIN", False)
+        is_rst = tcp_flags.get("RST", False)
 
         # Calculate logical length (RFC 793: SYN and FIN consume 1 seq number each)
         logical_len = payload_len
@@ -570,13 +571,13 @@ class TCPStateMachine:
 
         flow_state = self._flow_states[flow_key]
         return {
-            'state': flow_state.state.value,
-            'isn': flow_state.isn,
-            'fin_sent': flow_state.fin_sent,
-            'fin_acked': flow_state.fin_acked,
-            'peer_fin_received': flow_state.peer_fin_received,
-            'rst_seen': flow_state.rst_seen,
-            'connection_closed': flow_state.connection_closed,
-            'closure_timestamp': flow_state.closure_timestamp,
-            'last_packet_time': flow_state.last_packet_time,
+            "state": flow_state.state.value,
+            "isn": flow_state.isn,
+            "fin_sent": flow_state.fin_sent,
+            "fin_acked": flow_state.fin_acked,
+            "peer_fin_received": flow_state.peer_fin_received,
+            "rst_seen": flow_state.rst_seen,
+            "connection_closed": flow_state.connection_closed,
+            "closure_timestamp": flow_state.closure_timestamp,
+            "last_packet_time": flow_state.last_packet_time,
         }

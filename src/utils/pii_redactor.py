@@ -67,6 +67,7 @@ class RedactionLevel(str, Enum):
     DEVELOPMENT: Preserves IPs for debugging, redacts credentials
     DEBUG: No redaction (WARNING: NOT GDPR-COMPLIANT)
     """
+
     PRODUCTION = "PRODUCTION"
     DEVELOPMENT = "DEVELOPMENT"
     DEBUG = "DEBUG"
@@ -108,67 +109,44 @@ def get_redaction_level() -> str:
 # Compiled regex patterns for performance
 # IPv4: Matches 0.0.0.0 to 255.255.255.255
 IPV4_PATTERN = re.compile(
-    r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
-    r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
+    r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}" r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b"
 )
 
 # IPv6: Matches full and compressed IPv6 addresses
 # Comprehensive pattern that handles all IPv6 formats including compressed notation
 IPV6_PATTERN = re.compile(
-    r'(?:'
-    r'(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|'  # Full form: 8 groups (no ::)
-    r'(?:[0-9a-fA-F]{1,4}:){1,7}:|'  # Ending with ::
-    r'(?:[0-9a-fA-F]{1,4}:){1,6}(?::[0-9a-fA-F]{1,4}){1,6}|'  # :: in middle (compressed)
-    r'::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}|'  # Starting with ::
-    r'::1|::'  # Loopback and all-zeros (special cases)
-    r')(?=\s|$|[^0-9a-fA-F:])'  # Lookahead to ensure proper boundaries
+    r"(?:"
+    r"(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|"  # Full form: 8 groups (no ::)
+    r"(?:[0-9a-fA-F]{1,4}:){1,7}:|"  # Ending with ::
+    r"(?:[0-9a-fA-F]{1,4}:){1,6}(?::[0-9a-fA-F]{1,4}){1,6}|"  # :: in middle (compressed)
+    r"::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}|"  # Starting with ::
+    r"::1|::"  # Loopback and all-zeros (special cases)
+    r")(?=\s|$|[^0-9a-fA-F:])"  # Lookahead to ensure proper boundaries
 )
 
 # MAC address: Matches aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, and aabb.ccdd.eeff (Cisco)
-MAC_PATTERN = re.compile(
-    r'\b(?:(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{4}\.){2}[0-9a-fA-F]{4})\b'
-)
+MAC_PATTERN = re.compile(r"\b(?:(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{4}\.){2}[0-9a-fA-F]{4})\b")
 
 # Unix file paths: /home/username/file.pcap, /Users/john/capture.pcap
-UNIX_PATH_PATTERN = re.compile(
-    r'(/(?:home|Users)/)[^/\s]+(/[^\s]*)'
-)
+UNIX_PATH_PATTERN = re.compile(r"(/(?:home|Users)/)[^/\s]+(/[^\s]*)")
 
 # Windows file paths: C:\Users\John\file.pcap
-WINDOWS_PATH_PATTERN = re.compile(
-    r'([A-Z]:\\Users\\)[^\\]+(\\.+)',
-    re.IGNORECASE
-)
+WINDOWS_PATH_PATTERN = re.compile(r"([A-Z]:\\Users\\)[^\\]+(\\.+)", re.IGNORECASE)
 
 # Credential patterns
 # Match password/passwd/pwd followed by = or : and value (handles Unicode)
-PASSWORD_PATTERN = re.compile(
-    r'(password|passwd|pwd)\s*[=:]\s*\S+',
-    re.IGNORECASE
-)
+PASSWORD_PATTERN = re.compile(r"(password|passwd|pwd)\s*[=:]\s*\S+", re.IGNORECASE)
 
 # API key pattern - matches various formats including "API key: xxx"
-API_KEY_PATTERN = re.compile(
-    r'(api[_\s-]?key|apikey|token|secret)\s*[=:]\s*[^\s,;]+',
-    re.IGNORECASE
-)
+API_KEY_PATTERN = re.compile(r"(api[_\s-]?key|apikey|token|secret)\s*[=:]\s*[^\s,;]+", re.IGNORECASE)
 
-BEARER_TOKEN_PATTERN = re.compile(
-    r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',
-    re.IGNORECASE
-)
+BEARER_TOKEN_PATTERN = re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", re.IGNORECASE)
 
 # Basic Auth pattern (base64 in Authorization header)
-BASIC_AUTH_PATTERN = re.compile(
-    r'Basic\s+[A-Za-z0-9+/]+=*',
-    re.IGNORECASE
-)
+BASIC_AUTH_PATTERN = re.compile(r"Basic\s+[A-Za-z0-9+/]+=*", re.IGNORECASE)
 
 # Database connection string pattern (user:password in URLs)
-DB_CREDENTIALS_PATTERN = re.compile(
-    r'://([^:/@]+):([^@/]+)@',
-    re.IGNORECASE
-)
+DB_CREDENTIALS_PATTERN = re.compile(r"://([^:/@]+):([^@/]+)@", re.IGNORECASE)
 
 
 def redact_ipv4_addresses(text: str, preserve_prefix: bool = True) -> str:
@@ -195,11 +173,12 @@ def redact_ipv4_addresses(text: str, preserve_prefix: bool = True) -> str:
         >>> redact_ipv4_addresses("Server 10.0.0.1:8080", preserve_prefix=False)
         'Server [IP_REDACTED]:8080'
     """
+
     def replace_ipv4(match):
         ip = match.group(0)
         if preserve_prefix:
             # Keep first 2 octets for network troubleshooting
-            parts = ip.split('.')
+            parts = ip.split(".")
             if len(parts) == 4:
                 return f"{parts[0]}.{parts[1]}.XXX.XXX"
         return "[IP_REDACTED]"
@@ -230,19 +209,19 @@ def redact_ipv6_addresses(text: str, preserve_prefix: bool = True) -> str:
         'Localhost [IP_REDACTED]'
     """
     if not preserve_prefix:
-        return IPV6_PATTERN.sub('[IP_REDACTED]', text)
+        return IPV6_PATTERN.sub("[IP_REDACTED]", text)
 
     def replace_ipv6(match):
         ipv6 = match.group(0)
         # Preserve first 2 groups (network prefix)
-        parts = ipv6.split(':')
+        parts = ipv6.split(":")
         if len(parts) >= 2:
             # Handle compressed notation (::)
-            if '::' in ipv6:
+            if "::" in ipv6:
                 # Get prefix before ::
-                prefix = ipv6.split('::')[0]
+                prefix = ipv6.split("::")[0]
                 if prefix:
-                    prefix_parts = prefix.split(':')
+                    prefix_parts = prefix.split(":")
                     if len(prefix_parts) >= 2:
                         return f"{prefix_parts[0]}:{prefix_parts[1]}::[REDACTED]"
                     elif len(prefix_parts) == 1:
@@ -305,7 +284,7 @@ def redact_mac_addresses(text: str) -> str:
         >>> redact_mac_addresses("MAC 00-11-22-33-44-55")
         'MAC [MAC_REDACTED]'
     """
-    return MAC_PATTERN.sub('[MAC_REDACTED]', text)
+    return MAC_PATTERN.sub("[MAC_REDACTED]", text)
 
 
 def redact_file_paths(text: str) -> str:
@@ -334,10 +313,10 @@ def redact_file_paths(text: str) -> str:
         'C:\\Users\\[USER]\\network.pcap'
     """
     # Redact Unix paths
-    text = UNIX_PATH_PATTERN.sub(r'\1[USER]\2', text)
+    text = UNIX_PATH_PATTERN.sub(r"\1[USER]\2", text)
 
     # Redact Windows paths
-    text = WINDOWS_PATH_PATTERN.sub(r'\1[USER]\2', text)
+    text = WINDOWS_PATH_PATTERN.sub(r"\1[USER]\2", text)
 
     return text
 
@@ -378,7 +357,7 @@ def redact_credentials(text: str) -> str:
         'DB: postgresql://[CREDENTIAL_REDACTED]:[CREDENTIAL_REDACTED]@localhost/db'
     """
     # Redact database connection strings first
-    text = DB_CREDENTIALS_PATTERN.sub(r'://[CREDENTIAL_REDACTED]:[CREDENTIAL_REDACTED]@', text)
+    text = DB_CREDENTIALS_PATTERN.sub(r"://[CREDENTIAL_REDACTED]:[CREDENTIAL_REDACTED]@", text)
 
     # Redact password patterns (preserving delimiter)
     def replace_password(match):
@@ -392,20 +371,20 @@ def redact_credentials(text: str) -> str:
         full_match = match.group(0)
         key = match.group(1)
         # Detect delimiter (= or :)
-        if '=' in full_match:
+        if "=" in full_match:
             return f"{key}=[CREDENTIAL_REDACTED]"
         else:
             # Preserve spacing around colon
-            spacing = ' ' if ': ' in full_match else ''
+            spacing = " " if ": " in full_match else ""
             return f"{key}:{spacing}[CREDENTIAL_REDACTED]"
 
     text = API_KEY_PATTERN.sub(replace_api_key, text)
 
     # Redact Bearer tokens
-    text = BEARER_TOKEN_PATTERN.sub('Bearer [CREDENTIAL_REDACTED]', text)
+    text = BEARER_TOKEN_PATTERN.sub("Bearer [CREDENTIAL_REDACTED]", text)
 
     # Redact Basic Auth
-    text = BASIC_AUTH_PATTERN.sub('Basic [CREDENTIAL_REDACTED]', text)
+    text = BASIC_AUTH_PATTERN.sub("Basic [CREDENTIAL_REDACTED]", text)
 
     return text
 
@@ -509,21 +488,21 @@ def is_production_environment() -> bool:
         - HOME/USERPROFILE not in common dev paths
     """
     # Check explicit environment variables
-    env = os.getenv('ENVIRONMENT', '').lower()
-    if env in ['production', 'prod', 'live']:
+    env = os.getenv("ENVIRONMENT", "").lower()
+    if env in ["production", "prod", "live"]:
         return True
 
-    flask_env = os.getenv('FLASK_ENV', '').lower()
-    if flask_env == 'production':
+    flask_env = os.getenv("FLASK_ENV", "").lower()
+    if flask_env == "production":
         return True
 
-    django_settings = os.getenv('DJANGO_SETTINGS_MODULE', '').lower()
-    if 'production' in django_settings or 'prod' in django_settings:
+    django_settings = os.getenv("DJANGO_SETTINGS_MODULE", "").lower()
+    if "production" in django_settings or "prod" in django_settings:
         return True
 
     # Heuristic: Check if in typical development paths
-    home = os.getenv('HOME') or os.getenv('USERPROFILE') or ''
-    dev_indicators = ['/home/', '/Users/', 'C:\\Users\\', 'localhost', '127.0.0.1']
+    home = os.getenv("HOME") or os.getenv("USERPROFILE") or ""
+    dev_indicators = ["/home/", "/Users/", "C:\\Users\\", "localhost", "127.0.0.1"]
 
     if any(indicator in home for indicator in dev_indicators):
         # Likely development environment
@@ -548,9 +527,7 @@ def log_redaction_status() -> None:
     is_prod = is_production_environment()
 
     logger.info(
-        f"PII Redaction Configuration: "
-        f"Level={level}, "
-        f"Environment={'PRODUCTION' if is_prod else 'DEVELOPMENT'}"
+        f"PII Redaction Configuration: " f"Level={level}, " f"Environment={'PRODUCTION' if is_prod else 'DEVELOPMENT'}"
     )
 
     if level == REDACTION_DEBUG and is_prod:
@@ -561,8 +538,7 @@ def log_redaction_status() -> None:
         )
     elif level == REDACTION_DEBUG:
         logger.warning(
-            "PII redaction is DISABLED (DEBUG mode). "
-            "Do not store, transmit, or share logs containing PII."
+            "PII redaction is DISABLED (DEBUG mode). " "Do not store, transmit, or share logs containing PII."
         )
 
 
@@ -600,11 +576,7 @@ class PIIRedactor:
         'API key: [REDACTED]'
     """
 
-    def __init__(
-        self,
-        level: RedactionLevel = RedactionLevel.PRODUCTION,
-        preserve_network_prefixes: bool = True
-    ):
+    def __init__(self, level: RedactionLevel = RedactionLevel.PRODUCTION, preserve_network_prefixes: bool = True):
         """
         Initialize PII redactor with configuration.
 
@@ -762,21 +734,21 @@ class PIIRedactor:
 # Export public API
 __all__ = [
     # Classes
-    'RedactionLevel',
-    'PIIRedactor',
+    "RedactionLevel",
+    "PIIRedactor",
     # Functions (backward compatibility)
-    'redact_ip_addresses',
-    'redact_ipv4_addresses',
-    'redact_ipv6_addresses',
-    'redact_mac_addresses',
-    'redact_file_paths',
-    'redact_credentials',
-    'redact_for_logging',
-    'get_redaction_level',
-    'is_production_environment',
-    'log_redaction_status',
+    "redact_ip_addresses",
+    "redact_ipv4_addresses",
+    "redact_ipv6_addresses",
+    "redact_mac_addresses",
+    "redact_file_paths",
+    "redact_credentials",
+    "redact_for_logging",
+    "get_redaction_level",
+    "is_production_environment",
+    "log_redaction_status",
     # Constants
-    'REDACTION_PRODUCTION',
-    'REDACTION_DEVELOPMENT',
-    'REDACTION_DEBUG',
+    "REDACTION_PRODUCTION",
+    "REDACTION_DEVELOPMENT",
+    "REDACTION_DEBUG",
 ]

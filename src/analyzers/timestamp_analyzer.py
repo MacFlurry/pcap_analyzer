@@ -491,7 +491,11 @@ class TimestampAnalyzer:
         if len(durations) > 10:
             # Simple periodic detection: check if durations cluster around a value
             median_duration = statistics.median(durations)
-            within_10pct = sum(1 for d in durations if abs(d - median_duration) / median_duration < 0.1) if median_duration > 0 else 0
+            within_10pct = (
+                sum(1 for d in durations if abs(d - median_duration) / median_duration < 0.1)
+                if median_duration > 0
+                else 0
+            )
             is_periodic = (within_10pct / len(durations)) > 0.5 if durations else False
             pattern = f"Periodic (~{median_duration:.0f}s interval)" if is_periodic else "Random"
         else:

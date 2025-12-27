@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RateLimitState:
     """Track rate limit state for a client."""
+
     failed_attempts: int = 0
     last_attempt_time: float = 0.0
     lockout_until: float = 0.0
@@ -54,10 +55,7 @@ class RateLimiter:
             return
 
         # Remove entries with no recent activity (1 hour)
-        stale_keys = [
-            key for key, state in self.states.items()
-            if now - state.last_attempt_time > 3600
-        ]
+        stale_keys = [key for key, state in self.states.items() if now - state.last_attempt_time > 3600]
         for key in stale_keys:
             del self.states[key]
 
@@ -110,7 +108,9 @@ class RateLimiter:
             logger.warning(f"Rate limit: Client {client_id} locked out for 2s (5 failed attempts)")
         elif state.failed_attempts >= 6:
             state.lockout_until = time.time() + 5  # 5 seconds
-            logger.warning(f"Rate limit: Client {client_id} locked out for 5s ({state.failed_attempts} failed attempts)")
+            logger.warning(
+                f"Rate limit: Client {client_id} locked out for 5s ({state.failed_attempts} failed attempts)"
+            )
 
     def record_success(self, client_id: str):
         """

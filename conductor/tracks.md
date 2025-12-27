@@ -8,6 +8,11 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Context: Deploy to production VPS with Let's Encrypt automated TLS (pending infrastructure)*
 *Link: [./conductor/tracks/vps_deployment_https/](./conductor/tracks/vps_deployment_https/)*
 
+## [~] Track: Fix User Menu Not Showing After Password Change
+*Context: Fix UX critical bug where user menu (profile + logout) doesn't appear after forced password change*
+*Link: [./conductor/tracks/fix_password_change_ui_bug/](./conductor/tracks/fix_password_change_ui_bug/)*
+*Priority: High | Type: Bug Fix | Status: Ready for Implementation*
+
 ## [x] Track: Version Synchronization & v5.0.0-rc2 Release
 *Link: [./conductor/archive/tracks/version_sync_v5_0_0_rc2/](./conductor/archive/tracks/version_sync_v5_0_0_rc2/)*
 

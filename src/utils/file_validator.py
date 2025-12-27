@@ -36,13 +36,13 @@ logger = logging.getLogger(__name__)
 # Reference: https://wiki.wireshark.org/Development/LibpcapFileFormat
 PCAP_MAGIC_NUMBERS = {
     # Standard PCAP format (microsecond precision)
-    b'\xa1\xb2\xc3\xd4': 'pcap',  # Big-endian
-    b'\xd4\xc3\xb2\xa1': 'pcap',  # Little-endian
+    b"\xa1\xb2\xc3\xd4": "pcap",  # Big-endian
+    b"\xd4\xc3\xb2\xa1": "pcap",  # Little-endian
     # PCAP with nanosecond precision
-    b'\xa1\xb2\x3c\x4d': 'pcap-ns',  # Big-endian
-    b'\x4d\x3c\xb2\xa1': 'pcap-ns',  # Little-endian
+    b"\xa1\xb2\x3c\x4d": "pcap-ns",  # Big-endian
+    b"\x4d\x3c\xb2\xa1": "pcap-ns",  # Little-endian
     # PCAP-NG format (next generation)
-    b'\x0a\x0d\x0d\x0a': 'pcapng',  # Section Header Block magic
+    b"\x0a\x0d\x0d\x0a": "pcapng",  # Section Header Block magic
 }
 
 # Default file size limits (OWASP ASVS 5.2.1)
@@ -111,14 +111,12 @@ def validate_pcap_magic_number(file_path: str) -> str:
             raise ValueError("Invalid PCAP file: path is not a regular file")
 
         # Read only first 4 bytes (magic number)
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             magic_bytes = f.read(4)
 
         # Validate we read enough bytes
         if len(magic_bytes) < 4:
-            raise ValueError(
-                f"Invalid PCAP file: file too small (minimum {MIN_FILE_SIZE} bytes required)"
-            )
+            raise ValueError(f"Invalid PCAP file: file too small (minimum {MIN_FILE_SIZE} bytes required)")
 
         # Check if magic number matches any known PCAP format
         if magic_bytes in PCAP_MAGIC_NUMBERS:
@@ -128,7 +126,7 @@ def validate_pcap_magic_number(file_path: str) -> str:
 
         # Security: Do not leak file path in error message
         # Convert magic bytes to hex for error message
-        magic_hex = '0x' + magic_bytes.hex()
+        magic_hex = "0x" + magic_bytes.hex()
         error_msg = (
             f"Invalid PCAP file: magic number {magic_hex} not recognized. "
             f"Expected one of: standard PCAP (0xa1b2c3d4), PCAP-NS (0xa1b23c4d), "
@@ -153,10 +151,7 @@ def validate_pcap_magic_number(file_path: str) -> str:
         raise ValueError(f"Cannot read PCAP file: {type(e).__name__}") from e
 
 
-def validate_pcap_file_size(
-    file_path: str,
-    max_size_gb: int = DEFAULT_MAX_SIZE_GB
-) -> int:
+def validate_pcap_file_size(file_path: str, max_size_gb: int = DEFAULT_MAX_SIZE_GB) -> int:
     """
     Validate PCAP file size to prevent resource exhaustion attacks.
 
@@ -264,10 +259,7 @@ def validate_pcap_file_size(
         raise ValueError(f"Cannot access PCAP file: {type(e).__name__}") from e
 
 
-def validate_pcap_file(
-    file_path: str,
-    max_size_gb: int = DEFAULT_MAX_SIZE_GB
-) -> tuple[str, int]:
+def validate_pcap_file(file_path: str, max_size_gb: int = DEFAULT_MAX_SIZE_GB) -> tuple[str, int]:
     """
     Comprehensive PCAP file validation (magic number + file size).
 

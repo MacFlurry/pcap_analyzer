@@ -140,17 +140,13 @@ class CleanupScheduler:
         try:
             # 1. Tasks where worker died (timeout heartbeat)
             # Use 2 minutes timeout for orphan detection
-            orphaned_task_ids = await self.db_service.find_orphaned_tasks(
-                heartbeat_timeout_minutes=2
-            )
+            orphaned_task_ids = await self.db_service.find_orphaned_tasks(heartbeat_timeout_minutes=2)
 
             if not orphaned_task_ids:
                 logger.debug("No orphaned tasks found")
                 return
 
-            logger.warning(
-                f"Found {len(orphaned_task_ids)} orphaned tasks: {orphaned_task_ids}"
-            )
+            logger.warning(f"Found {len(orphaned_task_ids)} orphaned tasks: {orphaned_task_ids}")
 
             # Marquer chaque tâche comme FAILED
             for task_id in orphaned_task_ids:
@@ -174,29 +170,29 @@ class CleanupScheduler:
         Sert de filet de sécurité pour les suppressions échouées ou manuelles.
         """
         logger.info("Starting orphaned files cleanup safety net...")
-        
+
         try:
             # Récupérer tous les IDs de tâches valides en base
             query = "SELECT task_id FROM tasks"
             rows = await self.db_service.pool.fetch_all(query)
             valid_task_ids = {str(row["task_id"]) for row in rows}
-            
+
             deleted_count = 0
             freed_bytes = 0
-            
+
             # Vérifier reports/ et uploads/
             for dir_name in ["reports", "uploads"]:
                 dir_path = self.data_dir / dir_name
                 if not dir_path.exists():
                     continue
-                
+
                 for file_path in dir_path.iterdir():
                     if not file_path.is_file():
                         continue
-                    
+
                     # L'ID de la tâche est le nom du fichier (sans extension)
                     task_id = file_path.stem
-                    
+
                     # Si l'ID n'est pas en base, c'est un fichier orphelin
                     if task_id not in valid_task_ids:
                         file_size = file_path.stat().st_size
@@ -204,12 +200,14 @@ class CleanupScheduler:
                         deleted_count += 1
                         freed_bytes += file_size
                         logger.warning(f"Deleted orphaned file: {file_path.name} (no DB record)")
-            
+
             if deleted_count > 0:
-                logger.info(f"Orphaned cleanup completed: {deleted_count} files deleted, {freed_bytes / (1024**2):.2f} MB freed")
+                logger.info(
+                    f"Orphaned cleanup completed: {deleted_count} files deleted, {freed_bytes / (1024**2):.2f} MB freed"
+                )
             else:
                 logger.info("No orphaned files found")
-                
+
         except Exception as e:
             logger.error(f"Error during orphaned files cleanup: {e}", exc_info=True)
 

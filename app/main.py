@@ -20,6 +20,7 @@ from app.security.csrf import requires_csrf_protection
 from app.services.cleanup import CleanupScheduler
 from app.services.database import get_db_service
 from app.services.user_database import get_user_db_service
+from app.services.password_reset_service import get_password_reset_service
 from app.services.worker import get_worker
 from src.__version__ import __version__
 
@@ -61,11 +62,15 @@ async def lifespan(app: FastAPI):
     await user_db_service.init_db()
     logger.info("User database initialized")
 
+    # Initialiser le service de réinitialisation de mot de passe
+    password_reset_service = get_password_reset_service()
+    await password_reset_service.init_db()
+    logger.info("Password reset service initialized")
+
     # Migrer la table tasks pour ajouter owner_id (multi-tenant)
     await user_db_service.migrate_tasks_table()
     # Migrer la table users pour ajouter les colonnes 2FA
     await user_db_service.migrate_users_table()
-
 
     # Créer compte admin brise-glace si aucun admin n'existe
     admin_password = await user_db_service.create_admin_breakglass_if_not_exists()
@@ -95,8 +100,9 @@ async def lifespan(app: FastAPI):
     # Fermer les pools de connexion
     await db_service.pool.close()
     await user_db_service.pool.close()
+    await password_reset_service.pool.close()
     logger.info("Database pools closed")
-    
+
     logger.info("PCAP Analyzer Web API shutdown complete")
 
 
@@ -121,6 +127,7 @@ app = FastAPI(
 # CSRF PROTECTION CONFIGURATION
 # ========================================
 
+
 # Exception handler for CSRF errors
 @app.exception_handler(CsrfProtectError)
 async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
@@ -128,10 +135,7 @@ async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError
     Handle CSRF validation errors.
     Returns HTTP 403 Forbidden with detailed error message.
     """
-    logger.warning(
-        f"CSRF validation failed: {exc.message} "
-        f"(method={request.method}, path={request.url.path})"
-    )
+    logger.warning(f"CSRF validation failed: {exc.message} " f"(method={request.method}, path={request.url.path})")
     return JSONResponse(
         status_code=403,
         content={

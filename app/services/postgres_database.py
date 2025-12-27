@@ -44,14 +44,15 @@ class DatabasePool:
             if not database_url:
                 data_dir = os.getenv("DATA_DIR", "/data")
                 database_url = f"sqlite:///{os.path.join(data_dir, 'pcap_analyzer.db')}"
-        
+
         self.database_url = database_url
 
         # Parse URL to detect database type
         parsed = urlparse(self.database_url)
         self.db_type = parsed.scheme.split("+")[0]  # Handle postgresql+asyncpg
-        
+
         import traceback
+
         logger.info(f"Database pool initialized: {self.db_type} from {self.database_url}")
         # logger.debug("".join(traceback.format_stack()))
 
@@ -233,7 +234,7 @@ class DatabasePool:
                     param_count += 1
                 else:
                     translated_query += char
-            
+
             logger.debug(f"SQL TRANSLATE: original='{query}' -> translated='{translated_query}', params={params}")
             return translated_query, params
         else:

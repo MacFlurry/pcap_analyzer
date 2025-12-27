@@ -74,28 +74,29 @@ class PasswordUpdate(BaseModel):
 
         # Check password strength using zxcvbn (0-4 scale)
         result = zxcvbn(v)
-        score = result['score']
-        feedback = result['feedback']
+        score = result["score"]
+        feedback = result["feedback"]
 
         # Require score ≥ 3 (strong or very strong)
         if score < 3:
             # Build detailed error message from zxcvbn feedback
             error_parts = [f"Password is too weak (strength: {score}/4, need ≥3)"]
 
-            if feedback.get('warning'):
+            if feedback.get("warning"):
                 error_parts.append(f"Warning: {feedback['warning']}")
 
-            if feedback.get('suggestions'):
-                suggestions = '; '.join(feedback['suggestions'])
+            if feedback.get("suggestions"):
+                suggestions = "; ".join(feedback["suggestions"])
                 error_parts.append(f"Suggestions: {suggestions}")
 
-            raise ValueError('. '.join(error_parts))
+            raise ValueError(". ".join(error_parts))
 
         return v
 
 
 class ForgotPasswordRequest(BaseModel):
     """Schema for password reset request."""
+
     email: EmailStr
 
 
@@ -108,107 +109,100 @@ async def forgot_password(
 ):
     """
     Request a password reset link.
-    
+
     Rate limited: 3 requests per 15 minutes per IP.
     Always returns 200 OK to prevent user enumeration.
     """
     # Rate limiting
     client_ip = request.client.host if request.client else "unknown"
     rate_limiter = get_rate_limiter()
-    
+
     # Custom limit for forgot password: 3 attempts
     # We reuse the rate limiter but check manually if needed or just use the generic one.
     # The generic one has exponential backoff after 3 failed attempts.
     # Here we want strict limit on requests regardless of success/failure to prevent spam.
-    
+
     # NOTE: The current RateLimiter is designed for failed LOGIN attempts with exponential backoff.
     # We'll use a simple check here: if is_allowed returns False, we reject.
     # Ideally we'd have a separate limiter for this endpoint.
     # For now, we reuse it.
-    
+
     allowed, retry_after = rate_limiter.is_allowed(client_ip)
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many requests. Please try again in {retry_after:.0f} seconds.",
         )
-        
+
     # We record "failure" to increment the counter for this IP, effectively rate limiting it.
     # This is a bit of a hack on the existing RateLimiter designed for logins.
     # A better approach would be a separate RateLimiter instance or method.
     # But sticking to constraints:
-    rate_limiter.record_failure(client_ip) 
-    
+    rate_limiter.record_failure(client_ip)
+
     user_db = get_user_db_service()
-    
+
     # Lookup user (case-insensitive done in DB service usually, but email is lowercased there)
     # We need to get user by email.
     # Existing method is get_user_by_username.
     # We need get_user_by_email.
-    
+
     # Let's add get_user_by_email to UserDatabaseService or iterate/query manually?
     # UserDatabaseService has no get_user_by_email explicitly shown in previous read_file output?
     # Wait, let's check `app/services/user_database.py` again.
     # It has `get_user_by_username`.
     # It has `get_user_by_id`.
     # It does NOT have `get_user_by_email`.
-    
+
     # I will query directly using the pool here or I should add it to service.
     # Best practice: Add to service. But I can't edit that file in this step easily without context switching.
     # I will use a direct query via pool for now or fetch all and filter (bad performance).
     # Actually, `create_user` checks for email existence, so index exists.
-    
+
     # For now, I'll implement a quick lookup helper here or use what's available.
     # I'll rely on `user_db.pool.fetch_one`.
-    
-    query, params = user_db.pool.translate_query(
-        "SELECT id FROM users WHERE email = ?",
-        (payload.email.lower(),)
-    )
+
+    query, params = user_db.pool.translate_query("SELECT id FROM users WHERE email = ?", (payload.email.lower(),))
     row = await user_db.pool.fetch_one(query, *params)
-    
+
     if row:
         user_id = str(row["id"])
         user = await user_db.get_user_by_id(user_id)
-        
+
         if user and user.is_active and user.is_approved:
             # Generate token
             reset_service = get_password_reset_service()
             token = await reset_service.create_reset_token(
-                user_id=user.id,
-                ip_address=client_ip,
-                user_agent=request.headers.get("User-Agent")
+                user_id=user.id, ip_address=client_ip, user_agent=request.headers.get("User-Agent")
             )
-            
+
             # Construct reset link
             # Assuming frontend URL structure
             base_url = os.getenv("APP_BASE_URL", "http://pcaplab.com")
             reset_link = f"{base_url}/reset-password?token={token}"
-            
+
             # Send email
             from datetime import datetime, timezone
+
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-            
+
             background_tasks.add_task(
-                email_service.send_password_reset_request_email,
-                user,
-                reset_link,
-                client_ip,
-                timestamp
+                email_service.send_password_reset_request_email, user, reset_link, client_ip, timestamp
             )
-            
+
             logger.info(f"Password reset requested for {user.email}")
         else:
             logger.warning(f"Password reset requested for inactive/unapproved user {payload.email}")
     else:
         logger.warning(f"Password reset requested for non-existent email {payload.email}")
-        
+
     # Always return 200 OK
     return {"message": "If an account exists with this email, a password reset link has been sent."}
 
 
 class ResetPasswordRequest(BaseModel):
     """Schema for resetting password with token."""
+
     token: str
     new_password: str = Field(..., min_length=12, max_length=128)
 
@@ -219,14 +213,14 @@ class ResetPasswordRequest(BaseModel):
             raise ValueError("Password must be at least 12 characters")
 
         result = zxcvbn(v)
-        score = result['score']
-        feedback = result['feedback']
+        score = result["score"]
+        feedback = result["feedback"]
 
         if score < 3:
             error_parts = [f"Password is too weak (strength: {score}/4, need ≥3)"]
-            if feedback.get('warning'):
+            if feedback.get("warning"):
                 error_parts.append(f"Warning: {feedback['warning']}")
-            raise ValueError('. '.join(error_parts))
+            raise ValueError(". ".join(error_parts))
         return v
 
 
@@ -241,15 +235,16 @@ async def reset_password(
     Reset password using a valid token.
     """
     reset_service = get_password_reset_service()
-    
+
     # 1. Hash token provided by user
     import hashlib
-    token_hash = hashlib.sha256(payload.token.encode('utf-8')).hexdigest()
-    
+
+    token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
+
     # 2. Validate token
     user = await reset_service.validate_token(token_hash)
     if not user:
-        # Generic error message for security? 
+        # Generic error message for security?
         # Actually, for reset, if token is invalid, we should tell them so they can request a new one.
         # But we shouldn't reveal if the token was "just expired" vs "never existed" if we want to be super strict,
         # but UX wise, "Invalid or expired token" is standard.
@@ -257,20 +252,22 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired token. Please request a new password reset link.",
         )
-    
+
     user_db = get_user_db_service()
-    
+
     # 3. Check password history (reuse)
     try:
         is_reused = await user_db.check_password_reuse(user.id, payload.new_password)
         if is_reused:
-            raise ValueError("Password was used recently. Please choose a different password (last 5 passwords cannot be reused)")
-            
+            raise ValueError(
+                "Password was used recently. Please choose a different password (last 5 passwords cannot be reused)"
+            )
+
         # 4. Update password
         # Use update_password which handles hashing and history update
         # This also clears password_must_change flag
         await user_db.update_password(user.id, payload.new_password)
-        
+
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -282,38 +279,36 @@ async def reset_password(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
         )
-        
+
     # 5. Consume token
     await reset_service.consume_token(token_hash)
-    
+
     # 6. Invalidate other tokens for this user?
     # Security best practice: invalidate all other reset tokens
     await reset_service.invalidate_user_tokens(user.id)
-    
+
     # 7. Send confirmation email
     client_ip = request.client.host if request.client else "unknown"
     from datetime import datetime, timezone
+
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    
-    background_tasks.add_task(
-        email_service.send_password_reset_success_email,
-        user,
-        client_ip,
-        timestamp
-    )
-    
+
+    background_tasks.add_task(email_service.send_password_reset_success_email, user, client_ip, timestamp)
+
     logger.info(f"Password reset successful for user {user.username}")
-    
+
     return {"message": "Password reset successful. You can now login with your new password."}
 
 
 class ValidateTokenRequest(BaseModel):
     token: str
 
+
 class ValidateTokenResponse(BaseModel):
     valid: bool
     email: Optional[str] = None
     message: Optional[str] = None
+
 
 @router.post("/auth/validate-reset-token", response_model=ValidateTokenResponse)
 async def validate_reset_token(payload: ValidateTokenRequest):
@@ -323,27 +318,29 @@ async def validate_reset_token(payload: ValidateTokenRequest):
     """
     reset_service = get_password_reset_service()
     import hashlib
-    token_hash = hashlib.sha256(payload.token.encode('utf-8')).hexdigest()
-    
+
+    token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
+
     user = await reset_service.validate_token(token_hash)
-    
+
     if not user:
         return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={"valid": False, "message": "Invalid or expired token"}
+            status_code=status.HTTP_400_BAD_REQUEST, content={"valid": False, "message": "Invalid or expired token"}
         )
-        
+
     # Mask email
-    email_parts = user.email.split('@')
+    email_parts = user.email.split("@")
     masked_email = f"{email_parts[0][0]}***@{email_parts[1]}"
-    
+
     return ValidateTokenResponse(valid=True, email=masked_email)
 
 
 class AdminResetPasswordRequest(BaseModel):
     """Schema for admin-initiated password reset."""
+
     send_email: bool = True
     notify_user: bool = True
+
 
 @router.post("/admin/users/{user_id}/reset-password", response_model=dict)
 async def admin_reset_user_password(
@@ -358,58 +355,52 @@ async def admin_reset_user_password(
     Generates a temporary password and optionally emails it to the user.
     """
     user_db = get_user_db_service()
-    
+
     # 1. Get user
     user = await user_db.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
+
     # 2. Prevent resetting another admin
     if user.role == UserRole.ADMIN and user.id != admin.id:
         raise HTTPException(
-            status_code=403, 
-            detail="Cannot reset another admin's password. They must use self-service recovery."
+            status_code=403, detail="Cannot reset another admin's password. They must use self-service recovery."
         )
-        
+
     # 3. Generate temp password
     import secrets
+
     temp_password = secrets.token_urlsafe(16)
-    
+
     # 4. Update user
     # This sets password_must_change=False in update_password, but we want True.
     # update_password does: hashed_password = hash(pw), password_must_change = False
     # We need to set it to True manually or add a param to update_password?
     # update_password doesn't take a param.
     # We can call update_password then execute a raw query to set must_change=True.
-    
+
     await user_db.update_password(user.id, temp_password)
-    
+
     # Force password change
     query, params = user_db.pool.translate_query(
-        "UPDATE users SET password_must_change = ? WHERE id = ?",
-        (True, user.id)
+        "UPDATE users SET password_must_change = ? WHERE id = ?", (True, user.id)
     )
     await user_db.pool.execute(query, *params)
-    
+
     logger.warning(f"🔐 AUDIT: Admin {admin.username} reset password for user {user.username}")
-    
+
     response = {
         "user_id": user.id,
         "username": user.username,
-        "message": "Password reset successful. User will be prompted to change password on next login."
+        "message": "Password reset successful. User will be prompted to change password on next login.",
     }
-    
+
     if payload.send_email:
-        background_tasks.add_task(
-            email_service.send_admin_password_reset_email,
-            user,
-            temp_password,
-            admin.username
-        )
+        background_tasks.add_task(email_service.send_admin_password_reset_email, user, temp_password, admin.username)
         response["message"] = "Password reset email sent. User will be prompted to change password on next login."
     else:
         response["temporary_password"] = temp_password
-        
+
     return response
 
 
@@ -418,7 +409,7 @@ async def login(
     request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    totp_code: Optional[str] = Form(None)
+    totp_code: Optional[str] = Form(None),
 ):
     """
     Login endpoint (OAuth2 password flow) with rate limiting.
@@ -528,18 +519,18 @@ async def login(
                 detail="Two-factor authentication required",
                 headers={"WWW-Authenticate": "Bearer", "X-MFA-Required": "true"},
             )
-        
+
         # Verify TOTP
         if not user.totp_secret:
-             logger.error(f"User {user.username} has 2FA enabled but no secret")
-             raise HTTPException(status_code=500, detail="Internal 2FA error")
+            logger.error(f"User {user.username} has 2FA enabled but no secret")
+            raise HTTPException(status_code=500, detail="Internal 2FA error")
 
         totp = pyotp.TOTP(user.totp_secret)
         # Allow window of 1 (30s before/after) to account for clock drift
         if not totp.verify(totp_code, valid_window=1):
             # Try backup codes
             is_valid_backup = await user_db.consume_backup_code(user.id, totp_code)
-            
+
             if not is_valid_backup:
                 logger.warning("Failed login attempt: invalid 2FA code")
                 rate_limiter.record_failure(client_ip)
@@ -568,9 +559,13 @@ async def login(
         max_age=1800,  # 30 minutes, same as JWT expiry
     )
 
-    logger.info(f"User logged in: {user.username} (role: {user.role.value}, password_must_change: {user.password_must_change})")
+    logger.info(
+        f"User logged in: {user.username} (role: {user.role.value}, password_must_change: {user.password_must_change})"
+    )
 
-    return Token(access_token=access_token, token_type="bearer", expires_in=1800, password_must_change=user.password_must_change)
+    return Token(
+        access_token=access_token, token_type="bearer", expires_in=1800, password_must_change=user.password_must_change
+    )
 
 
 @router.post("/logout")
@@ -787,16 +782,13 @@ async def get_all_users(
         Admin role
     """
     user_db = get_user_db_service()
-    
+
     # If offset is None, we assume legacy behavior (list only)
     # But UserDatabaseService now returns a tuple, so we handle both
     effective_offset = offset if offset is not None else 0
-    
+
     users, total = await user_db.get_all_users(
-        limit=limit, 
-        offset=effective_offset,
-        status_filter=status,
-        role_filter=role
+        limit=limit, offset=effective_offset, status_filter=status, role_filter=role
     )
 
     logger.info(f"Admin {admin.username} fetched {len(users)} users (Total: {total}, Offset: {effective_offset})")
@@ -823,12 +815,7 @@ async def get_all_users(
         return user_responses
 
     # Otherwise return paginated wrapper
-    return PaginatedUsersResponse(
-        users=user_responses,
-        total=total,
-        offset=effective_offset,
-        limit=limit
-    )
+    return PaginatedUsersResponse(users=user_responses, total=total, offset=effective_offset, limit=limit)
 
 
 @router.put("/admin/users/{user_id}/approve", response_model=UserResponse)
@@ -1197,7 +1184,7 @@ async def delete_user(
             "user_id": user_id,
             "username": user.username,
             "files_deleted": files_deleted,
-            "errors": deletion_errors if deletion_errors else None
+            "errors": deletion_errors if deletion_errors else None,
         }
 
     except Exception as e:
@@ -1749,19 +1736,26 @@ async def bulk_unblock_users(
 # 2FA ENDPOINTS
 # ========================================
 
+
 class TwoFASetupResponse(BaseModel):
     """Response for 2FA setup initiation."""
+
     secret: str
     qr_code: str
 
+
 class TwoFAEnableRequest(BaseModel):
     """Request to enable 2FA."""
+
     secret: str
     code: str
 
+
 class TwoFADisableRequest(BaseModel):
     """Request to disable 2FA."""
+
     password: str
+
 
 @router.post("/users/me/2fa/setup", response_model=TwoFASetupResponse)
 async def setup_2fa(current_user: User = Depends(get_current_user)):
@@ -1769,87 +1763,78 @@ async def setup_2fa(current_user: User = Depends(get_current_user)):
     Initiate 2FA setup.
     Generates a secret and QR code.
     Does NOT enable 2FA yet (user must verify).
-    
+
     Returns:
         Secret key and QR code image (base64)
     """
     if current_user.is_2fa_enabled:
         raise HTTPException(status_code=400, detail="2FA is already enabled")
-        
+
     # Generate secret
     secret = pyotp.random_base32()
-    
+
     # Create provisioning URI
-    uri = pyotp.totp.TOTP(secret).provisioning_uri(
-        name=current_user.email,
-        issuer_name="PCAP Analyzer"
-    )
-    
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=current_user.email, issuer_name="PCAP Analyzer")
+
     # Generate QR code
     img = qrcode.make(uri)
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
     qr_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    
-    return TwoFASetupResponse(
-        secret=secret,
-        qr_code=f"data:image/png;base64,{qr_b64}"
-    )
+
+    return TwoFASetupResponse(secret=secret, qr_code=f"data:image/png;base64,{qr_b64}")
+
 
 @router.post("/users/me/2fa/enable")
-async def enable_2fa(
-    request: TwoFAEnableRequest,
-    current_user: User = Depends(get_current_user)
-):
+async def enable_2fa(request: TwoFAEnableRequest, current_user: User = Depends(get_current_user)):
     """
     Enable 2FA after setup.
     Verifies the code against the secret.
     Returns backup codes.
-    
+
     Returns:
         Backup codes (save these!)
     """
     if current_user.is_2fa_enabled:
         raise HTTPException(status_code=400, detail="2FA is already enabled")
-        
+
     # Verify code
     totp = pyotp.TOTP(request.secret)
     # Allow window of 1 (30s before/after)
     if not totp.verify(request.code, valid_window=1):
         raise HTTPException(status_code=400, detail="Invalid 2FA code")
-        
+
     # Generate backup codes (10 codes, 8 hex chars each)
     import secrets
+
     backup_codes = [secrets.token_hex(4) for _ in range(10)]
-    
+
     user_db = get_user_db_service()
     await user_db.enable_2fa(current_user.id, request.secret, backup_codes)
-    
+
     logger.info(f"2FA enabled for user {current_user.username}")
-    
+
     return {"message": "2FA enabled successfully", "backup_codes": backup_codes}
 
+
 @router.post("/users/me/2fa/disable")
-async def disable_2fa(
-    request: TwoFADisableRequest,
-    current_user: User = Depends(get_current_user)
-):
+async def disable_2fa(request: TwoFADisableRequest, current_user: User = Depends(get_current_user)):
     """
     Disable 2FA.
     Requires password for security.
     """
     if not current_user.is_2fa_enabled:
         raise HTTPException(status_code=400, detail="2FA is not enabled")
-        
+
     user_db = get_user_db_service()
-    
+
     # Verify password
     if not user_db.verify_password(request.password, current_user.hashed_password):
         logger.warning(f"Failed to disable 2FA for {current_user.username}: incorrect password")
         raise HTTPException(status_code=401, detail="Incorrect password")
-        
+
     await user_db.disable_2fa(current_user.id)
-    
+
     logger.info(f"2FA disabled for user {current_user.username}")
-    
+
     return {"message": "2FA disabled successfully"}

@@ -30,7 +30,7 @@ CRITICAL_EXPANSION_RATIO = int(os.getenv("CRITICAL_EXPANSION_RATIO", "10000"))
 PCAP_MAGIC_LE = b"\xd4\xc3\xb2\xa1"  # Little-endian
 PCAP_MAGIC_BE = b"\xa1\xb2\xc3\xd4"  # Big-endian
 PCAP_MAGIC_NS = b"\x4d\x3c\x2b\x1a"  # Nanosecond resolution
-PCAPNG_MAGIC = b"\x0a\x0d\x0d\x0a"   # PCAPNG Section Header Block
+PCAPNG_MAGIC = b"\x0a\x0d\x0d\x0a"  # PCAPNG Section Header Block
 
 
 async def validate_upload_size_streaming(
@@ -68,9 +68,7 @@ async def validate_upload_size_streaming(
 
         # Check size DURING reading (not after!)
         if total_bytes > max_size_bytes:
-            logger.warning(
-                f"Upload rejected: size {total_bytes} bytes exceeds limit {max_size_bytes} bytes"
-            )
+            logger.warning(f"Upload rejected: size {total_bytes} bytes exceeds limit {max_size_bytes} bytes")
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=f"File too large (max: {max_size_mb} MB)",
@@ -201,9 +199,7 @@ async def validate_pcap_upload_complete(file: UploadFile) -> Tuple[bytes, str]:
             detect_decompression_bomb(chunks, estimated_size)
 
     if not chunks:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file upload"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file upload")
 
     # Step 2: Magic number validation on first chunk
     pcap_type = validate_pcap_magic_bytes_streaming(chunks[0])

@@ -57,9 +57,7 @@ async def verify_sqlite_migration():
             db.row_factory = aiosqlite.Row
 
             # Check users table
-            async with db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
-            ) as cursor:
+            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'") as cursor:
                 result = await cursor.fetchone()
                 if not result:
                     print("ERROR: users table not found")
@@ -67,9 +65,7 @@ async def verify_sqlite_migration():
                 print("  - users table: OK")
 
             # Check tasks table
-            async with db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'"
-            ) as cursor:
+            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'") as cursor:
                 result = await cursor.fetchone()
                 if not result:
                     print("ERROR: tasks table not found")
@@ -161,9 +157,7 @@ async def verify_sqlite_migration():
         # Verify tables are dropped
         async with aiosqlite.connect(db_path) as db:
             db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ) as cursor:
+            async with db.execute("SELECT name FROM sqlite_master WHERE type='table'") as cursor:
                 tables = await cursor.fetchall()
                 # Only alembic_version should remain
                 table_names = [t["name"] for t in tables]

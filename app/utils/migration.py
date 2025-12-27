@@ -41,14 +41,10 @@ async def export_sqlite_to_json(sqlite_url: str, output_file: str) -> Dict[str, 
     await user_db.init_db()
 
     export_data = {
-        "metadata": {
-            "export_date": datetime.now(timezone.utc).isoformat(),
-            "source_type": "sqlite",
-            "version": "1.0"
-        },
+        "metadata": {"export_date": datetime.now(timezone.utc).isoformat(), "source_type": "sqlite", "version": "1.0"},
         "users": [],
         "tasks": [],
-        "progress_snapshots": []
+        "progress_snapshots": [],
     }
 
     # Export users
@@ -67,7 +63,7 @@ async def export_sqlite_to_json(sqlite_url: str, output_file: str) -> Dict[str, 
         export_data["progress_snapshots"].append(dict(row))
 
     # Write to file
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         json.dump(export_data, f, indent=2, default=str)
 
     return export_data
@@ -86,7 +82,7 @@ async def import_json_to_postgresql(postgres_url: str, input_file: str) -> None:
     - Timestamp conversion (ISO string → datetime)
     - NULL owner_id preservation
     """
-    with open(input_file, 'r') as f:
+    with open(input_file, "r") as f:
         data = json.load(f)
 
     db = DatabaseService(database_url=postgres_url)
@@ -97,19 +93,26 @@ async def import_json_to_postgresql(postgres_url: str, input_file: str) -> None:
 
     # Import users
     for user in data["users"]:
-        await user_db.pool.execute("""
+        await user_db.pool.execute(
+            """
             INSERT INTO users (id, username, email, hashed_password, role, is_active, is_approved, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (id) DO NOTHING
         """,
-            user["id"], user["username"], user["email"], user["hashed_password"],
-            user["role"], user["is_active"], user["is_approved"],
-            datetime.fromisoformat(user["created_at"])
+            user["id"],
+            user["username"],
+            user["email"],
+            user["hashed_password"],
+            user["role"],
+            user["is_active"],
+            user["is_approved"],
+            datetime.fromisoformat(user["created_at"]),
         )
 
     # Import tasks
     for task in data["tasks"]:
-        await db.pool.execute("""
+        await db.pool.execute(
+            """
             INSERT INTO tasks (
                 task_id, filename, status, uploaded_at, analyzed_at,
                 file_size_bytes, total_packets, health_score,
@@ -118,29 +121,41 @@ async def import_json_to_postgresql(postgres_url: str, input_file: str) -> None:
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             ON CONFLICT (task_id) DO NOTHING
         """,
-            task["task_id"], task["filename"], task["status"],
+            task["task_id"],
+            task["filename"],
+            task["status"],
             datetime.fromisoformat(task["uploaded_at"]) if task["uploaded_at"] else None,
             datetime.fromisoformat(task["analyzed_at"]) if task.get("analyzed_at") else None,
-            task["file_size_bytes"], task.get("total_packets"), task.get("health_score"),
-            task.get("report_html_path"), task.get("report_json_path"), task.get("error_message"),
+            task["file_size_bytes"],
+            task.get("total_packets"),
+            task.get("health_score"),
+            task.get("report_html_path"),
+            task.get("report_json_path"),
+            task.get("error_message"),
             datetime.fromisoformat(task["created_at"]) if task.get("created_at") else None,
             datetime.fromisoformat(task["last_heartbeat"]) if task.get("last_heartbeat") else None,
-            task.get("progress_percent", 0), task.get("current_phase"),
-            task.get("owner_id")  # May be NULL for legacy data
+            task.get("progress_percent", 0),
+            task.get("current_phase"),
+            task.get("owner_id"),  # May be NULL for legacy data
         )
 
     # Import progress snapshots
     for snapshot in data["progress_snapshots"]:
-        await db.pool.execute("""
+        await db.pool.execute(
+            """
             INSERT INTO progress_snapshots (
                 task_id, phase, progress_percent, packets_processed,
                 total_packets, current_analyzer, message, timestamp
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         """,
-            snapshot["task_id"], snapshot["phase"], snapshot["progress_percent"],
-            snapshot.get("packets_processed"), snapshot.get("total_packets"),
-            snapshot.get("current_analyzer"), snapshot.get("message"),
-            datetime.fromisoformat(snapshot["timestamp"])
+            snapshot["task_id"],
+            snapshot["phase"],
+            snapshot["progress_percent"],
+            snapshot.get("packets_processed"),
+            snapshot.get("total_packets"),
+            snapshot.get("current_analyzer"),
+            snapshot.get("message"),
+            datetime.fromisoformat(snapshot["timestamp"]),
         )
 
 
@@ -179,7 +194,7 @@ async def migrate_database(sqlite_url: str, postgres_url: str, temp_file: str = 
         return {
             "users": len(data["users"]),
             "tasks": len(data["tasks"]),
-            "progress_snapshots": len(data["progress_snapshots"])
+            "progress_snapshots": len(data["progress_snapshots"]),
         }
     finally:
         # Clean up temporary file if we created it (security best practice)
@@ -189,4 +204,5 @@ async def migrate_database(sqlite_url: str, postgres_url: str, temp_file: str = 
             except Exception as e:
                 # Log but don't fail migration
                 import logging
+
                 logging.warning(f"Failed to clean up temporary file {temp_file}: {e}")

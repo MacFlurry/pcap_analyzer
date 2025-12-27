@@ -329,10 +329,14 @@ def analyze_pcap_hybrid(
 
     # DEBUG: Log if callback is provided
     if progress_callback:
-        logger.info(f"[CALLBACK DEBUG] cli_analyze_pcap_hybrid received callback: {progress_callback} (type: {type(progress_callback).__name__})")
+        logger.info(
+            f"[CALLBACK DEBUG] cli_analyze_pcap_hybrid received callback: {progress_callback} (type: {type(progress_callback).__name__})"
+        )
         logger.info("Progress callback is provided - will send real-time updates")
     else:
-        logger.warning("[CALLBACK DEBUG] cli_analyze_pcap_hybrid received NO callback - using Rich Progress bars for CLI")
+        logger.warning(
+            "[CALLBACK DEBUG] cli_analyze_pcap_hybrid received NO callback - using Rich Progress bars for CLI"
+        )
 
     # Sprint 10: Initialize performance optimization tools
     memory_optimizer = MemoryOptimizer(memory_limit_mb=memory_limit_mb)
@@ -340,7 +344,7 @@ def analyze_pcap_hybrid(
         pcap_file,
         enable_bomb_protection=enable_bomb_protection,
         max_expansion_ratio=max_expansion_ratio,
-        critical_expansion_ratio=max_expansion_ratio * 10  # Critical threshold is 10x the max
+        critical_expansion_ratio=max_expansion_ratio * 10,  # Critical threshold is 10x the max
     )
 
     # Show performance mode info
@@ -382,7 +386,7 @@ def analyze_pcap_hybrid(
         pcap_file,
         enable_bomb_protection=enable_bomb_protection,
         max_expansion_ratio=max_expansion_ratio,
-        critical_expansion_ratio=max_expansion_ratio * 10  # Critical threshold is 10x the max
+        critical_expansion_ratio=max_expansion_ratio * 10,  # Critical threshold is 10x the max
     )
 
     # Count total packets first for accurate progress reporting
@@ -396,7 +400,7 @@ def analyze_pcap_hybrid(
         pcap_file,
         enable_bomb_protection=enable_bomb_protection,
         max_expansion_ratio=max_expansion_ratio,
-        critical_expansion_ratio=max_expansion_ratio * 10
+        critical_expansion_ratio=max_expansion_ratio * 10,
     )
     total_packets = sum(1 for _ in counter_parser.parse())
 
@@ -675,7 +679,9 @@ def analyze_pcap_hybrid(
                                 console.print(f"[green]  GC collected {collected} objects[/green]")
                             elif memory_optimizer.consecutive_empty_gcs == 1:
                                 # Only log once when GC starts being ineffective
-                                console.print(f"[dim]  GC triggered but collected 0 objects (will reduce frequency)[/dim]")
+                                console.print(
+                                    f"[dim]  GC triggered but collected 0 objects (will reduce frequency)[/dim]"
+                                )
 
                         # Explicit cleanup after chunk processing
                         memory_optimizer.release_chunk_memory(chunk)
@@ -1165,35 +1171,20 @@ def analyze_pcap_hybrid(
     "--log-level",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
     default="INFO",
-    help="Set logging level (default: INFO, NEVER use DEBUG in production)"
+    help="Set logging level (default: INFO, NEVER use DEBUG in production)",
 )
-@click.option(
-    "--log-file",
-    type=click.Path(),
-    help="Path to log file (default: logs/pcap_analyzer.log)"
-)
-@click.option(
-    "--no-log-file",
-    is_flag=True,
-    help="Disable file logging (console only)"
-)
+@click.option("--log-file", type=click.Path(), help="Path to log file (default: logs/pcap_analyzer.log)")
+@click.option("--no-log-file", is_flag=True, help="Disable file logging (console only)")
 @click.option(
     "--log-format",
     type=click.Choice(["standard", "json"], case_sensitive=False),
     default="standard",
-    help="Log format: standard (human-readable) or json (SIEM-friendly)"
+    help="Log format: standard (human-readable) or json (SIEM-friendly)",
 )
 @click.option(
-    "--enable-audit-log",
-    is_flag=True,
-    default=True,
-    help="Enable separate security audit log (default: enabled)"
+    "--enable-audit-log", is_flag=True, default=True, help="Enable separate security audit log (default: enabled)"
 )
-@click.option(
-    "--log-config",
-    type=click.Path(exists=True),
-    help="Path to YAML logging configuration file"
-)
+@click.option("--log-config", type=click.Path(exists=True), help="Path to YAML logging configuration file")
 @click.pass_context
 def cli(ctx, log_level, log_file, no_log_file, log_format, enable_audit_log, log_config):
     """Analyseur automatisé des causes de latence réseau"""
@@ -1216,7 +1207,7 @@ def cli(ctx, log_level, log_file, no_log_file, log_format, enable_audit_log, log
                 enable_file=not no_log_file,
                 enable_audit=enable_audit_log,
                 log_format=log_format,
-                config_file=log_config
+                config_file=log_config,
             )
             _logging_initialized = True
 
@@ -1264,8 +1255,12 @@ def cli(ctx, log_level, log_file, no_log_file, log_format, enable_audit_log, log
     help="Enable parallel analyzer execution using multiple CPU cores (Sprint 10 - experimental)",
 )
 @click.option("--memory-limit", type=float, help="Set memory limit in MB (default: 80% of available memory)")
-@click.option("--max-memory", type=float, default=4.0, help="Maximum memory limit in GB for DoS protection (default: 4GB)")
-@click.option("--max-cpu-time", type=int, default=3600, help="Maximum CPU time in seconds for DoS protection (default: 3600s)")
+@click.option(
+    "--max-memory", type=float, default=4.0, help="Maximum memory limit in GB for DoS protection (default: 4GB)"
+)
+@click.option(
+    "--max-cpu-time", type=int, default=3600, help="Maximum CPU time in seconds for DoS protection (default: 3600s)"
+)
 @click.option(
     "--max-expansion-ratio",
     type=int,
@@ -1312,8 +1307,10 @@ def analyze(
     """
     # Log analysis start
     logger.info(f"Starting PCAP analysis: {pcap_file}")
-    logger.info(f"Parameters: latency_filter={latency}, include_localhost={include_localhost}, "
-                f"streaming={'disabled' if no_streaming else 'auto'}, parallel={parallel}")
+    logger.info(
+        f"Parameters: latency_filter={latency}, include_localhost={include_localhost}, "
+        f"streaming={'disabled' if no_streaming else 'auto'}, parallel={parallel}"
+    )
 
     # Security: Set OS-level resource limits to prevent DoS attacks (CWE-770, NIST SC-5)
     try:
@@ -1321,11 +1318,12 @@ def analyze(
             memory_gb=max_memory,
             cpu_seconds=max_cpu_time,
             max_file_size_gb=10.0,  # 10GB max for any output file
-            max_open_files=1024     # Standard Linux default
+            max_open_files=1024,  # Standard Linux default
         )
         console.print(f"[dim]Resource limits applied: {max_memory}GB RAM, {max_cpu_time}s CPU time[/dim]")
-        logger.info(f"Resource limits applied: memory={max_memory}GB, cpu={max_cpu_time}s, "
-                   f"file_size=10GB, open_files=1024")
+        logger.info(
+            f"Resource limits applied: memory={max_memory}GB, cpu={max_cpu_time}s, " f"file_size=10GB, open_files=1024"
+        )
     except ValueError as e:
         console.print(f"[red]Invalid resource limit values: {e}[/red]")
         logger.error(f"Invalid resource limit values: {e}")
@@ -1373,7 +1371,9 @@ def analyze(
         raise click.Abort()
     except ValueError as e:
         console.print(f"[red]✗ File validation failed: {e}[/red]")
-        console.print("[yellow]Hint: Ensure the file is a valid PCAP capture (not a text file, executable, or corrupted file).[/yellow]")
+        console.print(
+            "[yellow]Hint: Ensure the file is a valid PCAP capture (not a text file, executable, or corrupted file).[/yellow]"
+        )
         logger.error(f"File validation failed (ValueError): {e}")
         raise click.Abort()
     except Exception as e:
@@ -1444,8 +1444,12 @@ def analyze(
 @click.option("-c", "--config", type=click.Path(exists=True), help="Fichier de configuration personnalisé")
 @click.option("--analyze/--no-analyze", default=True, help="Analyser automatiquement après capture")
 @click.option("-l", "--latency", type=float, help="Seuil de latence pour l'analyse")
-@click.option("--max-memory", type=float, default=4.0, help="Maximum memory limit in GB for DoS protection (default: 4GB)")
-@click.option("--max-cpu-time", type=int, default=3600, help="Maximum CPU time in seconds for DoS protection (default: 3600s)")
+@click.option(
+    "--max-memory", type=float, default=4.0, help="Maximum memory limit in GB for DoS protection (default: 4GB)"
+)
+@click.option(
+    "--max-cpu-time", type=int, default=3600, help="Maximum CPU time in seconds for DoS protection (default: 3600s)"
+)
 def capture(duration, filter, output, config, analyze, latency, max_memory, max_cpu_time):
     """
     Capture des paquets via SSH depuis un serveur distant
@@ -1456,12 +1460,7 @@ def capture(duration, filter, output, config, analyze, latency, max_memory, max_
     """
     # Security: Set OS-level resource limits to prevent DoS attacks (CWE-770, NIST SC-5)
     try:
-        set_resource_limits(
-            memory_gb=max_memory,
-            cpu_seconds=max_cpu_time,
-            max_file_size_gb=10.0,
-            max_open_files=1024
-        )
+        set_resource_limits(memory_gb=max_memory, cpu_seconds=max_cpu_time, max_file_size_gb=10.0, max_open_files=1024)
         console.print(f"[dim]Resource limits applied: {max_memory}GB RAM, {max_cpu_time}s CPU time[/dim]")
     except Exception as e:
         console.print(f"[yellow]Warning: Failed to set resource limits: {e}[/yellow]")

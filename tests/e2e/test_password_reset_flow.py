@@ -21,6 +21,7 @@ def test_complete_password_reset_flow(page: Page, postgres_db_url, base_url, app
     4. Reset password page -> validation
     5. Submit new password
     6. Login with new password
+    7. Verify user menu is visible (Non-regression)
     """
     
     # 1. Setup user via helper script
@@ -53,16 +54,9 @@ def test_complete_password_reset_flow(page: Page, postgres_db_url, base_url, app
     expect(page.locator("#success-message")).to_be_visible()
     
     # 5. Inject known token (since we can't reverse hash)
-    # We could fetch the hash, but we don't know the plaintext.
-    # So we must inject a known pair.
-    
     known_token_plaintext = "test-token-1234567890"
     known_token_hash = hashlib.sha256(known_token_plaintext.encode()).hexdigest()
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
-    
-    # Need to be careful with timestamp format for different DBs?
-    # run_db_action handles translation if needed, but we just pass string.
-    # Postgres accepts ISO string.
     
     run_db_action(
         "raw_execute",
@@ -83,12 +77,11 @@ def test_complete_password_reset_flow(page: Page, postgres_db_url, base_url, app
     page.fill("#confirm_password", new_password)
     
     # Check strength meter
-    expect(page.locator("#strength-text")).to_contain_text(["Excellent", "Bon", "Moyen"]) # Should be strong enough
+    expect(page.locator("#strength-text")).to_contain_text("Excellent") 
     
     page.click("button[type='submit']")
     
-    # 9. Success redirect
-    # Wait for redirect to login
+    # 9. Success redirect to login
     page.wait_for_url(re.compile(r"/login"))
     
     # 10. Login with new password
@@ -97,12 +90,25 @@ def test_complete_password_reset_flow(page: Page, postgres_db_url, base_url, app
     page.click("button[type='submit']")
     
     # Should login successfully
-    expect(page).to_have_url(re.compile(r"/$")) # Redirect to index or upload
+    page.wait_for_url(re.compile(r"/$"))
+    
+    # 11. Verify user menu is visible (Non-regression)
+    user_menu = page.locator("#user-menu")
+    expect(user_menu).not_to_have_class(re.compile(r"hidden"))
+    
+    # 12. Verify initials
+    user_initials = page.locator("#user-initials")
+    expect(user_initials).to_be_visible()
+    
+    # 13. Verify logout functional
+    page.click("#user-menu-button")
+    page.click("#logout-btn")
+    page.wait_for_url(re.compile(r"/login"))
 
 
 def test_admin_reset_user_password(page: Page, postgres_db_url, base_url, apply_migrations):
     """
-    Test admin resetting user password via UI.
+    Test admin resetting user password via UI and verifying menu visibility after forced change.
     """
     # 1. Setup admin and user
     admin_name = f"admin_{uuid4().hex[:8]}"
@@ -124,26 +130,18 @@ def test_admin_reset_user_password(page: Page, postgres_db_url, base_url, apply_
     # 3. Go to admin panel
     page.goto(f"{base_url}/admin")
     
-    # 4. Find user and click reset (need to wait for table load)
-    # Search for user to isolate
+    # 4. Find user and click reset
     page.fill("#search-input", user_name)
-    page.click("#refresh-btn") # Trigger reload
-    
-    # Wait for user row
+    page.click("#refresh-btn") 
     page.wait_for_selector(f"text={user_name}")
     
-    # Click reset button inside the row
-    # Use playwright locator chaining
     row = page.locator("tr", has_text=user_name)
     reset_btn = row.locator("button[title='Reset Password']")
     reset_btn.click()
     
     # 5. Modal interaction
     expect(page.locator("#reset-password-modal")).to_be_visible()
-    
-    # Uncheck email (to get temp password in UI)
     page.uncheck("#reset-send-email")
-    
     page.click("#confirm-reset-password")
     
     # 6. Check temp password modal
@@ -153,7 +151,7 @@ def test_admin_reset_user_password(page: Page, postgres_db_url, base_url, apply_
     
     page.click("#close-temp-password-modal")
     
-    # 7. Logout
+    # 7. Logout admin
     page.goto(f"{base_url}/logout")
     
     # 8. Login as user with temp password
@@ -163,13 +161,34 @@ def test_admin_reset_user_password(page: Page, postgres_db_url, base_url, apply_
     page.click("button[type='submit']")
     
     # 9. Should redirect to change-password
-    # Because password_must_change=True
     page.wait_for_url(re.compile(r"/change-password"))
     
     # 10. Change password
-    page.fill("#current_password", temp_password)
-    page.fill("#new_password", "NewStrongPassword123!")
+    page.fill("#current-password", temp_password)
+    page.fill("#new-password", "New-Strong-Password-999!")
+    page.fill("#confirm-password", "New-Strong-Password-999!")
     page.click("button[type='submit']")
     
     # 11. Should redirect to home
     page.wait_for_url(re.compile(r"/$"))
+    
+    # 🐛 BUG VERIFICATION: Verify user menu is visible
+    # This should fail BEFORE the fix
+    user_menu = page.locator("#user-menu")
+    expect(user_menu).not_to_have_class(re.compile(r"hidden"))
+    
+    # 12. Verify initials
+    user_initials = page.locator("#user-initials")
+    expect(user_initials).to_be_visible()
+    expect(user_initials).to_have_text(user_name[:2].upper())
+    
+    # 13. Dropdown interaction
+    page.click("#user-menu-button")
+    user_dropdown = page.locator("#user-menu-dropdown")
+    expect(user_dropdown).not_to_have_class(re.compile(r"hidden"))
+    
+    # 14. Verify logout functional
+    logout_btn = page.locator("#logout-btn")
+    expect(logout_btn).to_be_visible()
+    page.click("#logout-btn")
+    page.wait_for_url(re.compile(r"/login"))

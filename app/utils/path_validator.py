@@ -40,13 +40,10 @@ def validate_task_id(task_id: str) -> str:
     # Example: 550e8400-e29b-41d4-a716-446655440000
     #          ^^^^^^^^ ^^^^ ^^^^ ^^^^ ^^^^^^^^^^^^
     #          8 chars  4    4    4    12 chars
-    uuid_v4_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    uuid_v4_pattern = r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 
     if not re.match(uuid_v4_pattern, task_id, re.IGNORECASE):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid task_id format (must be UUID v4)"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid task_id format (must be UUID v4)")
 
     return task_id
 
@@ -86,47 +83,34 @@ def validate_filename(filename: str) -> str:
 
     # 2. Reject empty filename
     if not filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename (empty)"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename (empty)")
 
     # 3. Reject filename starting with dot (hidden files)
-    if filename.startswith('.'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename (cannot start with dot)"
-        )
+    if filename.startswith("."):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename (cannot start with dot)")
 
     # 4. Reject filename with .. sequences
-    if '..' in filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename (cannot contain '..')"
-        )
+    if ".." in filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename (cannot contain '..')")
 
     # 5. Whitelist extension
-    allowed_extensions = ['.pcap', '.pcapng']
+    allowed_extensions = [".pcap", ".pcapng"]
     if not any(filename.lower().endswith(ext) for ext in allowed_extensions):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file extension (allowed: {', '.join(allowed_extensions)})"
+            detail=f"Invalid file extension (allowed: {', '.join(allowed_extensions)})",
         )
 
     # 6. Limit filename length (prevent buffer overflows)
     max_length = 255  # Typical filesystem limit
     if len(filename) > max_length:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Filename too long (max {max_length} characters)"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Filename too long (max {max_length} characters)"
         )
 
     # 7. Reject filename with null bytes (can bypass filesystem checks)
-    if '\x00' in filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename (contains null byte)"
-        )
+    if "\x00" in filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename (contains null byte)")
 
     return filename
 
@@ -167,15 +151,9 @@ def validate_path_in_directory(file_path: Path, base_directory: Path) -> Path:
 
         # Check if resolved file is relative to base
         if not resolved_file.is_relative_to(resolved_base):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid path (escapes base directory)"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid path (escapes base directory)")
 
         return resolved_file
 
     except (ValueError, OSError) as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid path: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid path: {str(e)}")
