@@ -71,9 +71,20 @@ async def main():
             await user_service.pool.execute(query, *params)
             print("success")
 
+        elif action == "fetch_val":
+            query = sys.argv[3]
+            params = tuple(sys.argv[4:])
+            query, params = user_service.pool.translate_query(query, params)
+            row = await user_service.pool.fetch_one(query, *params)
+            if row:
+                # Print first column value
+                print(list(row.values())[0])
+            else:
+                print("None")
+
         elif action == "block_user":
             user_id = sys.argv[3]
-            await service.block_user(user_id)
+            await user_service.block_user(user_id)
             print("success")
             
         elif action == "init":

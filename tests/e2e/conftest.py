@@ -10,6 +10,7 @@ import time
 import uuid
 import subprocess
 import json
+import sys
 from typing import Generator
 
 import pytest
@@ -31,8 +32,12 @@ def run_db_action(action, db_url, *args):
         db_url
     ] + list(args)
     
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    return result.stdout.strip()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"DB Action Failed: {e.stderr}", file=sys.stderr)
+        raise
 
 @pytest.fixture(scope="session")
 def postgres_container():
@@ -55,8 +60,13 @@ def postgres_db_url(postgres_container):
 def apply_migrations(postgres_db_url):
     alembic_cfg = Config("alembic.ini")
     sync_url = postgres_db_url.replace("postgresql://", "postgresql+psycopg2://")
+    # env.py prefers DATABASE_URL env var, so we must set it to sync_url for migration to work
+    os.environ["DATABASE_URL"] = sync_url
     alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
     command.upgrade(alembic_cfg, "head")
+    
+    # Restore async URL for the app
+    os.environ["DATABASE_URL"] = postgres_db_url
     yield
 
 def get_free_port():
@@ -114,6 +124,10 @@ def server_url(postgres_db_url, apply_migrations, tmp_path_factory) -> Generator
             
     yield url
     thread.stop()
+
+@pytest.fixture(scope="session")
+def base_url(server_url):
+    return server_url
 
 @pytest.fixture(scope="session")
 def admin_user(postgres_db_url, apply_migrations):

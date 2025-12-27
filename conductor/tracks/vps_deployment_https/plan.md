@@ -1,14 +1,11 @@
-# Track: Deploy to VPS & Promote to v5.0.0 Stable
+# Track: Production VPS Deployment with HTTPS
 
-**Goal:** Deploy the application to a production VPS with a public IP, enable Let's Encrypt for `pcaplab.com`, and promote the release to `v5.0.0`.
+**Goal:** Deploy the application to a production VPS with public IP and enable Let's Encrypt HTTPS for `pcaplab.com`.
 
 **Status:** Pending (Blocked by Infrastructure)
 
 ## Context
-The project is currently at `v5.0.0-rc2`. The code is feature-complete for v5.0.0, including automated TLS support via cert-manager. However, actual TLS certificate issuance requires a public IP and DNS configuration, which are not available in the current local environment.
-
-**Current Version:** `v5.0.0-rc2`
-**Target Version:** `v5.0.0`
+The application supports automated TLS via cert-manager. Actual certificate issuance requires a public IP and DNS configuration (production VPS).
 
 ## Prerequisites
 - [ ] **VPS Provisioning**: A Linux VPS (Ubuntu/Debian) with public IP.

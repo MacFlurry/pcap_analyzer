@@ -47,6 +47,7 @@ An automated PCAP file analyzer for diagnosing network latency and performance i
 - **Role-Based Access Control (RBAC):** Admin and User roles with granular permissions.
 - **Password Security:** Passlib with bcrypt/Argon2id hashing and zxcvbn-based strength validation.
 - **Temporary Passwords:** First-login flow forcing password change for admin-created accounts.
+- **Self-Service Password Reset:** Secure token-based password reset flow (email) with expiration and single-use tokens.
 
 ### Security Controls
 - **CSRF Protection:** fastapi-csrf-protect library with token validation.
