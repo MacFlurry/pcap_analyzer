@@ -59,7 +59,7 @@ Cette track implémente:
   - Test nettoyage tokens expirés
   - Coverage: 95%+
 
-**Checkpoint Phase 1**: Migration appliquée, service fonctionnel, tests passent
+**Checkpoint Phase 1**: Migration appliquée, service fonctionnel, tests passent [checkpoint: 1e6c012]
 
 ---
 
