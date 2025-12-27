@@ -233,6 +233,7 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 - **Enhanced Password Policy:** NIST-compliant passwords (min 12 chars), zxcvbn strength validation, and password history (prevents reuse of last 5).
 - **Self-Service Password Reset:** Secure token-based recovery via email with anti-enumeration protection.
 - **Role-Based Access Control (RBAC):** Granular permissions for admins and users.
+- **Admin Visibility:** Administrators can view and manage all users' uploads, with a clear owner identification column in the history view.
 - **Rate Limiting** : Protection brute force (1s → 2s → 5s après 4-6 échecs)
 - **Multi-Tenant** : Isolation stricte des données par `owner_id` (CWE-639)
 - **Admin Actions** : Approve/block/unblock/delete users, view all tasks

@@ -7,6 +7,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+### Enhancements
+- **UI Admin**: Added "PROPRIÉTAIRE" (Owner) column in history view for administrators.
+  - Admins can now see at a glance which user owns each PCAP file.
+  - Column displays the username of the file owner (via LEFT JOIN on backend).
+  - Only visible for admin users (dynamically toggled in UI).
+  - Augmented E2E and integration tests to ensure visibility isolation.
+
 ### Bug Fixes
 - **UI**: Fixed user menu not appearing after forced password change (admin reset flow)
   - After changing temporary password, user menu and logout button are now properly visible
