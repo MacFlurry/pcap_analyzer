@@ -40,7 +40,7 @@ Cette track implémente:
   - Support PostgreSQL et SQLite (pattern: migration 2163cd9a7764)
   - Constraint: `expires_at > created_at`
 
-- [ ] **Task 1.2**: Implémenter `PasswordResetService`
+- [x] **Task 1.2**: Implémenter `PasswordResetService` (6c35b66)
   - Fichier: `app/services/password_reset_service.py`
   - `generate_reset_token()` → (token_plaintext, token_hash) using `secrets.token_urlsafe(32)` + SHA-256
   - `create_reset_token(user_id, ip, user_agent)` → token_plaintext
