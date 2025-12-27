@@ -87,6 +87,22 @@ async def register(request: Request):
     return templates.TemplateResponse("register.html", {"request": request, "version": __version__})
 
 
+@router.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password(request: Request):
+    """
+    Page 'Mot de passe oublié'
+    """
+    return templates.TemplateResponse("forgot-password.html", {"request": request, "version": __version__})
+
+
+@router.get("/reset-password", response_class=HTMLResponse)
+async def reset_password(request: Request):
+    """
+    Page de réinitialisation de mot de passe (avec token)
+    """
+    return templates.TemplateResponse("reset-password.html", {"request": request, "version": __version__})
+
+
 @router.get("/profile", response_class=HTMLResponse)
 async def profile(request: Request, user=Depends(get_current_user_cookie_or_redirect)):
     """

@@ -124,6 +124,19 @@ class AdminPanel {
                 if (e.target === tempPasswordModal) this.hideTempPasswordModal();
             });
         }
+
+        const resetPasswordModal = document.getElementById('reset-password-modal');
+        if (resetPasswordModal) {
+            resetPasswordModal.addEventListener('click', (e) => {
+                if (e.target === resetPasswordModal) this.hideResetPasswordModal();
+            });
+        }
+
+        const confirmResetBtn = document.getElementById('confirm-reset-password');
+        if (confirmResetBtn) confirmResetBtn.addEventListener('click', () => this.resetPassword());
+
+        const cancelResetBtn = document.getElementById('cancel-reset-password');
+        if (cancelResetBtn) cancelResetBtn.addEventListener('click', () => this.hideResetPasswordModal());
         
         // Pagination
         if (this.prevBtn) this.prevBtn.addEventListener('click', () => this.changePage(-1));
@@ -244,11 +257,65 @@ class AdminPanel {
     getUserActions(user) {
         if (user.role === 'admin') return '<span class="text-xs text-gray-400">Protected</span>';
         const actions = [];
-        if (!user.is_approved) actions.push(`<button onclick="adminPanel.approveUser('${user.id}')" class="action-btn action-btn-approve text-xs px-2 py-1"><i class="fas fa-check"></i></button>`);
-        if (user.is_active) actions.push(`<button onclick="adminPanel.blockUser('${user.id}')" class="action-btn action-btn-block text-xs px-2 py-1"><i class="fas fa-ban"></i></button>`);
-        else actions.push(`<button onclick="adminPanel.unblockUser('${user.id}')" class="action-btn action-btn-unblock text-xs px-2 py-1"><i class="fas fa-unlock"></i></button>`);
-        actions.push(`<button onclick="adminPanel.deleteUser('${user.id}', '${user.username}')" class="action-btn action-btn-delete text-xs px-2 py-1"><i class="fas fa-trash"></i></button>`);
+        if (!user.is_approved) actions.push(`<button onclick="adminPanel.approveUser('${user.id}')" class="action-btn action-btn-approve text-xs px-2 py-1" title="Approve"><i class="fas fa-check"></i></button>`);
+        if (user.is_active) actions.push(`<button onclick="adminPanel.blockUser('${user.id}')" class="action-btn action-btn-block text-xs px-2 py-1" title="Block"><i class="fas fa-ban"></i></button>`);
+        else actions.push(`<button onclick="adminPanel.unblockUser('${user.id}')" class="action-btn action-btn-unblock text-xs px-2 py-1" title="Unblock"><i class="fas fa-unlock"></i></button>`);
+        
+        // Reset Password Button
+        actions.push(`<button onclick="adminPanel.showResetPasswordModal('${user.id}', '${window.utils.escapeHtml(user.username)}')" class="action-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1" title="Reset Password"><i class="fas fa-key"></i></button>`);
+        
+        actions.push(`<button onclick="adminPanel.deleteUser('${user.id}', '${window.utils.escapeHtml(user.username)}')" class="action-btn action-btn-delete text-xs px-2 py-1" title="Delete"><i class="fas fa-trash"></i></button>`);
         return actions.join('');
+    }
+
+    showResetPasswordModal(userId, username) {
+        const el = document.getElementById('reset-password-modal');
+        if (el) {
+            el.classList.remove('hidden');
+            document.getElementById('reset-user-id').value = userId;
+            document.getElementById('reset-username-display').textContent = username;
+            document.getElementById('reset-password-form').reset();
+        }
+    }
+
+    hideResetPasswordModal() {
+        const el = document.getElementById('reset-password-modal');
+        if (el) el.classList.add('hidden');
+    }
+
+    async resetPassword() {
+        const userId = document.getElementById('reset-user-id').value;
+        const sendEmail = document.getElementById('reset-send-email').checked;
+        const notifyUser = document.getElementById('reset-notify-user').checked;
+        
+        try {
+            const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
+            const resp = await fetch(`/api/admin/users/${userId}/reset-password`, {
+                method: 'POST',
+                headers: { ...this.getAuthHeaders(), ...csrf, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ send_email: sendEmail, notify_user: notifyUser })
+            });
+            
+            if (resp.ok) {
+                const data = await resp.json();
+                this.hideResetPasswordModal();
+                
+                if (!sendEmail && data.temporary_password) {
+                    // Reuse create user temp password modal
+                    document.getElementById('created-username').textContent = data.username;
+                    document.getElementById('temp-password').textContent = data.temporary_password;
+                    document.getElementById('temp-password-modal').classList.remove('hidden');
+                }
+                
+                if (window.toast) window.toast.success(data.message || 'Mot de passe réinitialisé');
+            } else {
+                const err = await resp.json();
+                if (window.toast) window.toast.error(`❌ ${err.detail || 'Erreur'}`);
+            }
+        } catch (e) {
+            console.error('Error resetting password:', e);
+            if (window.toast) window.toast.error('❌ Erreur réseau');
+        }
     }
 
     async approveUser(userId) {
