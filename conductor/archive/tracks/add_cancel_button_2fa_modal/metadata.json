@@ -1,7 +1,7 @@
 {
   "track_id": "add_cancel_button_2fa_modal",
   "title": "Add Cancel Button to 2FA Setup Modal",
-  "status": "pending",
+  "status": "completed",
   "priority": "medium",
   "type": "bugfix",
   "version_type": "patch",
