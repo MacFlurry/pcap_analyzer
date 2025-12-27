@@ -7,6 +7,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.2.1] - 2025-12-27
+
+### Fixed
+- **UX**: Added "Cancel" button in 2FA setup modal to allow users to close the modal without page reload when postponing activation.
+
+## [5.2.0] - 2025-12-27
+
 ### Enhancements
 - **UI Admin**: Added "PROPRIÉTAIRE" (Owner) column in history view for administrators.
   - Admins can now see at a glance which user owns each PCAP file.
