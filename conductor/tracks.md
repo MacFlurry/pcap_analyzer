@@ -19,6 +19,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 ## [x] Track: Add Owner Column in History View for Admins
 *Link: [./conductor/archive/tracks/add_owner_column_history/](./conductor/archive/tracks/add_owner_column_history/)*
 
+## [x] Track: Add Cancel Button to 2FA Setup Modal
+*Link: [./conductor/archive/tracks/add_cancel_button_2fa_modal/](./conductor/archive/tracks/add_cancel_button_2fa_modal/)*
+
 ## [x] Track: Let's Encrypt with cert-manager on Kubernetes
 *Link: [./conductor/archive/tracks/letsencrypt_certmanager/](./conductor/archive/tracks/letsencrypt_certmanager/)*
 
