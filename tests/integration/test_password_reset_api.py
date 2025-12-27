@@ -138,3 +138,29 @@ async def test_reset_password_history_reuse(api_client, auth_user):
     
     assert response.status_code == 400
     assert "Password was used recently" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_validate_reset_token_success(api_client, auth_user):
+    """Test validating a valid token."""
+    from app.services.password_reset_service import get_password_reset_service
+    service = get_password_reset_service()
+    token = await service.create_reset_token(auth_user.id)
+    
+    response = await api_client.post("/api/auth/validate-reset-token", json={"token": token})
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["valid"] is True
+    # email should be masked
+    assert data["email"].startswith(auth_user.email[0])
+    assert "***" in data["email"]
+    assert data["email"].endswith(auth_user.email.split('@')[1])
+
+@pytest.mark.asyncio
+async def test_validate_reset_token_invalid(api_client):
+    """Test validating an invalid token."""
+    response = await api_client.post("/api/auth/validate-reset-token", json={"token": "invalid"})
+    assert response.status_code == 400
+    data = response.json()
+    assert data["valid"] is False
+    assert "Invalid or expired token" in data["message"]

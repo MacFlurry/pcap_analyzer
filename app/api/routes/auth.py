@@ -24,6 +24,7 @@ from typing import List, Optional
 import pyotp
 import qrcode
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status, Form
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, validator
 from zxcvbn import zxcvbn
@@ -304,6 +305,39 @@ async def reset_password(
     logger.info(f"Password reset successful for user {user.username}")
     
     return {"message": "Password reset successful. You can now login with your new password."}
+
+
+class ValidateTokenRequest(BaseModel):
+    token: str
+
+class ValidateTokenResponse(BaseModel):
+    valid: bool
+    email: Optional[str] = None
+    message: Optional[str] = None
+
+@router.post("/auth/validate-reset-token", response_model=ValidateTokenResponse)
+async def validate_reset_token(payload: ValidateTokenRequest):
+    """
+    Validate a password reset token without consuming it.
+    Returns masked email if valid.
+    """
+    reset_service = get_password_reset_service()
+    import hashlib
+    token_hash = hashlib.sha256(payload.token.encode('utf-8')).hexdigest()
+    
+    user = await reset_service.validate_token(token_hash)
+    
+    if not user:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"valid": False, "message": "Invalid or expired token"}
+        )
+        
+    # Mask email
+    email_parts = user.email.split('@')
+    masked_email = f"{email_parts[0][0]}***@{email_parts[1]}"
+    
+    return ValidateTokenResponse(valid=True, email=masked_email)
 
 
 @router.post("/token", response_model=Token)
