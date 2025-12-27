@@ -12,7 +12,9 @@ The project is currently at `v5.0.0-rc2`. The code is feature-complete for v5.0.
 
 ## Prerequisites
 - [ ] **VPS Provisioning**: A Linux VPS (Ubuntu/Debian) with public IP.
-- [ ] **DNS Configuration**: `pcaplab.com` A record pointing to the VPS IP.
+- [ ] **DNS Configuration**:
+  - `pcaplab.com` A record pointing to the VPS IP
+  - `www.pcaplab.com` A record pointing to the VPS IP (for www redirect)
 - [ ] **Port Access**: Ports 80 and 443 open.
 
 ## Implementation Plan
@@ -23,9 +25,11 @@ The project is currently at `v5.0.0-rc2`. The code is feature-complete for v5.0.
 - [ ] **Configure DNS**: Point domain to VPS.
 
 ### Phase 2: Deployment & TLS
+- [ ] **Configure WWW Redirect**: Update Helm chart per `www-redirect-config.md`.
 - [ ] **Run Setup Script**: Execute `scripts/setup-letsencrypt.sh`.
-- [ ] **Deploy App**: Helm install with production issuer enabled.
-- [ ] **Verify HTTPS**: Confirm valid Let's Encrypt certificate.
+- [ ] **Deploy App**: Helm install with production issuer enabled (both domains).
+- [ ] **Verify HTTPS**: Confirm valid Let's Encrypt certificate covers both domains.
+- [ ] **Test Redirects**: Verify `www.pcaplab.com` → `pcaplab.com` (HTTP 301).
 
 ### Phase 3: Release Promotion
 - [ ] **Version Bump**: Update `src/__version__.py` to `5.0.0`.
