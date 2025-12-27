@@ -103,7 +103,7 @@ Cette track implémente:
   - Test rate limiting
   - Coverage: 100% endpoints
 
-**Checkpoint Phase 2**: Endpoints fonctionnels, tests passent, rate limiting actif
+**Checkpoint Phase 2**: Endpoints fonctionnels, tests passent, rate limiting actif [checkpoint: 9c348d3] [checkpoint: ff71200]
 
 ---
 
