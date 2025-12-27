@@ -67,7 +67,7 @@ Cette track implémente:
 
 **Objectif**: Implémenter les endpoints pour réinitialisation self-service
 
-- [ ] **Task 2.1**: Endpoint `POST /api/auth/forgot-password`
+- [x] **Task 2.1**: Endpoint `POST /api/auth/forgot-password` (b64b314)
   - Fichier: `app/api/routes/auth.py`
   - Input: `{"email": "user@example.com"}`
   - Réponse: Toujours 200 OK + message générique (anti-énumération)
@@ -75,7 +75,7 @@ Cette track implémente:
   - Logic: valider email → lookup user (case-insensitive) → si active+approved: créer token + email → log event → réponse générique
   - Intégrer avec `RateLimiter` existant
 
-- [ ] **Task 2.2**: Endpoint `POST /api/auth/reset-password`
+- [x] **Task 2.2**: Endpoint `POST /api/auth/reset-password` (3012f64)
   - Input: `{"token": "...", "new_password": "..."}`
   - Réponse: 200 OK ou 400 Bad Request
   - Logic:
@@ -90,12 +90,12 @@ Cette track implémente:
     9. Email de confirmation
     10. Log security event
 
-- [ ] **Task 2.3**: Endpoint `POST /api/auth/validate-reset-token` (optionnel)
+- [x] **Task 2.3**: Endpoint `POST /api/auth/validate-reset-token` (optionnel) (8d859d6)
   - Input: `{"token": "..."}`
   - Réponse: `{"valid": true, "email": "u***@example.com"}`
   - Logic: valider token + retourner email masqué
 
-- [ ] **Task 2.4**: Tests d'intégration API
+- [x] **Task 2.4**: Tests d'intégration API (8d859d6)
   - Fichier: `tests/integration/test_password_reset_api.py`
   - Test forgot-password: user existant vs inexistant (même réponse)
   - Test reset-password: token valide, expiré, réutilisé
