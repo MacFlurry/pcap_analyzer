@@ -16,6 +16,7 @@ from app.models.user import User
 from app.security.csrf import validate_csrf_token
 from app.services.database import get_db_service
 from app.services.worker import get_worker
+from app.services.pcap_validator import validate_pcap, PCAPValidationError
 from app.utils.config import get_uploads_dir
 from app.utils.path_validator import validate_filename, validate_path_in_directory
 from app.utils.file_validator import validate_pcap_upload_complete
@@ -159,6 +160,24 @@ async def upload_pcap(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erreur lors de la sauvegarde du fichier",
+        )
+
+    # NEW: Validate PCAP before queuing analysis
+    is_valid, validation_error = validate_pcap(str(upload_path))
+
+    if not is_valid:
+        # Delete the uploaded file
+        upload_path.unlink(missing_ok=True)
+        logger.warning(f"PCAP validation failed for {file.filename}: {validation_error.error_type}")
+
+        # Return structured error response
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": "PCAP validation failed",
+                "validation_details": validation_error.to_dict()
+            }
         )
 
     # Créer l'entrée dans la base de données (with owner_id for multi-tenant)

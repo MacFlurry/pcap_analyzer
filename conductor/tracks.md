@@ -8,6 +8,16 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Context: Deploy to production VPS with Let's Encrypt automated TLS (pending infrastructure)*
 *Link: [./conductor/tracks/vps_deployment_https/](./conductor/tracks/vps_deployment_https/)*
 
+## [~] Track: PCAP Validation with User-Friendly Error Messages
+*Context: Add pre-upload validation to detect incompatible PCAPs with clear error messages*
+*Link: [./conductor/tracks/pcap_validation_error_messages/](./conductor/tracks/pcap_validation_error_messages/)*
+*Version: v5.2.2 (PATCH)*
+
+## [ ] Track: Modern Toast Notification System
+*Context: Implement modern toast notifications to replace generic JavaScript alerts*
+*Link: [./conductor/tracks/modern_toast_notification_system/](./conductor/tracks/modern_toast_notification_system/)*
+*Version: v5.3.0 (MINOR)*
+
 ## [x] Track: Version Synchronization & v5.0.0-rc2 Release
 
 ## [x] Track: Password Reset Functionality

@@ -84,3 +84,22 @@ class HealthCheck(BaseModel):
     memory_usage_percent: float
     total_tasks_completed: int = 0
     total_tasks_failed: int = 0
+
+
+class PCAPValidationErrorDetail(BaseModel):
+    """Detailed PCAP validation error"""
+
+    error_type: str  # "INVALID_TIMESTAMPS", "DUPLICATE_PACKETS", etc.
+    title: str  # "Timestamps incohérents détectés"
+    description: str  # Detailed explanation
+    detected_issues: list[str]  # Bullet points of specific issues
+    suggestions: list[str]  # What user should do
+    wireshark_link: str = "https://www.wireshark.org/download.html"
+
+
+class UploadErrorResponse(BaseModel):
+    """Upload error response"""
+
+    success: bool = False
+    error: str  # Short error message
+    validation_details: Optional[PCAPValidationErrorDetail] = None

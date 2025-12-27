@@ -509,6 +509,18 @@ async def async_client(
 
 
 @pytest.fixture
+def ultimate_pcap_path():
+    """Path to 'The Ultimate PCAP' test file"""
+    return "tests/fixtures/invalid_pcaps/ultimate_pcap_sample.pcapng"
+
+
+@pytest.fixture
+def normal_pcap_path():
+    """Path to a normal, valid PCAP"""
+    return "tests/test_data/test_bidirectional.pcap"
+
+
+@pytest.fixture
 def sample_pcap_file(test_data_dir: Path) -> Path:
     """Create a minimal valid PCAP file for testing"""
     pcap_file = test_data_dir / "sample.pcap"
