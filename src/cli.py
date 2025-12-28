@@ -810,6 +810,7 @@ def analyze_pcap_hybrid(
                         "delay": r.delay,
                         "is_spurious": r.is_spurious,
                         "is_syn_retrans": r.is_syn_retrans,
+                        "syn_retrans_direction": r.syn_retrans_direction,
                         "tcp_flags": r.tcp_flags,
                     }
                     for r in tshark_retrans
