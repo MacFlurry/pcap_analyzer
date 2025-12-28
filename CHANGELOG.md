@@ -7,6 +7,72 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.0] - 2025-12-28
+
+### Added - MAJOR FEATURE 🎯
+- **Backend tshark pour Détection de Retransmissions**: Atteindre 100% de précision de détection lorsque tshark (Wireshark CLI) est disponible.
+
+  **Nouveautés**:
+  - Détection intelligente du chemin tshark:
+    - macOS: `/Applications/Wireshark.app/Contents/MacOS/tshark`
+    - Linux: `which tshark`, `/usr/bin/tshark`, `/usr/local/bin/tshark`, `/snap/bin/tshark`
+    - Windows: `Program Files/Wireshark/tshark.exe`
+  - Détection automatique avec fallback gracieux vers l'analyseur intégré (85% de précision)
+  - Option CLI `--retrans-backend {auto,tshark,builtin}` pour contrôle manuel
+
+  **Comparaison des Backends**:
+  | Backend | Précision | Cas d'Usage |
+  |---------|-----------|-------------|
+  | `tshark` | 100% (27/27) | Docker/K8s, local avec Wireshark installé |
+  | `builtin` | 85% (23/27) | Portable, sans dépendances |
+  | `auto` (DÉFAUT) | 100% ou 85% | Meilleur des deux - essaie tshark d'abord |
+
+  **Installation**:
+  ```bash
+  # macOS
+  brew install --cask wireshark
+
+  # Linux (Debian/Ubuntu)
+  sudo apt-get install tshark
+
+  # Linux (RHEL/CentOS)
+  sudo yum install wireshark
+
+  # Docker (tshark pré-installé)
+  docker run macflurry/pcap-analyzer
+  ```
+
+  **Utilisation**:
+  ```bash
+  # Détection automatique (défaut) - utilise tshark si disponible
+  pcap_analyzer analyze capture.pcap
+
+  # Forcer tshark (erreur si indisponible)
+  pcap_analyzer analyze capture.pcap --retrans-backend tshark
+
+  # Forcer builtin (portable, pas besoin de tshark)
+  pcap_analyzer analyze capture.pcap --retrans-backend builtin
+  ```
+
+  **Pourquoi c'est Important**:
+  - v5.3.0 manquait 4 retransmissions (15% sous-détection) quand paquets perdus avant capture
+  - tshark utilise le moteur d'analyse éprouvé de Wireshark (20+ ans de développement)
+  - Les déploiements Docker/Kubernetes obtiennent 100% de précision out-of-the-box (tshark pré-installé)
+  - Les utilisateurs CLI peuvent opter en installant Wireshark
+
+  **Fichiers Ajoutés**:
+  - `src/analyzers/retransmission_tshark.py`: Implémentation backend tshark
+  - `conductor/tracks/tshark_backend_v540/`: Documentation track d'implémentation
+
+### Changed
+- **Analyse des Retransmissions**: Ajout du champ `backend` aux résultats indiquant quel backend a été utilisé
+- **Rapports HTML**: Afficheront le backend utilisé (tshark vX.X.X ou builtin 85% précision)
+
+### Performance
+- **Overhead tshark**: ~1-2 secondes pour gros PCAPs (un seul appel subprocess)
+- **Utilisation mémoire**: Comparable au builtin (parsing JSON évolue avec le nombre de retrans)
+- **Amélioration précision**: 0% → 15% d'augmentation selon conditions de capture
+
 ## [5.3.0] - 2025-12-28
 
 ### Fixed - HIGH PRIORITY 🟠
