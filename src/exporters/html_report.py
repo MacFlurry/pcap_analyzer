@@ -2893,13 +2893,32 @@ class HTMLReportGenerator:
                 ip = most_common_ip[0]
                 ip_info = self._identify_ip_range(ip)
 
-                # For SYN retransmissions, the root cause is ALWAYS "server unreachable"
-                # regardless of IP type (private/public doesn't matter for connection failures)
+                # v5.2.5 FIX: Distinguish between SYN and SYN,ACK retransmissions using syn_retrans_direction
                 if type_key == "syn":
-                    result["root_cause"] = (
-                        f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
-                    )
-                    result["action"] = "Verify server is running, port is open, and firewall allows traffic"
+                    # Determine retransmission direction from first flow's first retransmission
+                    syn_direction = None
+                    for _, retrans_list in flows:
+                        if retrans_list and retrans_list[0].get("syn_retrans_direction"):
+                            syn_direction = retrans_list[0]["syn_retrans_direction"]
+                            break
+
+                    if syn_direction == "client_unreachable":
+                        # Server SYN,ACK retransmissions - client didn't send final ACK
+                        result["root_cause"] = (
+                            f"Client unable to complete handshake with {most_common_ip[0]}:{most_common_port[0]} "
+                            f"(server sent SYN,ACK but no final ACK received)"
+                        )
+                        result["action"] = (
+                            "Check client network connectivity, verify client can send packets, "
+                            "check for asymmetric routing or client-side firewall blocking outbound ACKs"
+                        )
+                    else:
+                        # Client SYN retransmissions - server didn't respond with SYN,ACK
+                        # (syn_direction == "server_unreachable" or None for backward compatibility)
+                        result["root_cause"] = (
+                            f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
+                        )
+                        result["action"] = "Verify server is running, port is open, and firewall allows traffic"
                 elif ip_info and ip_info.get("diagnostic", False):
                     # For other retransmission types, only show diagnostic IP ranges as root cause
                     # (e.g., TEST-NET, loopback, link-local - NOT RFC 1918 private addresses)
@@ -3197,16 +3216,40 @@ class HTMLReportGenerator:
 
     def _generate_type_explanation_concise(self, type_key: str, flows: list) -> str:
         """Generate concise explanation for a retransmission type."""
-        explanations = {
-            "syn": """
+        # v5.2.5 FIX: Dynamic SYN explanation based on syn_retrans_direction
+        if type_key == "syn":
+            # Determine retransmission direction from flows
+            syn_direction = None
+            for _, retrans_list in flows:
+                if retrans_list and retrans_list[0].get("syn_retrans_direction"):
+                    syn_direction = retrans_list[0]["syn_retrans_direction"]
+                    break
+
+            if syn_direction == "client_unreachable":
+                # Server SYN,ACK retransmissions
+                return """
                 <div style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.95em;">
-                    <strong>SYN retrans = Connection failed</strong> (server unreachable)<br>
-                    <strong>Type:</strong> RTO-based (no ACKs during handshake, never fast retransmit)<br>
+                    <strong>SYN,ACK retrans = Handshake incomplete</strong> (client unreachable)<br>
+                    <strong>Type:</strong> RTO-based (server sent SYN,ACK but no final ACK received)<br>
                     <strong>Impact:</strong> <span style='color: #dc3545;'>CRITICAL</span> - Application cannot establish TCP connection
                     </p>
                 </div>
-            """,
+                """
+            else:
+                # Client SYN retransmissions (default)
+                return """
+                <div style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>SYN retrans = Connection failed</strong> (server unreachable)<br>
+                    <strong>Type:</strong> RTO-based (no SYN,ACK received from server)<br>
+                    <strong>Impact:</strong> <span style='color: #dc3545;'>CRITICAL</span> - Application cannot establish TCP connection
+                    </p>
+                </div>
+                """
+
+        # Static explanations for other types
+        explanations = {
             "rto": """
                 <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.95em;">

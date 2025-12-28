@@ -7,6 +7,54 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.2.5] - 2025-12-28
+
+### Fixed - CRITICAL 🔴
+- **HTML Report Diagnostic Messages for SYN Retransmissions**: Fixed incorrect diagnostic messages that always displayed "server unreachable" for ALL SYN-type retransmissions.
+
+  **Issue**: HTML reports showed misleading diagnostics for SYN,ACK retransmissions:
+  - Displayed: "SYN retrans = Connection failed (server unreachable)"
+  - Actually: Server WAS reachable (it sent SYN,ACK), but client didn't complete handshake
+  - Confusion: Users saw "server unreachable" even though server responded correctly
+
+  **Root Cause**: HTML report generator (`src/exporters/html_report.py`) had hardcoded diagnostic messages that didn't use the `syn_retrans_direction` field added in v5.2.3.
+
+  **Fixes Applied**:
+
+  1. **Root Cause Analysis Logic** (`html_report.py:2896-2921`)
+     - Now checks `syn_retrans_direction` from retransmission data
+     - `client_unreachable` → "Client unable to complete handshake (server sent SYN,ACK but no final ACK received)"
+     - `server_unreachable` → "Server unreachable or not listening" (unchanged for true SYN retrans)
+     - Action recommendations now match the actual failure direction
+
+  2. **HTML Template Explanation** (`html_report.py:3217-3249`)
+     - Dynamic message generation based on `syn_retrans_direction`
+     - SYN,ACK retrans: "SYN,ACK retrans = Handshake incomplete (client unreachable)"
+     - SYN retrans: "SYN retrans = Connection failed (server unreachable)"
+     - Maintains correct technical context for troubleshooting
+
+  **Impact**:
+  - Users now see accurate diagnostics that match the actual network behavior
+  - Troubleshooting guidance is correct (check client vs check server)
+  - Eliminates confusion when server is responding but client isn't completing handshake
+
+  **Verification** (test flow 2.19.147.191:80 ↔ 10.20.0.165:1831):
+  - Report shows: "SYN,ACK retrans = Handshake incomplete (client unreachable)" ✅
+  - Root cause: "Client unable to complete handshake" ✅
+  - Matches network behavior: Server sent 5 SYN,ACK retransmissions (frames 7462, 7492, 7608, 7616, 7989, 8099) ✅
+
+### Known Limitations ⚠️
+- **Retransmission Detection Over-Sensitivity**: PCAP Analyzer may detect more retransmissions than Wireshark/tshark due to different detection algorithms.
+  - **Example**: Test PCAP (c1.pcap) shows 43 retransmission events vs tshark's 27
+  - **Root Cause**: Hybrid dpkt+Scapy detection may classify normal out-of-order packets or spurious retransmissions as regular retransmissions
+  - **Impact**:
+    - Fast Retransmission count inflated (may include false positives)
+    - RTO count deflated (some RTOs misclassified as Fast Retrans)
+    - Health Score may be slightly pessimistic
+  - **Workaround**: Cross-reference critical flows with `tshark -Y "tcp.analysis.retransmission"` for verification
+  - **Future Fix**: Tracked in conductor (v5.3.0 planned) - will align detection with RFC 793 stateful analysis
+  - **Note**: Individual retransmission classifications (SYN vs RTO vs Fast) are accurate when verified frame-by-frame
+
 ## [5.2.4] - 2025-12-28
 
 ### Fixed - CRITICAL 🔴
