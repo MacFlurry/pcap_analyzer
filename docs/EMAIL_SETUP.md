@@ -37,7 +37,7 @@ SMTP_PORT: "1025"
 SMTP_TLS: "false"
 SMTP_SSL: "false"
 MAIL_ENABLED: "true"
-MAIL_FROM: "noreply@pcap-analyzer.com"
+MAIL_FROM: "noreply@pcaplab.com"
 MAIL_FROM_NAME: "PCAP Analyzer - Dev"
 ```
 

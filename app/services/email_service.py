@@ -30,7 +30,7 @@ class EmailService:
         self.conf = ConnectionConfig(
             MAIL_USERNAME=os.getenv("SMTP_USERNAME", ""),
             MAIL_PASSWORD=os.getenv("SMTP_PASSWORD", ""),
-            MAIL_FROM=os.getenv("MAIL_FROM", "noreply@pcap-analyzer.com"),
+            MAIL_FROM=os.getenv("MAIL_FROM", "noreply@pcaplab.com"),
             MAIL_PORT=int(os.getenv("SMTP_PORT", "1025")),
             MAIL_SERVER=os.getenv("SMTP_HOST", "localhost"),
             MAIL_FROM_NAME=os.getenv("MAIL_FROM_NAME", "PCAP Analyzer"),

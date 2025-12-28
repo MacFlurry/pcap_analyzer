@@ -88,7 +88,7 @@ L'application supporte les notifications email via SMTP. En développement, **Ma
 MAIL_ENABLED=true
 SMTP_HOST=localhost
 SMTP_PORT=1025
-MAIL_FROM=noreply@pcap-analyzer.com
+MAIL_FROM=noreply@pcaplab.com
 ```
 
 📖 [Guide complet de configuration Email](docs/EMAIL_SETUP.md)
