@@ -1,0 +1,25 @@
+{
+  "track_id": "retransmission_detection_fix_v530",
+  "title": "Fix Retransmission Detection Over-Sensitivity",
+  "version": "5.3.0",
+  "type": "bug_fix",
+  "priority": "high",
+  "status": "planned",
+  "created_at": "2025-12-28T03:45:00Z",
+  "impact": "data_accuracy",
+  "root_cause": "hybrid_dpkt_scapy_detection",
+  "test_data": "/Users/omegabk/Downloads/c1.pcap",
+  "baseline": {
+    "tshark_total_retrans": 27,
+    "pcap_analyzer_total_retrans": 43,
+    "discrepancy_percentage": 59,
+    "false_positives": 16,
+    "test_flow": "178.79.195.246:80 -> 10.20.0.165:1871"
+  },
+  "target": {
+    "match_tshark_total": true,
+    "detect_spurious_retrans": true,
+    "rfc_793_compliance": true,
+    "false_positive_rate": "<5%"
+  }
+}

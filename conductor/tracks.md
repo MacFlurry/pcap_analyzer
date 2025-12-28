@@ -18,6 +18,15 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Priority: CRITICAL 🔴*
 *Status: ✅ COMPLETED*
 
+## [ ] Track: Fix Retransmission Detection Over-Sensitivity
+*Context: PCAP Analyzer detects 59% more retransmissions than tshark due to over-sensitive hybrid dpkt+Scapy algorithm - false positives, wrong Fast/RTO classification, missing spurious detection*
+*Link: [./conductor/tracks/retransmission_detection_fix_v530/](./conductor/tracks/retransmission_detection_fix_v530/)*
+*Version: v5.3.0 (MINOR)*
+*Priority: HIGH 🟠*
+*Impact: Data Accuracy & User Trust*
+*Baseline: c1.pcap - PCAP Analyzer: 43 retrans, tshark: 27 retrans (59% discrepancy)*
+*Target: <5% discrepancy with tshark, RFC 793 compliance, spurious detection*
+
 ## [ ] Track: Production VPS Deployment with HTTPS
 *Context: Deploy to production VPS with Let's Encrypt automated TLS (pending infrastructure)*
 *Link: [./conductor/tracks/vps_deployment_https/](./conductor/tracks/vps_deployment_https/)*

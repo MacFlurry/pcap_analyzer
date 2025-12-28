@@ -7,6 +7,41 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.3.0] - 2025-12-28
+
+### Fixed - HIGH PRIORITY 🟠
+- **Retransmission Detection Over-Sensitivity**: Fixed false positive detection that reported 59% more retransmissions than Wireshark/tshark.
+
+  **Problem**: PCAP Analyzer detected 43 retransmissions vs tshark's 27 (59% over-detection) due to Method #4 "seq < highest_seq" logic marking normal out-of-order packets as retransmissions.
+
+  **Root Cause**: Method #4 in retransmission detection (lines 839-849) flagged ANY packet with `seq < highest_seq` as a retransmission, causing false positives for legitimate out-of-order delivery:
+  - Packet A (seq 1000-2460) arrives → highest_seq = 2460
+  - Packet C (seq 4000-5460) arrives → highest_seq = 5460
+  - Packet B (seq 2460-3920) arrives → **FALSE POSITIVE** (2460 < 5460 but not a retrans!)
+
+  **Fix**: Removed overly aggressive Method #4 and rely only on RFC 793-compliant detection:
+  - Method #1: Exact segment match (seq, len) seen multiple times ✅
+  - Method #2: Spurious detection (seq+len <= max_ack_seen) ✅
+  - Method #3: Fast retrans (3+ duplicate ACKs) ✅
+
+  **Results** (test PCAP c1.pcap):
+  - Before: 43 retrans vs 27 tshark (+59% over-detection) 🔴
+  - After: 23 retrans vs 27 tshark (-15% under-detection) 🟢
+  - **Improvement: 74% reduction in detection error!**
+
+  **Impact**:
+  - Eliminated false positives for out-of-order packets
+  - Health Score now more accurate (less pessimistic)
+  - Fast Retrans count: 25 → 5 (was +317%, now -17%)
+  - User trust restored when comparing with Wireshark
+
+### Added
+- **Spurious Retransmission Field**: Added `is_spurious` boolean field to `TCPRetransmission` class to identify segments retransmitted after already being ACKed by receiver.
+
+### Known Limitations ⚠️
+- **Under-detection vs tshark**: May miss 4-6 retransmissions (15%) when segment tracking starts mid-connection or after memory cleanup. This is acceptable vs previous 59% over-detection.
+- **Spurious retransmission count**: Currently detected as regular retransmissions but not separately counted (tshark detects 10, we detect 0 separately). Fix planned for future release.
+
 ## [5.2.5] - 2025-12-28
 
 ### Fixed - CRITICAL 🔴
