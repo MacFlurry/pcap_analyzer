@@ -24,6 +24,7 @@ config.yaml
 .env
 # IDE
 # Logs
+logs/
 # OS
 # Python
 # Reports
