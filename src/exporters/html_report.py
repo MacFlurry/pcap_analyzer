@@ -3500,7 +3500,9 @@ class HTMLReportGenerator:
 
         for flow_key, retrans_list in flows_to_show:
             total_retrans = len(retrans_list)
-            avg_delay = sum(r.get("delay", 0) for r in retrans_list) / total_retrans if total_retrans > 0 else 0
+            # Fix: Handle None/non-numeric delay values from tshark backend
+            delays = [r.get("delay", 0) for r in retrans_list if isinstance(r.get("delay"), (int, float))]
+            avg_delay = sum(delays) / len(delays) if delays else 0
 
             # Calculate duration and first retransmission timestamp
             if retrans_list:

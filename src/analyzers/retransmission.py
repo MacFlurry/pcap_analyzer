@@ -87,8 +87,8 @@ class TCPRetransmission:
     src_port: int
     dst_port: int
     seq_num: int
-    original_packet_num: int
-    delay: float
+    original_packet_num: Optional[int]  # None for tshark backend (no original packet tracking)
+    delay: Optional[float]  # None for tshark backend (no delay calculation)
     retrans_type: str = "Unknown"
 
     # Phase 1: Context enrichment
