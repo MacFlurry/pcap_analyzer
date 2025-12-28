@@ -324,6 +324,16 @@ class TsharkRetransmissionAnalyzer:
         is_syn = (tcp_flags_int & 0x02) != 0  # SYN flag
         is_ack = (tcp_flags_int & 0x10) != 0  # ACK flag
 
+        # Classify SYN retransmission direction
+        syn_retrans_direction = None
+        if is_syn:
+            if is_ack:
+                # SYN,ACK retransmitted → Server sent SYN,ACK but client didn't complete handshake
+                syn_retrans_direction = "client_unreachable"
+            else:
+                # SYN retransmitted → Client sent SYN but server didn't respond
+                syn_retrans_direction = "server_unreachable"
+
         # Create TCPRetransmission object
         retrans = TCPRetransmission(
             packet_num=get_field("frame.number", 0, int),
@@ -347,7 +357,7 @@ class TsharkRetransmissionAnalyzer:
             suspected_mechanisms=[],  # Not computed here
             confidence="high",  # tshark is authoritative
             is_syn_retrans=is_syn,
-            syn_retrans_direction=None,  # Would need more analysis
+            syn_retrans_direction=syn_retrans_direction,
             is_spurious=is_spurious,
             tcp_flags=tcp_flags_str,
         )
