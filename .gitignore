@@ -68,6 +68,13 @@ ISSUE_*.md
 # Helm packaged charts
 helm-chart/*.tgz
 .coverage
+coverage.json
+.coveragerc_temp
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+qa_reports/
+data/
 .claude/debugging-methodology.md
 
 # Test scripts (contiennent potentiellement des mots de passe de test)

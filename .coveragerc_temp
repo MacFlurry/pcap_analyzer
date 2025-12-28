@@ -1,7 +1,0 @@
-[run]
-source = src, app
-branch = True
-
-[report]
-show_missing = True
-precision = 2
