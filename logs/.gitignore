@@ -1,7 +1,0 @@
-# Ignore all log files
-*.log
-*.log.*
-*.log.*.gz
-
-# Allow this .gitignore file itself
-!.gitignore
