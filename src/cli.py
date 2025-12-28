@@ -852,6 +852,13 @@ def analyze_pcap_hybrid(
                 logger.warning(
                     "tshark not found, using built-in retransmission analyzer (may have 15% under-detection)"
                 )
+                if not progress_callback:
+                    console.print(
+                        "[yellow]⚠ tshark not found, switching to built-in backend (85% accuracy)[/yellow]"
+                    )
+                    console.print(
+                        "[dim]Install Wireshark for 100% accuracy: brew install --cask wireshark[/dim]"
+                    )
                 results["retransmission"]["backend"] = "builtin (85% accuracy)"
 
         except Exception as e:
@@ -1364,12 +1371,6 @@ def cli(ctx, log_level, log_file, no_log_file, log_format, enable_audit_log, log
     is_flag=True,
     help="Disable decompression bomb protection (WARNING: use only for trusted large captures)",
 )
-@click.option(
-    "--retrans-backend",
-    type=click.Choice(["auto", "tshark", "builtin"], case_sensitive=False),
-    default="auto",
-    help="Retransmission detection backend: auto (tshark if available, fallback to builtin), tshark (force tshark, error if unavailable), builtin (portable, 85%% accuracy). Default: auto",
-)
 def analyze(
     pcap_file,
     latency,
@@ -1383,7 +1384,6 @@ def analyze(
     export_dir,
     include_localhost,
     no_streaming,
-    retrans_backend,
     parallel,
     memory_limit,
     max_memory,
@@ -1509,7 +1509,7 @@ def analyze(
             memory_limit_mb=memory_limit,
             max_expansion_ratio=max_expansion_ratio,
             enable_bomb_protection=not allow_large_expansion,
-            retrans_backend=retrans_backend,
+            retrans_backend="auto",  # Always use auto-detection (tshark if available, fallback to builtin)
         )
         logger.info("PCAP analysis completed successfully")
     except MemoryError:

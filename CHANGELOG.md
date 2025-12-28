@@ -18,14 +18,11 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
     - Linux: `which tshark`, `/usr/bin/tshark`, `/usr/local/bin/tshark`, `/snap/bin/tshark`
     - Windows: `Program Files/Wireshark/tshark.exe`
   - Détection automatique avec fallback gracieux vers l'analyseur intégré (85% de précision)
-  - Option CLI `--retrans-backend {auto,tshark,builtin}` pour contrôle manuel
+  - Aucune option CLI requise - comportement automatique par défaut
 
-  **Comparaison des Backends**:
-  | Backend | Précision | Cas d'Usage |
-  |---------|-----------|-------------|
-  | `tshark` | 100% (27/27) | Docker/K8s, local avec Wireshark installé |
-  | `builtin` | 85% (23/27) | Portable, sans dépendances |
-  | `auto` (DÉFAUT) | 100% ou 85% | Meilleur des deux - essaie tshark d'abord |
+  **Comportement Automatique**:
+  - ✅ tshark détecté → 100% précision (27/27 retrans)
+  - ⚠️ tshark absent → 85% précision (23/27 retrans) + message d'installation
 
   **Installation**:
   ```bash
@@ -44,14 +41,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
   **Utilisation**:
   ```bash
-  # Détection automatique (défaut) - utilise tshark si disponible
+  # Par défaut: utilise tshark si disponible, sinon builtin
   pcap_analyzer analyze capture.pcap
 
-  # Forcer tshark (erreur si indisponible)
-  pcap_analyzer analyze capture.pcap --retrans-backend tshark
-
-  # Forcer builtin (portable, pas besoin de tshark)
-  pcap_analyzer analyze capture.pcap --retrans-backend builtin
+  # L'outil détecte automatiquement tshark et affiche:
+  # ✓ tshark backend: 27 retransmissions detected (100% accuracy)
+  # ou
+  # ⚠ tshark not found, switching to built-in backend (85% accuracy)
   ```
 
   **Pourquoi c'est Important**:
