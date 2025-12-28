@@ -162,6 +162,31 @@ kubectl get pvc -n pcap-analyzer
 kubectl get events -n pcap-analyzer --sort-by='.lastTimestamp'
 ```
 
+### ⚠️ Sélection du bon pod (Application vs Database)
+
+**IMPORTANT**: Le chart Helm déploie deux pods qui partagent certains labels :
+- **pcap-analyzer-xxx** : Le pod de l'application (Debian avec tshark)
+- **pcap-analyzer-postgresql-0** : Le pod PostgreSQL (Alpine)
+
+Lorsque vous utilisez `kubectl exec deployment/pcap-analyzer`, vous pouvez cibler **soit l'app soit la database** de manière aléatoire !
+
+**Solutions recommandées** :
+
+```bash
+# Option 1 : Utiliser le nom du deployment (généralement fiable pour logs)
+kubectl logs -n pcap-analyzer deployment/pcap-analyzer -f
+
+# Option 2 : Exclure explicitement la database avec un label selector
+kubectl exec -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer,app.kubernetes.io/component!=database -- <command>
+
+# Option 3 : Cibler le pod par son nom complet (le plus fiable)
+POD_NAME=$(kubectl get pods -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer,app.kubernetes.io/component!=database -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n pcap-analyzer $POD_NAME -- <command>
+
+# Vérifier quel pod vous ciblez (devrait montrer Debian pour l'app, Alpine pour la DB)
+kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- cat /etc/os-release
+```
+
 ### Voir les logs
 
 ```bash
@@ -175,8 +200,9 @@ kubectl logs -n pcap-analyzer deployment/pcap-analyzer --tail=100
 ### Health check
 
 ```bash
-# Via kubectl exec
-kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- curl -s localhost:8000/api/health
+# Via kubectl exec (utiliser le sélecteur de labels pour cibler l'app, pas la DB)
+kubectl exec -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer,app.kubernetes.io/component!=database -- \
+  python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/api/health').read().decode())"
 
 # Via port-forward (si NodePort non accessible)
 kubectl port-forward -n pcap-analyzer svc/pcap-analyzer 8000:8000 &
@@ -234,7 +260,12 @@ kubectl delete namespace pcap-analyzer
 ### Accéder au shell du pod
 
 ```bash
-kubectl exec -it -n pcap-analyzer deployment/pcap-analyzer -- /bin/sh
+# Cibler spécifiquement l'application (pas PostgreSQL)
+kubectl exec -it -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer,app.kubernetes.io/component!=database -- /bin/bash
+
+# Ou utiliser le nom du pod directement
+POD_NAME=$(kubectl get pods -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer,app.kubernetes.io/component!=database -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -it -n pcap-analyzer $POD_NAME -- /bin/bash
 ```
 
 ### Utilisation des ressources
@@ -254,14 +285,15 @@ kubectl describe pod -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer
 ### Tester depuis l'intérieur du pod
 
 ```bash
-# Upload test
-kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- sh -c "
-  curl -X POST http://localhost:8000/api/upload \
-    -F 'file=@/data/test.pcap'
-"
+# Obtenir le nom du pod application
+POD_NAME=$(kubectl get pods -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer,app.kubernetes.io/component!=database -o jsonpath='{.items[0].metadata.name}')
 
 # Vérifier l'espace disque
-kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- df -h /data
+kubectl exec -n pcap-analyzer $POD_NAME -- df -h /data
+
+# Test health check
+kubectl exec -n pcap-analyzer $POD_NAME -- \
+  python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/api/health').read().decode())"
 ```
 
 ## Architecture et Limitations
