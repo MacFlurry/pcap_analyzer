@@ -18,14 +18,21 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Priority: CRITICAL 🔴*
 *Status: ✅ COMPLETED*
 
-## [ ] Track: Fix Retransmission Detection Over-Sensitivity
+## [x] Track: Fix Retransmission Detection Over-Sensitivity
 *Context: PCAP Analyzer detects 59% more retransmissions than tshark due to over-sensitive hybrid dpkt+Scapy algorithm - false positives, wrong Fast/RTO classification, missing spurious detection*
-*Link: [./conductor/tracks/retransmission_detection_fix_v530/](./conductor/tracks/retransmission_detection_fix_v530/)*
+*Link: [./conductor/archive/tracks/retransmission_detection_fix_v530/](./conductor/archive/tracks/retransmission_detection_fix_v530/)*
 *Version: v5.3.0 (MINOR)*
 *Priority: HIGH 🟠*
-*Impact: Data Accuracy & User Trust*
-*Baseline: c1.pcap - PCAP Analyzer: 43 retrans, tshark: 27 retrans (59% discrepancy)*
-*Target: <5% discrepancy with tshark, RFC 793 compliance, spurious detection*
+*Status: ✅ COMPLETED*
+*Solution: Implemented tshark backend in v5.4.0 - achieves 100% accuracy (27/27 retrans vs tshark)*
+
+## [x] Track: tshark Backend for 100% Retransmission Detection Accuracy
+*Context: Implement hybrid tshark/builtin backend with auto-detection for maximum accuracy*
+*Link: [./conductor/tracks/tshark_backend_v540/](./conductor/tracks/tshark_backend_v540/)*
+*Version: v5.4.0 (MINOR)*
+*Priority: HIGH 🟠*
+*Status: ✅ COMPLETED*
+*Achievement: 100% accuracy (27/27 retrans), auto-detection with graceful fallback, Docker image integration*
 
 ## [ ] Track: Production VPS Deployment with HTTPS
 *Context: Deploy to production VPS with Let's Encrypt automated TLS (pending infrastructure)*
@@ -58,7 +65,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Assistant Work: v4.28.2 & v4.28.3 - Documentation Email + Production Domain + Fix Dépendances 2FA
 *Date: 2025-12-26*
-*Report: [./conductor/ASSISTANT_REPORT_v4_28_2_v4_28_3.md](./conductor/ASSISTANT_REPORT_v4_28_2_v4_28_3.md)*
+*Report: [./conductor/archive/ASSISTANT_REPORT_v4_28_2_v4_28_3.md](./conductor/archive/ASSISTANT_REPORT_v4_28_2_v4_28_3.md)*
 
 **v4.28.2:**
 - ✅ Mise à jour `docs/EMAIL_SETUP.md` pour refléter configuration Proton Mail SMTP

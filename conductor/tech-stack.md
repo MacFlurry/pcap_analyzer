@@ -3,8 +3,11 @@
 ## Core
 - **Language:** Python 3.10+
 - **Web Framework:** FastAPI (ASGI) with Uvicorn server, Nginx reverse proxy (production)
-- **Analysis Engine:** Hybrid dpkt + Scapy (dpkt for fast initial parsing, Scapy for deep inspection) with PacketMetadata lazy evaluation (3-5x speedup)
-- **Additional Tools:** tshark (Wireshark CLI) for PCAP validation
+- **Analysis Engine:**
+  - **Hybrid tshark/builtin backend** with auto-detection (v5.4.0+)
+  - **tshark backend:** Wireshark CLI (4.0.17+) for 100% accurate retransmission detection
+  - **Builtin backend:** Hybrid dpkt + Scapy (dpkt for fast initial parsing, Scapy for deep inspection) with PacketMetadata lazy evaluation (3-5x speedup) - 85% accuracy
+  - **Auto-detection:** Graceful fallback from tshark → builtin based on availability
 
 ## Database & Data
 - **Database:** PostgreSQL (Production, multi-tenant) and SQLite (Development/Testing)
