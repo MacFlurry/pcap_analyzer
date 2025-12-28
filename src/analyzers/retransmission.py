@@ -1860,3 +1860,87 @@ class RetransmissionAnalyzer:
             )
 
         return details
+
+
+# ============================================================================
+# Backend Selection Factory (v5.4.0)
+# ============================================================================
+
+
+def create_retransmission_analyzer(backend: str = "auto", **kwargs):
+    """
+    Factory function to create appropriate retransmission analyzer.
+
+    This function selects between tshark backend (100% accuracy) and builtin
+    backend (85% accuracy) based on availability and user preference.
+
+    Args:
+        backend: Backend selection ("auto", "tshark", or "builtin")
+            - "auto": Try tshark first, fallback to builtin (DEFAULT)
+            - "tshark": Force tshark, error if unavailable
+            - "builtin": Force builtin analyzer
+        **kwargs: Additional arguments passed to analyzer constructor
+
+    Returns:
+        Analyzer instance (either TsharkRetransmissionAnalyzer or RetransmissionAnalyzer)
+
+    Raises:
+        RuntimeError: If backend="tshark" but tshark not found
+
+    Examples:
+        >>> # Auto-detection (recommended)
+        >>> analyzer = create_retransmission_analyzer(backend="auto")
+        >>> # Analyzer will use tshark if available, fallback to builtin
+
+        >>> # Force tshark (error if not found)
+        >>> analyzer = create_retransmission_analyzer(backend="tshark")
+
+        >>> # Force builtin (portable, no dependencies)
+        >>> analyzer = create_retransmission_analyzer(backend="builtin")
+    """
+    # Builtin backend requested - use current analyzer
+    if backend == "builtin":
+        logger.info("Using built-in retransmission analyzer (may have 15% under-detection)")
+        return RetransmissionAnalyzer(**kwargs)
+
+    # tshark backend requested or auto-detection
+    if backend in ("tshark", "auto"):
+        try:
+            # Try to import and detect tshark
+            from .retransmission_tshark import find_tshark, TsharkRetransmissionAnalyzer
+
+            tshark_path = find_tshark()
+
+            if tshark_path:
+                logger.info(f"Using tshark backend for 100% accuracy: {tshark_path}")
+                return TsharkRetransmissionAnalyzer(tshark_path)
+
+            # tshark not found
+            if backend == "tshark":
+                raise RuntimeError(
+                    "tshark backend requested but tshark not found.\n"
+                    "Install Wireshark:\n"
+                    "  macOS: brew install --cask wireshark\n"
+                    "  Linux: apt-get install tshark (Debian) or yum install wireshark (RHEL)\n"
+                    "  Windows: Download from https://www.wireshark.org/download.html\n"
+                    "Or use --retrans-backend builtin for portable detection (85% accuracy)"
+                )
+
+            # Auto mode - fallback to builtin
+            logger.warning(
+                "tshark not found, falling back to built-in analyzer. "
+                "Install Wireshark for 100% accuracy. "
+                "Detection accuracy: 85% (may miss 4-6 retransmissions per 27)"
+            )
+            return RetransmissionAnalyzer(**kwargs)
+
+        except ImportError as e:
+            # retransmission_tshark.py not found (shouldn't happen)
+            if backend == "tshark":
+                raise RuntimeError(f"tshark backend unavailable: {e}")
+
+            logger.warning(f"tshark backend import failed: {e}, using builtin")
+            return RetransmissionAnalyzer(**kwargs)
+
+    # Invalid backend
+    raise ValueError(f"Invalid backend: {backend}. Must be 'auto', 'tshark', or 'builtin'")

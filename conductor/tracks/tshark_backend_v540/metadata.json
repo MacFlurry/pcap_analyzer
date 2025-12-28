@@ -1,0 +1,129 @@
+{
+  "track_id": "tshark_backend_v540",
+  "title": "tshark Backend Integration (v5.4.0)",
+  "version": "5.4.0",
+  "status": "in_progress",
+  "priority": "high",
+  "created": "2025-12-28",
+  "updated": "2025-12-28",
+  "description": "Implement hybrid tshark/builtin backend for 100% retransmission detection accuracy",
+
+  "objectives": [
+    "Add tshark backend with subprocess integration",
+    "Smart path detection (macOS /Applications/Wireshark.app, Linux which tshark)",
+    "Auto-detection with graceful fallback to builtin",
+    "CLI option --retrans-backend {auto,tshark,builtin}",
+    "100% accuracy for Docker/K8s deployments"
+  ],
+
+  "baseline": {
+    "version": "5.3.0",
+    "detection_accuracy": "85%",
+    "precision": "~100%",
+    "recall": "85%",
+    "false_positives": 0,
+    "false_negatives": 4
+  },
+
+  "target": {
+    "version": "5.4.0",
+    "detection_accuracy_tshark": "100%",
+    "detection_accuracy_builtin": "85%",
+    "backend_detection": "automatic",
+    "fallback": "graceful",
+    "docker_accuracy": "100%"
+  },
+
+  "implementation_phases": [
+    {
+      "phase": 1,
+      "name": "Core tshark Backend",
+      "tasks": [
+        "Create src/analyzers/retransmission_tshark.py",
+        "Implement TsharkBackend class with subprocess",
+        "Parse tshark JSON output",
+        "Map to TCPRetransmission dataclass"
+      ]
+    },
+    {
+      "phase": 2,
+      "name": "Path Detection",
+      "tasks": [
+        "Implement find_tshark() function",
+        "macOS: check /Applications/Wireshark.app/Contents/MacOS/tshark",
+        "Linux: use shutil.which('tshark')",
+        "Windows: check Program Files paths"
+      ]
+    },
+    {
+      "phase": 3,
+      "name": "Backend Selection",
+      "tasks": [
+        "Implement backend auto-detection",
+        "Add RetransmissionAnalyzerFactory",
+        "Graceful fallback to builtin",
+        "Logging for backend selection"
+      ]
+    },
+    {
+      "phase": 4,
+      "name": "CLI Integration",
+      "tasks": [
+        "Add --retrans-backend CLI option",
+        "Update analyze command",
+        "Add backend info to reports",
+        "Warning messages for fallback"
+      ]
+    },
+    {
+      "phase": 5,
+      "name": "Testing & Documentation",
+      "tasks": [
+        "Test with c1.pcap (expect 27 retrans)",
+        "Test fallback when tshark unavailable",
+        "Update README installation section",
+        "Update CHANGELOG.md",
+        "Update Docker documentation"
+      ]
+    }
+  ],
+
+  "test_cases": [
+    {
+      "name": "c1.pcap with tshark",
+      "expected_retrans": 27,
+      "expected_backend": "tshark",
+      "expected_accuracy": "100%"
+    },
+    {
+      "name": "c1.pcap without tshark",
+      "expected_retrans": 23,
+      "expected_backend": "builtin",
+      "expected_accuracy": "85%"
+    }
+  ],
+
+  "dependencies": [],
+
+  "risks": [
+    {
+      "risk": "tshark output format changes",
+      "mitigation": "Version detection, fallback to builtin",
+      "severity": "low"
+    },
+    {
+      "risk": "Performance overhead (subprocess)",
+      "mitigation": "Single tshark call for entire PCAP",
+      "severity": "low"
+    }
+  ],
+
+  "success_criteria": [
+    "tshark backend detects 27/27 retrans in c1.pcap",
+    "Auto-detection works on macOS and Linux",
+    "Graceful fallback when tshark unavailable",
+    "Docker image has tshark and uses it by default",
+    "CLI option allows forcing backend",
+    "No regression in builtin backend (still 23/27)"
+  ]
+}
