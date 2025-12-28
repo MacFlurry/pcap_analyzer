@@ -659,11 +659,11 @@ class HTMLReportGenerator:
         else:
             impact = (
                 "<strong>Impact & Probable Cause:</strong> "
-                "Mixed mechanisms suggest <span style='color: #ffc107;'>⚠ variable network conditions</span>. "
-                "This could indicate:"
-                "<br>• Intermittent congestion (sometimes severe, sometimes mild)"
-                "<br>• Path instability (routing changes during connection)"
-                "<br>• Multiple network issues affecting the connection"
+                "Plusieurs types de problèmes indiquent <span style='color: #ffc107;'>⚠ des conditions réseau variables</span>. "
+                "Causes possibles :"
+                "<br>• Congestion intermittente (parfois sévère, parfois légère)"
+                "<br>• Instabilité du chemin réseau (changements de route pendant la connexion)"
+                "<br>• Multiples problèmes réseau affectant simultanément la connexion"
             )
 
         # Pattern clarity note
@@ -672,7 +672,7 @@ class HTMLReportGenerator:
         elif "medium" in flow_confidence:
             pattern_note = "<br><br><em>~ Pattern Clarity: <strong>Medium</strong> - Mostly consistent pattern, but limited sample size or some variation makes definitive analysis challenging.</em>"
         else:
-            pattern_note = "<br><br><em>⚠ Pattern Clarity: <strong>Low</strong> - Mixed mechanisms suggest multiple concurrent issues. Detailed packet-level analysis recommended.</em>"
+            pattern_note = "<br><br><em>⚠ Pattern Clarity: <strong>Low</strong> - Plusieurs types de problèmes simultanés détectés. Analyse détaillée des paquets recommandée.</em>"
 
         # Build HTML
         html = f"""
@@ -3279,8 +3279,9 @@ class HTMLReportGenerator:
             "mixed": """
                 <div style="background: #e2e3e5; border-left: 4px solid #6c757d; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.95em;">
-                    <strong>Mixed mechanisms</strong> - Complex network behavior<br>
-                    <strong>Recommendation:</strong> Review individual flows for specific patterns
+                    <strong>🔀 Multiples problèmes simultanés</strong> - Ce flux combine plusieurs types de retransmissions (pertes de paquets, timeouts, congestion)<br>
+                    <strong>Signification :</strong> Conditions réseau instables ou changeantes (congestion intermittente, changements de route, etc.)<br>
+                    <strong>Recommandation :</strong> Analyser les flux individuels ci-dessous pour identifier la cause racine
                     </p>
                 </div>
             """,
@@ -4000,7 +4001,7 @@ class HTMLReportGenerator:
             flow_confidence = "confidence-low"
             flow_confidence_text = "Low Confidence"
             flow_confidence_emoji = "🟠"
-            flow_confidence_note = "Mixed mechanisms, detailed analysis needed"
+            flow_confidence_note = "Multiples problèmes simultanés, analyse détaillée nécessaire"
 
         # Calculate duration FIRST (needed for severity calculation)
         # Issue #12 Fix: Use min/max timestamps instead of first/last to handle delay-sorted lists
