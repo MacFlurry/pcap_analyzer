@@ -7,6 +7,28 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.2] - 2025-12-28
+
+### Fixed 🐛
+- **Classification Direction des Retransmissions SYN**: Correction de la classification des retransmissions SYN,ACK
+  - **Avant**: SYN,ACK retransmis affichait "server_unreachable" (incorrect)
+  - **Après**: SYN,ACK retransmis affiche "client_unreachable" (correct)
+  - **Explication**: Quand un SYN,ACK est retransmis, c'est que le serveur a bien reçu le SYN initial et a répondu avec SYN,ACK, mais le client n'a pas complété le handshake avec l'ACK final
+  - Fichiers modifiés: `src/analyzers/retransmission_tshark.py`, `src/cli.py`
+  - Commit: 40b7cbc, 81328f7
+
+- **Génération de Rapport HTML avec Backend tshark**: Correction de la gestion des valeurs `None` pour les délais de retransmission
+  - **Problème**: TypeError lors du calcul de moyenne si tshark retourne `delay=None`
+  - **Solution**: Filtrage des valeurs non-numériques avant calcul
+  - Fichier modifié: `src/exporters/html_report.py`
+  - Commit: 926b94b
+
+### Changed 🔄
+- **Déploiement Docker**: Migration vers Docker Hub (omegabk/pcap-analyzer)
+  - Image disponible publiquement: `omegabk/pcap-analyzer:v5.4.2` et `omegabk/pcap-analyzer:latest`
+  - Helm chart configuré avec `pullPolicy: Always` pour tirer depuis Docker Hub
+  - Chart version: 1.7.0
+
 ## [5.4.0] - 2025-12-28
 
 ### Added - MAJOR FEATURE 🎯

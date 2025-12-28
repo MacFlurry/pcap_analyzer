@@ -3,8 +3,8 @@ replicaCount: 1
 
 image:
   repository: omegabk/pcap-analyzer
-  pullPolicy: Never  # Use local image loaded with kind load
-  tag: "v5.4.1"
+  pullPolicy: Always  # Pull from Docker Hub
+  tag: "v5.4.2"
 
 service:
   type: ClusterIP  # Changed from NodePort when using Ingress
@@ -59,7 +59,7 @@ env:
 
 # Email configuration (Proton Mail SMTP)
 email:
-  enabled: true
+  enabled: false  # Disabled for local dev (use MailHog in production)
   smtp:
     host: smtp.protonmail.ch
     port: 587
