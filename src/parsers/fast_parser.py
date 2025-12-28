@@ -142,7 +142,8 @@ class FastPacketParser:
         Raises:
             DecompressionBombError: If expansion ratio exceeds critical threshold
         """
-        packet_num = 0
+        # v5.2.4: Start at 1 to match Wireshark frame numbering (1-based, not 0-based)
+        packet_num = 1
         bytes_processed = 0
 
         with open(self.pcap_file, "rb") as f:
@@ -163,14 +164,18 @@ class FastPacketParser:
             datalink = pcap.datalink()
 
             for timestamp, buf in pcap:
+                # v5.2.4 CRITICAL FIX: Increment packet_num for ALL packets (even skipped ones)
+                # to match Wireshark frame numbering (includes non-IP packets)
                 try:
                     metadata = self._extract_metadata(buf, packet_num, timestamp, datalink)
+                    packet_num += 1  # Always increment, even if metadata is None
+
                     if metadata:
                         # Track bytes processed for decompression bomb detection
                         bytes_processed += metadata.packet_length
 
                         # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
-                        if packet_num % 10000 == 0 and packet_num > 0:
+                        if packet_num % 10000 == 0:
                             try:
                                 self.decompression_monitor.check_expansion_ratio(
                                     self.file_size, bytes_processed, packet_num
@@ -184,7 +189,6 @@ class FastPacketParser:
                                 raise
 
                         yield metadata
-                    packet_num += 1
                 except DecompressionBombError:
                     # Re-raise security exceptions
                     raise

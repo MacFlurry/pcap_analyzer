@@ -26,11 +26,14 @@ References:
     RFC 6298: Computing TCP's Retransmission Timer
 """
 
+import logging
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from scapy.all import IP, TCP, Packet
+
+logger = logging.getLogger(__name__)
 
 from ..utils.packet_utils import get_ip_layer
 from ..utils.tcp_utils import get_tcp_logical_length
@@ -102,6 +105,11 @@ class TCPRetransmission:
 
     # SYN retransmission flag
     is_syn_retrans: bool = False  # True if this is a retransmitted SYN packet
+
+    # v5.2.3: Classification of SYN retransmission direction
+    # "server_unreachable": Client SYN retransmissions (no SYN,ACK received)
+    # "client_unreachable": Server SYN,ACK retransmissions (client didn't complete)
+    syn_retrans_direction: Optional[str] = None
 
     # TCP flags string (e.g., "SYN", "PSH,ACK", "FIN,ACK")
     tcp_flags: Optional[str] = None
@@ -382,6 +390,8 @@ class RetransmissionAnalyzer:
         self.sampled_timelines: dict[str, SampledTimeline] = {}  # flow_key -> SampledTimeline
         # Ring buffer: constant memory per flow (last 10 packets for potential handshake capture)
         self._packet_buffer: dict[str, deque] = {}  # flow_key -> deque of SimplePacketInfo (maxlen=10)
+        # v5.2.3: Permanent SYN packet storage to prevent loss in ring buffer
+        self._syn_packet: dict[str, Any] = {}  # flow_key -> SimplePacketInfo
 
     def _reset_flow_state(self, flow_key: str, reverse_key: str) -> None:
         """
@@ -462,14 +472,18 @@ class RetransmissionAnalyzer:
         if reverse_key in self._last_ack_timestamp:
             del self._last_ack_timestamp[reverse_key]
 
-        # CRITICAL FIX v4.16.1: Clear packet buffers to prevent contamination between connections
-        # Bug: Port reuse caused old connection packets to be mixed with new connection timeline
-        # Symptom: Retransmission context showed packets from connection 3h18 minutes earlier
-        # Impact: False positives in retransmission timeline (old handshake merged with new retrans)
+        # CRITICAL FIX v4.16.1: Clear packet buffers to prevent contamination
         if flow_key in self._packet_buffer:
             del self._packet_buffer[flow_key]
         if reverse_key in self._packet_buffer:
             del self._packet_buffer[reverse_key]
+
+        # v5.2.3: Cleanup permanent SYN storage
+        if flow_key in self._syn_packet:
+            del self._syn_packet[flow_key]
+        if reverse_key in self._syn_packet:
+            del self._syn_packet[reverse_key]
+
 
         # RFC 793: Reset TCP state machine for both directions
         self._state_machine.reset_flow(flow_key)
@@ -485,7 +499,8 @@ class RetransmissionAnalyzer:
         Returns:
             Dictionnaire contenant les résultats d'analyse
         """
-        for i, packet in enumerate(packets):
+        # v5.2.4: Fix frame numbering to match Wireshark (1-based indexing)
+        for i, packet in enumerate(packets, start=1):
             self.process_packet(packet, i)
 
         return self.finalize()
@@ -723,6 +738,13 @@ class RetransmissionAnalyzer:
             if metadata.is_syn:
                 self._initial_seq[flow_key] = metadata.tcp_seq
 
+        # v5.2.3: Permanent SYN storage to prevent handshake contamination
+        # Ring buffer (maxlen=10) can eject the initial SYN in heavy traffic
+        # MUST be AFTER reset to avoid being deleted by _reset_flow_state()
+        if metadata.is_syn and flow_key not in self._syn_packet:
+            self._syn_packet[flow_key] = packet_info
+            logger.debug(f"Captured initial SYN for {flow_key} (Frame {packet_num})")
+
         # RFC 793: Update TCP state machine (AFTER potential reset)
         tcp_flags = {
             "SYN": metadata.is_syn,
@@ -911,6 +933,7 @@ class RetransmissionAnalyzer:
                     suspected_mechanisms=suspected_mechanisms,
                     confidence=confidence,
                     is_syn_retrans=is_syn_retrans,
+                    syn_retrans_direction=self._classify_syn_retransmission(metadata) if is_syn_retrans else None,
                     tcp_flags=_tcp_flags_to_string(metadata=metadata),
                 )
                 self.retransmissions.append(retrans)
@@ -920,10 +943,35 @@ class RetransmissionAnalyzer:
                 if flow_key not in self.sampled_timelines:
                     # Flow just became problematic - snapshot BOTH directions
                     # CRITICAL: Capture reverse direction NOW before port reuse cleanup deletes it
-                    forward_handshake = list(self._packet_buffer[flow_key])
+                    
+                    # v5.2.3 Fix: Ensure initial SYN is always included in handshake
+                    forward_handshake = []
+                    # 1. Always include the SYN if it exists
+                    if flow_key in self._syn_packet:
+                        forward_handshake.append(self._syn_packet[flow_key])
+                    # 2. Add other packets from buffer (avoiding duplicates)
+                    buffer_packets = [
+                        p for p in self._packet_buffer[flow_key] 
+                        if not (flow_key in self._syn_packet and p.frame == self._syn_packet[flow_key].frame)
+                    ]
+                    forward_handshake.extend(buffer_packets)
+                    forward_handshake.sort(key=lambda p: p.timestamp)
+                    forward_handshake = forward_handshake[:10]
+
+                    # v5.2.3 Fix: Ensure initial SYN is always included in reverse handshake
                     reverse_handshake = []
+                    # 1. Always include the SYN if it exists
+                    if reverse_key in self._syn_packet:
+                        reverse_handshake.append(self._syn_packet[reverse_key])
+                    # 2. Add other packets from buffer (avoiding duplicates)
                     if reverse_key in self._packet_buffer:
-                        reverse_handshake = list(self._packet_buffer[reverse_key])
+                        buffer_packets = [
+                            p for p in self._packet_buffer[reverse_key]
+                            if not (reverse_key in self._syn_packet and p.frame == self._syn_packet[reverse_key].frame)
+                        ]
+                        reverse_handshake.extend(buffer_packets)
+                    reverse_handshake.sort(key=lambda p: p.timestamp)
+                    reverse_handshake = reverse_handshake[:10]
 
                     self.sampled_timelines[flow_key] = SampledTimeline(
                         handshake=forward_handshake,
@@ -1046,7 +1094,9 @@ class RetransmissionAnalyzer:
         if flow_key in self.sampled_timelines and (metadata.is_fin or metadata.is_rst):
             # Capture forward teardown (only if not already captured)
             if not self.sampled_timelines[flow_key].teardown:
-                self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
+                # v5.2.3: Add safety check to prevent KeyError
+                if flow_key in self._packet_buffer:
+                    self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
 
             # CRITICAL FIX v4.17.0: Capture reverse teardown simultaneously
             # Prevents data loss when port reuse cleanup deletes reverse buffer
@@ -1114,6 +1164,12 @@ class RetransmissionAnalyzer:
             # Update ISN tracking after reset
             if tcp.flags & 0x02:  # SYN
                 self._initial_seq[flow_key] = tcp.seq
+
+        # v5.2.3: Permanent SYN storage to prevent handshake contamination (Scapy path)
+        # MUST be AFTER reset to avoid being deleted by _reset_flow_state()
+        if (tcp.flags & 0x02) and flow_key not in self._syn_packet:
+            self._syn_packet[flow_key] = packet_info
+            logger.debug(f"Captured initial SYN for {flow_key} (Frame {packet_num})")
 
         # RFC 793: Update TCP state machine (AFTER potential reset)
         tcp_flags = {
@@ -1288,6 +1344,7 @@ class RetransmissionAnalyzer:
                     suspected_mechanisms=suspected_mechanisms,
                     confidence=confidence,
                     is_syn_retrans=(tcp.flags & 0x02) != 0,  # SYN flag check
+                    syn_retrans_direction=self._classify_syn_retransmission(tcp) if (tcp.flags & 0x02) else None,
                     tcp_flags=_tcp_flags_to_string(tcp=tcp),
                 )
                 self.retransmissions.append(retrans)
@@ -1297,10 +1354,35 @@ class RetransmissionAnalyzer:
                 if flow_key not in self.sampled_timelines:
                     # Flow just became problematic - snapshot BOTH directions
                     # CRITICAL: Capture reverse direction NOW before port reuse cleanup deletes it
-                    forward_handshake = list(self._packet_buffer[flow_key])
+                    
+                    # v5.2.3 Fix: Ensure initial SYN is always included in handshake
+                    forward_handshake = []
+                    # 1. Always include the SYN if it exists
+                    if flow_key in self._syn_packet:
+                        forward_handshake.append(self._syn_packet[flow_key])
+                    # 2. Add other packets from buffer (avoiding duplicates)
+                    buffer_packets = [
+                        p for p in self._packet_buffer[flow_key] 
+                        if not (flow_key in self._syn_packet and p.frame == self._syn_packet[flow_key].frame)
+                    ]
+                    forward_handshake.extend(buffer_packets)
+                    forward_handshake.sort(key=lambda p: p.timestamp)
+                    forward_handshake = forward_handshake[:10]
+
+                    # v5.2.3 Fix: Ensure initial SYN is always included in reverse handshake
                     reverse_handshake = []
+                    # 1. Always include the SYN if it exists
+                    if reverse_key in self._syn_packet:
+                        reverse_handshake.append(self._syn_packet[reverse_key])
+                    # 2. Add other packets from buffer (avoiding duplicates)
                     if reverse_key in self._packet_buffer:
-                        reverse_handshake = list(self._packet_buffer[reverse_key])
+                        buffer_packets = [
+                            p for p in self._packet_buffer[reverse_key]
+                            if not (reverse_key in self._syn_packet and p.frame == self._syn_packet[reverse_key].frame)
+                        ]
+                        reverse_handshake.extend(buffer_packets)
+                    reverse_handshake.sort(key=lambda p: p.timestamp)
+                    reverse_handshake = reverse_handshake[:10]
 
                     self.sampled_timelines[flow_key] = SampledTimeline(
                         handshake=forward_handshake,
@@ -1434,7 +1516,9 @@ class RetransmissionAnalyzer:
         if flow_key in self.sampled_timelines and (tcp.flags & 0x01 or tcp.flags & 0x04):  # FIN or RST
             # Capture forward teardown (only if not already captured)
             if not self.sampled_timelines[flow_key].teardown:
-                self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
+                # v5.2.3: Add safety check to prevent KeyError
+                if flow_key in self._packet_buffer:
+                    self.sampled_timelines[flow_key].teardown = list(self._packet_buffer[flow_key])
 
             # CRITICAL FIX v4.17.0: Capture reverse teardown simultaneously
             # Prevents data loss when port reuse cleanup deletes reverse buffer
@@ -1479,6 +1563,29 @@ class RetransmissionAnalyzer:
             else int(str(tcp.dport), 16) if isinstance(tcp.dport, str) else tcp.dport
         )
         return f"{ip.dst}:{dport}->{ip.src}:{sport}"
+
+    def _classify_syn_retransmission(self, metadata: Any) -> str:
+        """
+        Classify SYN retransmission as client-side or server-side failure.
+
+        Returns:
+            - "server_unreachable": Client SYN retransmissions (no SYN,ACK received)
+            - "client_unreachable": Server SYN,ACK retransmissions (client didn't complete)
+        """
+        # Note: metadata can be PacketMetadata (lightweight) or dict-like from Scapy path
+        is_ack = False
+        if hasattr(metadata, "is_ack"):
+            is_ack = metadata.is_ack
+        elif hasattr(metadata, "flags"):
+            # Scapy TCP flags: SYN=0x02, ACK=0x10
+            is_ack = bool(metadata.flags & 0x10)
+
+        if is_ack:
+            # Server retransmitting SYN,ACK → Client unreachable/unable to complete
+            return "client_unreachable"
+        else:
+            # Client retransmitting SYN → Server unreachable
+            return "server_unreachable"
 
     def _calculate_flow_severity(self) -> None:
         """Calcule la sévérité pour chaque flux"""

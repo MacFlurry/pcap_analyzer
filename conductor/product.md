@@ -54,7 +54,7 @@ An automated PCAP file analyzer for diagnosing network latency and performance i
 - **Server-Side Route Protection:** Automatic HTTP 307 redirection to login for unauthenticated users accessing protected HTML pages.
 - **Automated TLS:** Zero-touch certificate management via Let's Encrypt and cert-manager (auto-renewal).
 - **Path Traversal Prevention:** Validated file operations with magic number verification.
-- **Input Validation:** File size limits, PCAP format validation, decompression bomb protection.
+- **Input Validation:** File size limits, PCAP format validation, decompression bomb protection, and detailed pre-analysis heuristic validation (timestamps, duplication, self-loops).
 - **Output Sanitization:** XSS prevention via Jinja2 auto-escaping and CSP headers.
 - **SQL Injection Prevention:** Parameterized queries via SQLAlchemy.
 - **PII Sanitization:** Error messages and logs redact file paths and sensitive internals.

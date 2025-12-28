@@ -417,18 +417,19 @@ def analyze_pcap_hybrid(
             packet_count += 1
 
             # Pass metadata to compatible analyzers (much faster than Scapy)
-            timestamp_analyzer.process_packet(metadata, packet_count - 1)
-            handshake_analyzer.process_packet(metadata, packet_count - 1)
-            retrans_analyzer.process_packet(metadata, packet_count - 1)
-            rtt_analyzer.process_packet(metadata, packet_count - 1)
-            window_analyzer.process_packet(metadata, packet_count - 1)
-            reset_analyzer.process_packet(metadata, packet_count - 1)
-            toptalkers_analyzer.process_packet(metadata, packet_count - 1)
-            throughput_analyzer.process_packet(metadata, packet_count - 1)
-            syn_retrans_analyzer.process_packet(metadata, packet_count - 1)
-            tcp_timeout_analyzer.process_packet(metadata, packet_count - 1)
-            burst_analyzer.process_packet(metadata, packet_count - 1)
-            temporal_analyzer.process_packet(metadata, packet_count - 1)
+            # v5.2.4: Use metadata.packet_num (includes non-IP packets) to match Wireshark frame numbering
+            timestamp_analyzer.process_packet(metadata, metadata.packet_num)
+            handshake_analyzer.process_packet(metadata, metadata.packet_num)
+            retrans_analyzer.process_packet(metadata, metadata.packet_num)
+            rtt_analyzer.process_packet(metadata, metadata.packet_num)
+            window_analyzer.process_packet(metadata, metadata.packet_num)
+            reset_analyzer.process_packet(metadata, metadata.packet_num)
+            toptalkers_analyzer.process_packet(metadata, metadata.packet_num)
+            throughput_analyzer.process_packet(metadata, metadata.packet_num)
+            syn_retrans_analyzer.process_packet(metadata, metadata.packet_num)
+            tcp_timeout_analyzer.process_packet(metadata, metadata.packet_num)
+            burst_analyzer.process_packet(metadata, metadata.packet_num)
+            temporal_analyzer.process_packet(metadata, metadata.packet_num)
 
             if packet_count % MEMORY_CLEANUP_INTERVAL == 0:
                 gc.collect()
@@ -448,18 +449,19 @@ def analyze_pcap_hybrid(
                 packet_count += 1
 
                 # Pass metadata to compatible analyzers (much faster than Scapy)
-                timestamp_analyzer.process_packet(metadata, packet_count - 1)
-                handshake_analyzer.process_packet(metadata, packet_count - 1)
-                retrans_analyzer.process_packet(metadata, packet_count - 1)
-                rtt_analyzer.process_packet(metadata, packet_count - 1)
-                window_analyzer.process_packet(metadata, packet_count - 1)
-                reset_analyzer.process_packet(metadata, packet_count - 1)
-                toptalkers_analyzer.process_packet(metadata, packet_count - 1)
-                throughput_analyzer.process_packet(metadata, packet_count - 1)
-                syn_retrans_analyzer.process_packet(metadata, packet_count - 1)
-                tcp_timeout_analyzer.process_packet(metadata, packet_count - 1)
-                burst_analyzer.process_packet(metadata, packet_count - 1)
-                temporal_analyzer.process_packet(metadata, packet_count - 1)
+                # v5.2.4: Use metadata.packet_num (includes non-IP packets) to match Wireshark frame numbering
+                timestamp_analyzer.process_packet(metadata, metadata.packet_num)
+                handshake_analyzer.process_packet(metadata, metadata.packet_num)
+                retrans_analyzer.process_packet(metadata, metadata.packet_num)
+                rtt_analyzer.process_packet(metadata, metadata.packet_num)
+                window_analyzer.process_packet(metadata, metadata.packet_num)
+                reset_analyzer.process_packet(metadata, metadata.packet_num)
+                toptalkers_analyzer.process_packet(metadata, metadata.packet_num)
+                throughput_analyzer.process_packet(metadata, metadata.packet_num)
+                syn_retrans_analyzer.process_packet(metadata, metadata.packet_num)
+                tcp_timeout_analyzer.process_packet(metadata, metadata.packet_num)
+                burst_analyzer.process_packet(metadata, metadata.packet_num)
+                temporal_analyzer.process_packet(metadata, metadata.packet_num)
 
                 if packet_count % MEMORY_CLEANUP_INTERVAL == 0:
                     gc.collect()

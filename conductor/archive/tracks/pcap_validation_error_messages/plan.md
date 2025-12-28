@@ -683,7 +683,7 @@ async def test_upload_valid_pcap_succeeds(client: AsyncClient, normal_pcap_path)
 
 ---
 
-### Tâche 3.5: Build & Deploy [~]
+### Tâche 3.5: Build & Deploy [x]
 
 1. **Commit**:
    ```bash
@@ -721,7 +721,7 @@ async def test_upload_valid_pcap_succeeds(client: AsyncClient, normal_pcap_path)
 
 ---
 
-### Tâche 3.6: Archiver le track
+### Tâche 3.6: Archiver le track [~]
 
 ```bash
 mv conductor/tracks/pcap_validation_error_messages conductor/archive/tracks/

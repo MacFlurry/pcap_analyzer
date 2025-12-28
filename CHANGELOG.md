@@ -7,6 +7,65 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.2.4] - 2025-12-28
+
+### Fixed - CRITICAL 🔴
+- **Frame Numbering Bug** (Triple Root Cause): Fixed frame numbers in all reports to match Wireshark exactly.
+
+  **Issue**: Frame numbers were incorrect across the entire application:
+  - Handshakes showed Frame 7419 instead of 7458 (off by 39)
+  - SYN-ACK showed Frame 8099 instead of 7462 (wrong retransmission)
+  - Retransmissions showed correct frames but handshakes didn't
+
+  **Root Causes (3 bugs fixed)**:
+
+  1. **FastPacketParser Only Counted IP Packets** (`src/parsers/fast_parser.py:171`)
+     - Parser incremented `packet_num` only for yielded IP packets
+     - Non-IP packets (ARP, etc.) were skipped but NOT counted
+     - **Fix**: Moved `packet_num += 1` to execute for ALL packets (even skipped ones)
+     - **Impact**: `metadata.packet_num` now matches Wireshark's global frame numbering
+
+  2. **CLI Passed Wrong Packet Counter** (`src/cli.py:421-464`)
+     - CLI passed `packet_count` (only IP packets) instead of `metadata.packet_num` (all packets)
+     - Analyzers received incorrect frame numbers (7419 instead of 7458)
+     - **Fix**: Changed to pass `metadata.packet_num` to all analyzers
+     - **Impact**: All analyzers now receive correct Wireshark-compatible frame numbers
+
+  3. **Handshake Analyzer Recorded Last SYN-ACK Instead of First** (`src/analyzers/tcp_handshake.py:208, 323`)
+     - Analyzer overwrote `synack_packet_num` on every SYN-ACK retransmission
+     - Recorded frame 8099 (5th retransmission) instead of 7462 (original)
+     - **Fix**: Added `if handshake.synack_packet_num is None:` check to record only FIRST SYN-ACK
+     - **Impact**: Handshake timelines now show original SYN-ACK, not retransmissions
+
+  **Verification**:
+  - Port 1831 SYN: Frame 7458 ✅ (matches tshark)
+  - Port 1831 SYN-ACK: Frame 7462 ✅ (matches tshark, not 8099)
+  - SYN-ACK retransmissions: Frames 7492, 7608, 7616, 7989, 8099 ✅ (all correct)
+  - Total packets: 9390 (matches tshark packet count exactly)
+
+## [5.2.3] - 2025-12-28
+
+### Fixed - CRITICAL 🔴
+- **Packet Timeline Data Integrity**: Fixed critical bug where packet timeline displayed frames from wrong TCP streams.
+  - **Issue**: Handshake section showed frames from different TCP streams (e.g., frames 7422, 7452 from ports 1830, 1829 instead of frames 7458, 7462 from port 1831).
+  - **Root Cause**: SYN packet storage occurred BEFORE flow reset check, causing immediate deletion. Reverse handshake capture did not include SYN from `_syn_packet`.
+  - **Fix**:
+    - Moved SYN packet storage AFTER reset check to ensure persistence.
+    - Enhanced reverse_handshake capture to include SYN from `_syn_packet`.
+    - SYN packet now always included in handshake timeline (no longer lost in ring buffer).
+  - **Impact**: All flows with SYN retransmissions now display correct packet timeline.
+
+- **SYN Retransmission Diagnostics**: Fixed incorrect diagnostic message for SYN,ACK retransmissions.
+  - **Was**: "Server unreachable (no SYN,ACK received)"
+  - **Now**: "Client unable to complete handshake (no final ACK)" - when server retransmits SYN,ACK
+  - **Classification**: Added `syn_retrans_direction` field to distinguish client-side (server unreachable) vs server-side (client unreachable) failures.
+
+### Tests
+- Added comprehensive regression tests with real PCAP (`tests/data/syn_retrans_bug.pcap`).
+- Verified correct frame numbers appear in handshake timeline.
+- Verified no frames from other TCP streams contaminate the display.
+- Verified diagnostic classification for SYN vs SYN,ACK retransmissions.
+
 ## [5.2.1] - 2025-12-27
 
 ### Fixed

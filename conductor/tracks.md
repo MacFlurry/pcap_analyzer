@@ -4,14 +4,23 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
+## [x] Track: Frame Numbering Bug Fix (v5.2.4)
+*Context: Fix triple root cause bug - frame numbers didn't match Wireshark (parser counted only IP packets, CLI passed wrong counter, handshake analyzer recorded last SYN-ACK)*
+*Link: [./conductor/archive/tracks/frame_numbering_bug_v524/](./conductor/archive/tracks/frame_numbering_bug_v524/)*
+*Version: v5.2.4 (PATCH)*
+*Priority: CRITICAL 🔴*
+*Status: ✅ COMPLETED*
+
+## [x] Track: SYN Retransmission Packet Timeline Bug Fix
+*Context: Fix critical data integrity bug where packet timeline shows frames from wrong TCP streams*
+*Link: [./conductor/archive/tracks/syn_retrans_packet_timeline_bug/](./conductor/archive/tracks/syn_retrans_packet_timeline_bug/)*
+*Version: v5.2.3 (PATCH)*
+*Priority: CRITICAL 🔴*
+*Status: ✅ COMPLETED*
+
 ## [ ] Track: Production VPS Deployment with HTTPS
 *Context: Deploy to production VPS with Let's Encrypt automated TLS (pending infrastructure)*
 *Link: [./conductor/tracks/vps_deployment_https/](./conductor/tracks/vps_deployment_https/)*
-
-## [~] Track: PCAP Validation with User-Friendly Error Messages
-*Context: Add pre-upload validation to detect incompatible PCAPs with clear error messages*
-*Link: [./conductor/tracks/pcap_validation_error_messages/](./conductor/tracks/pcap_validation_error_messages/)*
-*Version: v5.2.2 (PATCH)*
 
 ## [ ] Track: Modern Toast Notification System
 *Context: Implement modern toast notifications to replace generic JavaScript alerts*
@@ -31,6 +40,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Add Cancel Button to 2FA Setup Modal
 *Link: [./conductor/archive/tracks/add_cancel_button_2fa_modal/](./conductor/archive/tracks/add_cancel_button_2fa_modal/)*
+
+## [x] Track: PCAP Validation with User-Friendly Error Messages
+*Link: [./conductor/archive/tracks/pcap_validation_error_messages/](./conductor/archive/tracks/pcap_validation_error_messages/)*
 
 ## [x] Track: Let's Encrypt with cert-manager on Kubernetes
 *Link: [./conductor/archive/tracks/letsencrypt_certmanager/](./conductor/archive/tracks/letsencrypt_certmanager/)*

@@ -4,7 +4,7 @@ replicaCount: 1
 image:
   repository: macflurry/pcap-analyzer
   pullPolicy: IfNotPresent
-  tag: "5.2.2"
+  tag: "v5.2.4"
 
 service:
   type: ClusterIP  # Changed from NodePort when using Ingress

@@ -1,0 +1,40 @@
+{
+  "track_id": "syn_retrans_packet_timeline_bug",
+  "title": "SYN Retransmission Packet Timeline Bug Fix",
+  "version": "5.2.3",
+  "version_type": "PATCH",
+  "priority": "CRITICAL",
+  "type": "bug_fix",
+  "status": "ready_for_implementation",
+  "created": "2025-12-28",
+  "estimated_phases": 4,
+  "target_coverage": "95%",
+  "tags": [
+    "bug",
+    "data-integrity",
+    "packet-timeline",
+    "retransmission",
+    "syn"
+  ],
+  "impact": {
+    "severity": "critical",
+    "scope": "all_syn_retransmission_analysis",
+    "affected_components": [
+      "src/analyzers/retransmission.py",
+      "src/exporters/html_report.py"
+    ]
+  },
+  "testing": {
+    "test_pcap_provided": true,
+    "test_pcap_path": "tests/data/syn_retrans_bug.pcap",
+    "regression_tests_required": true,
+    "e2e_tests_required": true
+  },
+  "semver_justification": {
+    "version": "5.2.3",
+    "type": "PATCH",
+    "reason": "Bug fix - data integrity issue in existing feature (packet timeline)",
+    "breaking_changes": false,
+    "new_features": false
+  }
+}
