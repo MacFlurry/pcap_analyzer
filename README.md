@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20|%203.12-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-5.4.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.4.3-blue.svg)](CHANGELOG.md)
 [![Tests](https://img.shields.io/badge/tests-850%2B%20passing-brightgreen.svg)](.github/workflows/test.yml)
 [![Security](https://img.shields.io/badge/security-100%25%20OWASP%20ASVS-brightgreen.svg)](SECURITY.md)
 [![Coverage](https://img.shields.io/badge/coverage-64.43%25-brightgreen.svg)](htmlcov/index.html)
@@ -54,6 +54,7 @@ pcap_analyzer analyze capture.pcap
 - 🔒 Sécurité renforcée (score 91.5%, production ready)
 - 📊 Rapports HTML interactifs avec graphiques Plotly.js
 - 🎯 Analyse complète : TCP, DNS, jitter, retransmissions, RTT
+- 🎖️ Détection de retransmissions 100% précise avec backend tshark (Wireshark)
 
 ### Option 2: Docker Compose (optionnel)
 
@@ -146,14 +147,17 @@ docker-compose down -v
 
 ### Option 3: Kubernetes (optionnel, production)
 
+**Image Docker Hub** : L'image est disponible publiquement sur [`omegabk/pcap-analyzer`](https://hub.docker.com/r/omegabk/pcap-analyzer)
+
 #### Avec Ingress (recommandé)
 
 ```bash
-# Build l'image
-docker build -t pcap-analyzer:latest .
-
+# Option A: Utiliser l'image depuis Docker Hub (recommandé)
 # Créer le cluster kind avec ports Ingress
 kind create cluster --name pcap-analyzer --config kind-config.yaml
+
+# Option B: Build local (si vous avez modifié le code)
+docker build -t pcap-analyzer:latest .
 kind load docker-image pcap-analyzer:latest --name pcap-analyzer
 
 # Installer l'Ingress controller nginx
@@ -194,12 +198,13 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 ## 📋 Fonctionnalités
 
 ### Analyse réseau
-- **TCP** : Retransmissions (RTO/Fast/Generic), handshakes, fenêtres
+- **TCP** : Retransmissions (RTO/Fast/Generic/Spurious) avec backend tshark pour 100% de précision, handshakes, fenêtres
 - **DNS** : Timeouts, latences, erreurs
 - **Jitter** : Graphiques interactifs temps réel avec RTT overlay
 - **Anomalies** : Gaps temporels, bursts, fragmentation IP
 - **Support complet IPv4/IPv6**
 - **Messages contextuels** basés sur RFC (SSH, mDNS, HTTP...)
+- **Détection automatique tshark** : Fallback gracieux vers analyseur intégré si tshark absent
 
 ### Sécurité (v5.0)
 - **Compliance** : OWASP ASVS 4.0 (100%), CWE Top 25 (100%), GDPR
