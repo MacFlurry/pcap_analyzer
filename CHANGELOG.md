@@ -7,6 +7,17 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.3] - 2025-12-28
+
+### Improved 🎨
+- **UX "Mixed Mechanisms" Retransmissions**: Amélioration du texte pour les utilisateurs
+  - **Avant**: "Mixed mechanisms - Complex network behavior" (trop technique)
+  - **Après**: "🔀 Multiples problèmes simultanés - Ce flux combine plusieurs types de retransmissions"
+  - Ajout d'explications concrètes : congestion intermittente, changements de route, etc.
+  - Recommandations actionnables : "Analyser les flux individuels ci-dessous"
+  - Fichier modifié: `src/exporters/html_report.py`
+  - Commit: 24571c9
+
 ## [5.4.2] - 2025-12-28
 
 ### Fixed 🐛
