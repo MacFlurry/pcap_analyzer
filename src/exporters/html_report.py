@@ -659,11 +659,11 @@ class HTMLReportGenerator:
         else:
             impact = (
                 "<strong>Impact & Probable Cause:</strong> "
-                "Mixed mechanisms suggest <span style='color: #ffc107;'>⚠ variable network conditions</span>. "
-                "This could indicate:"
-                "<br>• Intermittent congestion (sometimes severe, sometimes mild)"
-                "<br>• Path instability (routing changes during connection)"
-                "<br>• Multiple network issues affecting the connection"
+                "Plusieurs types de problèmes indiquent <span style='color: #ffc107;'>⚠ des conditions réseau variables</span>. "
+                "Causes possibles :"
+                "<br>• Congestion intermittente (parfois sévère, parfois légère)"
+                "<br>• Instabilité du chemin réseau (changements de route pendant la connexion)"
+                "<br>• Multiples problèmes réseau affectant simultanément la connexion"
             )
 
         # Pattern clarity note
@@ -672,7 +672,7 @@ class HTMLReportGenerator:
         elif "medium" in flow_confidence:
             pattern_note = "<br><br><em>~ Pattern Clarity: <strong>Medium</strong> - Mostly consistent pattern, but limited sample size or some variation makes definitive analysis challenging.</em>"
         else:
-            pattern_note = "<br><br><em>⚠ Pattern Clarity: <strong>Low</strong> - Mixed mechanisms suggest multiple concurrent issues. Detailed packet-level analysis recommended.</em>"
+            pattern_note = "<br><br><em>⚠ Pattern Clarity: <strong>Low</strong> - Plusieurs types de problèmes simultanés détectés. Analyse détaillée des paquets recommandée.</em>"
 
         # Build HTML
         html = f"""
@@ -852,7 +852,8 @@ class HTMLReportGenerator:
         html_parts.append("</div>")
 
         # v4.19.0: Initialize Plotly graphs when QoS tab becomes visible (fix for display:none issue)
-        html_parts.append("""
+        html_parts.append(
+            """
 <script>
 (function() {
     var graphsInitialized = false;
@@ -873,7 +874,8 @@ class HTMLReportGenerator:
     }
 })();
 </script>
-""")
+"""
+        )
 
         html_parts.append("</body>")
         html_parts.append("</html>")
@@ -2541,10 +2543,9 @@ class HTMLReportGenerator:
             flows_with_timeseries = []
             for flow in high_jitter_flows[:10]:
                 if "timeseries" in flow:
-                    flows_with_timeseries.append({
-                        "name": flow.get("flow_key", "Unknown"),
-                        "timeseries": flow["timeseries"]
-                    })
+                    flows_with_timeseries.append(
+                        {"name": flow.get("flow_key", "Unknown"), "timeseries": flow["timeseries"]}
+                    )
 
             if len(flows_with_timeseries) >= 2:
                 html += "<h3>Multi-Flow Jitter Comparison</h3>"
@@ -2892,13 +2893,32 @@ class HTMLReportGenerator:
                 ip = most_common_ip[0]
                 ip_info = self._identify_ip_range(ip)
 
-                # For SYN retransmissions, the root cause is ALWAYS "server unreachable"
-                # regardless of IP type (private/public doesn't matter for connection failures)
+                # v5.2.5 FIX: Distinguish between SYN and SYN,ACK retransmissions using syn_retrans_direction
                 if type_key == "syn":
-                    result["root_cause"] = (
-                        f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
-                    )
-                    result["action"] = "Verify server is running, port is open, and firewall allows traffic"
+                    # Determine retransmission direction from first flow's first retransmission
+                    syn_direction = None
+                    for _, retrans_list in flows:
+                        if retrans_list and retrans_list[0].get("syn_retrans_direction"):
+                            syn_direction = retrans_list[0]["syn_retrans_direction"]
+                            break
+
+                    if syn_direction == "client_unreachable":
+                        # Server SYN,ACK retransmissions - client didn't send final ACK
+                        result["root_cause"] = (
+                            f"Client unable to complete handshake with {most_common_ip[0]}:{most_common_port[0]} "
+                            f"(server sent SYN,ACK but no final ACK received)"
+                        )
+                        result["action"] = (
+                            "Check client network connectivity, verify client can send packets, "
+                            "check for asymmetric routing or client-side firewall blocking outbound ACKs"
+                        )
+                    else:
+                        # Client SYN retransmissions - server didn't respond with SYN,ACK
+                        # (syn_direction == "server_unreachable" or None for backward compatibility)
+                        result["root_cause"] = (
+                            f"Server {most_common_ip[0]}:{most_common_port[0]} unreachable or not listening"
+                        )
+                        result["action"] = "Verify server is running, port is open, and firewall allows traffic"
                 elif ip_info and ip_info.get("diagnostic", False):
                     # For other retransmission types, only show diagnostic IP ranges as root cause
                     # (e.g., TEST-NET, loopback, link-local - NOT RFC 1918 private addresses)
@@ -3196,16 +3216,40 @@ class HTMLReportGenerator:
 
     def _generate_type_explanation_concise(self, type_key: str, flows: list) -> str:
         """Generate concise explanation for a retransmission type."""
-        explanations = {
-            "syn": """
+        # v5.2.5 FIX: Dynamic SYN explanation based on syn_retrans_direction
+        if type_key == "syn":
+            # Determine retransmission direction from flows
+            syn_direction = None
+            for _, retrans_list in flows:
+                if retrans_list and retrans_list[0].get("syn_retrans_direction"):
+                    syn_direction = retrans_list[0]["syn_retrans_direction"]
+                    break
+
+            if syn_direction == "client_unreachable":
+                # Server SYN,ACK retransmissions
+                return """
                 <div style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.95em;">
-                    <strong>SYN retrans = Connection failed</strong> (server unreachable)<br>
-                    <strong>Type:</strong> RTO-based (no ACKs during handshake, never fast retransmit)<br>
+                    <strong>SYN,ACK retrans = Handshake incomplete</strong> (client unreachable)<br>
+                    <strong>Type:</strong> RTO-based (server sent SYN,ACK but no final ACK received)<br>
                     <strong>Impact:</strong> <span style='color: #dc3545;'>CRITICAL</span> - Application cannot establish TCP connection
                     </p>
                 </div>
-            """,
+                """
+            else:
+                # Client SYN retransmissions (default)
+                return """
+                <div style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                    <strong>SYN retrans = Connection failed</strong> (server unreachable)<br>
+                    <strong>Type:</strong> RTO-based (no SYN,ACK received from server)<br>
+                    <strong>Impact:</strong> <span style='color: #dc3545;'>CRITICAL</span> - Application cannot establish TCP connection
+                    </p>
+                </div>
+                """
+
+        # Static explanations for other types
+        explanations = {
             "rto": """
                 <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.95em;">
@@ -3235,8 +3279,9 @@ class HTMLReportGenerator:
             "mixed": """
                 <div style="background: #e2e3e5; border-left: 4px solid #6c757d; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.95em;">
-                    <strong>Mixed mechanisms</strong> - Complex network behavior<br>
-                    <strong>Recommendation:</strong> Review individual flows for specific patterns
+                    <strong>🔀 Multiples problèmes simultanés</strong> - Ce flux combine plusieurs types de retransmissions (pertes de paquets, timeouts, congestion)<br>
+                    <strong>Signification :</strong> Conditions réseau instables ou changeantes (congestion intermittente, changements de route, etc.)<br>
+                    <strong>Recommandation :</strong> Analyser les flux individuels ci-dessous pour identifier la cause racine
                     </p>
                 </div>
             """,
@@ -3456,7 +3501,9 @@ class HTMLReportGenerator:
 
         for flow_key, retrans_list in flows_to_show:
             total_retrans = len(retrans_list)
-            avg_delay = sum(r.get("delay", 0) for r in retrans_list) / total_retrans if total_retrans > 0 else 0
+            # Fix: Handle None/non-numeric delay values from tshark backend
+            delays = [r.get("delay", 0) for r in retrans_list if isinstance(r.get("delay"), (int, float))]
+            avg_delay = sum(delays) / len(delays) if delays else 0
 
             # Calculate duration and first retransmission timestamp
             if retrans_list:
@@ -3504,11 +3551,11 @@ class HTMLReportGenerator:
                 html += '<div style="color: #ffeb3b; margin-top: 10px; padding-top: 10px; border-top: 1px solid #455a64; font-size: 0.8em;">'
                 html += "<strong>Example Output:</strong><br>"
                 html += '<pre style="color: #b0bec5; margin: 5px 0 0 0; font-family: monospace; font-size: 0.9em; line-height: 1.4;">'
-                html += 'Frame | Time     | Src IP        | Dst IP        | SPort | DPort | Flags | Seq    | Ack    | Win   | Len | Analysis\n'
-                html += '1     | 0.000000 | 192.168.1.2   | 10.0.0.5      | 51234 | 80    | S     | 0      | 0      | 65535 | 0   |         \n'
-                html += '2     | 0.100000 | 10.0.0.5      | 192.168.1.2   | 80    | 51234 | SA    | 0      | 1      | 29200 | 0   |         \n'
+                html += "Frame | Time     | Src IP        | Dst IP        | SPort | DPort | Flags | Seq    | Ack    | Win   | Len | Analysis\n"
+                html += "1     | 0.000000 | 192.168.1.2   | 10.0.0.5      | 51234 | 80    | S     | 0      | 0      | 65535 | 0   |         \n"
+                html += "2     | 0.100000 | 10.0.0.5      | 192.168.1.2   | 80    | 51234 | SA    | 0      | 1      | 29200 | 0   |         \n"
                 html += '<span style="color: #ffab40;">5     | 0.250000 | 192.168.1.2   | 10.0.0.5      | 51234 | 80    | PA    | 1      | 1      | 65535 | 512 | Retrans </span>'
-                html += '</pre>'
+                html += "</pre>"
                 html += "</div>"
                 html += "</div>"
                 html += "</details>"
@@ -3719,7 +3766,7 @@ class HTMLReportGenerator:
         if not packets:
             return f"<p><em>No {section_title.lower()} captured</em></p>"
 
-        html = f'<h5>{escape_html(section_title)}</h5>'
+        html = f"<h5>{escape_html(section_title)}</h5>"
         html += '<table class="packet-timeline">'
         html += """
             <thead>
@@ -3747,9 +3794,10 @@ class HTMLReportGenerator:
 
             # Format timestamp in ISO 8601 format (like tshark -tttt)
             # Convert epoch timestamp to YYYY-MM-DD HH:MM:SS.mmm
-            raw_timestamp = pkt.get('timestamp', 0)
+            raw_timestamp = pkt.get("timestamp", 0)
             if raw_timestamp > 0:
                 from datetime import datetime
+
                 dt = datetime.fromtimestamp(raw_timestamp)
                 timestamp = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Keep milliseconds
             else:
@@ -3866,27 +3914,27 @@ class HTMLReportGenerator:
         # Retransmission contexts
         if retrans_context:
             html += '<div style="margin-top: 20px;">'
-            html += f'<h5>Retransmission Contexts ({len(retrans_context)} events)</h5>'
+            html += f"<h5>Retransmission Contexts ({len(retrans_context)} events)</h5>"
             for idx, context in enumerate(retrans_context, 1):
                 html += f'<div style="margin-left: 20px; margin-bottom: 15px;">'
-                html += f'<h6>Context #{idx} (±5 packets around retransmission)</h6>'
+                html += f"<h6>Context #{idx} (±5 packets around retransmission)</h6>"
                 html += self._render_packet_table(context, f"Context {idx}", flow_key)
-                html += '</div>'
-            html += '</div>'
+                html += "</div>"
+            html += "</div>"
 
         # Teardown section
         if teardown:
             html += '<div style="margin-top: 20px;">'
             html += self._render_packet_table(teardown, "Teardown (Last 10 Packets)", flow_key)
-            html += '</div>'
+            html += "</div>"
 
         # Tshark fallback command
         html += '<div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #3498db;">'
-        html += '<h6>📊 Full Timeline (tshark command)</h6>'
+        html += "<h6>📊 Full Timeline (tshark command)</h6>"
         html += '<p style="margin: 5px 0;"><em>For complete packet-by-packet analysis:</em></p>'
         html += f'<code class="copy-code" style="display: block; padding: 10px; background: white; overflow-x: auto;">{escape_html(tshark_cmd)}</code>'
         html += '<button class="copy-btn" onclick="copyToClipboard(this)" style="margin-top: 10px;">📋 Copy</button>'
-        html += '</div>'
+        html += "</div>"
 
         html += """
                 </div>
@@ -3953,7 +4001,7 @@ class HTMLReportGenerator:
             flow_confidence = "confidence-low"
             flow_confidence_text = "Low Confidence"
             flow_confidence_emoji = "🟠"
-            flow_confidence_note = "Mixed mechanisms, detailed analysis needed"
+            flow_confidence_note = "Multiples problèmes simultanés, analyse détaillée nécessaire"
 
         # Calculate duration FIRST (needed for severity calculation)
         # Issue #12 Fix: Use min/max timestamps instead of first/last to handle delay-sorted lists
@@ -5117,7 +5165,9 @@ class HTMLReportGenerator:
         # v4.19.0: Add individual flow graphs with POC-style stats badges (top 3 flows with timeseries data)
         flows_with_graphs = [f for f in flows[:5] if "timeseries" in f]
         if flows_with_graphs:
-            html += "<h4 style='margin-top: 25px; margin-bottom: 15px; color: #2c3e50;'>📊 Time-Series Visualization</h4>"
+            html += (
+                "<h4 style='margin-top: 25px; margin-bottom: 15px; color: #2c3e50;'>📊 Time-Series Visualization</h4>"
+            )
             for idx, flow in enumerate(flows_with_graphs[:3]):  # Show top 3 graphs
                 flow_key = flow.get("flow_key", f"Flow {idx+1}")
                 graph_id = f"jitter-graph-{severity_key}-{idx}"
@@ -5145,7 +5195,7 @@ class HTMLReportGenerator:
                     packet_count=packet_count,
                     mean_rtt=mean_rtt,
                     max_rtt=max_rtt,
-                    retrans_count=retrans_count
+                    retrans_count=retrans_count,
                 )
 
         # Add compact flow table
@@ -5233,10 +5283,14 @@ class HTMLReportGenerator:
         if problematic_flows == 1 and total_flows > 1:
             diagnosis_type = "localized"
             diagnosis = f"Problème <strong>localisé</strong>: {problematic_flows} flux sur {total_flows} subit une dégradation, les autres sont stables."
-            recommendation = "Vérifiez le lien réseau spécifique de ce flux, il peut subir une congestion ou saturation localisée."
+            recommendation = (
+                "Vérifiez le lien réseau spécifique de ce flux, il peut subir une congestion ou saturation localisée."
+            )
         elif problematic_flows > total_flows * 0.8:
             diagnosis_type = "systemic"
-            diagnosis = f"Problème <strong>systémique</strong>: {problematic_flows} flux sur {total_flows} sont affectés."
+            diagnosis = (
+                f"Problème <strong>systémique</strong>: {problematic_flows} flux sur {total_flows} sont affectés."
+            )
             recommendation = "Congestion réseau généralisée. Vérifiez la bande passante totale, les équipements réseau (routeurs/switches), et envisagez QoS."
         elif problematic_flows > 0:
             diagnosis_type = "partial"
@@ -5366,7 +5420,7 @@ class HTMLReportGenerator:
             severity_text=severity_text,
             severity_color=severity_color,
             diagnosis=diagnosis,
-            recommendation=recommendation
+            recommendation=recommendation,
         )
 
     def _generate_grouped_jitter_analysis(self, jitter_data: dict, results: dict = None) -> str:
@@ -5401,7 +5455,12 @@ class HTMLReportGenerator:
         # Order: Critical -> High -> Medium -> Low -> Excellent
         if flow_groups["critical"]:
             html += self._generate_jitter_severity_section(
-                "critical", "Critical Jitter (P95 > 50ms UDP or > 200ms TCP)", flow_groups["critical"], "#dc3545", "🔴", results
+                "critical",
+                "Critical Jitter (P95 > 50ms UDP or > 200ms TCP)",
+                flow_groups["critical"],
+                "#dc3545",
+                "🔴",
+                results,
             )
 
         if flow_groups["high"]:

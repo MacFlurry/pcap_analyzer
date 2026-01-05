@@ -1,7 +1,7 @@
 # API Documentation
 
-**Version**: 5.0
-**Date**: 2025-12-21
+**Version**: 4.27.2
+**Date**: 2025-12-25
 **Base URL**: `http://localhost:8000` (development)
 **Status**: Production Ready ✅
 
@@ -114,12 +114,12 @@ curl -X POST http://localhost:8000/api/register \
   "email": "alice@example.com",
   "role": "user",
   "is_active": true,
-  "is_approved": false,  ← User cannot login yet (pending admin approval)
-  "created_at": "2025-12-21T20:00:00Z"
+  "is_approved": false,
+  "created_at": "2025-12-25T20:00:00Z"
 }
 ```
 
-**⚠️ Note**: User must be approved by admin before login.
+**⚠️ Note**: User must be approved by admin before login. A confirmation email is sent to the user upon registration.
 
 ---
 
@@ -293,12 +293,12 @@ curl -X POST http://localhost:8000/api/token \
 
 | Method | Endpoint | Description | Admin Only | CSRF |
 |--------|----------|-------------|------------|------|
-| GET | `/api/users` | List all users | ✅ | ❌ |
+| GET | `/api/users` | List all users (supports `limit`, `offset`, `status`, `role` filters) | ✅ | ❌ |
 | POST | `/api/admin/users` | Create user with temp password | ✅ | ✅ |
-| PUT | `/api/admin/users/{id}/approve` | Approve user registration | ✅ | ✅ |
+| PUT | `/api/admin/users/{id}/approve` | Approve user registration (triggers email) | ✅ | ✅ |
 | PUT | `/api/admin/users/{id}/block` | Block user account | ✅ | ✅ |
 | PUT | `/api/admin/users/{id}/unblock` | Unblock user account | ✅ | ✅ |
-| DELETE | `/api/admin/users/{id}` | Delete user account | ✅ | ✅ |
+| DELETE | `/api/admin/users/{id}` | Delete user account + associated files (GDPR) | ✅ | ✅ |
 | POST | `/api/admin/users/bulk/approve` | Bulk approve multiple users | ✅ | ✅ |
 | POST | `/api/admin/users/bulk/block` | Bulk block multiple users | ✅ | ✅ |
 | POST | `/api/admin/users/bulk/unblock` | Bulk unblock multiple users | ✅ | ✅ |
@@ -343,6 +343,13 @@ curl -X POST http://localhost:8000/api/token \
 ```json
 {
   "detail": "Incorrect username or password"
+}
+```
+
+**Password Strength Error** (400):
+```json
+{
+  "detail": "Password is too weak (strength: 1/4, need ≥3). Warning: This is a common password. Suggestions: Add another word or two; Avoid common words or patterns."
 }
 ```
 
@@ -681,7 +688,7 @@ async function fetchWithAuth(endpoint, options) {
 
 ---
 
-**Last Updated**: 2025-12-21
-**Version**: 5.0.0
+**Last Updated**: 2025-12-25
+**Version**: 4.27.2
 **Interactive Docs**: http://localhost:8000/docs
 **Status**: Production Ready ✅

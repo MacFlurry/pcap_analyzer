@@ -49,6 +49,7 @@ dependencies = [
     "python-multipart>=0.0.6",  # Upload multipart/form-data
     "aiofiles>=23.2.1",  # Async file operations
     "apscheduler>=3.10.0,<4.0",  # Cleanup scheduler
+    "fastapi-mail>=1.4.1",  # Email notifications (Feature #v4.27.0)
     # Database (SQLite + PostgreSQL)
     "aiosqlite>=0.19.0,<1.0",  # SQLite async wrapper
     "alembic>=1.13.0",  # Database migrations
@@ -61,6 +62,9 @@ dependencies = [
     "email-validator>=2.0.0",  # EmailStr validation in Pydantic
     "fastapi-csrf-protect>=0.3.4,<1.0",  # CSRF protection (OWASP ASVS 4.2.2)
     "zxcvbn>=4.5.0,<5.0",  # Password strength estimation (Issue #23)
+    "pyotp>=2.9.0,<3.0",  # TOTP 2FA (v4.28.0)
+    "qrcode>=7.4.0,<8.0",  # QR code generation for 2FA setup (v4.28.0)
+    "Pillow>=10.0.0",  # Image library for QR code generation (v4.28.0)
 ]
 
 [project.optional-dependencies]
@@ -85,6 +89,7 @@ test = [
     "pytest-cov>=4.1.0",
     "pytest-xdist>=3.5.0",
     "hypothesis>=6.92.0",
+    "testcontainers>=4.0.0",
 ]
 docs = [
     "sphinx>=7.2.0",

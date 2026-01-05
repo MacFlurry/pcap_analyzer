@@ -15,6 +15,7 @@ References:
 import logging
 import os
 import secrets
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -50,6 +51,17 @@ def _parse_timestamp(value) -> Optional[datetime]:
         return datetime.fromisoformat(value)
     return None
 
+
+def _parse_backup_codes(value) -> Optional[list[str]]:
+    """Parse backup codes from JSON string."""
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return []
+
+
 # Database schema for users table
 # NOTE: For PostgreSQL, use Alembic migrations instead of this schema
 USER_SCHEMA = """
@@ -64,6 +76,9 @@ CREATE TABLE IF NOT EXISTS users (
     approved_by TEXT,
     approved_at TIMESTAMP,
     password_must_change BOOLEAN NOT NULL DEFAULT 0,
+    is_2fa_enabled BOOLEAN NOT NULL DEFAULT 0,
+    totp_secret TEXT,
+    backup_codes TEXT,
     created_at TIMESTAMP NOT NULL,
     last_login TIMESTAMP,
     CONSTRAINT role_check CHECK (role IN ('admin', 'user'))
@@ -152,6 +167,33 @@ class UserDatabaseService:
                 # Non-critical, continue
         else:
             # PostgreSQL: migrations handled by Alembic
+            logger.debug("PostgreSQL detected: skipping manual migration (use Alembic)")
+
+    async def migrate_users_table(self):
+        """
+        Migrate users table to add 2FA columns.
+        Safe to call multiple times.
+        """
+        if self.pool.db_type == "sqlite":
+            try:
+                result = await self.pool.fetch_all("PRAGMA table_info(users)")
+                column_names = [col["name"] if "name" in col else col[1] for col in result]
+
+                if "is_2fa_enabled" not in column_names:
+                    await self.pool.execute("ALTER TABLE users ADD COLUMN is_2fa_enabled BOOLEAN NOT NULL DEFAULT 0")
+                    logger.info("Added is_2fa_enabled column to users table")
+
+                if "totp_secret" not in column_names:
+                    await self.pool.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+                    logger.info("Added totp_secret column to users table")
+
+                if "backup_codes" not in column_names:
+                    await self.pool.execute("ALTER TABLE users ADD COLUMN backup_codes TEXT")
+                    logger.info("Added backup_codes column to users table")
+
+            except Exception as e:
+                logger.error(f"Error migrating users table: {e}")
+        else:
             logger.debug("PostgreSQL detected: skipping manual migration (use Alembic)")
 
     async def create_admin_breakglass_if_not_exists(self) -> Optional[str]:
@@ -273,10 +315,10 @@ class UserDatabaseService:
             Hashed password (bcrypt format)
         """
         # Truncate password to 72 bytes (bcrypt limitation)
-        password_bytes = password.encode('utf-8')[:72]
+        password_bytes = password.encode("utf-8")[:72]
         salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
         hashed = bcrypt.hashpw(password_bytes, salt)
-        return hashed.decode('utf-8')
+        return hashed.decode("utf-8")
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """
@@ -290,12 +332,20 @@ class UserDatabaseService:
             True if password matches
         """
         # Truncate password to 72 bytes (bcrypt limitation)
-        password_bytes = plain_password.encode('utf-8')[:72]
-        hashed_bytes = hashed_password.encode('utf-8')
-        return bcrypt.checkpw(password_bytes, hashed_bytes)
+        password_bytes = plain_password.encode("utf-8")[:72]
+        hashed_bytes = hashed_password.encode("utf-8")
+        try:
+            return bcrypt.checkpw(password_bytes, hashed_bytes)
+        except Exception as e:
+            logger.error(f"Error during password verification: {e}")
+            return False
 
     async def create_user(
-        self, user_data: UserCreate, role: UserRole = UserRole.USER, auto_approve: bool = False, password_must_change: bool = False
+        self,
+        user_data: UserCreate,
+        role: UserRole = UserRole.USER,
+        auto_approve: bool = False,
+        password_must_change: bool = False,
     ) -> User:
         """
         Create a new user.
@@ -349,10 +399,17 @@ class UserDatabaseService:
 
         except Exception as e:
             error_str = str(e).lower()
-            if "username" in error_str or "unique" in error_str:
+            if "idx_users_email" in error_str or "users_email_key" in error_str:
+                raise ValueError("Email already exists")
+            elif "idx_users_username" in error_str or "users_username_key" in error_str:
+                raise ValueError("Username already exists")
+            elif "username" in error_str:
                 raise ValueError("Username already exists")
             elif "email" in error_str:
                 raise ValueError("Email already exists")
+            elif "unique" in error_str:
+                # Fallback for other unique constraints or SQLite
+                raise ValueError("Username already exists")
             else:
                 raise ValueError(f"Database error: {e}")
 
@@ -401,6 +458,9 @@ class UserDatabaseService:
             approved_by=str(row["approved_by"]) if row.get("approved_by") else None,
             approved_at=_parse_timestamp(row.get("approved_at")),
             password_must_change=bool(row.get("password_must_change", False)),
+            is_2fa_enabled=bool(row.get("is_2fa_enabled", False)),
+            totp_secret=row.get("totp_secret"),
+            backup_codes=_parse_backup_codes(row.get("backup_codes")),
             created_at=_parse_timestamp(row.get("created_at")) or datetime.now(timezone.utc),
             last_login=_parse_timestamp(row.get("last_login")),
         )
@@ -427,6 +487,9 @@ class UserDatabaseService:
             approved_by=str(row["approved_by"]) if row.get("approved_by") else None,
             approved_at=_parse_timestamp(row.get("approved_at")),
             password_must_change=bool(row.get("password_must_change", False)),
+            is_2fa_enabled=bool(row.get("is_2fa_enabled", False)),
+            totp_secret=row.get("totp_secret"),
+            backup_codes=_parse_backup_codes(row.get("backup_codes")),
             created_at=_parse_timestamp(row.get("created_at")) or datetime.now(timezone.utc),
             last_login=_parse_timestamp(row.get("last_login")),
         )
@@ -493,7 +556,9 @@ class UserDatabaseService:
         # Check password reuse (Issue #23)
         is_reused = await self.check_password_reuse(user_id, new_password)
         if is_reused:
-            raise ValueError("Password was used recently. Please choose a different password (last 5 passwords cannot be reused)")
+            raise ValueError(
+                "Password was used recently. Please choose a different password (last 5 passwords cannot be reused)"
+            )
 
         hashed_password = self.hash_password(new_password)
 
@@ -543,7 +608,7 @@ class UserDatabaseService:
             old_ids = [row[0] for row in rows[5:]]  # Everything beyond the first 5
 
             # Build DELETE query with IN clause
-            placeholders = ', '.join(['?' for _ in old_ids])
+            placeholders = ", ".join(["?" for _ in old_ids])
             delete_query = f"DELETE FROM password_history WHERE id IN ({placeholders})"
             delete_query, delete_params = self.pool.translate_query(delete_query, tuple(old_ids))
             await self.pool.execute(delete_query, *delete_params)
@@ -570,27 +635,64 @@ class UserDatabaseService:
 
         # Check if new password matches any of the last 5
         for row in rows:
-            old_hashed_password = row[0]
+            old_hashed_password = row["hashed_password"]
             if self.verify_password(new_password, old_hashed_password):
                 return True  # Reuse detected!
 
         return False  # Password not reused
 
-    async def get_all_users(self, limit: int = 100) -> list[User]:
+    async def get_all_users(
+        self, limit: int = 100, offset: int = 0, status_filter: Optional[str] = None, role_filter: Optional[str] = None
+    ) -> tuple[list[User], int]:
         """
-        Get all users (admin only).
+        Get all users with pagination and filtering (admin only).
 
         Args:
             limit: Maximum number of users to return
+            offset: Number of users to skip
+            status_filter: Filter by approval status ("pending", "approved", "blocked")
+            role_filter: Filter by user role ("admin", "user")
 
         Returns:
-            List of users
+            Tuple of (list of users, total count matching filters)
         """
-        query, params = self.pool.translate_query(
-            "SELECT * FROM users ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        )
-        rows = await self.pool.fetch_all(query, *params)
+        effective_offset = offset
+        base_query = "FROM users"
+        conditions = []
+        params = []
+
+        if status_filter:
+            if status_filter == "pending":
+                conditions.append("is_approved = ?")
+                params.append(False)
+            elif status_filter == "approved":
+                conditions.append("is_approved = ?")
+                params.append(True)
+                conditions.append("is_active = ?")
+                params.append(True)
+            elif status_filter == "blocked":
+                conditions.append("is_active = ?")
+                params.append(False)
+
+        if role_filter:
+            conditions.append("role = ?")
+            params.append(role_filter)
+
+        where_clause = ""
+        if conditions:
+            where_clause = " WHERE " + " AND ".join(conditions)
+
+        # 1. Get total count
+        count_query = f"SELECT COUNT(*) as total {base_query}{where_clause}"
+        count_query, count_params = self.pool.translate_query(count_query, tuple(params))
+        count_row = await self.pool.fetch_one(count_query, *count_params)
+        total = int(count_row["total"]) if count_row else 0
+
+        # 2. Get paginated results
+        query = f"SELECT * {base_query}{where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        all_params = params + [limit, effective_offset]
+        query, all_params = self.pool.translate_query(query, tuple(all_params))
+        rows = await self.pool.fetch_all(query, *all_params)
 
         users = []
         for row in rows:
@@ -605,12 +707,13 @@ class UserDatabaseService:
                     is_approved=bool(row.get("is_approved", False)),
                     approved_by=str(row["approved_by"]) if row.get("approved_by") else None,
                     approved_at=_parse_timestamp(row.get("approved_at")),
+                    is_2fa_enabled=bool(row.get("is_2fa_enabled", False)),
                     created_at=_parse_timestamp(row.get("created_at")) or datetime.now(timezone.utc),
                     last_login=_parse_timestamp(row.get("last_login")),
                 )
             )
 
-        return users
+        return users, total
 
     async def approve_user(self, user_id: str, approver_id: str) -> bool:
         """
@@ -693,6 +796,56 @@ class UserDatabaseService:
             logger.info(f"User {user_id} unblocked (is_active=True)")
 
         return updated
+
+    async def enable_2fa(self, user_id: str, totp_secret: str, backup_codes: list[str]):
+        """
+        Enable 2FA for a user.
+
+        Args:
+            user_id: User ID
+            totp_secret: The TOTP secret key
+            backup_codes: List of backup codes
+        """
+        backup_codes_json = json.dumps(backup_codes)
+        query, params = self.pool.translate_query(
+            "UPDATE users SET is_2fa_enabled = ?, totp_secret = ?, backup_codes = ? WHERE id = ?",
+            (True, totp_secret, backup_codes_json, user_id),
+        )
+        await self.pool.execute(query, *params)
+        logger.info(f"2FA enabled for user {user_id}")
+
+    async def disable_2fa(self, user_id: str):
+        """Disable 2FA for a user."""
+        query, params = self.pool.translate_query(
+            "UPDATE users SET is_2fa_enabled = ?, totp_secret = NULL, backup_codes = NULL WHERE id = ?",
+            (False, user_id),
+        )
+        await self.pool.execute(query, *params)
+        logger.info(f"2FA disabled for user {user_id}")
+
+    async def consume_backup_code(self, user_id: str, code: str) -> bool:
+        """
+        Verify and consume a backup code.
+        Returns True if code was valid and consumed.
+        """
+        user = await self.get_user_by_id(user_id)
+        if not user or not user.backup_codes:
+            return False
+
+        if code in user.backup_codes:
+            # Remove used code
+            new_codes = [c for c in user.backup_codes if c != code]
+            new_codes_json = json.dumps(new_codes)
+
+            query, params = self.pool.translate_query(
+                "UPDATE users SET backup_codes = ? WHERE id = ?",
+                (new_codes_json, user_id),
+            )
+            await self.pool.execute(query, *params)
+            logger.info(f"Backup code consumed for user {user_id}")
+            return True
+
+        return False
 
 
 # Singleton instance

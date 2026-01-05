@@ -4,6 +4,7 @@ PCAP Analyzer Web API - Main FastAPI Application
 
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,7 +20,9 @@ from app.security.csrf import requires_csrf_protection
 from app.services.cleanup import CleanupScheduler
 from app.services.database import get_db_service
 from app.services.user_database import get_user_db_service
+from app.services.password_reset_service import get_password_reset_service
 from app.services.worker import get_worker
+from src.__version__ import __version__
 
 # Configuration logging
 logging.basicConfig(
@@ -28,10 +31,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Démarrage/arrêt cleanup scheduler
-data_dir = os.getenv("DATA_DIR", "/data")
-retention_hours = int(os.getenv("REPORT_TTL_HOURS", "24"))
-cleanup_scheduler = CleanupScheduler(data_dir=data_dir, retention_hours=retention_hours)
+# temps de démarrage pour calcul uptime
+start_time = time.time()
+
+# Scheduler sera initialisé dans lifespan
+cleanup_scheduler = None
 
 
 @asynccontextmanager
@@ -40,7 +44,13 @@ async def lifespan(app: FastAPI):
     Lifespan context manager pour démarrage/arrêt de l'application.
     Démarre le scheduler de cleanup au démarrage, l'arrête à la fin.
     """
+    global cleanup_scheduler
     logger.info("Starting PCAP Analyzer Web API")
+
+    # Initialisation dynamique du scheduler
+    data_dir = os.getenv("DATA_DIR", "/data")
+    retention_hours = int(os.getenv("REPORT_TTL_HOURS", "24"))
+    cleanup_scheduler = CleanupScheduler(data_dir=data_dir, retention_hours=retention_hours)
 
     # Initialiser la base de données
     db_service = get_db_service()
@@ -52,8 +62,15 @@ async def lifespan(app: FastAPI):
     await user_db_service.init_db()
     logger.info("User database initialized")
 
+    # Initialiser le service de réinitialisation de mot de passe
+    password_reset_service = get_password_reset_service()
+    await password_reset_service.init_db()
+    logger.info("Password reset service initialized")
+
     # Migrer la table tasks pour ajouter owner_id (multi-tenant)
     await user_db_service.migrate_tasks_table()
+    # Migrer la table users pour ajouter les colonnes 2FA
+    await user_db_service.migrate_users_table()
 
     # Créer compte admin brise-glace si aucun admin n'existe
     admin_password = await user_db_service.create_admin_breakglass_if_not_exists()
@@ -79,6 +96,13 @@ async def lifespan(app: FastAPI):
     # Arrêter cleanup scheduler
     cleanup_scheduler.stop()
     logger.info("Cleanup scheduler stopped")
+
+    # Fermer les pools de connexion
+    await db_service.pool.close()
+    await user_db_service.pool.close()
+    await password_reset_service.pool.close()
+    logger.info("Database pools closed")
+
     logger.info("PCAP Analyzer Web API shutdown complete")
 
 
@@ -86,7 +110,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="PCAP Analyzer Web API",
     description="Interface web pour l'analyse automatisée de fichiers PCAP",
-    version="1.0.0",
+    version=__version__,
     lifespan=lifespan,
     docs_url=None,  # Désactiver le /docs par défaut pour le customiser
     redoc_url=None,  # Pas besoin de ReDoc
@@ -103,6 +127,7 @@ app = FastAPI(
 # CSRF PROTECTION CONFIGURATION
 # ========================================
 
+
 # Exception handler for CSRF errors
 @app.exception_handler(CsrfProtectError)
 async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
@@ -110,10 +135,7 @@ async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError
     Handle CSRF validation errors.
     Returns HTTP 403 Forbidden with detailed error message.
     """
-    logger.warning(
-        f"CSRF validation failed: {exc.message} "
-        f"(method={request.method}, path={request.url.path})"
-    )
+    logger.warning(f"CSRF validation failed: {exc.message} " f"(method={request.method}, path={request.url.path})")
     return JSONResponse(
         status_code=403,
         content={
@@ -144,9 +166,10 @@ async def csrf_middleware(request: Request, call_next):
 
 
 # CORS middleware (AFTER CSRF middleware!)
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restreindre en production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

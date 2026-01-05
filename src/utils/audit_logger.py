@@ -43,11 +43,7 @@ def log_security_event(event_type: str, severity: str, message: str, **details) 
         **details: Additional structured data
     """
     # Build structured log entry
-    log_parts = [
-        f"event_type='{event_type}'",
-        f"severity='{severity}'",
-        f"message='{message}'"
-    ]
+    log_parts = [f"event_type='{event_type}'", f"severity='{severity}'", f"message='{message}'"]
 
     if details:
         details_str = " | ".join([f"{k}='{v}'" for k, v in details.items()])

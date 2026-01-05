@@ -92,7 +92,9 @@ def _create_log_directory(log_dir: str) -> Path:
 
     # Set secure permissions (0700 = owner read/write/execute only)
     try:
-        os.chmod(log_path, 0o700)
+        # Defense-in-depth: Ensure log files are not world-writable
+        # 0o644 = rw-r--r-- (safe default)
+        os.chmod(log_path, 0o644)
     except OSError as e:
         logging.warning(f"Could not set secure permissions on {log_path}: {e}")
 
@@ -141,9 +143,8 @@ def setup_logging(
     # Security: Warn if DEBUG level is used (should only be in development)
     if log_level == "DEBUG":
         print(
-            "WARNING: DEBUG logging enabled. This may expose sensitive data. "
-            "Never use DEBUG level in production!",
-            file=sys.stderr
+            "WARNING: DEBUG logging enabled. This may expose sensitive data. " "Never use DEBUG level in production!",
+            file=sys.stderr,
         )
 
     # Create log directory with secure permissions
@@ -175,15 +176,13 @@ def setup_logging(
     if log_format == "json":
         try:
             from pythonjsonlogger import jsonlogger
+
             config["formatters"]["json"] = {
                 "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
                 "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
             }
         except ImportError:
-            print(
-                "WARNING: python-json-logger not installed. Falling back to standard format.",
-                file=sys.stderr
-            )
+            print("WARNING: python-json-logger not installed. Falling back to standard format.", file=sys.stderr)
             log_format = "standard"
 
     # Console handler (stderr)
@@ -243,8 +242,10 @@ def setup_logging(
 
     # Log startup message
     logger = logging.getLogger(__name__)
-    logger.info(f"Logging initialized: level={log_level}, console={enable_console}, "
-                f"file={enable_file}, audit={enable_audit}, format={log_format}")
+    logger.info(
+        f"Logging initialized: level={log_level}, console={enable_console}, "
+        f"file={enable_file}, audit={enable_audit}, format={log_format}"
+    )
     logger.info(f"Log directory: {log_path}")
 
 
@@ -261,7 +262,7 @@ def _setup_logging_from_file(config_file: str, log_dir: str) -> None:
         OSError: If configuration file cannot be read
     """
     try:
-        with open(config_file, 'r') as f:
+        with open(config_file, "r") as f:
             config = yaml.safe_load(f)
 
         # Ensure log directory exists

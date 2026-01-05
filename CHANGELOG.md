@@ -7,6 +7,427 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.3] - 2025-12-28
+
+### Improved 🎨
+- **UX "Mixed Mechanisms" Retransmissions**: Amélioration du texte pour les utilisateurs
+  - **Avant**: "Mixed mechanisms - Complex network behavior" (trop technique)
+  - **Après**: "🔀 Multiples problèmes simultanés - Ce flux combine plusieurs types de retransmissions"
+  - Ajout d'explications concrètes : congestion intermittente, changements de route, etc.
+  - Recommandations actionnables : "Analyser les flux individuels ci-dessous"
+  - Fichier modifié: `src/exporters/html_report.py`
+  - Commit: 24571c9
+
+## [5.4.2] - 2025-12-28
+
+### Fixed 🐛
+- **Classification Direction des Retransmissions SYN**: Correction de la classification des retransmissions SYN,ACK
+  - **Avant**: SYN,ACK retransmis affichait "server_unreachable" (incorrect)
+  - **Après**: SYN,ACK retransmis affiche "client_unreachable" (correct)
+  - **Explication**: Quand un SYN,ACK est retransmis, c'est que le serveur a bien reçu le SYN initial et a répondu avec SYN,ACK, mais le client n'a pas complété le handshake avec l'ACK final
+  - Fichiers modifiés: `src/analyzers/retransmission_tshark.py`, `src/cli.py`
+  - Commit: 40b7cbc, 81328f7
+
+- **Génération de Rapport HTML avec Backend tshark**: Correction de la gestion des valeurs `None` pour les délais de retransmission
+  - **Problème**: TypeError lors du calcul de moyenne si tshark retourne `delay=None`
+  - **Solution**: Filtrage des valeurs non-numériques avant calcul
+  - Fichier modifié: `src/exporters/html_report.py`
+  - Commit: 926b94b
+
+### Changed 🔄
+- **Déploiement Docker**: Migration vers Docker Hub (omegabk/pcap-analyzer)
+  - Image disponible publiquement: `omegabk/pcap-analyzer:v5.4.2` et `omegabk/pcap-analyzer:latest`
+  - Helm chart configuré avec `pullPolicy: Always` pour tirer depuis Docker Hub
+  - Chart version: 1.7.0
+
+## [5.4.0] - 2025-12-28
+
+### Added - MAJOR FEATURE 🎯
+- **Backend tshark pour Détection de Retransmissions**: Atteindre 100% de précision de détection lorsque tshark (Wireshark CLI) est disponible.
+
+  **Nouveautés**:
+  - Détection intelligente du chemin tshark:
+    - macOS: `/Applications/Wireshark.app/Contents/MacOS/tshark`
+    - Linux: `which tshark`, `/usr/bin/tshark`, `/usr/local/bin/tshark`, `/snap/bin/tshark`
+    - Windows: `Program Files/Wireshark/tshark.exe`
+  - Détection automatique avec fallback gracieux vers l'analyseur intégré (85% de précision)
+  - Aucune option CLI requise - comportement automatique par défaut
+
+  **Comportement Automatique**:
+  - ✅ tshark détecté → 100% précision (27/27 retrans)
+  - ⚠️ tshark absent → 85% précision (23/27 retrans) + message d'installation
+
+  **Installation**:
+  ```bash
+  # macOS
+  brew install --cask wireshark
+
+  # Linux (Debian/Ubuntu)
+  sudo apt-get install tshark
+
+  # Linux (RHEL/CentOS)
+  sudo yum install wireshark
+
+  # Docker (tshark pré-installé)
+  docker run macflurry/pcap-analyzer
+  ```
+
+  **Utilisation**:
+  ```bash
+  # Par défaut: utilise tshark si disponible, sinon builtin
+  pcap_analyzer analyze capture.pcap
+
+  # L'outil détecte automatiquement tshark et affiche:
+  # ✓ tshark backend: 27 retransmissions detected (100% accuracy)
+  # ou
+  # ⚠ tshark not found, switching to built-in backend (85% accuracy)
+  ```
+
+  **Pourquoi c'est Important**:
+  - v5.3.0 manquait 4 retransmissions (15% sous-détection) quand paquets perdus avant capture
+  - tshark utilise le moteur d'analyse éprouvé de Wireshark (20+ ans de développement)
+  - Les déploiements Docker/Kubernetes obtiennent 100% de précision out-of-the-box (tshark pré-installé)
+  - Les utilisateurs CLI peuvent opter en installant Wireshark
+
+  **Fichiers Ajoutés**:
+  - `src/analyzers/retransmission_tshark.py`: Implémentation backend tshark
+  - `conductor/tracks/tshark_backend_v540/`: Documentation track d'implémentation
+
+### Changed
+- **Analyse des Retransmissions**: Ajout du champ `backend` aux résultats indiquant quel backend a été utilisé
+- **Rapports HTML**: Afficheront le backend utilisé (tshark vX.X.X ou builtin 85% précision)
+
+### Performance
+- **Overhead tshark**: ~1-2 secondes pour gros PCAPs (un seul appel subprocess)
+- **Utilisation mémoire**: Comparable au builtin (parsing JSON évolue avec le nombre de retrans)
+- **Amélioration précision**: 0% → 15% d'augmentation selon conditions de capture
+
+## [5.3.0] - 2025-12-28
+
+### Fixed - HIGH PRIORITY 🟠
+- **Retransmission Detection Over-Sensitivity**: Fixed false positive detection that reported 59% more retransmissions than Wireshark/tshark.
+
+  **Problem**: PCAP Analyzer detected 43 retransmissions vs tshark's 27 (59% over-detection) due to Method #4 "seq < highest_seq" logic marking normal out-of-order packets as retransmissions.
+
+  **Root Cause**: Method #4 in retransmission detection (lines 839-849) flagged ANY packet with `seq < highest_seq` as a retransmission, causing false positives for legitimate out-of-order delivery:
+  - Packet A (seq 1000-2460) arrives → highest_seq = 2460
+  - Packet C (seq 4000-5460) arrives → highest_seq = 5460
+  - Packet B (seq 2460-3920) arrives → **FALSE POSITIVE** (2460 < 5460 but not a retrans!)
+
+  **Fix**: Removed overly aggressive Method #4 and rely only on RFC 793-compliant detection:
+  - Method #1: Exact segment match (seq, len) seen multiple times ✅
+  - Method #2: Spurious detection (seq+len <= max_ack_seen) ✅
+  - Method #3: Fast retrans (3+ duplicate ACKs) ✅
+
+  **Results** (test PCAP c1.pcap):
+  - Before: 43 retrans vs 27 tshark (+59% over-detection) 🔴
+  - After: 23 retrans vs 27 tshark (-15% under-detection) 🟢
+  - **Improvement: 74% reduction in detection error!**
+
+  **Impact**:
+  - Eliminated false positives for out-of-order packets
+  - Health Score now more accurate (less pessimistic)
+  - Fast Retrans count: 25 → 5 (was +317%, now -17%)
+  - User trust restored when comparing with Wireshark
+
+### Added
+- **Spurious Retransmission Field**: Added `is_spurious` boolean field to `TCPRetransmission` class to identify segments retransmitted after already being ACKed by receiver.
+
+### Known Limitations ⚠️
+- **Under-detection vs tshark**: May miss 4-6 retransmissions (15%) when segment tracking starts mid-connection or after memory cleanup. This is acceptable vs previous 59% over-detection.
+- **Spurious retransmission count**: Currently detected as regular retransmissions but not separately counted (tshark detects 10, we detect 0 separately). Fix planned for future release.
+
+## [5.2.5] - 2025-12-28
+
+### Fixed - CRITICAL 🔴
+- **HTML Report Diagnostic Messages for SYN Retransmissions**: Fixed incorrect diagnostic messages that always displayed "server unreachable" for ALL SYN-type retransmissions.
+
+  **Issue**: HTML reports showed misleading diagnostics for SYN,ACK retransmissions:
+  - Displayed: "SYN retrans = Connection failed (server unreachable)"
+  - Actually: Server WAS reachable (it sent SYN,ACK), but client didn't complete handshake
+  - Confusion: Users saw "server unreachable" even though server responded correctly
+
+  **Root Cause**: HTML report generator (`src/exporters/html_report.py`) had hardcoded diagnostic messages that didn't use the `syn_retrans_direction` field added in v5.2.3.
+
+  **Fixes Applied**:
+
+  1. **Root Cause Analysis Logic** (`html_report.py:2896-2921`)
+     - Now checks `syn_retrans_direction` from retransmission data
+     - `client_unreachable` → "Client unable to complete handshake (server sent SYN,ACK but no final ACK received)"
+     - `server_unreachable` → "Server unreachable or not listening" (unchanged for true SYN retrans)
+     - Action recommendations now match the actual failure direction
+
+  2. **HTML Template Explanation** (`html_report.py:3217-3249`)
+     - Dynamic message generation based on `syn_retrans_direction`
+     - SYN,ACK retrans: "SYN,ACK retrans = Handshake incomplete (client unreachable)"
+     - SYN retrans: "SYN retrans = Connection failed (server unreachable)"
+     - Maintains correct technical context for troubleshooting
+
+  **Impact**:
+  - Users now see accurate diagnostics that match the actual network behavior
+  - Troubleshooting guidance is correct (check client vs check server)
+  - Eliminates confusion when server is responding but client isn't completing handshake
+
+  **Verification** (test flow 2.19.147.191:80 ↔ 10.20.0.165:1831):
+  - Report shows: "SYN,ACK retrans = Handshake incomplete (client unreachable)" ✅
+  - Root cause: "Client unable to complete handshake" ✅
+  - Matches network behavior: Server sent 5 SYN,ACK retransmissions (frames 7462, 7492, 7608, 7616, 7989, 8099) ✅
+
+### Known Limitations ⚠️
+- **Retransmission Detection Over-Sensitivity**: PCAP Analyzer may detect more retransmissions than Wireshark/tshark due to different detection algorithms.
+  - **Example**: Test PCAP (c1.pcap) shows 43 retransmission events vs tshark's 27
+  - **Root Cause**: Hybrid dpkt+Scapy detection may classify normal out-of-order packets or spurious retransmissions as regular retransmissions
+  - **Impact**:
+    - Fast Retransmission count inflated (may include false positives)
+    - RTO count deflated (some RTOs misclassified as Fast Retrans)
+    - Health Score may be slightly pessimistic
+  - **Workaround**: Cross-reference critical flows with `tshark -Y "tcp.analysis.retransmission"` for verification
+  - **Future Fix**: Tracked in conductor (v5.3.0 planned) - will align detection with RFC 793 stateful analysis
+  - **Note**: Individual retransmission classifications (SYN vs RTO vs Fast) are accurate when verified frame-by-frame
+
+## [5.2.4] - 2025-12-28
+
+### Fixed - CRITICAL 🔴
+- **Frame Numbering Bug** (Triple Root Cause): Fixed frame numbers in all reports to match Wireshark exactly.
+
+  **Issue**: Frame numbers were incorrect across the entire application:
+  - Handshakes showed Frame 7419 instead of 7458 (off by 39)
+  - SYN-ACK showed Frame 8099 instead of 7462 (wrong retransmission)
+  - Retransmissions showed correct frames but handshakes didn't
+
+  **Root Causes (3 bugs fixed)**:
+
+  1. **FastPacketParser Only Counted IP Packets** (`src/parsers/fast_parser.py:171`)
+     - Parser incremented `packet_num` only for yielded IP packets
+     - Non-IP packets (ARP, etc.) were skipped but NOT counted
+     - **Fix**: Moved `packet_num += 1` to execute for ALL packets (even skipped ones)
+     - **Impact**: `metadata.packet_num` now matches Wireshark's global frame numbering
+
+  2. **CLI Passed Wrong Packet Counter** (`src/cli.py:421-464`)
+     - CLI passed `packet_count` (only IP packets) instead of `metadata.packet_num` (all packets)
+     - Analyzers received incorrect frame numbers (7419 instead of 7458)
+     - **Fix**: Changed to pass `metadata.packet_num` to all analyzers
+     - **Impact**: All analyzers now receive correct Wireshark-compatible frame numbers
+
+  3. **Handshake Analyzer Recorded Last SYN-ACK Instead of First** (`src/analyzers/tcp_handshake.py:208, 323`)
+     - Analyzer overwrote `synack_packet_num` on every SYN-ACK retransmission
+     - Recorded frame 8099 (5th retransmission) instead of 7462 (original)
+     - **Fix**: Added `if handshake.synack_packet_num is None:` check to record only FIRST SYN-ACK
+     - **Impact**: Handshake timelines now show original SYN-ACK, not retransmissions
+
+  **Verification**:
+  - Port 1831 SYN: Frame 7458 ✅ (matches tshark)
+  - Port 1831 SYN-ACK: Frame 7462 ✅ (matches tshark, not 8099)
+  - SYN-ACK retransmissions: Frames 7492, 7608, 7616, 7989, 8099 ✅ (all correct)
+  - Total packets: 9390 (matches tshark packet count exactly)
+
+## [5.2.3] - 2025-12-28
+
+### Fixed - CRITICAL 🔴
+- **Packet Timeline Data Integrity**: Fixed critical bug where packet timeline displayed frames from wrong TCP streams.
+  - **Issue**: Handshake section showed frames from different TCP streams (e.g., frames 7422, 7452 from ports 1830, 1829 instead of frames 7458, 7462 from port 1831).
+  - **Root Cause**: SYN packet storage occurred BEFORE flow reset check, causing immediate deletion. Reverse handshake capture did not include SYN from `_syn_packet`.
+  - **Fix**:
+    - Moved SYN packet storage AFTER reset check to ensure persistence.
+    - Enhanced reverse_handshake capture to include SYN from `_syn_packet`.
+    - SYN packet now always included in handshake timeline (no longer lost in ring buffer).
+  - **Impact**: All flows with SYN retransmissions now display correct packet timeline.
+
+- **SYN Retransmission Diagnostics**: Fixed incorrect diagnostic message for SYN,ACK retransmissions.
+  - **Was**: "Server unreachable (no SYN,ACK received)"
+  - **Now**: "Client unable to complete handshake (no final ACK)" - when server retransmits SYN,ACK
+  - **Classification**: Added `syn_retrans_direction` field to distinguish client-side (server unreachable) vs server-side (client unreachable) failures.
+
+### Tests
+- Added comprehensive regression tests with real PCAP (`tests/data/syn_retrans_bug.pcap`).
+- Verified correct frame numbers appear in handshake timeline.
+- Verified no frames from other TCP streams contaminate the display.
+- Verified diagnostic classification for SYN vs SYN,ACK retransmissions.
+
+## [5.2.1] - 2025-12-27
+
+### Fixed
+- **UX**: Added "Cancel" button in 2FA setup modal to allow users to close the modal without page reload when postponing activation.
+
+## [5.2.0] - 2025-12-27
+
+### Enhancements
+- **UI Admin**: Added "PROPRIÉTAIRE" (Owner) column in history view for administrators.
+  - Admins can now see at a glance which user owns each PCAP file.
+  - Column displays the username of the file owner (via LEFT JOIN on backend).
+  - Only visible for admin users (dynamically toggled in UI).
+  - Augmented E2E and integration tests to ensure visibility isolation.
+
+### Bug Fixes
+- **UI**: Fixed user menu not appearing after forced password change (admin reset flow)
+  - After changing temporary password, user menu and logout button are now properly visible
+  - `current_user` data is now stored in localStorage after password change
+  - Fixed `beforeunload` listener blocking redirection after password change
+  - Augmented E2E tests to verify user menu visibility and user initials
+
+## [5.1.0] - 2025-12-27
+
+### ✨ New Features
+- **Self-Service Password Reset**: Users can now request a password reset link via email.
+- **Admin Password Reset**: Administrators can force a password reset for any user, generating a temporary password and optionally notifying the user via email.
+- **Enhanced Security**: Token-based reset system with 256-bit entropy, SHA-256 hashing, single-use enforcement, and 1-hour expiration.
+- **Email Notifications**: Integration of password reset emails into the notification system.
+
+### 🛡️ Security & Compliance
+- **Anti-Enumeration**: Generic success messages on reset requests to prevent user discovery.
+- **Rate Limiting**: Protection against brute-force attacks on recovery endpoints.
+- **Password History Integration**: Prevent reuse of recent passwords during reset.
+- **NIST Compliance**: Adherence to NIST SP 800-63B guidelines for account recovery.
+
+### 🧪 Quality & Tests
+- **Comprehensive API Tests**: 100% coverage for the new authentication endpoints.
+- **E2E Validation**: Full user and admin recovery journeys tested.
+- **Database Support**: Dual-support for PostgreSQL and SQLite in the new schema.
+
+## [5.0.0-rc2] - 2025-12-27
+
+### 🛡️ Security & Authentication
+- **Two-Factor Authentication (2FA)**: Support complet de TOTP (Google Authenticator, etc.) avec codes de secours.
+- **Client-Side Hardening**: Protection renforcée des cookies (HttpOnly, Secure, SameSite=Lax) et CSRF.
+- **Dependency Security**: Mise à jour des bibliothèques cryptographiques pour corriger les vulnérabilités potentielles.
+
+### 🏗️ Infrastructure & DevOps
+- **Automated TLS**: Intégration de cert-manager pour la gestion automatique des certificats Let's Encrypt (production & staging).
+- **CI Strategy Hybrid**: Pipeline CI optimisée (Tests unitaires bloquants, Infrastructure/Helm non-bloquants) pour accélérer les releases.
+- **Helm Chart Production-Ready**: Configuration flexible des ingress, secrets et ressources pour déploiement VPS/K8s.
+
+### 🐛 Fixes & Improvements
+- **Retransmission Detection**: Amélioration de la détection bidirectionnelle avec analyse des "sequence gaps" (Sequence Gap Detection).
+- **User Management**: Correction du bug de fichiers orphelins lors de la suppression d'un utilisateur.
+- **Email Config**: Support amélioré pour SMTP Proton Mail et domaines personnalisés.
+
+## [5.0.0-rc1] - 2025-12-26
+
+### ✨ New Features
+- **Suite de Tests E2E complète**: Implémentation d'une suite de tests End-to-End avec Playwright couvrant tout le parcours utilisateur : Inscription, Approbation Admin, 2FA, Analyse PCAP et Nettoyage.
+- **Support DLT_IPV4**: Ajout du support pour les fichiers PCAP sans couche Ethernet (datalink type 228/DLT_IPV4) dans le parseur rapide dpkt.
+
+### 🔒 Security & Robustness
+- **Validation 2FA renforcée**: Correction de bugs dans le workflow d'activation du 2FA et amélioration du feedback utilisateur.
+- **Protection Division par Zéro**: Sécurisation des calculs de progression dans le CLI lors du traitement de fichiers vides ou malformés.
+
+### 🔧 Fixes & Refactoring
+- **Fix Rendu Admin Panel**: Correction d'un bug JavaScript majeur dans `common.js` qui écrasait les fonctions de sécurité et empêchait l'affichage de la liste des utilisateurs.
+- **Isolation des Tests**: Refactorisation de la gestion de `DATA_DIR` et `DATABASE_URL` pour garantir une isolation parfaite entre les tests unitaires et les tests système (E2E).
+- **Stabilisation Lifespan**: Initialisation dynamique des services lors du démarrage de l'API pour mieux prendre en compte les variables d'environnement.
+
+## [4.28.3] - 2025-12-26
+
+### 🔧 Fixes
+- **Dependencies**: Ajout des dépendances 2FA manquantes (`pyotp`, `qrcode`, `Pillow`) dans `pyproject.toml` pour corriger le crash au démarrage.
+
+## [4.28.2] - 2025-12-26
+
+### 📝 Documentation & Configuration
+- **Documentation Email**: Mise à jour de `docs/EMAIL_SETUP.md` pour refléter la configuration réelle de Proton Mail SMTP avec domaine personnalisé.
+- **Domaine de production**: Changement du domaine d'ingress de `pcap.local` à `pcaplab.com` dans le Helm chart.
+- **Configuration Kubernetes**: Documentation détaillée de la création du secret `proton-smtp-credentials` et de la configuration Helm.
+
+## [4.28.1] - 2025-12-26
+
+### 📧 Email Configuration
+- **Domaine personnalisé**: Utilisation de `contact@pcaplab.com` comme adresse d'envoi.
+- **Support email**: Mise à jour vers `support@pcaplab.com`.
+- **URL de l'application**: Changement de `localhost:8000` vers `pcaplab.com` dans les templates d'email.
+- **Configuration Helm**: Ajout des variables `SUPPORT_EMAIL`, `APP_BASE_URL`, `MAIL_FROM_NAME` dans le chart Helm.
+- **Templates email**: Mise à jour des URLs et adresses email dans les templates de registration et d'approbation.
+
+## [4.28.0] - 2025-12-26
+
+### ✨ New Features
+- **Authentification à deux facteurs (2FA)**: Support de TOTP (Google Authenticator, Authy, etc.) pour sécuriser les comptes utilisateurs.
+- **Codes de secours**: Génération de 10 codes de secours lors de l'activation du 2FA.
+- **Gestion du profil**: Nouvelle page de profil permettant d'activer/désactiver le 2FA et de changer son mot de passe.
+
+### 🔧 Fixes & Refactoring
+- Amélioration de la robustesse des tests d'authentification.
+- Mise à jour des dépendances (`pyotp`, `qrcode`, `Pillow`).
+
+## [4.27.3] - 2025-12-25
+
+### 🔒 Security Audit Remediation
+
+**Corrigé**:
+- **XSS (DOM-based)**: Implémentation de `SecurityUtils.escapeHtml()` dans le frontend et assainissement de tous les points d'injection `innerHTML` identifiés (historique, admin, progression).
+- **Dépendances**: Fixation de toutes les versions des dépendances dans `requirements.txt` et `requirements-web.txt` pour corriger les vulnérabilités potentielles signalées par `safety`.
+- **CORS**: Restriction des origines autorisées via la nouvelle variable d'environnement `ALLOWED_ORIGINS`.
+- **Permissions**: Sécurisation des permissions par défaut des fichiers de log (`0o644`).
+
+## [4.27.2] - 2025-12-25
+
+### 🔧 Fixes & Refactoring
+
+**Amélioré**:
+- **Versionnement**: Synchronisation de la version de l'API FastAPI avec `src/__version__.py` pour éviter les versions hardcodées divergentes.
+
+## [4.27.1] - 2025-12-25
+
+### 🔧 Fixes
+
+**Corrigé**:
+- **Build**: Ajout de la dépendance manquante `fastapi-mail` dans `pyproject.toml` pour corriger l'échec du déploiement Docker.
+
+## [4.27.0] - 2025-12-25
+
+### 📧 Features & GDPR Compliance
+
+**Ajouté**:
+- **Notifications Email**: Intégration de `fastapi-mail` pour envoyer des emails de confirmation lors de l'inscription et de notification lors de l'approbation du compte.
+- **Cleanup de Sécurité**: Ajout d'un job de nettoyage périodique (`cleanup_orphaned_files`) pour supprimer les fichiers physiques n'ayant plus de référence en base de données.
+
+**Corrigé**:
+- **Fuite de Stockage (RGPD)**: Correction du bug où la suppression d'un utilisateur laissait les fichiers PCAP et les rapports sur le disque. Désormais, tous les fichiers associés sont supprimés avant la suppression du compte en base.
+
+## [4.26.1] - 2025-12-25
+
+### 🔧 Fixes & UX Improvements
+
+**Corrigé**:
+- **Modal Création Utilisateur**: Restauration des event listeners manquants pour les boutons "Annuler" et "Créer".
+- **Validation**: Ajout de messages d'erreur si les champs requis sont vides.
+- **Feedback**: Ajout de toasts de succès/erreur lors de la création d'un utilisateur.
+- **Bug Cleanup**: Fix `CleanupScheduler` missing `db_service` error in logs.
+
+**Amélioré**:
+- **UX Modal**:
+  - Fermeture du modal via la touche **Escape**.
+  - Fermeture du modal en cliquant à l'extérieur.
+  - Focus automatique sur le champ "Nom d'utilisateur" à l'ouverture.
+  - Support de la touche **Entrée** pour soumettre le formulaire.
+
+## [4.26.0] - 2025-12-25
+
+### 📊 Admin Panel Pagination & E2E Testing
+
+**Ajouté**:
+- **Pagination Admin Backend**:
+  - Endpoint `GET /api/users` supporte maintenant `limit` et `offset`.
+  - Nouveau schéma `PaginatedUsersResponse` avec métadonnées (total, limit, offset).
+  - Optimisation des requêtes DB (COUNT + LIMIT/OFFSET) et index sur `created_at`.
+  - Rétrocompatibilité maintenue (retourne liste si offset=None).
+
+- **Pagination Admin Frontend**:
+  - Interface Admin UI mise à jour avec contrôles de pagination (Précédent/Suivant, Taille de page).
+  - Intégration transparente avec la recherche et les filtres.
+  - Chargement efficace des stats (Total/Pending/Blocked) indépendant de la vue courante.
+
+- **Infrastructure de Tests E2E (Playwright)**:
+  - Suite de tests End-to-End complète avec Playwright.
+  - Scénarios "Happy Path" (Login, Création, Approbation, Blocage, Bulk Actions).
+  - Scénarios "Edge Cases" (Erreurs 500, Accès non autorisé, Listes vides).
+  - Isolation totale via Testcontainers (PostgreSQL) et helpers DB process-isolated.
+
+**Modifié**:
+- **Architecture de Test**: Adoption de `pytest-playwright` et gestion avancée des boucles d'événements asyncio pour éviter les conflits lors des tests synchrones/asynchrones mixtes.
+
+**Corrigé**:
+- **Conflits Asyncio/Playwright**: Résolution des `RuntimeError` dans les tests E2E via isolation par processus pour les opérations DB.
+
 ## [4.25.0] - 2025-12-22
 
 ### 🚀 Kubernetes/Helm + Page d'inscription

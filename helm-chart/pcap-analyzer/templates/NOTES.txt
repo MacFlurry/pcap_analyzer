@@ -44,16 +44,26 @@ Version: {{ .Chart.AppVersion }}
 
 📋 Commandes utiles :
 
-  # Voir les logs
+  ⚠️  IMPORTANT: Sélection du bon pod
+  Les pods app et database partagent certains labels. Pour cibler l'application (pas PostgreSQL):
+
+  # Option 1: Utiliser le nom du deployment (recommandé)
   kubectl logs -n {{ .Release.Namespace }} deployment/{{ include "pcap-analyzer.fullname" . }} -f
 
-  # Vérifier le statut
+  # Option 2: Utiliser un sélecteur de labels excluant la database
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "pcap-analyzer.name" . }},app.kubernetes.io/component!=database -f
+
+  # Option 3: Cibler le pod par son nom complet
+  POD_NAME=$(kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "pcap-analyzer.name" . }},app.kubernetes.io/component!=database -o jsonpath='{.items[0].metadata.name}')
+  kubectl logs -n {{ .Release.Namespace }} $POD_NAME -f
+
+  # Vérifier le statut de tous les composants
   kubectl get all -n {{ .Release.Namespace }}
 
-  # Health check
-  kubectl exec -n {{ .Release.Namespace }} deployment/{{ include "pcap-analyzer.fullname" . }} -- curl -s localhost:8000/api/health
+  # Health check (utiliser le sélecteur pour éviter de cibler PostgreSQL)
+  kubectl exec -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "pcap-analyzer.name" . }},app.kubernetes.io/component!=database -- python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/api/health').read().decode())"
 
-  # Redémarrer le pod
+  # Redémarrer l'application (pas la database)
   kubectl rollout restart deployment/{{ include "pcap-analyzer.fullname" . }} -n {{ .Release.Namespace }}
 
 ⚙️  Configuration :

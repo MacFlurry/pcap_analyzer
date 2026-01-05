@@ -62,7 +62,7 @@ async def client():
         user = UserCreate(
             username="testuser",
             email="test@example.com",
-            password="testpass1234"
+            password="Correct-Horse-Battery-Staple-2025!"
         )
         await user_db_service.create_user(user, role=UserRole.USER, auto_approve=True)
 
@@ -105,7 +105,7 @@ async def get_auth_token(client: AsyncClient) -> str:
     """Helper to get authentication token."""
     response = await client.post(
         "/api/token",
-        data={"username": "testuser", "password": "testpass1234"}
+        data={"username": "testuser", "password": "Correct-Horse-Battery-Staple-2025!"}
     )
     assert response.status_code == 200
     return response.json()["access_token"]

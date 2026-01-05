@@ -45,10 +45,7 @@ class MemoryProfiler:
             flow_key = f"192.168.1.{i % 100}:1234 → 192.168.1.{(i % 100) + 1}:80"
 
             if flow_key not in flow_data:
-                flow_data[flow_key] = {
-                    "packet_count": 0,
-                    "retransmissions": []
-                }
+                flow_data[flow_key] = {"packet_count": 0, "retransmissions": []}
 
             flow_data[flow_key]["packet_count"] += 1
             packets_processed += 1
@@ -65,7 +62,7 @@ class MemoryProfiler:
             "packets": packets_processed,
             "flows": len(flow_data),
             "current_mb": current / 1024 / 1024,
-            "peak_mb": peak / 1024 / 1024
+            "peak_mb": peak / 1024 / 1024,
         }
 
         return peak
@@ -86,10 +83,7 @@ class MemoryProfiler:
             flow_key = f"192.168.1.{i % 100}:1234 → 192.168.1.{(i % 100) + 1}:80"
 
             if flow_key not in flow_data:
-                flow_data[flow_key] = {
-                    "packet_count": 0,
-                    "retransmissions": []
-                }
+                flow_data[flow_key] = {"packet_count": 0, "retransmissions": []}
 
             flow_data[flow_key]["packet_count"] += 1
             packets_processed += 1
@@ -110,7 +104,7 @@ class MemoryProfiler:
             "flows": len(flow_data),
             "timeline_buffers": len(timeline_buffers),
             "current_mb": current / 1024 / 1024,
-            "peak_mb": peak / 1024 / 1024
+            "peak_mb": peak / 1024 / 1024,
         }
 
         return peak
@@ -131,10 +125,7 @@ class MemoryProfiler:
             flow_key = f"192.168.1.{i % 100}:1234 → 192.168.1.{(i % 100) + 1}:80"
 
             if flow_key not in flow_data:
-                flow_data[flow_key] = {
-                    "packet_count": 0,
-                    "retransmissions": []
-                }
+                flow_data[flow_key] = {"packet_count": 0, "retransmissions": []}
 
             flow_data[flow_key]["packet_count"] += 1
 
@@ -145,13 +136,9 @@ class MemoryProfiler:
                     timeline_buffers[flow_key] = deque(maxlen=10)
 
                 # Add packet to timeline
-                timeline_buffers[flow_key].append({
-                    "seq": 1000 + i,
-                    "ack": 2000 + i,
-                    "flags": "A",
-                    "len": 1500,
-                    "time": float(i) * 0.001
-                })
+                timeline_buffers[flow_key].append(
+                    {"seq": 1000 + i, "ack": 2000 + i, "flags": "A", "len": 1500, "time": float(i) * 0.001}
+                )
 
             packets_processed += 1
 
@@ -174,7 +161,7 @@ class MemoryProfiler:
             "flows": len(flow_data),
             "timeline_buffers": len(timeline_buffers),
             "current_mb": current / 1024 / 1024,
-            "peak_mb": peak / 1024 / 1024
+            "peak_mb": peak / 1024 / 1024,
         }
 
         return peak
@@ -233,10 +220,7 @@ class MemoryProfiler:
                 if flow_key not in timeline_buffers:
                     timeline_buffers[flow_key] = deque(maxlen=10)
 
-                timeline_buffers[flow_key].append({
-                    "seq": 1000 + i,
-                    "time": float(i) * 0.0001
-                })
+                timeline_buffers[flow_key].append({"seq": 1000 + i, "time": float(i) * 0.0001})
 
         current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()

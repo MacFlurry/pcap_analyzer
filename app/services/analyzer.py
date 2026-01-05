@@ -13,6 +13,8 @@ from app.models.schemas import TaskStatus
 from src.cli import analyze_pcap_hybrid as cli_analyze_pcap_hybrid
 from src.config import get_config
 
+from app.utils.config import get_data_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -204,12 +206,15 @@ class AnalyzerService:
         sync_progress_callback = None
         if progress_callback:
             logger.info(f"[CALLBACK DEBUG] Task {task_id}: progress_callback exists, creating wrapper")
+
             def sync_callback_wrapper(phase: str, progress_percent: int, message: str):
                 """
                 Synchronous wrapper that schedules the async callback in the event loop.
                 This can be called from the executor thread (synchronous code).
                 """
-                logger.info(f"[CALLBACK DEBUG] Task {task_id}: Wrapper called - phase={phase}, progress={progress_percent}%, message={message}")
+                logger.info(
+                    f"[CALLBACK DEBUG] Task {task_id}: Wrapper called - phase={phase}, progress={progress_percent}%, message={message}"
+                )
                 # Schedule the async callback in the main event loop (fire-and-forget)
                 asyncio.run_coroutine_threadsafe(
                     progress_callback.update(
@@ -217,7 +222,7 @@ class AnalyzerService:
                         progress_percent=progress_percent,
                         message=message,
                     ),
-                    loop
+                    loop,
                 )
 
             sync_progress_callback = sync_callback_wrapper
@@ -382,6 +387,6 @@ def get_analyzer_service() -> AnalyzerService:
     """
     global _analyzer_service
     if _analyzer_service is None:
-        data_dir = os.getenv("DATA_DIR", "/data")
-        _analyzer_service = AnalyzerService(data_dir=data_dir)
+        data_dir = get_data_dir()
+        _analyzer_service = AnalyzerService(data_dir=str(data_dir))
     return _analyzer_service

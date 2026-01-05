@@ -54,6 +54,11 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
 
+    # 2FA (Two-Factor Authentication)
+    is_2fa_enabled: bool = False
+    totp_secret: Optional[str] = None
+    backup_codes: Optional[list[str]] = None  # Hashed backup codes
+
     @validator("username")
     def username_alphanumeric(cls, v):
         """Username must be alphanumeric (+ underscore, hyphen)."""
@@ -92,22 +97,22 @@ class UserCreate(BaseModel):
 
         # Check password strength using zxcvbn (0-4 scale)
         result = zxcvbn(v)
-        score = result['score']
-        feedback = result['feedback']
+        score = result["score"]
+        feedback = result["feedback"]
 
         # Require score ≥ 3 (strong or very strong)
         if score < 3:
             # Build detailed error message from zxcvbn feedback
             error_parts = [f"Password is too weak (strength: {score}/4, need ≥3)"]
 
-            if feedback.get('warning'):
+            if feedback.get("warning"):
                 error_parts.append(f"Warning: {feedback['warning']}")
 
-            if feedback.get('suggestions'):
-                suggestions = '; '.join(feedback['suggestions'])
+            if feedback.get("suggestions"):
+                suggestions = "; ".join(feedback["suggestions"])
                 error_parts.append(f"Suggestions: {suggestions}")
 
-            raise ValueError('. '.join(error_parts))
+            raise ValueError(". ".join(error_parts))
 
         return v
 
@@ -124,6 +129,7 @@ class UserResponse(BaseModel):
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
     password_must_change: bool = False
+    is_2fa_enabled: bool = False
     created_at: datetime
     last_login: Optional[datetime]
 
@@ -187,3 +193,12 @@ class BulkUserActionResponse(BaseModel):
     success: int = Field(..., description="Number of successful actions")
     failed: int = Field(..., description="Number of failed actions")
     results: list[BulkActionResult] = Field(..., description="Detailed results for each user")
+
+
+class PaginatedUsersResponse(BaseModel):
+    """Schema for paginated user list response."""
+
+    users: list[UserResponse] = Field(..., description="List of users for the current page")
+    total: int = Field(..., description="Total number of users matching filters")
+    offset: int = Field(..., description="Current offset")
+    limit: int = Field(..., description="Current limit")

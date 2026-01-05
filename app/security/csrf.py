@@ -49,8 +49,8 @@ class CsrfSettings(BaseModel):
     # Exempt paths (public endpoints that don't need CSRF)
     exempt_paths: list = [
         "/api/health",
-        "/api/token",      # Login endpoint (initial auth)
-        "/api/register",   # Registration (no prior session)
+        "/api/token",  # Login endpoint (initial auth)
+        "/api/register",  # Registration (no prior session)
         "/docs",
         "/openapi.json",
         "/swagger-custom.css",

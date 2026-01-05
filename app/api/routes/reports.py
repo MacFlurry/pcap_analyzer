@@ -13,15 +13,12 @@ from app.auth import get_current_user, get_current_user_sse, verify_ownership
 from app.models.user import User
 from app.security.csrf import validate_csrf_token
 from app.services.database import get_db_service
+from app.utils.config import get_reports_dir
 from app.utils.path_validator import validate_task_id, validate_path_in_directory
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Configuration
-DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
-REPORTS_DIR = DATA_DIR / "reports"
 
 
 @router.get("/reports/{task_id}/html")
@@ -67,11 +64,14 @@ async def get_html_report(task_id: str, current_user: User = Depends(get_current
             detail="Access denied: you can only access your own reports",
         )
 
-    # Vérifier que le rapport existe
-    html_path = REPORTS_DIR / f"{task_id}.html"
+    # Récupérer le répertoire dynamiquement
+    reports_dir = get_reports_dir()
 
-    # Defense-in-depth: Verify resolved path is within REPORTS_DIR
-    html_path = validate_path_in_directory(html_path, REPORTS_DIR)
+    # Vérifier que le rapport existe
+    html_path = reports_dir / f"{task_id}.html"
+
+    # Defense-in-depth: Verify resolved path is within reports_dir
+    html_path = validate_path_in_directory(html_path, reports_dir)
 
     if not html_path.exists():
         raise HTTPException(
@@ -128,11 +128,14 @@ async def get_json_report(task_id: str, current_user: User = Depends(get_current
             detail="Access denied: you can only access your own reports",
         )
 
-    # Vérifier que le rapport existe
-    json_path = REPORTS_DIR / f"{task_id}.json"
+    # Récupérer le répertoire dynamiquement
+    reports_dir = get_reports_dir()
 
-    # Defense-in-depth: Verify resolved path is within REPORTS_DIR
-    json_path = validate_path_in_directory(json_path, REPORTS_DIR)
+    # Vérifier que le rapport existe
+    json_path = reports_dir / f"{task_id}.json"
+
+    # Defense-in-depth: Verify resolved path is within reports_dir
+    json_path = validate_path_in_directory(json_path, reports_dir)
 
     if not json_path.exists():
         raise HTTPException(
@@ -189,13 +192,16 @@ async def delete_report(task_id: str, current_user: User = Depends(get_current_u
             detail="Access denied: you can only delete your own reports",
         )
 
-    # Supprimer les fichiers
-    html_path = REPORTS_DIR / f"{task_id}.html"
-    json_path = REPORTS_DIR / f"{task_id}.json"
+    # Récupérer le répertoire dynamiquement
+    reports_dir = get_reports_dir()
 
-    # Defense-in-depth: Verify resolved paths are within REPORTS_DIR
-    html_path = validate_path_in_directory(html_path, REPORTS_DIR)
-    json_path = validate_path_in_directory(json_path, REPORTS_DIR)
+    # Supprimer les fichiers
+    html_path = reports_dir / f"{task_id}.html"
+    json_path = reports_dir / f"{task_id}.json"
+
+    # Defense-in-depth: Verify resolved paths are within reports_dir
+    html_path = validate_path_in_directory(html_path, reports_dir)
+    json_path = validate_path_in_directory(json_path, reports_dir)
 
     deleted_files = []
 

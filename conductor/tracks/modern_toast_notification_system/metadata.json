@@ -1,0 +1,53 @@
+{
+  "track_id": "modern_toast_notification_system",
+  "title": "Modern Toast Notification System",
+  "status": "pending",
+  "priority": "medium",
+  "type": "feature",
+  "version_type": "minor",
+  "target_version": "5.3.0",
+  "created_at": "2025-12-27",
+  "estimated_duration": "3-4 hours",
+  "tags": [
+    "ui",
+    "ux",
+    "notifications",
+    "toast",
+    "frontend",
+    "accessibility"
+  ],
+  "files_to_modify": [
+    "app/static/js/toast.js",
+    "app/templates/components/toast_container.html",
+    "app/templates/base.html",
+    "app/static/js/upload.js",
+    "app/static/js/history.js",
+    "app/static/js/profile.js",
+    "app/static/js/admin.js",
+    "tests/e2e/test_toast_notifications.py",
+    "src/__version__.py",
+    "helm-chart/pcap-analyzer/Chart.yaml",
+    "helm-chart/pcap-analyzer/values.yaml",
+    "CHANGELOG.md"
+  ],
+  "dependencies": [],
+  "version_sync_required": true,
+  "description": "Implement a modern toast notification system to replace generic JavaScript alerts. Features animated slide-in/slide-out toasts with auto-dismiss, manual close, stacking support, dark mode, and full accessibility (ARIA, keyboard navigation).",
+  "acceptance_criteria": [
+    "ToastManager class implemented and functional",
+    "4 toast types work (success, error, warning, info)",
+    "Smooth animations (slide-in, slide-out, fade)",
+    "Auto-dismiss with progress bar works",
+    "Manual close button works",
+    "Multiple toasts stack vertically (max 5)",
+    "Dark mode rendering correct",
+    "Keyboard navigation works (Escape to close)",
+    "ARIA attributes present and correct",
+    "All alerts replaced in upload/history/profile/admin JS",
+    "E2E tests pass",
+    "Manual tests validated",
+    "Responsive on mobile",
+    "Versions synchronized to 5.3.0",
+    "Deployed to Kubernetes successfully"
+  ]
+}

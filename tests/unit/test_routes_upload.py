@@ -31,7 +31,7 @@ def test_upload_invalid_extension(client: TestClient, test_data_dir):
         response = client.post("/api/upload", files={"file": ("test.txt", f, "text/plain")})
 
     assert response.status_code == 400
-    assert "Extension non autorisée" in response.json()["detail"]
+    assert "Invalid file extension" in response.json()["detail"]
 
 
 @pytest.mark.unit
@@ -41,7 +41,7 @@ def test_upload_invalid_magic_bytes(client: TestClient, invalid_pcap_file):
         response = client.post("/api/upload", files={"file": ("invalid.pcap", f, "application/vnd.tcpdump.pcap")})
 
     assert response.status_code == 400
-    assert "invalide" in response.json()["detail"].lower()
+    assert "invalid" in response.json()["detail"].lower()
 
 
 @pytest.mark.unit
@@ -64,7 +64,7 @@ def test_upload_empty_file(client: TestClient, test_data_dir):
         response = client.post("/api/upload", files={"file": ("empty.pcap", f, "application/vnd.tcpdump.pcap")})
 
     assert response.status_code == 400
-    assert "vide" in response.json()["detail"].lower()
+    assert "empty" in response.json()["detail"].lower()
 
 
 @pytest.mark.unit

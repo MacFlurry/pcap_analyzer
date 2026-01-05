@@ -1,0 +1,39 @@
+{
+  "track_id": "add_cancel_button_2fa_modal",
+  "title": "Add Cancel Button to 2FA Setup Modal",
+  "status": "completed",
+  "priority": "medium",
+  "type": "bugfix",
+  "version_type": "patch",
+  "target_version": "5.2.1",
+  "created_at": "2025-12-27",
+  "estimated_duration": "30 minutes",
+  "tags": [
+    "ux",
+    "2fa",
+    "modal",
+    "frontend",
+    "bugfix"
+  ],
+  "files_to_modify": [
+    "app/templates/profile.html",
+    "app/static/js/profile.js",
+    "src/__version__.py",
+    "helm-chart/pcap-analyzer/Chart.yaml",
+    "helm-chart/pcap-analyzer/values.yaml",
+    "CHANGELOG.md"
+  ],
+  "dependencies": [],
+  "version_sync_required": true,
+  "description": "Add a Cancel button in the 2FA setup modal to allow users to close it without reloading the page when postponing activation.",
+  "acceptance_criteria": [
+    "Cancel button visible in 2FA setup modal",
+    "Clicking Cancel closes the modal without activating 2FA",
+    "No API call on cancel",
+    "Form is reset after canceling",
+    "User can reopen modal after canceling",
+    "Styles consistent with app design (secondary button)",
+    "Dark mode works correctly",
+    "Versions synchronized to 5.2.1"
+  ]
+}

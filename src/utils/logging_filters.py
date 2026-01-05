@@ -157,19 +157,16 @@ class PIIRedactionFilter(logging.Filter):
             return True
 
         # Redact the message template
-        if hasattr(record, 'msg') and record.msg:
+        if hasattr(record, "msg") and record.msg:
             record.msg = self._safe_redact(record.msg)
 
         # Redact message arguments
-        if self.redact_args and hasattr(record, 'args') and record.args:
+        if self.redact_args and hasattr(record, "args") and record.args:
             record.args = self._redact_args(record.args)
 
         # Redact exception traceback
-        if self.redact_exc_info and hasattr(record, 'exc_text') and record.exc_text:
-            record.exc_text = redact_for_logging(
-                record.exc_text,
-                level=self._effective_level
-            )
+        if self.redact_exc_info and hasattr(record, "exc_text") and record.exc_text:
+            record.exc_text = redact_for_logging(record.exc_text, level=self._effective_level)
 
         return True
 
@@ -188,9 +185,9 @@ class PIIRedactionFilter(logging.Filter):
         elif isinstance(obj, bytes):
             # Handle byte strings
             try:
-                decoded = obj.decode('utf-8', errors='replace')
+                decoded = obj.decode("utf-8", errors="replace")
                 redacted = redact_for_logging(decoded, level=self._effective_level)
-                return redacted.encode('utf-8')
+                return redacted.encode("utf-8")
             except Exception:
                 return obj
         else:
@@ -235,8 +232,7 @@ class PIIRedactionFilter(logging.Filter):
             return tuple(redacted)
         elif isinstance(args, dict):
             # Redact each value in the dictionary
-            return {key: self._safe_redact(value) if isinstance(value, str) else value
-                    for key, value in args.items()}
+            return {key: self._safe_redact(value) if isinstance(value, str) else value for key, value in args.items()}
         else:
             # Single argument
             return self._safe_redact(args) if isinstance(args, str) else args
@@ -268,11 +264,7 @@ class ConditionalPIIRedactionFilter(PIIRedactionFilter):
     """
 
     def __init__(
-        self,
-        name: str = "",
-        level_overrides: Optional[dict] = None,
-        default_level: str = "PRODUCTION",
-        **kwargs
+        self, name: str = "", level_overrides: Optional[dict] = None, default_level: str = "PRODUCTION", **kwargs
     ):
         """
         Initialize conditional PII redaction filter.
@@ -299,10 +291,7 @@ class ConditionalPIIRedactionFilter(PIIRedactionFilter):
             True (always allows record after redaction)
         """
         # Determine redaction level for this record's log level
-        redaction_level = self.level_overrides.get(
-            record.levelno,
-            self.default_level
-        )
+        redaction_level = self.level_overrides.get(record.levelno, self.default_level)
 
         # Temporarily override the effective level for this record
         original_level = self._effective_level
@@ -378,8 +367,8 @@ class AuditLogFilter(logging.Filter):
             self._config_logged = True
 
         # Add audit marker if requested
-        if self.add_audit_marker and hasattr(record, 'msg'):
-            if isinstance(record.msg, str) and not record.msg.startswith('[AUDIT]'):
+        if self.add_audit_marker and hasattr(record, "msg"):
+            if isinstance(record.msg, str) and not record.msg.startswith("[AUDIT]"):
                 record.msg = f"[AUDIT] {record.msg}"
 
         return True
@@ -387,7 +376,7 @@ class AuditLogFilter(logging.Filter):
 
 # Export public API
 __all__ = [
-    'PIIRedactionFilter',
-    'ConditionalPIIRedactionFilter',
-    'AuditLogFilter',
+    "PIIRedactionFilter",
+    "ConditionalPIIRedactionFilter",
+    "AuditLogFilter",
 ]

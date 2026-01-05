@@ -17,15 +17,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Configure logging to see all messages
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(levelname)-8s: %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(levelname)-8s: %(message)s")
 
 from src.utils.resource_limits import (
     get_current_resource_usage,
     set_resource_limits,
 )
+
 
 def demo_basic_usage():
     """Demonstrate basic resource limit usage."""
@@ -62,12 +60,7 @@ def demo_custom_limits():
     print("  - File descriptors: 512")
     print()
 
-    set_resource_limits(
-        memory_gb=2.0,
-        cpu_seconds=1800,
-        max_file_size_gb=5.0,
-        max_open_files=512
-    )
+    set_resource_limits(memory_gb=2.0, cpu_seconds=1800, max_file_size_gb=5.0, max_open_files=512)
 
     print()
     print("Custom limits have been set.")
@@ -87,15 +80,15 @@ def demo_resource_usage():
     print(f"Resource module available: {usage['resource_module_available']}")
     print()
 
-    if usage.get('resource_module_available'):
+    if usage.get("resource_module_available"):
         print("Current Resource Usage:")
         print(f"  Memory: {usage.get('memory_mb', 0):.2f} MB")
         print(f"  CPU time: {usage.get('cpu_time_seconds', 0):.2f} seconds")
         print()
 
         print("Current Limits:")
-        mem_limit = usage.get('memory_limit_gb')
-        cpu_limit = usage.get('cpu_limit_seconds')
+        mem_limit = usage.get("memory_limit_gb")
+        cpu_limit = usage.get("cpu_limit_seconds")
 
         if mem_limit:
             print(f"  Memory limit: {mem_limit} GB")

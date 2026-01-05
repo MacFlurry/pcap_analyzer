@@ -60,6 +60,7 @@ class TaskInfo(BaseModel):
     error_message: Optional[str] = None  # Message d'erreur si échec
     expires_at: Optional[datetime] = None  # Date d'expiration (uploaded_at + 24h)
     owner_id: Optional[str] = None  # User ID (multi-tenant)
+    owner_username: Optional[str] = None  # Username du propriétaire (pour admins)
 
     @validator("expires_at", always=True)
     def calculate_expiry(cls, v, values):
@@ -83,3 +84,22 @@ class HealthCheck(BaseModel):
     memory_usage_percent: float
     total_tasks_completed: int = 0
     total_tasks_failed: int = 0
+
+
+class PCAPValidationErrorDetail(BaseModel):
+    """Detailed PCAP validation error"""
+
+    error_type: str  # "INVALID_TIMESTAMPS", "DUPLICATE_PACKETS", etc.
+    title: str  # "Timestamps incohérents détectés"
+    description: str  # Detailed explanation
+    detected_issues: list[str]  # Bullet points of specific issues
+    suggestions: list[str]  # What user should do
+    wireshark_link: str = "https://www.wireshark.org/download.html"
+
+
+class UploadErrorResponse(BaseModel):
+    """Upload error response"""
+
+    success: bool = False
+    error: str  # Short error message
+    validation_details: Optional[PCAPValidationErrorDetail] = None

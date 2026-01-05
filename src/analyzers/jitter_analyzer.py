@@ -431,10 +431,7 @@ class JitterAnalyzer:
             # Convert to relative timestamps (from first packet)
             base_time = first_packet_time if first_packet_time else timestamps[0]
             relative_timestamps = [(t - base_time) for t in timestamps]
-            result["timeseries"] = {
-                "timestamps": relative_timestamps,
-                "jitter_values": jitter_values
-            }
+            result["timeseries"] = {"timestamps": relative_timestamps, "jitter_values": jitter_values}
 
         return result
 

@@ -34,6 +34,7 @@ from typing import Optional
 RESOURCE_MODULE_AVAILABLE = False
 try:
     import resource
+
     RESOURCE_MODULE_AVAILABLE = True
 except ImportError:
     # Windows doesn't have resource module
@@ -65,6 +66,7 @@ class ResourceLimitConfig:
         >>> config = ResourceLimitConfig(memory_limit_gb=8.0, cpu_time_limit_seconds=7200)
         >>> set_resource_limits(config)
     """
+
     memory_limit_gb: float = 4.0
     cpu_time_limit_seconds: int = 3600
     max_file_size_gb: float = 10.0
@@ -81,7 +83,7 @@ def _bytes_to_human(bytes_value: int) -> str:
     Returns:
         Human-readable string (e.g., "4.0 GB", "512.0 MB")
     """
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
         if bytes_value < 1024.0:
             return f"{bytes_value:.1f} {unit}"
         bytes_value /= 1024.0
@@ -209,12 +211,12 @@ def set_resource_limits(
             "The resource module is only available on Unix-like systems (Linux, macOS). "
             "Resource exhaustion protection is DISABLED. "
             "Consider running on Linux/macOS for production deployments.",
-            platform.system()
+            platform.system(),
         )
         print(
             f"[WARNING] Resource limits not supported on {platform.system()}. "
             "Resource exhaustion protection disabled.",
-            file=sys.stderr
+            file=sys.stderr,
         )
         return
 
@@ -260,20 +262,20 @@ def set_resource_limits(
                 resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
                 logger.info(
                     "Memory limit (RLIMIT_AS): %s (prevents zip bombs and memory exhaustion)",
-                    _bytes_to_human(memory_bytes)
+                    _bytes_to_human(memory_bytes),
                 )
             else:
                 logger.warning(
                     "Cannot set memory limit to %s (system hard limit is %s). Using system limit.",
                     _bytes_to_human(memory_bytes),
-                    _bytes_to_human(current_mem_hard)
+                    _bytes_to_human(current_mem_hard),
                 )
         except (ValueError, OSError) as e:
             # macOS doesn't fully support RLIMIT_AS - this is expected
             logger.warning(
                 "RLIMIT_AS not supported on this platform (%s). Memory limit cannot be enforced. "
                 "This is a known limitation on macOS. Consider using Linux for production deployments.",
-                platform.system()
+                platform.system(),
             )
 
         # Set CPU time limit (RLIMIT_CPU)
@@ -282,15 +284,12 @@ def set_resource_limits(
         current_cpu_soft, current_cpu_hard = resource.getrlimit(resource.RLIMIT_CPU)
         if current_cpu_hard == resource.RLIM_INFINITY or cpu_seconds <= current_cpu_hard:
             resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
-            logger.info(
-                "CPU time limit (RLIMIT_CPU): %d seconds (prevents infinite loops)",
-                cpu_seconds
-            )
+            logger.info("CPU time limit (RLIMIT_CPU): %d seconds (prevents infinite loops)", cpu_seconds)
         else:
             logger.warning(
                 "Cannot set CPU limit to %d seconds (system hard limit is %d). Using system limit.",
                 cpu_seconds,
-                current_cpu_hard
+                current_cpu_hard,
             )
 
         # Set maximum file size limit (RLIMIT_FSIZE)
@@ -300,14 +299,13 @@ def set_resource_limits(
         if current_fsize_hard == resource.RLIM_INFINITY or file_size_bytes <= current_fsize_hard:
             resource.setrlimit(resource.RLIMIT_FSIZE, (file_size_bytes, file_size_bytes))
             logger.info(
-                "File size limit (RLIMIT_FSIZE): %s (prevents disk exhaustion)",
-                _bytes_to_human(file_size_bytes)
+                "File size limit (RLIMIT_FSIZE): %s (prevents disk exhaustion)", _bytes_to_human(file_size_bytes)
             )
         else:
             logger.warning(
                 "Cannot set file size limit to %s (system hard limit is %s). Using system limit.",
                 _bytes_to_human(file_size_bytes),
-                _bytes_to_human(current_fsize_hard)
+                _bytes_to_human(current_fsize_hard),
             )
 
         # Set maximum open file descriptors (RLIMIT_NOFILE)
@@ -316,15 +314,12 @@ def set_resource_limits(
         current_nofile_soft, current_nofile_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         if current_nofile_hard == resource.RLIM_INFINITY or max_open_files <= current_nofile_hard:
             resource.setrlimit(resource.RLIMIT_NOFILE, (max_open_files, max_open_files))
-            logger.info(
-                "File descriptor limit (RLIMIT_NOFILE): %d (prevents fd exhaustion)",
-                max_open_files
-            )
+            logger.info("File descriptor limit (RLIMIT_NOFILE): %d (prevents fd exhaustion)", max_open_files)
         else:
             logger.warning(
                 "Cannot set file descriptor limit to %d (system hard limit is %d). Using system limit.",
                 max_open_files,
-                current_nofile_hard
+                current_nofile_hard,
             )
 
         # Install signal handler for CPU limit exceeded
@@ -348,7 +343,7 @@ def set_resource_limits(
             "This may occur if you lack permissions or if system limits are too restrictive. "
             "Consider running with appropriate privileges or adjusting limits. "
             "Resource exhaustion protection may be INCOMPLETE.",
-            e
+            e,
         )
         raise OSError(
             f"Failed to set resource limits: {e}. "
@@ -380,7 +375,7 @@ def get_current_resource_usage() -> dict:
         return {
             "platform": platform.system(),
             "resource_module_available": False,
-            "message": "Resource monitoring not available on this platform"
+            "message": "Resource monitoring not available on this platform",
         }
 
     try:
@@ -396,16 +391,14 @@ def get_current_resource_usage() -> dict:
             "resource_module_available": True,
             "memory_mb": usage.ru_maxrss / 1024 / 1024,  # Convert KB to MB (Linux)
             "cpu_time_seconds": usage.ru_utime + usage.ru_stime,  # User + System time
-            "memory_limit_gb": memory_limit[0] / 1024 / 1024 / 1024 if memory_limit[0] != resource.RLIM_INFINITY else None,
+            "memory_limit_gb": (
+                memory_limit[0] / 1024 / 1024 / 1024 if memory_limit[0] != resource.RLIM_INFINITY else None
+            ),
             "cpu_limit_seconds": cpu_limit[0] if cpu_limit[0] != resource.RLIM_INFINITY else None,
         }
     except Exception as e:
         logger.warning("Failed to get resource usage: %s", e)
-        return {
-            "platform": platform.system(),
-            "resource_module_available": True,
-            "error": str(e)
-        }
+        return {"platform": platform.system(), "resource_module_available": True, "error": str(e)}
 
 
 def handle_memory_error():
@@ -447,7 +440,7 @@ def get_current_limits() -> dict:
         return {
             "platform": platform.system(),
             "resource_module_available": False,
-            "message": "Resource limits not available on this platform"
+            "message": "Resource limits not available on this platform",
         }
 
     try:
@@ -461,11 +454,7 @@ def get_current_limits() -> dict:
         }
     except Exception as e:
         logger.warning("Failed to get current limits: %s", e)
-        return {
-            "platform": platform.system(),
-            "resource_module_available": True,
-            "error": str(e)
-        }
+        return {"platform": platform.system(), "resource_module_available": True, "error": str(e)}
 
 
 # Store original limits for restoration
@@ -494,9 +483,7 @@ def restore_default_limits() -> None:
     """
     if not RESOURCE_MODULE_AVAILABLE:
         logger.warning(
-            "Resource limits not available on this platform (%s). "
-            "Cannot restore limits.",
-            platform.system()
+            "Resource limits not available on this platform (%s). " "Cannot restore limits.", platform.system()
         )
         return
 
@@ -515,7 +502,8 @@ def restore_default_limits() -> None:
                         # Some limits can't be restored (e.g., macOS RLIMIT_AS)
                         logger.warning(
                             "Could not restore %s to original value: %s. This is expected on some platforms.",
-                            limit_name, e
+                            limit_name,
+                            e,
                         )
         else:
             # No original limits stored - try to set to high values
@@ -535,8 +523,7 @@ def restore_default_limits() -> None:
                 except (ValueError, OSError) as e:
                     # Some limits can't be set (e.g., macOS RLIMIT_AS)
                     logger.warning(
-                        "Could not set %s to default: %s. This is expected on some platforms.",
-                        limit_name, e
+                        "Could not set %s to default: %s. This is expected on some platforms.", limit_name, e
                     )
 
         logger.info("Resource limits restoration completed")

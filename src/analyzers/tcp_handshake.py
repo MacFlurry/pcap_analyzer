@@ -134,7 +134,8 @@ class TCPHandshakeAnalyzer:
         Returns:
             Dictionnaire contenant les résultats d'analyse
         """
-        for i, packet in enumerate(packets):
+        # v5.2.4: Fix frame numbering to match Wireshark (1-based indexing)
+        for i, packet in enumerate(packets, start=1):
             self.process_packet(packet, i)
 
         return self.finalize()
@@ -203,13 +204,15 @@ class TCPHandshakeAnalyzer:
 
             if flow_key in self.incomplete_handshakes:
                 handshake = self.incomplete_handshakes[flow_key]
-                handshake.synack_time = packet_time
-                handshake.synack_packet_num = packet_num
-                # RFC 793: Store SYN-ACK sequence number for final ACK validation
-                handshake.synack_seq = tcp.seq
+                # v5.2.4: Only record the FIRST SYN-ACK (ignore retransmissions)
+                if handshake.synack_packet_num is None:
+                    handshake.synack_time = packet_time
+                    handshake.synack_packet_num = packet_num
+                    # RFC 793: Store SYN-ACK sequence number for final ACK validation
+                    handshake.synack_seq = tcp.seq
 
-                if handshake.syn_time:
-                    handshake.syn_to_synack_delay = packet_time - handshake.syn_time
+                    if handshake.syn_time:
+                        handshake.syn_to_synack_delay = packet_time - handshake.syn_time
 
         # Détection ACK final (après SYN/ACK)
         elif tcp.flags & 0x10 and not tcp.flags & 0x02:  # ACK flag set, SYN not set
@@ -316,13 +319,15 @@ class TCPHandshakeAnalyzer:
 
             if flow_key in self.incomplete_handshakes:
                 handshake = self.incomplete_handshakes[flow_key]
-                handshake.synack_time = packet_time
-                handshake.synack_packet_num = packet_num
-                # RFC 793: Store SYN-ACK sequence number for final ACK validation
-                handshake.synack_seq = metadata.tcp_seq
+                # v5.2.4: Only record the FIRST SYN-ACK (ignore retransmissions)
+                if handshake.synack_packet_num is None:
+                    handshake.synack_time = packet_time
+                    handshake.synack_packet_num = packet_num
+                    # RFC 793: Store SYN-ACK sequence number for final ACK validation
+                    handshake.synack_seq = metadata.tcp_seq
 
-                if handshake.syn_time:
-                    handshake.syn_to_synack_delay = packet_time - handshake.syn_time
+                    if handshake.syn_time:
+                        handshake.syn_to_synack_delay = packet_time - handshake.syn_time
 
         # Détection ACK final (après SYN/ACK) - flags: ACK only (no SYN)
         elif tcp_flags & 0x10 and not tcp_flags & 0x02:  # ACK flag set, SYN not set

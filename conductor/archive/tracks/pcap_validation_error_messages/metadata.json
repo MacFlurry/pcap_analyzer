@@ -1,0 +1,48 @@
+{
+  "track_id": "pcap_validation_error_messages",
+  "title": "PCAP Validation with User-Friendly Error Messages",
+  "status": "completed",
+  "priority": "high",
+  "type": "improvement",
+  "version_type": "patch",
+  "target_version": "5.2.2",
+  "created_at": "2025-12-27",
+  "estimated_duration": "4-6 hours",
+  "tags": [
+    "validation",
+    "error-handling",
+    "ux",
+    "frontend",
+    "backend"
+  ],
+  "files_to_modify": [
+    "app/services/pcap_validator.py",
+    "app/api/routes/upload.py",
+    "app/models/schemas.py",
+    "app/templates/components/pcap_error_display.html",
+    "app/templates/upload.html",
+    "app/static/js/upload.js",
+    "tests/unit/test_pcap_validation.py",
+    "tests/integration/test_upload_validation.py",
+    "src/__version__.py",
+    "helm-chart/pcap-analyzer/Chart.yaml",
+    "helm-chart/pcap-analyzer/values.yaml",
+    "CHANGELOG.md"
+  ],
+  "dependencies": [],
+  "version_sync_required": true,
+  "description": "Add pre-upload PCAP validation to detect incompatible files (synthetic/educational PCAPs) and display detailed, user-friendly error messages explaining why the file cannot be analyzed and suggesting alternatives (Wireshark).",
+  "acceptance_criteria": [
+    "Validation detects 'The Ultimate PCAP' as incompatible",
+    "Normal PCAPs pass validation without overhead (< 500ms)",
+    "Error display is integrated in UI (not just a toast)",
+    "Error messages explain what's wrong and what to do",
+    "Wireshark download link works",
+    "Retry button resets upload form",
+    "Dark mode rendering works correctly",
+    "Unit tests achieve 100% coverage of validator",
+    "Integration tests pass",
+    "Versions synchronized to 5.2.2",
+    "Deployed to Kubernetes successfully"
+  ]
+}

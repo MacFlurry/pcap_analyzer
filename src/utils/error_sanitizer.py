@@ -49,14 +49,14 @@ def sanitize_file_path(text: str) -> str:
 
     # Redact user-specific paths with [USER] placeholder
     # Unix: /home/username
-    sanitized = re.sub(r'/home/([^/\s]+)', '/home/[USER]', sanitized)
+    sanitized = re.sub(r"/home/([^/\s]+)", "/home/[USER]", sanitized)
 
     # macOS: /Users/username
-    sanitized = re.sub(r'/Users/([^/\s]+)', '/Users/[USER]', sanitized)
+    sanitized = re.sub(r"/Users/([^/\s]+)", "/Users/[USER]", sanitized)
 
     # Windows: C:\Users\username
-    sanitized = re.sub(r'C:\\Users\\([^\\s]+)', r'C:\\Users\\[USER]', sanitized)
-    sanitized = re.sub(r'C:/Users/([^/\s]+)', 'C:/Users/[USER]', sanitized)
+    sanitized = re.sub(r"C:\\Users\\([^\\s]+)", r"C:\\Users\\[USER]", sanitized)
+    sanitized = re.sub(r"C:/Users/([^/\s]+)", "C:/Users/[USER]", sanitized)
 
     # DON'T redact system paths like /tmp, /var, /etc (safe, non-user-specific)
     # These are already generic and don't expose user information
@@ -81,13 +81,13 @@ def sanitize_python_internals(text: str) -> str:
         'Python [VERSION_REDACTED] error in module [MODULE_REDACTED]'
     """
     # Remove Python version numbers
-    sanitized = re.sub(r'Python\s+\d+\.\d+(?:\.\d+)?', 'Python [VERSION_REDACTED]', text)
+    sanitized = re.sub(r"Python\s+\d+\.\d+(?:\.\d+)?", "Python [VERSION_REDACTED]", text)
 
     # Remove module paths (e.g., "scapy.layers.inet.TCP")
-    sanitized = re.sub(r'\b[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*){2,}\b', '[MODULE_REDACTED]', sanitized)
+    sanitized = re.sub(r"\b[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*){2,}\b", "[MODULE_REDACTED]", sanitized)
 
     # Remove traceback line references
-    sanitized = re.sub(r'File\s+"[^"]+",\s+line\s+\d+', 'File [PATH_REDACTED], line [LINE_REDACTED]', sanitized)
+    sanitized = re.sub(r'File\s+"[^"]+",\s+line\s+\d+', "File [PATH_REDACTED], line [LINE_REDACTED]", sanitized)
 
     return sanitized
 
@@ -99,7 +99,7 @@ def sanitize_stack_trace(text: str) -> str:
     Alias for sanitize_python_internals that also removes traceback headers.
     """
     # Remove traceback header
-    sanitized = re.sub(r'Traceback \(most recent call last\):.*', '', text, flags=re.DOTALL)
+    sanitized = re.sub(r"Traceback \(most recent call last\):.*", "", text, flags=re.DOTALL)
 
     # Remove any remaining Python internals
     sanitized = sanitize_python_internals(sanitized)
@@ -128,10 +128,15 @@ def sanitize_error_message(text: str, context: Optional[str] = None) -> str:
     sanitized = sanitize_python_internals(sanitized)
 
     # Redact common credential patterns
-    sanitized = re.sub(r'(?:password|passwd|pwd|secret|token|key|api[-_]?key)\s*[=:]\s*[^\s]+', '[CREDENTIAL_REDACTED]', sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(
+        r"(?:password|passwd|pwd|secret|token|key|api[-_]?key)\s*[=:]\s*[^\s]+",
+        "[CREDENTIAL_REDACTED]",
+        sanitized,
+        flags=re.IGNORECASE,
+    )
 
     # Redact connection strings
-    sanitized = re.sub(r'(?:postgresql|mysql|mongodb)://[^@]+@[^\s]+', '[CONNECTION_REDACTED]', sanitized)
+    sanitized = re.sub(r"(?:postgresql|mysql|mongodb)://[^@]+@[^\s]+", "[CONNECTION_REDACTED]", sanitized)
 
     return sanitized
 
@@ -167,28 +172,28 @@ def sanitize_error_for_display(error: Exception, context: Optional[str] = None) 
 
     # Common exception types with safe messages
     safe_messages = {
-        'FileNotFoundError': 'File not found',
-        'PermissionError': 'Permission denied',
-        'IsADirectoryError': 'Expected file, found directory',
-        'NotADirectoryError': 'Expected directory, found file',
-        'OSError': 'System error occurred',
-        'IOError': 'Input/output error',
-        'TimeoutError': 'Operation timed out',
-        'MemoryError': 'Insufficient memory',
-        'ValueError': 'Invalid value provided',
-        'TypeError': 'Invalid data type',
-        'KeyError': 'Required data not found',
-        'IndexError': 'Data index out of range',
-        'AttributeError': 'Invalid operation',
-        'ImportError': 'Module not available',
-        'ModuleNotFoundError': 'Required module not found',
-        'RuntimeError': 'Runtime error occurred',
-        'subprocess.CalledProcessError': 'External process failed',
-        'subprocess.TimeoutExpired': 'Process execution timed out',
+        "FileNotFoundError": "File not found",
+        "PermissionError": "Permission denied",
+        "IsADirectoryError": "Expected file, found directory",
+        "NotADirectoryError": "Expected directory, found file",
+        "OSError": "System error occurred",
+        "IOError": "Input/output error",
+        "TimeoutError": "Operation timed out",
+        "MemoryError": "Insufficient memory",
+        "ValueError": "Invalid value provided",
+        "TypeError": "Invalid data type",
+        "KeyError": "Required data not found",
+        "IndexError": "Data index out of range",
+        "AttributeError": "Invalid operation",
+        "ImportError": "Module not available",
+        "ModuleNotFoundError": "Required module not found",
+        "RuntimeError": "Runtime error occurred",
+        "subprocess.CalledProcessError": "External process failed",
+        "subprocess.TimeoutExpired": "Process execution timed out",
     }
 
     # Get base message from mapping or generic fallback
-    base_message = safe_messages.get(error_type, 'An error occurred')
+    base_message = safe_messages.get(error_type, "An error occurred")
 
     # Add context if provided
     if context:
@@ -217,22 +222,19 @@ def sanitize_subprocess_error(error: Exception) -> str:
     """
     error_type = type(error).__name__
 
-    if 'TimeoutExpired' in error_type:
-        return 'Process execution timed out'
-    elif 'CalledProcessError' in error_type:
+    if "TimeoutExpired" in error_type:
+        return "Process execution timed out"
+    elif "CalledProcessError" in error_type:
         # Extract return code if available, but not output
-        if hasattr(error, 'returncode'):
-            return f'External process failed (exit code: {error.returncode})'
-        return 'External process failed'
+        if hasattr(error, "returncode"):
+            return f"External process failed (exit code: {error.returncode})"
+        return "External process failed"
     else:
-        return 'Process execution error'
+        return "Process execution error"
 
 
 def log_and_sanitize(
-    error: Exception,
-    logger_instance: logging.Logger,
-    context: str,
-    user_message: Optional[str] = None
+    error: Exception, logger_instance: logging.Logger, context: str, user_message: Optional[str] = None
 ) -> str:
     """
     Combined logging and sanitization helper.

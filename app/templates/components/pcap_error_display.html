@@ -1,0 +1,82 @@
+<!-- PCAP Validation Error Display Component -->
+<div id="pcap-validation-error" class="hidden">
+    <div class="max-w-2xl mx-auto my-8 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-lg shadow-lg overflow-hidden">
+        <!-- Header -->
+        <div class="p-6 border-b border-red-200 dark:border-red-800">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <svg class="h-8 w-8 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <div class="ml-4 flex-1">
+                    <h3 id="error-title" class="text-lg font-bold text-red-900 dark:text-red-200">
+                        Fichier PCAP incompatible avec l'analyse de latence
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 space-y-4">
+            <!-- Description -->
+            <p id="error-description" class="text-sm text-gray-700 dark:text-gray-300">
+                <!-- Injected via JS -->
+            </p>
+
+            <!-- Detected Issues -->
+            <div>
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                    Problèmes détectés :
+                </h4>
+                <ul id="error-issues" class="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                    <!-- Injected via JS -->
+                </ul>
+            </div>
+
+            <!-- Info Box -->
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-800 dark:text-blue-200">
+                            <strong>PCAP Analyzer</strong> analyse les captures réseau réelles de production pour détecter les latences et problèmes de performance.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Suggestions -->
+            <div>
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                    Que faire ensuite ?
+                </h4>
+                <ul id="error-suggestions" class="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                    <!-- Injected via JS -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 flex flex-col sm:flex-row gap-3">
+            <a id="wireshark-link" href="https://www.wireshark.org/download.html" target="_blank"
+               class="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Télécharger Wireshark
+            </a>
+            <button id="retry-upload-btn"
+                    class="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Réessayer avec un autre fichier
+            </button>
+        </div>
+    </div>
+</div>

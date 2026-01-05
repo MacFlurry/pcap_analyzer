@@ -54,7 +54,7 @@ class StreamingProcessor:
         pcap_file: str,
         enable_bomb_protection: bool = True,
         max_expansion_ratio: int = 1000,
-        critical_expansion_ratio: int = 10000
+        critical_expansion_ratio: int = 10000,
     ):
         """
         Initialize streaming processor.
@@ -72,9 +72,7 @@ class StreamingProcessor:
 
         # Initialize decompression bomb monitor
         self.decompression_monitor = DecompressionMonitor(
-            max_ratio=max_expansion_ratio,
-            critical_ratio=critical_expansion_ratio,
-            enabled=enable_bomb_protection
+            max_ratio=max_expansion_ratio, critical_ratio=critical_expansion_ratio, enabled=enable_bomb_protection
         )
 
     def _determine_processing_mode(self) -> str:
@@ -124,15 +122,10 @@ class StreamingProcessor:
                 # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
                 if i % 10000 == 0 and i > 0:
                     try:
-                        self.decompression_monitor.check_expansion_ratio(
-                            self.file_size,
-                            bytes_processed,
-                            i
-                        )
+                        self.decompression_monitor.check_expansion_ratio(self.file_size, bytes_processed, i)
                     except DecompressionBombError:
                         logger.critical(
-                            f"Decompression bomb detected at packet {i}. "
-                            f"Processing aborted for security."
+                            f"Decompression bomb detected at packet {i}. " f"Processing aborted for security."
                         )
                         raise
 
@@ -169,11 +162,7 @@ class StreamingProcessor:
                 # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
                 if packet_count % 10000 == 0:
                     try:
-                        self.decompression_monitor.check_expansion_ratio(
-                            self.file_size,
-                            bytes_processed,
-                            packet_count
-                        )
+                        self.decompression_monitor.check_expansion_ratio(self.file_size, bytes_processed, packet_count)
                     except DecompressionBombError:
                         logger.critical(
                             f"Decompression bomb detected at packet {packet_count}. "
@@ -229,11 +218,7 @@ class StreamingProcessor:
                 # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
                 if i % 10000 == 0 and i > 0:
                     try:
-                        self.decompression_monitor.check_expansion_ratio(
-                            self.file_size,
-                            bytes_processed,
-                            i
-                        )
+                        self.decompression_monitor.check_expansion_ratio(self.file_size, bytes_processed, i)
                     except DecompressionBombError:
                         logger.critical(
                             f"Decompression bomb detected while loading all packets. "

@@ -9,8 +9,10 @@ class AdminPanel {
         this.selectedUsers = new Set();
         this.currentFilter = 'all';
         this.searchQuery = '';
+        this.limit = 50;
+        this.offset = 0;
+        this.totalCount = 0;
 
-        // DOM elements
         this.loading = document.getElementById('loading');
         this.emptyState = document.getElementById('empty-state');
         this.tableContainer = document.getElementById('table-container');
@@ -18,660 +20,448 @@ class AdminPanel {
         this.selectAllCheckbox = document.getElementById('select-all');
         this.bulkActionsBar = document.getElementById('bulk-actions-bar');
         this.selectedCountSpan = document.getElementById('selected-count');
+        
+        this.prevBtn = document.getElementById('prev-page');
+        this.nextBtn = document.getElementById('next-page');
+        this.pageRangeSpan = document.getElementById('page-range');
+        this.totalCountSpan = document.getElementById('total-count');
+        this.pageSizeSelect = document.getElementById('page-size');
 
-        // Stats
         this.statTotal = document.getElementById('stat-total');
         this.statPending = document.getElementById('stat-pending');
         this.statBlocked = document.getElementById('stat-blocked');
 
-        // Check authentication before initializing
         this.checkAuthentication().then(isAuth => {
-            if (isAuth) {
-                this.init();
-            }
+            if (isAuth) this.init();
         });
     }
 
     async checkAuthentication() {
         const token = localStorage.getItem('access_token');
-        if (!token) {
-            window.location.href = '/login?returnUrl=/admin';
-            return false;
-        }
-
-        // Verify token and check admin role
+        if (!token) { window.location.href = '/login?returnUrl=/admin'; return false; }
         try {
-            const response = await fetch('/api/users/me', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (!response.ok) {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('token_type');
-                localStorage.removeItem('current_user');
-                window.location.href = '/login?returnUrl=/admin';
-                return false;
-            }
-
+            const response = await fetch('/api/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) { localStorage.clear(); window.location.href = '/login?returnUrl=/admin'; return false; }
             const user = await response.json();
-
-            // Check if user is admin
-            if (user.role !== 'admin') {
-                window.toast.error('❌ Access denied: Admin role required');
-                window.location.href = '/';
-                return false;
-            }
-
+            if (user.role !== 'admin') { window.location.href = '/'; return false; }
             return true;
-        } catch (error) {
-            console.error('Auth check error:', error);
-            window.location.href = '/login?returnUrl=/admin';
-            return false;
-        }
+        } catch (error) { window.location.href = '/login?returnUrl=/admin'; return false; }
     }
 
     getAuthHeaders() {
-        const token = localStorage.getItem('access_token');
-        return {
-            'Authorization': `Bearer ${token}`
-        };
+        return { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` };
     }
 
     init() {
-        // Load users
         this.loadUsers();
+        this.loadStats();
 
-        // Filter buttons
-        document.getElementById('filter-all').addEventListener('click', () => this.setFilter('all'));
-        document.getElementById('filter-pending').addEventListener('click', () => this.setFilter('pending'));
-        document.getElementById('filter-approved').addEventListener('click', () => this.setFilter('approved'));
-        document.getElementById('filter-blocked').addEventListener('click', () => this.setFilter('blocked'));
-
-        // Search input
-        document.getElementById('search-input').addEventListener('input', (e) => {
-            this.searchQuery = e.target.value.toLowerCase();
-            this.renderUsers();
+        ['all', 'pending', 'approved', 'blocked'].forEach(f => {
+            const el = document.getElementById(`filter-${f}`);
+            if (el) el.addEventListener('click', () => this.setFilter(f));
         });
 
-        // Refresh button
-        document.getElementById('refresh-btn').addEventListener('click', () => this.loadUsers());
+        const searchInput = document.getElementById('search-input');
+        let searchTimeout;
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.searchQuery = e.target.value.toLowerCase();
+                    this.offset = 0;
+                    this.loadUsers();
+                }, 300);
+            });
+        }
 
-        // Select all checkbox
-        this.selectAllCheckbox.addEventListener('change', () => this.toggleSelectAll());
+        const refreshBtn = document.getElementById('refresh-btn');
+        if (refreshBtn) refreshBtn.addEventListener('click', () => { this.loadUsers(); this.loadStats(); });
 
-        // Bulk actions
-        document.getElementById('bulk-approve').addEventListener('click', () => this.bulkAction('approve'));
-        document.getElementById('bulk-block').addEventListener('click', () => this.bulkAction('block'));
-        document.getElementById('bulk-unblock').addEventListener('click', () => this.bulkAction('unblock'));
-        document.getElementById('bulk-delete').addEventListener('click', () => this.bulkAction('delete'));
-        document.getElementById('bulk-cancel').addEventListener('click', () => this.clearSelection());
+        if (this.selectAllCheckbox) this.selectAllCheckbox.addEventListener('change', () => this.toggleSelectAll());
 
-        // Create user modal
-        document.getElementById('create-user-btn').addEventListener('click', () => this.showCreateUserModal());
-        document.getElementById('cancel-create-user').addEventListener('click', () => this.hideCreateUserModal());
-        document.getElementById('confirm-create-user').addEventListener('click', () => this.createUser());
-        document.getElementById('close-temp-password-modal').addEventListener('click', () => this.hideTempPasswordModal());
+        ['approve', 'block', 'unblock', 'delete'].forEach(a => {
+            const el = document.getElementById(`bulk-${a}`);
+            if (el) el.addEventListener('click', () => this.bulkAction(a));
+        });
+        const bulkCancel = document.getElementById('bulk-cancel');
+        if (bulkCancel) bulkCancel.addEventListener('click', () => this.clearSelection());
+
+        const createBtn = document.getElementById('create-user-btn');
+        if (createBtn) createBtn.addEventListener('click', () => this.showCreateUserModal());
+
+        const cancelCreateBtn = document.getElementById('cancel-create-user');
+        if (cancelCreateBtn) cancelCreateBtn.addEventListener('click', () => this.hideCreateUserModal());
+
+        const confirmCreateBtn = document.getElementById('confirm-create-user');
+        if (confirmCreateBtn) confirmCreateBtn.addEventListener('click', () => this.createUser());
+
+        const createUserForm = document.getElementById('create-user-form');
+        if (createUserForm) {
+            createUserForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.createUser();
+            });
+        }
+
+        // Close modal on Escape or click outside
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.hideCreateUserModal();
+                this.hideTempPasswordModal();
+            }
+        });
+        
+        const modal = document.getElementById('create-user-modal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) this.hideCreateUserModal();
+            });
+        }
+
+        const tempPasswordModal = document.getElementById('temp-password-modal');
+        if (tempPasswordModal) {
+            tempPasswordModal.addEventListener('click', (e) => {
+                if (e.target === tempPasswordModal) this.hideTempPasswordModal();
+            });
+        }
+
+        const resetPasswordModal = document.getElementById('reset-password-modal');
+        if (resetPasswordModal) {
+            resetPasswordModal.addEventListener('click', (e) => {
+                if (e.target === resetPasswordModal) this.hideResetPasswordModal();
+            });
+        }
+
+        const confirmResetBtn = document.getElementById('confirm-reset-password');
+        if (confirmResetBtn) confirmResetBtn.addEventListener('click', () => this.resetPassword());
+
+        const cancelResetBtn = document.getElementById('cancel-reset-password');
+        if (cancelResetBtn) cancelResetBtn.addEventListener('click', () => this.hideResetPasswordModal());
+        
+        // Pagination
+        if (this.prevBtn) this.prevBtn.addEventListener('click', () => this.changePage(-1));
+        if (this.nextBtn) this.nextBtn.addEventListener('click', () => this.changePage(1));
+        if (this.pageSizeSelect) this.pageSizeSelect.addEventListener('change', (e) => {
+            this.limit = parseInt(e.target.value);
+            this.offset = 0;
+            this.loadUsers();
+        });
     }
 
     setFilter(filter) {
         this.currentFilter = filter;
-
-        // Update button styles
+        this.offset = 0;
         document.querySelectorAll('[id^="filter-"]').forEach(btn => {
-            if (btn.id === `filter-${filter}`) {
-                btn.className = 'px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm transition-all';
-            } else {
-                btn.className = 'px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium text-sm transition-all hover:bg-gray-300';
-            }
+            if (btn.id === `filter-${filter}`) btn.className = 'px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm transition-all';
+            else btn.className = 'px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium text-sm transition-all hover:bg-gray-300';
         });
-
-        this.renderUsers();
+        this.loadUsers();
     }
 
     async loadUsers() {
         this.showLoading();
-
+        this.clearSelection();
         try {
-            const response = await fetch('/api/users?limit=1000', {
-                headers: this.getAuthHeaders()
-            });
+            let url = `/api/users?limit=${this.limit}&offset=${this.offset}`;
+            if (this.currentFilter !== 'all') url += `&status=${this.currentFilter}`;
+            
+            const response = await fetch(url, { headers: this.getAuthHeaders() });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                    window.location.href = '/login?returnUrl=/admin';
-                    return;
-                }
-                throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (data.users && typeof data.total === 'number') {
+                this.users = data.users;
+                this.totalCount = data.total;
+            } else if (Array.isArray(data)) {
+                this.users = data;
+                this.totalCount = data.length;
+            } else {
+                this.users = []; this.totalCount = 0;
             }
-
-            this.users = await response.json();
-            this.updateStats();
-            this.renderUsers();
-
         } catch (error) {
             console.error('Failed to load users:', error);
-            window.toast.error('❌ Failed to load users');
-            this.showEmpty();
+            this.users = []; this.totalCount = 0;
+        } finally {
+            this.renderUsers();
+            this.updatePaginationUI();
         }
     }
 
-    updateStats() {
-        const total = this.users.length;
-        const pending = this.users.filter(u => !u.is_approved).length;
-        const blocked = this.users.filter(u => !u.is_active).length;
-
-        this.statTotal.textContent = total;
-        this.statPending.textContent = pending;
-        this.statBlocked.textContent = blocked;
+    async loadStats() {
+        try {
+            const fetchCount = async (status) => {
+                let url = `/api/users?limit=0&offset=0`;
+                if (status) url += `&status=${status}`;
+                const resp = await fetch(url, { headers: this.getAuthHeaders() });
+                if (!resp.ok) return 0;
+                const data = await resp.json();
+                return typeof data.total === 'number' ? data.total : (Array.isArray(data) ? data.length : 0);
+            };
+            const [total, pending, blocked] = await Promise.all([fetchCount(null), fetchCount('pending'), fetchCount('blocked')]);
+            if (this.statTotal) this.statTotal.textContent = total;
+            if (this.statPending) this.statPending.textContent = pending;
+            if (this.statBlocked) this.statBlocked.textContent = blocked;
+        } catch (e) {}
     }
 
     renderUsers() {
-        let filteredUsers = this.users;
-
-        // Apply filter
-        if (this.currentFilter === 'pending') {
-            filteredUsers = filteredUsers.filter(u => !u.is_approved);
-        } else if (this.currentFilter === 'approved') {
-            filteredUsers = filteredUsers.filter(u => u.is_approved && u.is_active);
-        } else if (this.currentFilter === 'blocked') {
-            filteredUsers = filteredUsers.filter(u => !u.is_active);
-        }
-
-        // Apply search
+        let displayUsers = this.users;
         if (this.searchQuery) {
-            filteredUsers = filteredUsers.filter(u =>
+            displayUsers = displayUsers.filter(u =>
                 u.username.toLowerCase().includes(this.searchQuery) ||
                 u.email.toLowerCase().includes(this.searchQuery)
             );
         }
 
-        if (filteredUsers.length === 0) {
-            this.showEmpty();
-            return;
-        }
+        if (displayUsers.length === 0) { this.showEmpty(); return; }
 
         this.showTable();
-        this.usersTbody.innerHTML = '';
-
-        filteredUsers.forEach(user => {
-            const row = this.createUserRow(user);
-            this.usersTbody.appendChild(row);
-        });
+        if (this.usersTbody) {
+            this.usersTbody.innerHTML = '';
+            displayUsers.forEach(user => this.usersTbody.appendChild(this.createUserRow(user)));
+        }
     }
 
     createUserRow(user) {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
+        const canSelect = user.role !== 'admin';
+        
+        const escapedUsername = window.utils.escapeHtml(user.username);
+        const escapedEmail = window.utils.escapeHtml(user.email);
+        const userInitial = escapedUsername.charAt(0).toUpperCase();
 
-        // Checkbox
-        const canSelect = user.role !== 'admin'; // Cannot select admin users
         tr.innerHTML = `
-            <td class="px-6 py-4">
-                ${canSelect ? `<input type="checkbox" class="user-checkbox w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" data-user-id="${user.id}" />` : ''}
-            </td>
-            <td class="px-6 py-4">
-                <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
-                        ${user.username.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                        <div class="font-semibold text-gray-900 dark:text-white">${user.username}</div>
-                        ${user.role === 'admin' ? '<div class="text-xs text-purple-600 dark:text-purple-400 font-semibold"><i class="fas fa-crown mr-1"></i>Administrator</div>' : ''}
-                    </div>
-                </div>
-            </td>
-            <td class="px-6 py-4 text-gray-700 dark:text-gray-300">${user.email}</td>
-            <td class="px-6 py-4">
-                <span class="px-3 py-1 rounded-full text-xs font-semibold ${user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
-                    ${user.role.toUpperCase()}
-                </span>
-            </td>
-            <td class="px-6 py-4">
-                ${this.getStatusBadge(user)}
-            </td>
-            <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                ${this.formatDate(user.created_at)}
-            </td>
-            <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                ${user.last_login ? this.formatDate(user.last_login) : 'Never'}
-            </td>
-            <td class="px-6 py-4">
-                <div class="flex items-center justify-center space-x-2">
-                    ${this.getUserActions(user)}
-                </div>
-            </td>
+            <td class="px-6 py-4">${canSelect ? `<input type="checkbox" class="user-checkbox w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" data-user-id="${user.id}" />` : ''}</td>
+            <td class="px-6 py-4"><div class="flex items-center space-x-3"><div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-lg">${userInitial}</div><div><div class="font-semibold text-gray-900 dark:text-white">${escapedUsername}</div>${user.role === 'admin' ? '<div class="text-xs text-purple-600 dark:text-purple-400 font-semibold"><i class="fas fa-crown mr-1"></i>Administrator</div>' : ''}</div></div></td>
+            <td class="px-6 py-4 text-gray-700 dark:text-gray-300">${escapedEmail}</td>
+            <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-semibold ${user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">${user.role.toUpperCase()}</span></td>
+            <td class="px-6 py-4">${this.getStatusBadge(user)}</td>
+            <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">${this.formatDate(user.created_at)}</td>
+            <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">${user.last_login ? this.formatDate(user.last_login) : 'Never'}</td>
+            <td class="px-6 py-4"><div class="flex items-center justify-center space-x-2">${this.getUserActions(user)}</div></td>
         `;
-
-        // Add checkbox event listener
         if (canSelect) {
-            const checkbox = tr.querySelector('.user-checkbox');
-            checkbox.addEventListener('change', () => {
-                if (checkbox.checked) {
-                    this.selectedUsers.add(user.id);
-                } else {
-                    this.selectedUsers.delete(user.id);
-                }
-                this.updateSelectionUI();
-            });
+            const cb = tr.querySelector('.user-checkbox');
+            cb.addEventListener('change', () => { if (cb.checked) this.selectedUsers.add(user.id); else this.selectedUsers.delete(user.id); this.updateSelectionUI(); });
         }
-
         return tr;
     }
 
     getStatusBadge(user) {
-        if (!user.is_active) {
-            return '<span class="status-badge status-blocked"><i class="fas fa-ban"></i><span>Blocked</span></span>';
-        } else if (!user.is_approved) {
-            return '<span class="status-badge status-pending"><i class="fas fa-clock"></i><span>Pending</span></span>';
-        } else {
-            return '<span class="status-badge status-approved"><i class="fas fa-check-circle"></i><span>Approved</span></span>';
-        }
+        if (!user.is_active) return '<span class="status-badge status-blocked"><i class="fas fa-ban"></i><span>Blocked</span></span>';
+        if (!user.is_approved) return '<span class="status-badge status-pending"><i class="fas fa-clock"></i><span>Pending</span></span>';
+        return '<span class="status-badge status-approved"><i class="fas fa-check-circle"></i><span>Approved</span></span>';
     }
 
     getUserActions(user) {
-        // Cannot perform actions on admin users
-        if (user.role === 'admin') {
-            return '<span class="text-xs text-gray-400">Protected</span>';
-        }
-
+        if (user.role === 'admin') return '<span class="text-xs text-gray-400">Protected</span>';
         const actions = [];
-
-        // Approve (if pending)
-        if (!user.is_approved) {
-            actions.push(`
-                <button onclick="adminPanel.approveUser('${user.id}')" class="action-btn action-btn-approve text-xs px-2 py-1" title="Approve user">
-                    <i class="fas fa-check"></i>
-                </button>
-            `);
-        }
-
-        // Block/Unblock
-        if (user.is_active) {
-            actions.push(`
-                <button onclick="adminPanel.blockUser('${user.id}')" class="action-btn action-btn-block text-xs px-2 py-1" title="Block user">
-                    <i class="fas fa-ban"></i>
-                </button>
-            `);
-        } else {
-            actions.push(`
-                <button onclick="adminPanel.unblockUser('${user.id}')" class="action-btn action-btn-unblock text-xs px-2 py-1" title="Unblock user">
-                    <i class="fas fa-unlock"></i>
-                </button>
-            `);
-        }
-
-        // Delete
-        actions.push(`
-            <button onclick="adminPanel.deleteUser('${user.id}', '${user.username}')" class="action-btn action-btn-delete text-xs px-2 py-1" title="Delete user">
-                <i class="fas fa-trash"></i>
-            </button>
-        `);
-
+        if (!user.is_approved) actions.push(`<button onclick="adminPanel.approveUser('${user.id}')" class="action-btn action-btn-approve text-xs px-2 py-1" title="Approve"><i class="fas fa-check"></i></button>`);
+        if (user.is_active) actions.push(`<button onclick="adminPanel.blockUser('${user.id}')" class="action-btn action-btn-block text-xs px-2 py-1" title="Block"><i class="fas fa-ban"></i></button>`);
+        else actions.push(`<button onclick="adminPanel.unblockUser('${user.id}')" class="action-btn action-btn-unblock text-xs px-2 py-1" title="Unblock"><i class="fas fa-unlock"></i></button>`);
+        
+        // Reset Password Button
+        actions.push(`<button onclick="adminPanel.showResetPasswordModal('${user.id}', '${window.utils.escapeHtml(user.username)}')" class="action-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1" title="Reset Password"><i class="fas fa-key"></i></button>`);
+        
+        actions.push(`<button onclick="adminPanel.deleteUser('${user.id}', '${window.utils.escapeHtml(user.username)}')" class="action-btn action-btn-delete text-xs px-2 py-1" title="Delete"><i class="fas fa-trash"></i></button>`);
         return actions.join('');
+    }
+
+    showResetPasswordModal(userId, username) {
+        const el = document.getElementById('reset-password-modal');
+        if (el) {
+            el.classList.remove('hidden');
+            document.getElementById('reset-user-id').value = userId;
+            document.getElementById('reset-username-display').textContent = username;
+            document.getElementById('reset-password-form').reset();
+        }
+    }
+
+    hideResetPasswordModal() {
+        const el = document.getElementById('reset-password-modal');
+        if (el) el.classList.add('hidden');
+    }
+
+    async resetPassword() {
+        const userId = document.getElementById('reset-user-id').value;
+        const sendEmail = document.getElementById('reset-send-email').checked;
+        const notifyUser = document.getElementById('reset-notify-user').checked;
+        
+        try {
+            const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
+            const resp = await fetch(`/api/admin/users/${userId}/reset-password`, {
+                method: 'POST',
+                headers: { ...this.getAuthHeaders(), ...csrf, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ send_email: sendEmail, notify_user: notifyUser })
+            });
+            
+            if (resp.ok) {
+                const data = await resp.json();
+                this.hideResetPasswordModal();
+                
+                if (!sendEmail && data.temporary_password) {
+                    // Reuse create user temp password modal
+                    document.getElementById('created-username').textContent = data.username;
+                    document.getElementById('temp-password').textContent = data.temporary_password;
+                    document.getElementById('temp-password-modal').classList.remove('hidden');
+                }
+                
+                if (window.toast) window.toast.success(data.message || 'Mot de passe réinitialisé');
+            } else {
+                const err = await resp.json();
+                if (window.toast) window.toast.error(`❌ ${err.detail || 'Erreur'}`);
+            }
+        } catch (e) {
+            console.error('Error resetting password:', e);
+            if (window.toast) window.toast.error('❌ Erreur réseau');
+        }
     }
 
     async approveUser(userId) {
         try {
-            const csrfHeaders = await window.csrfManager.getHeaders();
-            const response = await fetch(`/api/admin/users/${userId}/approve`, {
-                method: 'PUT',
-                headers: {
-                    ...this.getAuthHeaders(),
-                    ...csrfHeaders
-                }
-            });
-
-            if (response.ok) {
-                window.toast.success('✓ User approved successfully');
-                this.loadUsers();
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-            } else {
-                const error = await response.json();
-                window.toast.error(`❌ ${error.detail || 'Failed to approve user'}`);
-            }
-        } catch (error) {
-            console.error('Approve error:', error);
-            window.toast.error('❌ Failed to approve user');
-        }
+            const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
+            const resp = await fetch(`/api/admin/users/${userId}/approve`, { method: 'PUT', headers: { ...this.getAuthHeaders(), ...csrf } });
+            if (resp.ok) { this.loadUsers(); this.loadStats(); }
+        } catch (e) {}
     }
 
     async blockUser(userId) {
-        if (!confirm('Are you sure you want to block this user?')) {
-            return;
-        }
-
+        if (!confirm('Block user?')) return;
         try {
-            const csrfHeaders = await window.csrfManager.getHeaders();
-            const response = await fetch(`/api/admin/users/${userId}/block`, {
-                method: 'PUT',
-                headers: {
-                    ...this.getAuthHeaders(),
-                    ...csrfHeaders
-                }
-            });
-
-            if (response.ok) {
-                window.toast.success('✓ User blocked successfully');
-                this.loadUsers();
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-            } else {
-                const error = await response.json();
-                window.toast.error(`❌ ${error.detail || 'Failed to block user'}`);
-            }
-        } catch (error) {
-            console.error('Block error:', error);
-            window.toast.error('❌ Failed to block user');
-        }
+            const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
+            const resp = await fetch(`/api/admin/users/${userId}/block`, { method: 'PUT', headers: { ...this.getAuthHeaders(), ...csrf } });
+            if (resp.ok) { this.loadUsers(); this.loadStats(); }
+        } catch (e) {}
     }
 
     async unblockUser(userId) {
         try {
-            const csrfHeaders = await window.csrfManager.getHeaders();
-            const response = await fetch(`/api/admin/users/${userId}/unblock`, {
-                method: 'PUT',
-                headers: {
-                    ...this.getAuthHeaders(),
-                    ...csrfHeaders
-                }
-            });
-
-            if (response.ok) {
-                window.toast.success('✓ User unblocked successfully');
-                this.loadUsers();
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-            } else {
-                const error = await response.json();
-                window.toast.error(`❌ ${error.detail || 'Failed to unblock user'}`);
-            }
-        } catch (error) {
-            console.error('Unblock error:', error);
-            window.toast.error('❌ Failed to unblock user');
-        }
+            const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
+            const resp = await fetch(`/api/admin/users/${userId}/unblock`, { method: 'PUT', headers: { ...this.getAuthHeaders(), ...csrf } });
+            if (resp.ok) { this.loadUsers(); this.loadStats(); }
+        } catch (e) {}
     }
 
     async deleteUser(userId, username) {
-        if (!confirm(`⚠️ Are you sure you want to DELETE user "${username}"?\n\nThis action cannot be undone and will delete all associated tasks.`)) {
-            return;
-        }
-
+        const escapedUsername = window.utils.escapeHtml(username);
+        if (!confirm(`Delete ${escapedUsername}?`)) return;
         try {
-            const csrfHeaders = await window.csrfManager.getHeaders();
-            const response = await fetch(`/api/admin/users/${userId}`, {
-                method: 'DELETE',
-                headers: {
-                    ...this.getAuthHeaders(),
-                    ...csrfHeaders
-                }
-            });
+            const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
+            const resp = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE', headers: { ...this.getAuthHeaders(), ...csrf } });
+            if (resp.ok) { this.loadUsers(); this.loadStats(); }
+        } catch (e) {}
+    }
 
-            if (response.ok) {
-                window.toast.success(`✓ User "${username}" deleted successfully`);
-                this.loadUsers();
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-            } else {
-                const error = await response.json();
-                window.toast.error(`❌ ${error.detail || 'Failed to delete user'}`);
-            }
-        } catch (error) {
-            console.error('Delete error:', error);
-            window.toast.error('❌ Failed to delete user');
-        }
+    changePage(delta) {
+        const newOffset = this.offset + (delta * this.limit);
+        if (newOffset >= 0 && newOffset < this.totalCount) { this.offset = newOffset; this.loadUsers(); }
+    }
+
+    updatePaginationUI() {
+        if (!this.pageRangeSpan) return;
+        const start = this.totalCount === 0 ? 0 : this.offset + 1;
+        const end = Math.min(this.offset + this.limit, this.totalCount);
+        this.pageRangeSpan.textContent = `${start}-${end}`;
+        this.totalCountSpan.textContent = this.totalCount;
+        this.prevBtn.disabled = this.offset === 0;
+        this.nextBtn.disabled = end >= this.totalCount;
     }
 
     toggleSelectAll() {
-        const checkboxes = document.querySelectorAll('.user-checkbox');
-        const isChecked = this.selectAllCheckbox.checked;
-
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = isChecked;
-            const userId = checkbox.dataset.userId;
-            if (isChecked) {
-                this.selectedUsers.add(userId);
-            } else {
-                this.selectedUsers.delete(userId);
-            }
-        });
-
+        const cbs = document.querySelectorAll('.user-checkbox');
+        cbs.forEach(cb => { cb.checked = this.selectAllCheckbox.checked; if (cb.checked) this.selectedUsers.add(cb.dataset.userId); else this.selectedUsers.delete(cb.dataset.userId); });
         this.updateSelectionUI();
     }
 
     updateSelectionUI() {
-        const count = this.selectedUsers.size;
-        this.selectedCountSpan.textContent = count;
-
-        if (count > 0) {
-            this.bulkActionsBar.classList.remove('hidden');
-        } else {
-            this.bulkActionsBar.classList.add('hidden');
-        }
-
-        // Update "select all" checkbox state
-        const checkboxes = document.querySelectorAll('.user-checkbox');
-        const allChecked = checkboxes.length > 0 && count === checkboxes.length;
-        this.selectAllCheckbox.checked = allChecked;
+        if (!this.selectedCountSpan) return;
+        this.selectedCountSpan.textContent = this.selectedUsers.size;
+        if (this.selectedUsers.size > 0) this.bulkActionsBar.classList.remove('hidden');
+        else this.bulkActionsBar.classList.add('hidden');
+        const cbs = document.querySelectorAll('.user-checkbox');
+        if (this.selectAllCheckbox) this.selectAllCheckbox.checked = cbs.length > 0 && Array.from(cbs).every(cb => cb.checked);
     }
 
     clearSelection() {
         this.selectedUsers.clear();
         document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
-        this.selectAllCheckbox.checked = false;
+        if (this.selectAllCheckbox) this.selectAllCheckbox.checked = false;
         this.updateSelectionUI();
     }
 
     async bulkAction(action) {
-        if (this.selectedUsers.size === 0) {
-            window.toast.error('❌ No users selected');
-            return;
-        }
-
-        const count = this.selectedUsers.size;
-        const actionName = action.charAt(0).toUpperCase() + action.slice(1);
-
-        if (!confirm(`Are you sure you want to ${action} ${count} user(s)?`)) {
-            return;
-        }
-
-        window.loadingOverlay.show(`${actionName} in progress...`, `Processing ${count} user(s)`);
-
-        const userIds = Array.from(this.selectedUsers);
-        let successCount = 0;
-        let errorCount = 0;
-
-        // Get CSRF headers once for bulk request
-        const csrfHeaders = await window.csrfManager.getHeaders();
-
+        if (this.selectedUsers.size === 0) return;
+        if (!confirm(`Bulk ${action}?`)) return;
         try {
-            let response;
-
-            // Use bulk endpoints for approve, block, unblock (Issue #22)
-            if (action === 'approve' || action === 'block' || action === 'unblock') {
-                response = await fetch(`/api/admin/users/bulk/${action}`, {
+            const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
+            if (action === 'delete') {
+                for (const id of this.selectedUsers) await fetch(`/api/admin/users/${id}`, { method: 'DELETE', headers: { ...this.getAuthHeaders(), ...csrf } });
+            } else {
+                await fetch(`/api/admin/users/bulk/${action}`, {
                     method: 'POST',
-                    headers: {
-                        ...this.getAuthHeaders(),
-                        ...csrfHeaders,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ user_ids: userIds })
+                    headers: { ...this.getAuthHeaders(), ...csrf, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_ids: Array.from(this.selectedUsers) })
                 });
-
-                if (!response.ok) {
-                    if (response.status === 403) {
-                        window.loadingOverlay.hide();
-                        window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-                        this.clearSelection();
-                        return;
-                    }
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                // Parse bulk response
-                const result = await response.json();
-                successCount = result.success;
-                errorCount = result.failed;
-
-                // Show detailed results if there were failures
-                if (errorCount > 0 && result.results) {
-                    const failedUsers = result.results
-                        .filter(r => r.status === 'failed')
-                        .map(r => `${r.username || r.user_id}: ${r.reason}`)
-                        .join('\n');
-                    console.warn(`Failed users:\n${failedUsers}`);
-                }
-
-            } else if (action === 'delete') {
-                // Delete doesn't have bulk endpoint, use loop (legacy)
-                for (const userId of userIds) {
-                    try {
-                        response = await fetch(`/api/admin/users/${userId}`, {
-                            method: 'DELETE',
-                            headers: {
-                                ...this.getAuthHeaders(),
-                                ...csrfHeaders
-                            }
-                        });
-
-                        if (response.ok) {
-                            successCount++;
-                        } else if (response.status === 403) {
-                            // CSRF error - stop processing
-                            window.loadingOverlay.hide();
-                            window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
-                            this.clearSelection();
-                            return;
-                        } else {
-                            errorCount++;
-                        }
-                    } catch (error) {
-                        console.error(`Failed to delete user ${userId}:`, error);
-                        errorCount++;
-                    }
-                }
             }
+            this.loadUsers(); this.loadStats();
+        } catch (e) {} finally { this.clearSelection(); }
+    }
 
-        } catch (error) {
-            console.error(`Bulk ${action} failed:`, error);
-            window.loadingOverlay.hide();
-            window.toast.error(`❌ Failed to ${action} users: ${error.message}`);
-            this.clearSelection();
-            return;
+    formatDate(d) { if (!d) return 'N/A'; return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    showLoading() { if (this.loading) this.loading.classList.remove('hidden'); if (this.emptyState) this.emptyState.classList.add('hidden'); if (this.tableContainer) this.tableContainer.classList.add('hidden'); }
+    showEmpty() { if (this.loading) this.loading.classList.add('hidden'); if (this.emptyState) this.emptyState.classList.remove('hidden'); if (this.tableContainer) this.tableContainer.classList.add('hidden'); }
+    showTable() { if (this.loading) this.loading.classList.add('hidden'); if (this.emptyState) this.emptyState.classList.add('hidden'); if (this.tableContainer) this.tableContainer.classList.remove('hidden'); }
+    showCreateUserModal() { 
+        const el = document.getElementById('create-user-modal'); 
+        if (el) {
+            el.classList.remove('hidden'); 
+            const form = document.getElementById('create-user-form');
+            if (form) form.reset();
+            const usernameInput = document.getElementById('new-username');
+            if (usernameInput) usernameInput.focus();
         }
-
-        window.loadingOverlay.hide();
-
-        if (successCount > 0) {
-            window.toast.success(`✓ ${successCount} user(s) ${action}d successfully`);
-        }
-        if (errorCount > 0) {
-            window.toast.error(`❌ ${errorCount} user(s) failed`);
-        }
-
-        this.clearSelection();
-        this.loadUsers();
     }
-
-    formatDate(dateStr) {
-        if (!dateStr) return 'N/A';
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+    
+    hideCreateUserModal() { 
+        const el = document.getElementById('create-user-modal'); 
+        if (el) el.classList.add('hidden'); 
     }
-
-    showLoading() {
-        this.loading.classList.remove('hidden');
-        this.emptyState.classList.add('hidden');
-        this.tableContainer.classList.add('hidden');
-    }
-
-    showEmpty() {
-        this.loading.classList.add('hidden');
-        this.emptyState.classList.remove('hidden');
-        this.tableContainer.classList.add('hidden');
-    }
-
-    showTable() {
-        this.loading.classList.add('hidden');
-        this.emptyState.classList.add('hidden');
-        this.tableContainer.classList.remove('hidden');
-    }
-
-    showCreateUserModal() {
-        document.getElementById('create-user-modal').classList.remove('hidden');
-        document.getElementById('create-user-form').reset();
-    }
-
-    hideCreateUserModal() {
-        document.getElementById('create-user-modal').classList.add('hidden');
-    }
+    hideTempPasswordModal() { const el = document.getElementById('temp-password-modal'); if (el) el.classList.add('hidden'); }
 
     async createUser() {
         const username = document.getElementById('new-username').value;
         const email = document.getElementById('new-email').value;
         const role = document.getElementById('new-role').value;
-
         if (!username || !email) {
-            window.toast.error('Veuillez remplir tous les champs');
+            if (window.toast) window.toast.error('Veuillez remplir tous les champs');
             return;
         }
-
         try {
-            const csrfHeaders = await window.csrfManager.getHeaders();
-            const response = await fetch('/api/admin/users', {
+            const csrf = window.csrfManager ? await window.csrfManager.getHeaders() : {};
+            const resp = await fetch('/api/admin/users', {
                 method: 'POST',
-                headers: {
-                    ...this.getAuthHeaders(),
-                    ...csrfHeaders,
-                    'Content-Type': 'application/json'
-                },
+                headers: { ...this.getAuthHeaders(), ...csrf, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, email, role })
             });
-
-            if (response.ok) {
-                const data = await response.json();
-
-                // Hide create modal
+            if (resp.ok) {
+                const data = await resp.json();
                 this.hideCreateUserModal();
-
-                // Show temporary password modal
                 document.getElementById('created-username').textContent = data.user.username;
                 document.getElementById('temp-password').textContent = data.temporary_password;
                 document.getElementById('temp-password-modal').classList.remove('hidden');
-
-                // Reload users
-                await this.loadUsers();
-
-                window.toast.success(`✅ Utilisateur ${username} créé avec succès`);
-            } else if (response.status === 403) {
-                window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
+                if (window.toast) window.toast.success(`✅ Utilisateur ${username} créé avec succès`);
+                this.loadUsers(); this.loadStats();
             } else {
-                const error = await response.json();
-                window.toast.error(error.detail || 'Erreur lors de la création');
+                const err = await resp.json(); 
+                if (window.toast) window.toast.error(`❌ ${err.detail || 'Erreur lors de la création'}`);
             }
-        } catch (error) {
-            console.error('Error creating user:', error);
-            window.toast.error('Erreur réseau');
+        } catch (e) { 
+            console.error('Error creating user:', e);
+            if (window.toast) window.toast.error('❌ Erreur réseau'); 
         }
-    }
-
-    hideTempPasswordModal() {
-        document.getElementById('temp-password-modal').classList.add('hidden');
     }
 }
 
-// Initialize on DOM ready
 let adminPanel;
-document.addEventListener('DOMContentLoaded', () => {
-    adminPanel = new AdminPanel();
-    console.log('Admin panel initialized');
-});
+document.addEventListener('DOMContentLoaded', () => { adminPanel = new AdminPanel(); });

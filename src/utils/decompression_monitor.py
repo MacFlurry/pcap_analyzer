@@ -49,6 +49,7 @@ class DecompressionBombError(ValueError):
     This is a security exception indicating potential malicious activity
     or corrupted data that could exhaust system resources.
     """
+
     pass
 
 
@@ -106,7 +107,7 @@ class DecompressionMonitor:
         max_ratio: int = MAX_EXPANSION_RATIO,
         critical_ratio: int = CRITICAL_EXPANSION_RATIO,
         check_interval: int = CHECK_INTERVAL_PACKETS,
-        enabled: bool = True
+        enabled: bool = True,
     ):
         """
         Initialize decompression bomb monitor.
@@ -158,10 +159,7 @@ class DecompressionMonitor:
         return bytes_out / bytes_in
 
     def check_expansion_ratio(
-        self,
-        file_size: int,
-        bytes_processed: int,
-        packets_count: int
+        self, file_size: int, bytes_processed: int, packets_count: int
     ) -> Optional[ExpansionStats]:
         """
         Check if expansion ratio exceeds safe thresholds.
@@ -212,7 +210,7 @@ class DecompressionMonitor:
             packets_processed=packets_count,
             expansion_ratio=ratio,
             is_warning=ratio >= self.max_ratio,
-            is_critical=ratio >= self.critical_ratio
+            is_critical=ratio >= self.critical_ratio,
         )
 
         # CRITICAL: Abort if critical threshold exceeded
@@ -244,8 +242,7 @@ class DecompressionMonitor:
         # INFO: Periodic status updates
         if self.checks_performed % 10 == 0:
             logger.debug(
-                f"Expansion check #{self.checks_performed}: "
-                f"ratio={ratio:.1f}:1, packets={packets_count:,}"
+                f"Expansion check #{self.checks_performed}: " f"ratio={ratio:.1f}:1, packets={packets_count:,}"
             )
 
         return stats
@@ -274,7 +271,7 @@ class DecompressionMonitor:
             "critical_ratio": self.critical_ratio,
             "check_interval": self.check_interval,
             "checks_performed": self.checks_performed,
-            "warning_logged": self.warning_logged
+            "warning_logged": self.warning_logged,
         }
 
     def disable(self) -> None:
@@ -297,11 +294,7 @@ class DecompressionMonitor:
 
 
 # Convenience function for quick checks
-def check_expansion_safe(
-    file_size: int,
-    bytes_processed: int,
-    max_ratio: int = MAX_EXPANSION_RATIO
-) -> bool:
+def check_expansion_safe(file_size: int, bytes_processed: int, max_ratio: int = MAX_EXPANSION_RATIO) -> bool:
     """
     Quick check if expansion ratio is safe.
 

@@ -1,0 +1,83 @@
+{
+  "track_id": "add_owner_column_history",
+  "title": "Add Owner Column in History View for Admins",
+  "type": "feature_enhancement",
+  "priority": "medium",
+  "status": "completed",
+  "created_at": "2025-12-27",
+  "created_by": "claude-code",
+  "assignee": "conductor",
+  "estimated_duration_hours": 3,
+  "complexity": "low",
+  "risk_level": "very_low",
+  "target_version": "5.2.0",
+  "semver_bump": "minor",
+  "tags": [
+    "admin",
+    "ui",
+    "ux",
+    "multi-tenant",
+    "history",
+    "enhancement"
+  ],
+  "affected_components": [
+    "backend/database",
+    "backend/schemas",
+    "frontend/templates",
+    "frontend/javascript",
+    "frontend/css"
+  ],
+  "files_modified": [
+    "app/models/schemas.py",
+    "app/services/database.py",
+    "app/templates/history.html",
+    "app/static/js/history.js",
+    "app/static/css/style.css"
+  ],
+  "files_created": [
+    "tests/e2e/test_history_owner_column.py",
+    "tests/integration/test_history_api.py"
+  ],
+  "files_documentation": [
+    "CHANGELOG.md",
+    "README.md",
+    "src/__version__.py",
+    "helm-chart/pcap-analyzer/Chart.yaml",
+    "helm-chart/pcap-analyzer/values.yaml"
+  ],
+  "dependencies": [],
+  "blockers": [],
+  "related_tracks": [],
+  "test_coverage": {
+    "unit_tests": 0,
+    "integration_tests": 2,
+    "e2e_tests": 2
+  },
+  "breaking_changes": false,
+  "backward_compatible": true,
+  "requires_migration": false,
+  "requires_deployment": true,
+  "security_impact": "none",
+  "performance_impact": "negligible",
+  "user_impact": "high_positive_for_admins",
+  "validation_checklist": [
+    "Schema TaskInfo has owner_username field",
+    "get_recent_tasks does LEFT JOIN with users table",
+    "API /api/history returns owner_username",
+    "Admin sees PROPRIÉTAIRE column in history",
+    "Regular user does NOT see PROPRIÉTAIRE column",
+    "E2E tests pass for both admin and user",
+    "Version bumped to v5.2.0 in all files",
+    "CHANGELOG.md updated with feature description",
+    "README.md updated with admin features section"
+  ],
+  "rollback_plan": "Simple git revert (no database migration)",
+  "notes": "IMPORTANT: Conductor must handle SemVer version bump (MINOR) and synchronize versions across all files (src/__version__.py, helm chart, values.yaml). Use LEFT JOIN (not INNER) to support orphaned tasks.",
+  "version_sync_required": true,
+  "version_files": [
+    "src/__version__.py",
+    "helm-chart/pcap-analyzer/Chart.yaml",
+    "helm-chart/pcap-analyzer/values.yaml",
+    "pyproject.toml"
+  ]
+}

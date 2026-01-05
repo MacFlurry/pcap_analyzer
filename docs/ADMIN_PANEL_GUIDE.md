@@ -218,6 +218,7 @@ Actions:
 - `is_approved` set to `true`
 - `approved_by` set to your admin user ID
 - `approved_at` set to current timestamp
+- **Approval email sent** to the user (if email service is enabled)
 - User can now login
 - Audit log entry created
 
@@ -298,9 +299,9 @@ curl -X PUT http://localhost:8000/api/admin/users/<user_id>/unblock \
 
 #### Delete User
 
-**When to Use**: Permanent removal of user account
+**When to Use**: Permanent removal of user account (GDPR "Right to be Forgotten")
 
-**⚠️ WARNING**: This action is **irreversible**!
+**⚠️ WARNING**: This action is **irreversible** and deletes all associated data!
 
 **Steps**:
 1. Navigate to **Admin Panel** → **Users**
@@ -311,18 +312,14 @@ curl -X PUT http://localhost:8000/api/admin/users/<user_id>/unblock \
 
 **Effect**:
 - User account **permanently deleted** from database
-- User's tasks **remain** (orphaned with original `owner_id`)
+- **All associated files deleted** from disk (PCAPs, HTML reports, JSON reports)
+- User's tasks, progress snapshots, and password history removed (CASCADE)
 - User **cannot** login (account no longer exists)
-- Audit log entry created
-
-**⚠️ Important**:
-- **Cannot delete your own account** (safety measure)
-- **Cannot undo** this action
-- **Consider blocking** instead of deleting
+- Audit log entry created with count of files removed
 
 **Audit Log**:
 ```
-🗑️  AUDIT: Admin john.admin deleted user spam.account (id: 770e8400-e29b-41d4-a716-446655440002)
+🗑️  AUDIT: Admin john.admin deleted user spam.account (id: 770e8400-e29b-41d4-a716-446655440002). Files removed: 12 uploads, 24 reports.
 ```
 
 **Via API**:
@@ -544,6 +541,23 @@ Actions:
 
 ## Security Features
 
+### Advanced Password Policy (zxcvbn)
+
+PCAP Analyzer enforces a modern NIST-compliant password policy (v4.27+):
+
+- **Minimum Length**: 12 characters.
+- **Strength Validation**: Uses the `zxcvbn` library to estimate entropy.
+- **Minimum Score**: Must be ≥ 3/4 (Strong or Very Strong).
+- **Feedback**: Users receive real-time feedback and suggestions if their password is too weak.
+- **Password History**: Prevents reuse of the last **5 passwords**.
+
+**API Error Example**:
+```json
+{
+  "detail": "Password is too weak (strength: 1/4, need ≥3). Warning: This is a common password. Suggestions: Add another word or two."
+}
+```
+
 ### Rate Limiting
 
 **Failed Login Protection**:
@@ -757,6 +771,7 @@ SELECT username, is_approved FROM users WHERE is_approved=false;
 ## Related Documentation
 
 - [Admin Approval Workflow Guide](ADMIN_APPROVAL_WORKFLOW.md) - API-focused admin guide
+- [Data Retention & Cleanup Policy](DATA_RETENTION_POLICY.md)
 - [PostgreSQL Deployment Guide](POSTGRESQL_DEPLOYMENT.md)
 - [Security Best Practices](SECURITY_BEST_PRACTICES.md)
 - [Troubleshooting Guide](TROUBLESHOOTING.md)

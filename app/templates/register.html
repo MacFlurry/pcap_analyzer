@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}Inscription - PCAP Analyzer{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4 py-12">
+    <div class="max-w-md w-full space-y-8">
+        <!-- Header -->
+        <div class="text-center">
+            <div class="bg-gradient-success p-4 rounded-2xl inline-block mb-4">
+                <i class="fas fa-user-plus text-white text-4xl"></i>
+            </div>
+            <h2 class="text-3xl font-extrabold text-gray-900 dark:text-white">
+                Créer un compte
+            </h2>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                Demandez l'accès pour uploader des fichiers PCAP
+            </p>
+        </div>
+
+        <!-- Registration Form -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 space-y-6">
+            <form id="register-form" class="space-y-6">
+                <!-- Username -->
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-user mr-2 text-primary"></i>Nom d'utilisateur
+                    </label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        required
+                        autocomplete="username"
+                        minlength="3"
+                        maxlength="50"
+                        pattern="[a-zA-Z0-9_-]+"
+                        class="appearance-none relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
+                        placeholder="utilisateur123"
+                    >
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">3-50 caractères (lettres, chiffres, - et _)</p>
+                </div>
+
+                <!-- Email -->
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-envelope mr-2 text-primary"></i>Email
+                    </label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        required
+                        autocomplete="email"
+                        class="appearance-none relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
+                        placeholder="utilisateur@example.com"
+                    >
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-key mr-2 text-primary"></i>Mot de passe
+                    </label>
+                    <div class="relative">
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            required
+                            autocomplete="new-password"
+                            minlength="12"
+                            class="appearance-none relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors pr-12"
+                            placeholder="••••••••••••"
+                        >
+                        <button
+                            type="button"
+                            id="toggle-password"
+                            class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        >
+                            <i class="fas fa-eye" id="password-icon"></i>
+                        </button>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Minimum 12 caractères, mot de passe fort requis</p>
+                </div>
+
+                <!-- Confirm Password -->
+                <div>
+                    <label for="confirm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-check-circle mr-2 text-primary"></i>Confirmer le mot de passe
+                    </label>
+                    <div class="relative">
+                        <input
+                            type="password"
+                            id="confirm-password"
+                            name="confirm-password"
+                            required
+                            autocomplete="new-password"
+                            class="appearance-none relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors pr-12"
+                            placeholder="••••••••••••"
+                        >
+                        <button
+                            type="button"
+                            id="toggle-confirm-password"
+                            class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        >
+                            <i class="fas fa-eye" id="confirm-password-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="error-message" class="hidden p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-circle text-red-500 mr-3"></i>
+                        <p class="text-sm text-red-700 dark:text-red-300" id="error-text"></p>
+                    </div>
+                </div>
+
+                <!-- Success Message -->
+                <div id="success-message" class="hidden p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                        <p class="text-sm text-green-700 dark:text-green-300" id="success-text"></p>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button
+                    type="submit"
+                    id="register-button"
+                    class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-success hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <span class="absolute left-0 inset-y-0 flex items-center pl-4">
+                        <i class="fas fa-user-plus text-white/80"></i>
+                    </span>
+                    <span id="register-button-text">S'inscrire</span>
+                    <span id="register-spinner" class="hidden ml-3">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </span>
+                </button>
+            </form>
+
+            <!-- Info box -->
+            <div class="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <div class="flex items-start">
+                    <i class="fas fa-info-circle text-yellow-500 mt-0.5 mr-3"></i>
+                    <div class="text-sm text-yellow-700 dark:text-yellow-300">
+                        <p class="font-medium mb-1">Approbation requise :</p>
+                        <p>Un administrateur doit approuver votre compte avant de pouvoir vous connecter.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Login Link -->
+            <div class="text-center mt-4">
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Déjà un compte ?
+                    <a href="/login" class="font-medium text-primary hover:text-primary/80 transition-colors">
+                        Se connecter
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Toggle password visibility
+document.getElementById('toggle-password').addEventListener('click', function() {
+    const passwordInput = document.getElementById('password');
+    const icon = document.getElementById('password-icon');
+
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        passwordInput.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+});
+
+// Toggle confirm password visibility
+document.getElementById('toggle-confirm-password').addEventListener('click', function() {
+    const confirmPasswordInput = document.getElementById('confirm-password');
+    const icon = document.getElementById('confirm-password-icon');
+
+    if (confirmPasswordInput.type === 'password') {
+        confirmPasswordInput.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        confirmPasswordInput.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+});
+
+// Handle registration form submission
+document.getElementById('register-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const username = document.getElementById('username').value;
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    const errorMessage = document.getElementById('error-message');
+    const successMessage = document.getElementById('success-message');
+    const errorText = document.getElementById('error-text');
+    const successText = document.getElementById('success-text');
+    const registerButton = document.getElementById('register-button');
+    const buttonText = document.getElementById('register-button-text');
+    const spinner = document.getElementById('register-spinner');
+
+    // Hide previous messages
+    errorMessage.classList.add('hidden');
+    successMessage.classList.add('hidden');
+
+    // Validate passwords match
+    if (password !== confirmPassword) {
+        errorText.textContent = 'Les mots de passe ne correspondent pas';
+        errorMessage.classList.remove('hidden');
+        return;
+    }
+
+    // Disable button and show spinner
+    registerButton.disabled = true;
+    buttonText.textContent = 'Inscription en cours...';
+    spinner.classList.remove('hidden');
+
+    try {
+        // Send registration request
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: username,
+                email: email,
+                password: password
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Registration successful
+            successText.innerHTML = `Inscription réussie ! Votre compte est en attente d'approbation par un administrateur.<br><br>Vous recevrez un email lorsque votre compte sera activé.`;
+            successMessage.classList.remove('hidden');
+
+            // Clear form
+            document.getElementById('register-form').reset();
+
+            // Show login link after 3 seconds
+            setTimeout(() => {
+                successText.innerHTML += '<br><br><a href="/login" class="font-medium text-accent hover:underline">Retour à la page de connexion</a>';
+            }, 3000);
+
+            // Re-enable button
+            registerButton.disabled = false;
+            buttonText.textContent = 'S\'inscrire';
+            spinner.classList.add('hidden');
+        } else {
+            // Registration failed
+            let errorMsg = data.detail || 'Erreur lors de l\'inscription';
+
+            // Handle specific error cases
+            if (errorMsg.includes('already exists')) {
+                errorMsg = 'Ce nom d\'utilisateur ou email existe déjà';
+            } else if (errorMsg.includes('too weak')) {
+                errorMsg = 'Mot de passe trop faible. Utilisez au moins 12 caractères avec lettres, chiffres et symboles.';
+            } else if (errorMsg.includes('Password')) {
+                // Display password validation errors from backend
+                errorMsg = errorMsg.replace('Value error, ', '');
+            }
+
+            errorText.textContent = errorMsg;
+            errorMessage.classList.remove('hidden');
+
+            // Re-enable button
+            registerButton.disabled = false;
+            buttonText.textContent = 'S\'inscrire';
+            spinner.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        errorText.textContent = 'Erreur de connexion au serveur';
+        errorMessage.classList.remove('hidden');
+
+        // Re-enable button
+        registerButton.disabled = false;
+        buttonText.textContent = 'S\'inscrire';
+        spinner.classList.add('hidden');
+    }
+});
+</script>
+{% endblock %}

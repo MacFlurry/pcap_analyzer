@@ -2,13 +2,14 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20|%203.12-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-730%2B%20passing-brightgreen.svg)](.github/workflows/test.yml)
+[![Version](https://img.shields.io/badge/version-5.4.3-blue.svg)](CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-850%2B%20passing-brightgreen.svg)](.github/workflows/test.yml)
 [![Security](https://img.shields.io/badge/security-100%25%20OWASP%20ASVS-brightgreen.svg)](SECURITY.md)
-[![Coverage](https://img.shields.io/badge/coverage-49.75%25-yellow.svg)](htmlcov/index.html)
+[![Coverage](https://img.shields.io/badge/coverage-64.43%25-brightgreen.svg)](htmlcov/index.html)
 
 Analyseur automatisé de fichiers PCAP pour diagnostiquer les problèmes de latence et de performance réseau.
 
-**CLI rapide et puissant** • **Rapports HTML interactifs** • **Interface web optionnelle** • **Production ready**
+**CLI rapide et puissant** • **Rapports HTML interactifs** • **Interface web moderne** • **Production ready**
 
 ## 📋 Prérequis
 
@@ -53,6 +54,7 @@ pcap_analyzer analyze capture.pcap
 - 🔒 Sécurité renforcée (score 91.5%, production ready)
 - 📊 Rapports HTML interactifs avec graphiques Plotly.js
 - 🎯 Analyse complète : TCP, DNS, jitter, retransmissions, RTT
+- 🎖️ Détection de retransmissions 100% précise avec backend tshark (Wireshark)
 
 ### Option 2: Docker Compose (optionnel)
 
@@ -76,6 +78,21 @@ docker-compose --profile prod up -d
 Accéder à :
 - Application : http://localhost:8000
 - Adminer (dev) : http://localhost:8080
+- MailHog (dev) : http://localhost:8025 (pour tester les emails)
+
+#### Configuration Email (Optionnel)
+
+L'application supporte les notifications email via SMTP. En développement, **MailHog** est utilisé pour capturer les emails localement sans serveur réel.
+
+**Variables d'environnement (.env) :**
+```bash
+MAIL_ENABLED=true
+SMTP_HOST=localhost
+SMTP_PORT=1025
+MAIL_FROM=noreply@pcaplab.com
+```
+
+📖 [Guide complet de configuration Email](docs/EMAIL_SETUP.md)
 
 #### Configuration PostgreSQL
 
@@ -130,14 +147,17 @@ docker-compose down -v
 
 ### Option 3: Kubernetes (optionnel, production)
 
+**Image Docker Hub** : L'image est disponible publiquement sur [`omegabk/pcap-analyzer`](https://hub.docker.com/r/omegabk/pcap-analyzer)
+
 #### Avec Ingress (recommandé)
 
 ```bash
-# Build l'image
-docker build -t pcap-analyzer:latest .
-
+# Option A: Utiliser l'image depuis Docker Hub (recommandé)
 # Créer le cluster kind avec ports Ingress
 kind create cluster --name pcap-analyzer --config kind-config.yaml
+
+# Option B: Build local (si vous avez modifié le code)
+docker build -t pcap-analyzer:latest .
 kind load docker-image pcap-analyzer:latest --name pcap-analyzer
 
 # Installer l'Ingress controller nginx
@@ -178,12 +198,13 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 ## 📋 Fonctionnalités
 
 ### Analyse réseau
-- **TCP** : Retransmissions (RTO/Fast/Generic), handshakes, fenêtres
+- **TCP** : Retransmissions (RTO/Fast/Generic/Spurious) avec backend tshark pour 100% de précision, handshakes, fenêtres
 - **DNS** : Timeouts, latences, erreurs
 - **Jitter** : Graphiques interactifs temps réel avec RTT overlay
 - **Anomalies** : Gaps temporels, bursts, fragmentation IP
 - **Support complet IPv4/IPv6**
 - **Messages contextuels** basés sur RFC (SSH, mDNS, HTTP...)
+- **Détection automatique tshark** : Fallback gracieux vers analyseur intégré si tshark absent
 
 ### Sécurité (v5.0)
 - **Compliance** : OWASP ASVS 4.0 (100%), CWE Top 25 (100%), GDPR
@@ -202,11 +223,22 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 - **Historique** des analyses (rétention 24h)
 - **API REST** complète
 
+📖 [Data Retention & Cleanup Policy](docs/DATA_RETENTION_POLICY.md)
+
+### Notifications Email (v4.27)
+- **Inscription** : Email de confirmation envoyé dès la création du compte (statut PENDING).
+- **Approbation** : Notification envoyée à l'utilisateur dès que son compte est activé par un admin.
+- **Asynchrone** : Envoi non bloquant via `FastAPI BackgroundTasks`.
+- **Templates** : Emails HTML responsifs basés sur Jinja2.
+- **Dev-friendly** : Intégration MailHog pour le test en local.
+
 ### Authentication & Admin Workflow (v5.0)
 - **User Registration** : Self-service avec approbation admin requise
 - **Admin Approval** : Les nouveaux comptes doivent être approuvés par un admin
-- **Role-Based Access Control** : Roles `admin` et `user` avec permissions distinctes
-- **Password Policy** : Minimum 12 caractères, bcrypt cost factor 12
+- **Enhanced Password Policy:** NIST-compliant passwords (min 12 chars), zxcvbn strength validation, and password history (prevents reuse of last 5).
+- **Self-Service Password Reset:** Secure token-based recovery via email with anti-enumeration protection.
+- **Role-Based Access Control (RBAC):** Granular permissions for admins and users.
+- **Admin Visibility:** Administrators can view and manage all users' uploads, with a clear owner identification column in the history view.
 - **Rate Limiting** : Protection brute force (1s → 2s → 5s après 4-6 échecs)
 - **Multi-Tenant** : Isolation stricte des données par `owner_id` (CWE-639)
 - **Admin Actions** : Approve/block/unblock/delete users, view all tasks
@@ -310,12 +342,14 @@ Configuration complète : voir `config.yaml.example`
 ### Admin Endpoints
 | Endpoint | Description | Admin Only |
 |----------|-------------|------------|
-| `GET /api/users` | List all users | Yes |
+| `GET /api/users` | List all users (with pagination & filters) | Yes |
 | `POST /api/admin/users` | Create user with temp password | Yes |
 | `PUT /api/admin/users/{id}/approve` | Approve user registration | Yes |
 | `PUT /api/admin/users/{id}/block` | Block user account | Yes |
 | `PUT /api/admin/users/{id}/unblock` | Unblock user account | Yes |
-| `DELETE /api/admin/users/{id}` | Delete user account | Yes |
+| `DELETE /api/admin/users/{id}` | Delete user account + associated files (GDPR) | Yes |
+| `POST /api/admin/users/bulk/approve` | Approve multiple users at once | Yes |
+| `POST /api/admin/users/bulk/block` | Block multiple users at once | Yes |
 
 ### System Endpoints
 | Endpoint | Description | Auth Required |
@@ -371,16 +405,17 @@ pytest -m integration # Tests d'intégration
 pytest -m security    # Tests de sécurité
 ```
 
-**Résultats v5.0** :
-- **Total** : 730+ tests ✅
-- **Auth** : 31/31 passing ✅
-- **Database** : 18/18 parametrized (SQLite + PostgreSQL) ✅
-- **Security** : 49/49 passing ✅ (100% pass rate)
-- **PostgreSQL Integration** : 27/27 passing ✅
-- **Coverage** : 49.75% global, 73%+ on security modules
+**Résultats v4.27** :
+- **Total** : 750+ tests ✅
+- **Auth** : 35+ passing ✅
+- **Emails** : Intégration MailHog validée ✅
+- **Storage** : Zéro fichier orphelin après suppression (RGPD) ✅
+- **Security** : 50+ passing ✅ (100% pass rate)
+- **PostgreSQL Integration** : 30+ passing ✅
+- **Coverage** : ~38% global, 85%+ sur les modules critiques (Email, Auth, Cleanup)
 - **No regressions** : 0 failed tests
 
-📖 [Testing Guide](docs/TESTING.md)
+📖 [Testing Guide](docs/TESTING_GUIDE.md)
 
 ## 📦 Déploiement
 

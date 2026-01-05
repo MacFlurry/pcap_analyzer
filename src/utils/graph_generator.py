@@ -17,7 +17,7 @@ def generate_jitter_timeseries_graph(
     packet_count: int = 0,
     mean_rtt: float = 0.0,
     max_rtt: float = 0.0,
-    retrans_count: Optional[int] = None
+    retrans_count: Optional[int] = None,
 ) -> str:
     """
     Generate Plotly.js interactive jitter time-series graph with POC-style stats badges.
@@ -36,20 +36,20 @@ def generate_jitter_timeseries_graph(
     Returns:
         HTML string with flow header, stats badges, and Plotly.js graph
     """
-    if 'timeseries' not in flow_data:
+    if "timeseries" not in flow_data:
         return ""
 
-    timeseries = flow_data['timeseries']
-    timestamps = timeseries['timestamps']
-    jitter_values = [v * 1000 for v in timeseries['jitter_values']]  # Convert to ms
+    timeseries = flow_data["timeseries"]
+    timestamps = timeseries["timestamps"]
+    jitter_values = [v * 1000 for v in timeseries["jitter_values"]]  # Convert to ms
 
     if not timestamps or not jitter_values:
         return ""
 
     # Calculate stats for display
-    mean_jitter = flow_data.get('mean_jitter', 0) * 1000
-    p95_jitter = flow_data.get('p95_jitter', 0) * 1000
-    max_jitter = flow_data.get('max_jitter', 0) * 1000
+    mean_jitter = flow_data.get("mean_jitter", 0) * 1000
+    p95_jitter = flow_data.get("p95_jitter", 0) * 1000
+    max_jitter = flow_data.get("max_jitter", 0) * 1000
     jitter_samples = len(jitter_values)
     # Use provided retrans_count if available, otherwise derive from timestamps
     if retrans_count is None:
@@ -61,19 +61,19 @@ def generate_jitter_timeseries_graph(
 
     # Determine severity based on p95 jitter
     if p95_jitter > 50:
-        jitter_color = '#e74c3c'  # Red - critical
-        severity_badge = '🔴 CRITICAL'
+        jitter_color = "#e74c3c"  # Red - critical
+        severity_badge = "🔴 CRITICAL"
     elif p95_jitter > 30:
-        jitter_color = '#f39c12'  # Orange - warning
-        severity_badge = '🟠 WARNING'
+        jitter_color = "#f39c12"  # Orange - warning
+        severity_badge = "🟠 WARNING"
     else:
-        jitter_color = '#3498db'  # Blue - OK
-        severity_badge = '🟢 OK'
+        jitter_color = "#3498db"  # Blue - OK
+        severity_badge = "🟢 OK"
 
     # Build HTML with POC structure: flow header + stats badges + graph
     html = f'<div class="flow-header">\n'
-    html += f'    {flow_name}\n'
-    html += '</div>\n'
+    html += f"    {flow_name}\n"
+    html += "</div>\n"
 
     # Stats badges
     html += '<div class="stats">\n'
@@ -85,12 +85,12 @@ def generate_jitter_timeseries_graph(
     html += f'    <div class="stat-item"><strong>Max RTT:</strong> {max_rtt_ms:.2f}ms</div>\n'
     html += f'    <div class="stat-item"><strong>Retransmissions:</strong> {retrans_count}</div>\n'
     html += f'    <div class="stat-item">{severity_badge}</div>\n'
-    html += '</div>\n'
+    html += "</div>\n"
 
     html += '<div class="graph-container">\n'
     html += f'    <div id="{graph_id}" style="width: 100%; height: 600px;"></div>\n'
-    html += '</div>\n'
-    html += '<script>\n(function() {\n'
+    html += "</div>\n"
+    html += "<script>\n(function() {\n"
 
     # Jitter trace
     html += f"""
@@ -109,9 +109,9 @@ def generate_jitter_timeseries_graph(
 """
 
     # Add RTT overlay if available
-    if rtt_data and rtt_data.get('timestamps') and rtt_data.get('values'):
-        rtt_timestamps = rtt_data['timestamps']
-        rtt_values = [v * 1000 for v in rtt_data['values']]  # Convert to ms
+    if rtt_data and rtt_data.get("timestamps") and rtt_data.get("values"):
+        rtt_timestamps = rtt_data["timestamps"]
+        rtt_values = [v * 1000 for v in rtt_data["values"]]  # Convert to ms
 
         html += f"""
     var rttTrace = {{
@@ -179,7 +179,7 @@ def generate_jitter_timeseries_graph(
 """
 
     # Layout configuration
-    has_rtt = rtt_data and rtt_data.get('timestamps')
+    has_rtt = rtt_data and rtt_data.get("timestamps")
 
     html += f"""
     var layout = {{
@@ -263,8 +263,7 @@ def generate_jitter_timeseries_graph(
 
 
 def generate_multi_flow_comparison_graph(
-    flows_data: List[Dict[str, Any]],
-    graph_id: str = "multi-flow-comparison"
+    flows_data: List[Dict[str, Any]], graph_id: str = "multi-flow-comparison"
 ) -> str:
     """
     Generate multi-flow comparison graph.
@@ -279,28 +278,38 @@ def generate_multi_flow_comparison_graph(
     if not flows_data:
         return ""
 
-    colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
-              '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400']
+    colors = [
+        "#3498db",
+        "#e74c3c",
+        "#2ecc71",
+        "#f39c12",
+        "#9b59b6",
+        "#1abc9c",
+        "#34495e",
+        "#e67e22",
+        "#95a5a6",
+        "#d35400",
+    ]
 
     html = '<div class="graph-container">\n'
     html += f'    <div id="{graph_id}" style="width: 100%; height: 700px;"></div>\n'
-    html += '</div>\n'
-    html += '<script>\n(function() {\n'
-    html += '    var data = [];\n'
+    html += "</div>\n"
+    html += "<script>\n(function() {\n"
+    html += "    var data = [];\n"
 
     for idx, flow in enumerate(flows_data[:10]):  # Max 10 flows
-        if 'timeseries' not in flow:
+        if "timeseries" not in flow:
             continue
 
-        timeseries = flow['timeseries']
-        timestamps = timeseries['timestamps']
-        jitter_values = [v * 1000 for v in timeseries['jitter_values']]
-        flow_name = flow.get('name', f'Flow {idx+1}')
+        timeseries = flow["timeseries"]
+        timestamps = timeseries["timestamps"]
+        jitter_values = [v * 1000 for v in timeseries["jitter_values"]]
+        flow_name = flow.get("name", f"Flow {idx+1}")
         color = colors[idx % len(colors)]
 
         # Shorten flow name for legend
         if len(flow_name) > 40:
-            flow_name = flow_name[:37] + '...'
+            flow_name = flow_name[:37] + "..."
 
         html += f"""
     data.push({{

@@ -1,0 +1,8 @@
+{
+"track_id": "maintenance_20251224",
+"type": "maintenance",
+"status": "new",
+"created_at": "2025-12-24T00:00:00Z",
+"updated_at": "2025-12-24T00:00:00Z",
+"description": "Implement missing security tests for the app/security/csrf.py module and improve test coverage for the src/analyzers/ logic to reach the 60% global target."
+}

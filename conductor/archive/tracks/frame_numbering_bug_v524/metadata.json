@@ -1,0 +1,25 @@
+{
+  "track_id": "frame_numbering_bug_v524",
+  "title": "Frame Numbering Bug Fix",
+  "version": "5.2.4",
+  "type": "bug_fix",
+  "priority": "critical",
+  "status": "completed",
+  "created_at": "2025-12-28T02:00:00Z",
+  "completed_at": "2025-12-28T02:54:00Z",
+  "impact": "data_integrity",
+  "root_causes": 3,
+  "files_modified": [
+    "src/parsers/fast_parser.py",
+    "src/cli.py",
+    "src/analyzers/tcp_handshake.py",
+    "CHANGELOG.md"
+  ],
+  "test_data": "/Users/omegabk/Downloads/c1.pcap",
+  "verification": {
+    "syn_frame": 7458,
+    "synack_frame": 7462,
+    "retransmissions": [7492, 7608, 7616, 7989, 8099],
+    "all_match_tshark": true
+  }
+}

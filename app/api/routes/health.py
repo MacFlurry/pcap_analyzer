@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from app.models.schemas import HealthCheck
 from app.services.database import get_db_service
 from app.services.worker import get_worker
+from app.utils.config import get_data_dir
 from src.__version__ import __version__
 
 logger = logging.getLogger(__name__)
@@ -20,9 +21,6 @@ router = APIRouter()
 
 # Temps de démarrage pour calcul uptime
 start_time = time.time()
-
-# Configuration
-DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
 
 
 @router.get("/health", response_model=HealthCheck)
@@ -38,15 +36,17 @@ async def health_check():
     - Nombre d'analyses actives
     """
     try:
+        data_dir = get_data_dir()
+
         # Uptime
         uptime = time.time() - start_time
 
         # Statistiques mémoire
         memory = psutil.virtual_memory()
 
-        # Espace disque (répertoire DATA_DIR)
-        if DATA_DIR.exists():
-            disk = psutil.disk_usage(str(DATA_DIR))
+        # Espace disque (répertoire data_dir)
+        if data_dir.exists():
+            disk = psutil.disk_usage(str(data_dir))
             disk_available_gb = disk.free / (1024**3)
         else:
             disk_available_gb = 0.0

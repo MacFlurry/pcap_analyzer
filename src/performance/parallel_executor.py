@@ -92,7 +92,9 @@ class ParallelAnalyzerExecutor:
                 except Exception as e:
                     # CWE-209: Log detailed error to file, not console
                     # Fallback: run sequentially on error
-                    logger.warning(f"Parallel execution failed for {name}, falling back to sequential: {e}", exc_info=True)
+                    logger.warning(
+                        f"Parallel execution failed for {name}, falling back to sequential: {e}", exc_info=True
+                    )
                     analyzer = next(a for n, a in tasks if n == name)
                     results[name] = self._run_single_analyzer(analyzer, packets)
 

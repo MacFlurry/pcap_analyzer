@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Account Approved</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+    <div style="background: #f8f9fa; padding: 30px; border-radius: 8px; border: 1px solid #e9ecef;">
+        <h1 style="color: #10b981; margin-top: 0;">🎉 Account Approved!</h1>
+
+        <p>Hello <strong>{{ username }}</strong>,</p>
+
+        <p>Great news! Your PCAP Analyzer account has been approved by an administrator.</p>
+
+        <div style="background: #d1fae5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0;">
+            <strong>✅ You can now login and start analyzing network traffic!</strong>
+        </div>
+
+        <h2 style="font-size: 18px; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 10px;">Account Details</h2>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 5px;"><strong>Username:</strong> {{ username }}</li>
+            <li style="margin-bottom: 5px;"><strong>Email:</strong> {{ email }}</li>
+            <li style="margin-bottom: 5px;"><strong>Approved By:</strong> {{ approved_by }}</li>
+        </ul>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ login_url }}" style="background: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                Login to PCAP Analyzer
+            </a>
+        </div>
+
+        <h2 style="font-size: 18px; color: #495057;">Next Steps</h2>
+        <ol style="padding-left: 20px;">
+            <li style="margin-bottom: 5px;">Login with your username and password</li>
+            <li style="margin-bottom: 5px;">Upload a PCAP file for analysis</li>
+            <li style="margin-bottom: 5px;">Explore the generated reports and security insights</li>
+        </ol>
+
+        <p style="margin-top: 30px;">If you have any questions, please contact us at <a href="mailto:{{ support_email }}" style="color: #2563eb;">{{ support_email }}</a>.</p>
+
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #dee2e6;">
+
+        <p style="color: #6c757d; font-size: 12px; text-align: center;">
+            This is an automated email from PCAP Analyzer. Please do not reply to this email.
+        </p>
+    </div>
+</body>
+</html>

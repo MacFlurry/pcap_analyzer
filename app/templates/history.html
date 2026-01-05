@@ -72,17 +72,19 @@
             <div class="overflow-x-auto">
                 <div class="history-grid">
                     <!-- Header row -->
-                    <div class="history-grid-header">
-                        <div class="grid-cell grid-cell-checkbox">
-                            <input type="checkbox" id="select-all" class="checkbox-modern" title="Tout sélectionner">
-                        </div>
-                        <div class="grid-cell grid-cell-file">FICHIER</div>
-                        <div class="grid-cell grid-cell-status">STATUT</div>
-                        <div class="grid-cell grid-cell-date">DATE</div>
-                        <div class="grid-cell grid-cell-packets">PAQUETS</div>
-                        <div class="grid-cell grid-cell-score">SCORE SANTÉ</div>
-                        <div class="grid-cell grid-cell-actions">ACTIONS</div>
-                    </div>
+                                <div class="history-grid-header">
+                                    <div class="grid-cell grid-cell-checkbox">
+                                        <input type="checkbox" id="select-all" class="checkbox-modern" title="Tout sélectionner">
+                                    </div>
+                                    <div class="grid-cell grid-cell-file">FICHIER</div>
+                                    <div class="grid-cell grid-cell-owner hidden" id="owner-column-header">PROPRIÉTAIRE</div>
+                                    <div class="grid-cell grid-cell-status">STATUT</div>
+                                    <div class="grid-cell grid-cell-date">DATE</div>
+                                    <div class="grid-cell grid-cell-packets">PAQUETS</div>
+                                    <div class="grid-cell grid-cell-score">SCORE SANTÉ</div>
+                                    <div class="grid-cell grid-cell-actions">ACTIONS</div>
+                                </div>
+                    
                     <!-- Data rows container -->
                     <div id="history-tbody" class="history-grid-body">
                         <!-- Rows will be added dynamically -->

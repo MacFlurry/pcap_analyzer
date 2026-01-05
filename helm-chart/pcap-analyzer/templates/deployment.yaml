@@ -59,6 +59,35 @@ spec:
               name: {{ include "pcap-analyzer.fullname" . }}
               key: SECRET_KEY
         {{- end }}
+        {{- if .Values.email.enabled }}
+        # Email SMTP configuration
+        - name: MAIL_ENABLED
+          value: "true"
+        - name: SMTP_HOST
+          value: "{{ .Values.email.smtp.host }}"
+        - name: SMTP_PORT
+          value: "{{ .Values.email.smtp.port }}"
+        - name: SMTP_TLS
+          value: "{{ .Values.email.smtp.tls }}"
+        - name: MAIL_FROM
+          value: "{{ .Values.email.smtp.from }}"
+        - name: MAIL_FROM_NAME
+          value: "{{ .Values.email.smtp.fromName }}"
+        - name: SUPPORT_EMAIL
+          value: "{{ .Values.email.supportEmail }}"
+        - name: APP_BASE_URL
+          value: "{{ .Values.email.appBaseUrl }}"
+        - name: SMTP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.email.credentials.existingSecret }}
+              key: {{ .Values.email.credentials.usernameKey }}
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.email.credentials.existingSecret }}
+              key: {{ .Values.email.credentials.passwordKey }}
+        {{- end }}
         volumeMounts:
         - name: data
           mountPath: /data

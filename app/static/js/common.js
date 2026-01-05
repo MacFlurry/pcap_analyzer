@@ -48,7 +48,25 @@ class ThemeManager {
 }
 
 // ========================================
-// 2. TOAST NOTIFICATIONS
+// 2. SECURITY UTILS
+// ========================================
+
+class SecurityUtils {
+    /**
+     * Escape HTML special characters to prevent XSS attacks.
+     * @param {string} text - The text to escape.
+     * @returns {string} - The escaped HTML.
+     */
+    static escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// ========================================
+// 3. TOAST NOTIFICATIONS
 // ========================================
 
 class ToastManager {
@@ -67,13 +85,14 @@ class ToastManager {
         toast.className = `toast toast-${type}`;
 
         const icon = this.getIcon(type);
+        const escapedMessage = SecurityUtils.escapeHtml(message);
 
         toast.innerHTML = `
             <div class="flex-shrink-0">
                 <i class="${icon} text-xl"></i>
             </div>
             <div class="flex-1">
-                <p class="font-medium">${message}</p>
+                <p class="font-medium">${escapedMessage}</p>
             </div>
             <button class="flex-shrink-0 ml-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                     onclick="this.parentElement.remove()">
@@ -174,6 +193,13 @@ class HealthMonitor {
 // ========================================
 
 const Utils = {
+    /**
+     * Escape HTML special characters to prevent XSS attacks.
+     */
+    escapeHtml(text) {
+        return SecurityUtils.escapeHtml(text);
+    },
+
     /**
      * Formate une taille de fichier en octets vers une chaîne lisible
      */

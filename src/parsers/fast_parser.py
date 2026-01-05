@@ -106,7 +106,7 @@ class FastPacketParser:
         pcap_file: str,
         enable_bomb_protection: bool = True,
         max_expansion_ratio: int = 1000,
-        critical_expansion_ratio: int = 10000
+        critical_expansion_ratio: int = 10000,
     ):
         """
         Initialize fast parser.
@@ -123,9 +123,7 @@ class FastPacketParser:
 
         # Initialize decompression bomb monitor
         self.decompression_monitor = DecompressionMonitor(
-            max_ratio=max_expansion_ratio,
-            critical_ratio=critical_expansion_ratio,
-            enabled=enable_bomb_protection
+            max_ratio=max_expansion_ratio, critical_ratio=critical_expansion_ratio, enabled=enable_bomb_protection
         )
         self.file_size = os.path.getsize(self.pcap_file)
 
@@ -144,7 +142,8 @@ class FastPacketParser:
         Raises:
             DecompressionBombError: If expansion ratio exceeds critical threshold
         """
-        packet_num = 0
+        # v5.2.4: Start at 1 to match Wireshark frame numbering (1-based, not 0-based)
+        packet_num = 1
         bytes_processed = 0
 
         with open(self.pcap_file, "rb") as f:
@@ -165,19 +164,21 @@ class FastPacketParser:
             datalink = pcap.datalink()
 
             for timestamp, buf in pcap:
+                # v5.2.4 CRITICAL FIX: Increment packet_num for ALL packets (even skipped ones)
+                # to match Wireshark frame numbering (includes non-IP packets)
                 try:
                     metadata = self._extract_metadata(buf, packet_num, timestamp, datalink)
+                    packet_num += 1  # Always increment, even if metadata is None
+
                     if metadata:
                         # Track bytes processed for decompression bomb detection
                         bytes_processed += metadata.packet_length
 
                         # Check for decompression bomb every N packets (OWASP ASVS 5.2.3)
-                        if packet_num % 10000 == 0 and packet_num > 0:
+                        if packet_num % 10000 == 0:
                             try:
                                 self.decompression_monitor.check_expansion_ratio(
-                                    self.file_size,
-                                    bytes_processed,
-                                    packet_num
+                                    self.file_size, bytes_processed, packet_num
                                 )
                             except DecompressionBombError:
                                 logger.critical(
@@ -188,7 +189,6 @@ class FastPacketParser:
                                 raise
 
                         yield metadata
-                    packet_num += 1
                 except DecompressionBombError:
                     # Re-raise security exceptions
                     raise
@@ -224,6 +224,19 @@ class FastPacketParser:
             elif datalink == dpkt.pcap.DLT_EN10MB:  # 1 - Ethernet
                 eth = dpkt.ethernet.Ethernet(buf)
                 ip_packet = eth.data
+            elif datalink == 12 or (hasattr(dpkt.pcap, "DLT_RAW") and datalink == dpkt.pcap.DLT_RAW):
+                # 12 - Raw IP (no datalink header)
+                ip_packet = dpkt.ip.IP(buf)
+            elif datalink == 228 or (hasattr(dpkt.pcap, "DLT_IPV4") and datalink == dpkt.pcap.DLT_IPV4):
+                # 228 - Raw IPv4
+                ip_packet = dpkt.ip.IP(buf)
+            elif datalink == 229 or (hasattr(dpkt.pcap, "DLT_IPV6") and datalink == dpkt.pcap.DLT_IPV6):
+                # 229 - Raw IPv6
+                ip_packet = dpkt.ip6.IP6(buf)
+            elif datalink == 0 or (hasattr(dpkt.pcap, "DLT_NULL") and datalink == dpkt.pcap.DLT_NULL):
+                # 0 - BSD loopback
+                # The first 4 bytes are the protocol family (AF_INET, etc.)
+                ip_packet = dpkt.ip.IP(buf[4:])
             else:
                 # Try to guess the format (fallback for other datalink types)
                 try:

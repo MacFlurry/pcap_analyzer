@@ -254,6 +254,7 @@ async def get_task_history(limit: int = 20, current_user: User = Depends(get_cur
 
     # Admin voit tout, regular users voient seulement leurs propres tâches
     from app.models.user import UserRole
+
     if current_user.role == UserRole.ADMIN:
         tasks = await db_service.get_recent_tasks(limit=limit)
     else:

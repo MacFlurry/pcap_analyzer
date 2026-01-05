@@ -11,6 +11,8 @@ from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.services.database import get_db_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +33,7 @@ class CleanupScheduler:
         self.data_dir = Path(data_dir)
         self.retention_hours = retention_hours
         self.scheduler = AsyncIOScheduler()
+        self.db_service = get_db_service()
 
         # Configurer job de cleanup (toutes les heures)
         self.scheduler.add_job(
@@ -47,6 +50,15 @@ class CleanupScheduler:
             CronTrigger(minute="*/5"),  # Toutes les 5 minutes
             id="cleanup_orphaned_tasks",
             name="Cleanup orphaned tasks (OOMKilled detection)",
+            replace_existing=True,
+        )
+
+        # Configurer job de cleanup des fichiers orphelins (tous les jours à 3h du matin)
+        self.scheduler.add_job(
+            self.cleanup_orphaned_files,
+            CronTrigger(hour=3, minute=0),
+            id="cleanup_orphaned_files",
+            name="Cleanup orphaned files (no DB record)",
             replace_existing=True,
         )
 
@@ -126,27 +138,19 @@ class CleanupScheduler:
         3. Logger l'événement pour monitoring
         """
         try:
-            # Import dynamique pour éviter circular dependencies
-            from app.services.database import get_db_service
-
-            db_service = get_db_service()
-
-            # Trouver les tâches orphelines (no heartbeat for 120 seconds)
-            orphaned_task_ids = await db_service.find_orphaned_tasks(
-                heartbeat_timeout_seconds=120
-            )
+            # 1. Tasks where worker died (timeout heartbeat)
+            # Use 2 minutes timeout for orphan detection
+            orphaned_task_ids = await self.db_service.find_orphaned_tasks(heartbeat_timeout_minutes=2)
 
             if not orphaned_task_ids:
                 logger.debug("No orphaned tasks found")
                 return
 
-            logger.warning(
-                f"Found {len(orphaned_task_ids)} orphaned tasks: {orphaned_task_ids}"
-            )
+            logger.warning(f"Found {len(orphaned_task_ids)} orphaned tasks: {orphaned_task_ids}")
 
             # Marquer chaque tâche comme FAILED
             for task_id in orphaned_task_ids:
-                await db_service.mark_task_as_failed_orphan(
+                await self.db_service.mark_task_as_failed_orphan(
                     task_id=task_id,
                     error_message=(
                         "Analysis terminated unexpectedly. "
@@ -159,6 +163,53 @@ class CleanupScheduler:
         except Exception as e:
             logger.error(f"Error during orphan cleanup: {e}", exc_info=True)
             # Don't raise - allow scheduler to continue
+
+    async def cleanup_orphaned_files(self):
+        """
+        Supprime les fichiers physiques qui n'ont plus de référence en base de données.
+        Sert de filet de sécurité pour les suppressions échouées ou manuelles.
+        """
+        logger.info("Starting orphaned files cleanup safety net...")
+
+        try:
+            # Récupérer tous les IDs de tâches valides en base
+            query = "SELECT task_id FROM tasks"
+            rows = await self.db_service.pool.fetch_all(query)
+            valid_task_ids = {str(row["task_id"]) for row in rows}
+
+            deleted_count = 0
+            freed_bytes = 0
+
+            # Vérifier reports/ et uploads/
+            for dir_name in ["reports", "uploads"]:
+                dir_path = self.data_dir / dir_name
+                if not dir_path.exists():
+                    continue
+
+                for file_path in dir_path.iterdir():
+                    if not file_path.is_file():
+                        continue
+
+                    # L'ID de la tâche est le nom du fichier (sans extension)
+                    task_id = file_path.stem
+
+                    # Si l'ID n'est pas en base, c'est un fichier orphelin
+                    if task_id not in valid_task_ids:
+                        file_size = file_path.stat().st_size
+                        file_path.unlink()
+                        deleted_count += 1
+                        freed_bytes += file_size
+                        logger.warning(f"Deleted orphaned file: {file_path.name} (no DB record)")
+
+            if deleted_count > 0:
+                logger.info(
+                    f"Orphaned cleanup completed: {deleted_count} files deleted, {freed_bytes / (1024**2):.2f} MB freed"
+                )
+            else:
+                logger.info("No orphaned files found")
+
+        except Exception as e:
+            logger.error(f"Error during orphaned files cleanup: {e}", exc_info=True)
 
     async def delete_file(self, file_path: Path):
         """

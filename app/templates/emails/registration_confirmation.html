@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Account Registration Confirmation</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+    <div style="background: #f8f9fa; padding: 30px; border-radius: 8px; border: 1px solid #e9ecef;">
+        <h1 style="color: #2563eb; margin-top: 0;">Welcome to PCAP Analyzer!</h1>
+
+        <p>Hello <strong>{{ username }}</strong>,</p>
+
+        <p>Thank you for registering an account with PCAP Analyzer. Your registration was successful!</p>
+
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+            <strong>⏳ Pending Administrator Approval</strong>
+            <p style="margin: 5px 0 0 0;">Your account is currently pending approval by an administrator. You will receive another email once your account has been approved and you can login.</p>
+        </div>
+
+        <h2 style="font-size: 18px; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 10px;">Registration Details</h2>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 5px;"><strong>Username:</strong> {{ username }}</li>
+            <li style="margin-bottom: 5px;"><strong>Email:</strong> {{ email }}</li>
+            <li style="margin-bottom: 5px;"><strong>Registration Date:</strong> {{ created_at }}</li>
+        </ul>
+
+        <p style="margin-top: 30px;">If you did not create this account, please contact us immediately at <a href="mailto:{{ support_email }}" style="color: #2563eb;">{{ support_email }}</a>.</p>
+
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #dee2e6;">
+
+        <p style="color: #6c757d; font-size: 12px; text-align: center;">
+            This is an automated email from PCAP Analyzer. Please do not reply to this email.
+        </p>
+    </div>
+</body>
+</html>

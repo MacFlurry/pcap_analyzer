@@ -370,10 +370,16 @@ helm install pcap-analyzer ./helm-chart/pcap-analyzer \
 
 ### Backup et Restore
 
+**⚠️ Note** : Cibler spécifiquement le pod application (pas PostgreSQL) :
+```bash
+# Obtenir le nom du pod application
+POD_NAME=$(kubectl get pods -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer,app.kubernetes.io/component!=database -o jsonpath='{.items[0].metadata.name}')
+```
+
 **Backup :**
 ```bash
-# Créer snapshot avec kubectl
-kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- \
+# Créer snapshot avec kubectl (utiliser le nom du pod)
+kubectl exec -n pcap-analyzer $POD_NAME -- \
   tar czf - /data > backup-$(date +%Y%m%d).tar.gz
 ```
 
@@ -381,9 +387,9 @@ kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- \
 ```bash
 # Restaurer dans nouveau PVC
 kubectl cp backup-20251213.tar.gz \
-  pcap-analyzer/pcap-analyzer-xxx:/tmp/
+  pcap-analyzer/$POD_NAME:/tmp/
 
-kubectl exec -n pcap-analyzer pcap-analyzer-xxx -- \
+kubectl exec -n pcap-analyzer $POD_NAME -- \
   tar xzf /tmp/backup-20251213.tar.gz -C /
 ```
 
@@ -545,16 +551,23 @@ kubectl top pod -n pcap-analyzer
 
 ### Debugging
 
+**⚠️ IMPORTANT** : Sélectionner le bon pod (app vs database)
 ```bash
-# Décrire pod (voir events, status)
-kubectl describe pod -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer
+# Obtenir le nom du pod application (exclure PostgreSQL)
+POD_NAME=$(kubectl get pods -n pcap-analyzer -l app.kubernetes.io/name=pcap-analyzer,app.kubernetes.io/component!=database -o jsonpath='{.items[0].metadata.name}')
 
-# Shell dans le pod
-kubectl exec -it -n pcap-analyzer deployment/pcap-analyzer -- /bin/sh
+# Décrire le pod application
+kubectl describe pod -n pcap-analyzer $POD_NAME
+
+# Shell dans le pod application (Debian avec tshark)
+kubectl exec -it -n pcap-analyzer $POD_NAME -- /bin/bash
+
+# Vérifier l'OS du pod (devrait afficher Debian, pas Alpine)
+kubectl exec -n pcap-analyzer $POD_NAME -- cat /etc/os-release
 
 # Test health check
-kubectl exec -n pcap-analyzer deployment/pcap-analyzer -- \
-  python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/api/health').read())"
+kubectl exec -n pcap-analyzer $POD_NAME -- \
+  python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/api/health').read().decode())"
 
 # Port forward (si NodePort inaccessible)
 kubectl port-forward -n pcap-analyzer svc/pcap-analyzer 8000:8000

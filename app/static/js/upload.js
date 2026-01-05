@@ -187,6 +187,69 @@ class UploadManager {
         this.dropzoneDefault.classList.remove('hidden');
         this.dropzoneLoading.classList.add('hidden');
         this.dropzone.classList.remove('error');
+        // Hide validation error display if visible
+        const errorDisplay = document.getElementById('pcap-validation-error');
+        if (errorDisplay) {
+            errorDisplay.classList.add('hidden');
+        }
+    }
+
+    displayPCAPValidationError(validationDetails) {
+        const errorContainer = document.getElementById('pcap-validation-error');
+        if (!errorContainer) return;
+
+        // Populate content
+        document.getElementById('error-title').textContent = validationDetails.title;
+        document.getElementById('error-description').textContent = validationDetails.description;
+
+        // Populate issues list
+        const issuesList = document.getElementById('error-issues');
+        issuesList.innerHTML = '';
+        validationDetails.detected_issues.forEach(issue => {
+            const li = document.createElement('li');
+            li.className = 'flex items-start';
+            li.innerHTML = `
+                <svg class="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                </svg>
+                <span>${issue}</span>
+            `;
+            issuesList.appendChild(li);
+        });
+
+        // Populate suggestions list
+        const suggestionsList = document.getElementById('error-suggestions');
+        suggestionsList.innerHTML = '';
+        validationDetails.suggestions.forEach(suggestion => {
+            const li = document.createElement('li');
+            li.className = 'flex items-start';
+            li.innerHTML = `
+                <svg class="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <span>${suggestion}</span>
+            `;
+            suggestionsList.appendChild(li);
+        });
+
+        // Update Wireshark link
+        document.getElementById('wireshark-link').href = validationDetails.wireshark_link;
+
+        // Setup retry button (clear existing listeners by cloning)
+        const retryBtn = document.getElementById('retry-upload-btn');
+        const newRetryBtn = retryBtn.cloneNode(true);
+        retryBtn.parentNode.replaceChild(newRetryBtn, retryBtn);
+        newRetryBtn.addEventListener('click', () => {
+            errorContainer.classList.add('hidden');
+            // Reset to initial state
+            this.clearFile();
+        });
+
+        // Show error container
+        errorContainer.classList.remove('hidden');
+
+        // Scroll to error
+        errorContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     async uploadFile() {
@@ -267,6 +330,10 @@ class UploadManager {
                 window.toast.error('❌ Erreur de sécurité CSRF. Veuillez rafraîchir la page.', 5000);
                 // Revenir à l'état initial
                 this.clearFile();
+            } else if (response.status === 400 && data.validation_details) {
+                // PCAP validation failed - display detailed error
+                window.loadingOverlay.hide();
+                this.displayPCAPValidationError(data.validation_details);
             } else {
                 // Erreur
                 throw new Error(data.detail || 'Erreur lors de l\'upload');

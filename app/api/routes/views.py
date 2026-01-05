@@ -5,10 +5,11 @@ Routes pour servir les pages HTML (templates Jinja2)
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.auth import get_current_user_cookie_or_redirect
 from src.__version__ import __version__
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ templates = Jinja2Templates(directory=str(templates_dir))
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+async def index(request: Request, user=Depends(get_current_user_cookie_or_redirect)):
     """
     Page d'accueil - Upload PCAP
     """
@@ -29,7 +30,7 @@ async def index(request: Request):
 
 
 @router.get("/progress/{task_id}", response_class=HTMLResponse)
-async def progress(request: Request, task_id: str):
+async def progress(request: Request, task_id: str, user=Depends(get_current_user_cookie_or_redirect)):
     """
     Page de progression d'analyse
     """
@@ -37,7 +38,7 @@ async def progress(request: Request, task_id: str):
 
 
 @router.get("/history", response_class=HTMLResponse)
-async def history(request: Request):
+async def history(request: Request, user=Depends(get_current_user_cookie_or_redirect)):
     """
     Page d'historique des analyses
     """
@@ -61,7 +62,7 @@ async def logout(request: Request):
 
 
 @router.get("/admin", response_class=HTMLResponse)
-async def admin(request: Request):
+async def admin(request: Request, user=Depends(get_current_user_cookie_or_redirect)):
     """
     Page d'administration (admin only)
     Gestion des utilisateurs et permissions
@@ -70,7 +71,7 @@ async def admin(request: Request):
 
 
 @router.get("/change-password", response_class=HTMLResponse)
-async def change_password(request: Request):
+async def change_password(request: Request, user=Depends(get_current_user_cookie_or_redirect)):
     """
     Page de changement de mot de passe obligatoire
     Affichée quand password_must_change=True
@@ -84,3 +85,27 @@ async def register(request: Request):
     Page d'inscription (user registration)
     """
     return templates.TemplateResponse("register.html", {"request": request, "version": __version__})
+
+
+@router.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password(request: Request):
+    """
+    Page 'Mot de passe oublié'
+    """
+    return templates.TemplateResponse("forgot-password.html", {"request": request, "version": __version__})
+
+
+@router.get("/reset-password", response_class=HTMLResponse)
+async def reset_password(request: Request):
+    """
+    Page de réinitialisation de mot de passe (avec token)
+    """
+    return templates.TemplateResponse("reset-password.html", {"request": request, "version": __version__})
+
+
+@router.get("/profile", response_class=HTMLResponse)
+async def profile(request: Request, user=Depends(get_current_user_cookie_or_redirect)):
+    """
+    Page de profil utilisateur (2FA, etc.)
+    """
+    return templates.TemplateResponse("profile.html", {"request": request, "version": __version__})
