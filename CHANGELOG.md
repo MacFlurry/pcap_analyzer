@@ -7,6 +7,18 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.5] - 2026-01-10
+
+### Fixed - BUGFIXES 🐛
+
+- **HTML Report Timestamp Discrepancy**: Fixed incorrect timestamp display for "First SYN" in HTML reports.
+  
+  **Problem**: The HTML report was displaying the timestamp of the first *retransmission* instead of the initial SYN packet in the flow table, causing a discrepancy with the CLI output (which showed the correct "Premier SYN" time).
+  
+  **Solution**: Updated `_generate_flow_table` in `src/exporters/html_report.py` to use the specialized SYN analysis results (`first_syn_time`) when available, ensuring the displayed timestamp matches the start of the connection attempt.
+
+- **Chart.yaml Conflict**: Resolved merge conflict markers in Helm chart configuration.
+
 ## [5.4.1] - 2026-01-10
 
 ### Fixed - BUGFIXES 🐛

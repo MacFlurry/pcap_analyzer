@@ -3485,13 +3485,24 @@ class HTMLReportGenerator:
             retrans_data = results.get("retransmission", {})
             sampled_timelines = retrans_data.get("sampled_timelines", {})
 
+        # v5.4.1: Use SYNRetransmissionAnalyzer results for accurate "First SYN" time
+        syn_lookup = {}
+        if type_key == "syn" and results and "syn_retransmissions" in results:
+            syn_data = results["syn_retransmissions"].get("all_retransmissions", [])
+            for item in syn_data:
+                # Key format: src_ip:src_port->dst_ip:dst_port
+                key = f"{item['src_ip']}:{item['src_port']}->{item['dst_ip']}:{item['dst_port']}"
+                syn_lookup[key] = item
+
         html = '<div style="overflow-x: auto; margin-bottom: 20px;">'
         html += '<table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #dee2e6;">'
         html += '<thead style="background: #e9ecef;">'
         html += "<tr>"
         html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Flow</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Flags</th>'
-        html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">First Retrans</th>'
+        
+        col_name = "First SYN" if type_key == "syn" else "First Retrans"
+        html += f'<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">{col_name}</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Total Retrans</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Avg Delay</th>'
         html += '<th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Duration</th>'
@@ -3523,6 +3534,14 @@ class HTMLReportGenerator:
                     flag = r.get("tcp_flags", "UNKNOWN")
                     flags_count[flag] = flags_count.get(flag, 0) + 1
                 dominant_flags = max(flags_count.items(), key=lambda x: x[1])[0] if flags_count else "UNKNOWN"
+
+                # v5.4.1: Override with specialized SYN analysis if available
+                if flow_key in syn_lookup:
+                    # Use First SYN time
+                    timestamp_iso = syn_lookup[flow_key].get("first_syn_time_iso", timestamp_iso)
+                    # Use total_delay if available (more accurate flow duration)
+                    if syn_lookup[flow_key].get("total_delay") is not None:
+                        duration = syn_lookup[flow_key]["total_delay"]
             else:
                 duration = 0
                 timestamp_iso = "N/A"
