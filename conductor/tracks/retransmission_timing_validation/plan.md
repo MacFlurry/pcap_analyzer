@@ -38,9 +38,9 @@
 - [x] HTML affiche Avg Delay: 2000.0ms (SYN) et 476.7ms (PSH,ACK) ✅
 - [x] Cohérence CLI/HTML confirmée ✅
 
-## Phase 7: Documentation & Commit [~]
+## Phase 7: Documentation & Commit [x] [30ec2e2]
 
 - [x] Bug identifié et corrigé: retransmission_tshark.py delay calculation
 - [x] Tests TDD créés: test_retransmission_timing_validation.py
 - [x] Script de génération: generate_retransmission_pcap.py
-- [ ] Commit final avec structured message
+- [x] Commit final avec structured message: 30ec2e2
