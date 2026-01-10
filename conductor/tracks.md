@@ -6,7 +6,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: HTML Report Timestamp Discrepancy Fix (v5.4.5)
 *Context: Fix discrepancy between CLI (Premier SYN) and HTML report (First Retrans) by integrating stateful SYN analysis data into the HTML exporter.*
-*Link: [./conductor/tracks/html_report_timestamp_fix_v545/](./conductor/tracks/html_report_timestamp_fix_v545/)*
+*Link: [./conductor/archive/tracks/html_report_timestamp_fix_v545/](./conductor/archive/tracks/html_report_timestamp_fix_v545/)*
 *Version: v5.4.5 (PATCH)*
 *Priority: MEDIUM 🟡*
 *Status: ✅ COMPLETED*
@@ -35,7 +35,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: tshark Backend for 100% Retransmission Detection Accuracy
 *Context: Implement hybrid tshark/builtin backend with auto-detection for maximum accuracy*
-*Link: [./conductor/tracks/tshark_backend_v540/](./conductor/tracks/tshark_backend_v540/)*
+*Link: [./conductor/archive/tracks/tshark_backend_v540/](./conductor/archive/tracks/tshark_backend_v540/)*
 *Version: v5.4.0 (MINOR)*
 *Priority: HIGH 🟠*
 *Status: ✅ COMPLETED*
