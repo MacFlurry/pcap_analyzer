@@ -7,7 +7,74 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
-## [5.4.1] - 2026-01-10
+## [5.4.6] - 2026-01-10
+
+### Added - TEST COVERAGE IMPROVEMENTS 🧪
+
+- **Massive Test Suite Expansion**: Added 409 comprehensive unit tests across 25 analyzer test files, significantly improving code coverage from ~27% to 57.02%.
+
+  **New Test Files Added**:
+  - `test_retransmission.py` (15 tests) - Retransmission analyzer coverage
+  - `test_tcp_handshake.py` (12 tests) - TCP handshake analysis
+  - `test_syn_retransmission.py` (12 tests) - SYN retransmission detection
+  - `test_rtt_analyzer.py` (11 tests) - Round-trip time analysis
+  - `test_tcp_window.py` (11 tests) - TCP window size tracking
+  - `test_tcp_reset.py` (11 tests) - TCP RST packet detection
+  - `test_tcp_timeout.py` (11 tests) - TCP timeout detection
+  - `test_dns_analyzer.py` (15 tests) - DNS query/response analysis
+  - `test_timestamp_analyzer.py` (15 tests) - Timestamp gap detection
+  - `test_throughput.py` (13 tests) - Throughput calculation
+  - `test_jitter_analyzer.py` (15 tests) - Jitter (IPDV) analysis
+  - `test_burst_analyzer.py` (15 tests) - Burst detection
+  - `test_brute_force_detector.py` (16 tests) - Brute-force attack detection
+  - `test_port_scan_detector.py` (16 tests) - Port scan detection
+  - `test_ddos_detector.py` (17 tests) - DDoS attack detection
+  - `test_dns_tunneling_detector.py` (18 tests) - DNS tunneling detection
+  - `test_temporal_pattern.py` (19 tests) - Temporal pattern analysis
+  - `test_asymmetric_traffic.py` (24 tests) - Asymmetric traffic detection
+  - `test_ip_fragmentation.py` (19 tests) - IP fragmentation analysis
+  - `test_top_talkers.py` (18 tests) - Top talkers identification
+  - `test_icmp_pmtu.py` (20 tests) - ICMP/PMTU analysis
+  - `test_sack_analyzer.py` (21 tests) - TCP SACK option analysis
+  - `test_protocol_distribution.py` (24 tests) - Protocol distribution
+  - `test_service_classifier.py` (28 tests) - Service classification
+  - `test_retransmission_tshark.py` (11 tests) - tshark backend validation
+  - `test_retransmission_metadata.py` (6 tests) - Metadata optimization path
+
+  **Coverage Improvements**:
+  - **25 analyzers** now have comprehensive test coverage (81% of all analyzers)
+  - **409 unit tests** all passing (100% success rate)
+  - Global analyzer coverage: **57.02%** (up from ~27%)
+  - **~11,160 lines** of analyzer code now covered by tests
+  - **~17,700 lines** of test code created
+
+  **Testing Infrastructure**:
+  - Created `tests/regression/` directory for regression tests
+  - Consolidated `test_bugs_fixed.py` for previously fixed bugs
+  - Added `tests/unit/analyzers/README.md` documenting test suite
+  - Created `docs/COVERAGE_ANALYSIS.md` with detailed coverage analysis
+
+  **Quality Assurance**:
+  - All tests follow TDD methodology
+  - Tests cover edge cases, error handling, and boundary conditions
+  - Mock-based testing for external dependencies (tshark, subprocess)
+  - Regression tests ensure previously fixed bugs don't regress
+
+### Changed
+- **Test Organization**: Reorganized test suite structure for better maintainability
+  - Moved regression tests to `tests/regression/`
+  - Consolidated duplicate test files
+  - Removed obsolete POC test files (`test_v415_security_poc.py`, `test_security_poc_exploits.py`)
+
+### Fixed
+- **Test Infrastructure**: Fixed hardcoded version string in `test_routes_health.py` to dynamically import from `src/__version__.py`
+
+## [5.4.5] - 2026-01-10
+
+### Fixed
+- **HTML Report Timestamp Discrepancy**: Fixed timestamp display inconsistencies in HTML reports
+
+## [5.4.4] - 2026-01-10
 
 ### Fixed - BUGFIXES 🐛
 
@@ -41,6 +108,36 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ### Changed
 - **Retransmission Analysis**: CLI and HTML reports now show consistent delay values from tshark backend.
+
+## [5.4.3] - 2025-12-28
+
+### Improved 🎨
+- **UX "Mixed Mechanisms" Retransmissions**: Amélioration du texte pour les utilisateurs
+  - **Avant**: "Mixed mechanisms - Complex network behavior" (trop technique)
+  - **Après**: "🔀 Multiples problèmes simultanés - Ce flux combine plusieurs types de retransmissions"
+  - Ajout d'explications concrètes : congestion intermittente, changements de route, etc.
+  - Recommandations actionnables : "Analyser les flux individuels ci-dessous"
+  - Fichier modifié: `src/exporters/html_report.py`
+
+## [5.4.2] - 2025-12-28
+
+### Fixed 🐛
+- **Classification Direction des Retransmissions SYN**: Correction de la classification des retransmissions SYN,ACK
+  - **Avant**: SYN,ACK retransmis affichait "server_unreachable" (incorrect)
+  - **Après**: SYN,ACK retransmis affiche "client_unreachable" (correct)
+  - **Explication**: Quand un SYN,ACK est retransmis, c'est que le serveur a bien reçu le SYN initial et a répondu avec SYN,ACK, mais le client n'a pas complété le handshake avec l'ACK final
+  - Fichiers modifiés: `src/analyzers/retransmission_tshark.py`, `src/cli.py`
+
+- **Génération de Rapport HTML avec Backend tshark**: Correction de la gestion des valeurs `None` pour les délais de retransmission
+  - **Problème**: TypeError lors du calcul de moyenne si tshark retourne `delay=None`
+  - **Solution**: Filtrage des valeurs non-numériques avant calcul
+  - Fichier modifié: `src/exporters/html_report.py`
+
+### Changed 🔄
+- **Déploiement Docker**: Migration vers Docker Hub (omegabk/pcap-analyzer)
+  - Image disponible publiquement: `omegabk/pcap-analyzer:v5.4.2` et `omegabk/pcap-analyzer:latest`
+  - Helm chart configuré avec `pullPolicy: Always` pour tirer depuis Docker Hub
+  - Chart version: 1.7.0
 
 ## [5.4.0] - 2025-12-28
 

@@ -4,6 +4,7 @@ Tests unitaires pour la route health check
 
 import pytest
 from fastapi.testclient import TestClient
+from src.__version__ import __version__
 
 
 @pytest.mark.unit
@@ -23,6 +24,6 @@ def test_health_check(client: TestClient):
 
     # Values
     assert data["status"] == "healthy"
-    assert data["version"] == "4.28.3"
+    assert data["version"] == __version__  # Use actual version dynamically
     assert data["uptime_seconds"] >= 0
     assert 0 <= data["memory_usage_percent"] <= 100
