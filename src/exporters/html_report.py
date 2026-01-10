@@ -3509,7 +3509,9 @@ class HTMLReportGenerator:
             if retrans_list:
                 timestamps = [r.get("timestamp", 0) for r in retrans_list]
                 first_timestamp = min(timestamps)
-                duration = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
+                # Duration = max delay from original packet (not timestamp diff which excludes original)
+                # This gives the true window from original transmission to last retransmit
+                duration = max(delays) if delays else (max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0)
 
                 # Format timestamp in ISO 8601 (YYYY-MM-DD HH:MM:SS.mmm)
                 dt = datetime.fromtimestamp(first_timestamp)

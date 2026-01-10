@@ -554,7 +554,6 @@ class SYNRetransmissionAnalyzer:
                 summary += (
                     f"     SYN/ACK reçu: {datetime.fromtimestamp(retrans.synack_time).strftime('%H:%M:%S.%f')[:-3]}\n"
                 )
-                summary += f"     Délai total: {retrans.total_delay:.3f}s\n"
 
             summary += f"     Retransmissions SYN: {retrans.retransmission_count}\n"
 
@@ -564,6 +563,10 @@ class SYNRetransmissionAnalyzer:
                 for j, syn_time in enumerate(retrans.syn_attempts, 1):
                     delay_from_first = syn_time - retrans.first_syn_time
                     summary += f"       - Tentative #{j}: +{delay_from_first:.3f}s\n"
+
+            # Afficher le délai total (que le SYN-ACK soit reçu ou non)
+            if retrans.total_delay is not None:
+                summary += f"     Délai total: {retrans.total_delay:.3f}s\n"
 
             summary += f"     Problème identifié: {retrans.suspected_issue}\n\n"
 

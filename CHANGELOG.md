@@ -7,38 +7,40 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
-## [5.4.3] - 2025-12-28
+## [5.4.1] - 2026-01-10
 
-### Improved 🎨
-- **UX "Mixed Mechanisms" Retransmissions**: Amélioration du texte pour les utilisateurs
-  - **Avant**: "Mixed mechanisms - Complex network behavior" (trop technique)
-  - **Après**: "🔀 Multiples problèmes simultanés - Ce flux combine plusieurs types de retransmissions"
-  - Ajout d'explications concrètes : congestion intermittente, changements de route, etc.
-  - Recommandations actionnables : "Analyser les flux individuels ci-dessous"
-  - Fichier modifié: `src/exporters/html_report.py`
-  - Commit: 24571c9
+### Fixed - BUGFIXES 🐛
 
-## [5.4.2] - 2025-12-28
+- **tshark Backend Retransmission Delay Calculation**: Fixed `delay=None` for all retransmissions from tshark backend causing HTML reports to show "Avg Delay: 0.0ms".
 
-### Fixed 🐛
-- **Classification Direction des Retransmissions SYN**: Correction de la classification des retransmissions SYN,ACK
-  - **Avant**: SYN,ACK retransmis affichait "server_unreachable" (incorrect)
-  - **Après**: SYN,ACK retransmis affiche "client_unreachable" (correct)
-  - **Explication**: Quand un SYN,ACK est retransmis, c'est que le serveur a bien reçu le SYN initial et a répondu avec SYN,ACK, mais le client n'a pas complété le handshake avec l'ACK final
-  - Fichiers modifiés: `src/analyzers/retransmission_tshark.py`, `src/cli.py`
-  - Commit: 40b7cbc, 81328f7
+  **Problem**: The tshark backend only extracted retransmission packets without tracking original packet timestamps. Without knowing when the original segment was sent, delay calculation was impossible.
 
-- **Génération de Rapport HTML avec Backend tshark**: Correction de la gestion des valeurs `None` pour les délais de retransmission
-  - **Problème**: TypeError lors du calcul de moyenne si tshark retourne `delay=None`
-  - **Solution**: Filtrage des valeurs non-numériques avant calcul
-  - Fichier modifié: `src/exporters/html_report.py`
-  - Commit: 926b94b
+  **Solution**: Implemented two-pass approach in `TsharkRetransmissionAnalyzer`:
+  1. First pass: Index ALL TCP packets by `(flow_key, seq_num)` → `(pkt_num, timestamp)`
+  2. Second pass: For each retransmission, lookup original packet and calculate delay
 
-### Changed 🔄
-- **Déploiement Docker**: Migration vers Docker Hub (omegabk/pcap-analyzer)
-  - Image disponible publiquement: `omegabk/pcap-analyzer:v5.4.2` et `omegabk/pcap-analyzer:latest`
-  - Helm chart configuré avec `pullPolicy: Always` pour tirer depuis Docker Hub
-  - Chart version: 1.7.0
+  **Validation**:
+  - SYN retransmissions: delays 1.0s, 2.0s, 3.0s ✓
+  - PSH,ACK retransmissions: delays 0.2s, 0.4s, 0.8s ✓
+
+- **SYN Retransmission Total Delay Display**: Restored "Délai total" display for SYN retransmissions without SYN-ACK response.
+
+  **Problem**: The total_delay was only displayed when `synack_time` existed, but for `no_synack_received` cases the delay was calculated but never shown in CLI output.
+
+  **Solution**: Now displays "Délai total: X.XXXs" after the timeline for all cases where `total_delay` is available.
+
+- **HTML Report Duration Calculation**: Fixed Duration column showing incorrect values in retransmission table.
+
+  **Problem**: Duration was calculated as `max(timestamps) - min(timestamps)` which only measured the window between retransmissions, excluding the original packet. For SYN retrans at t=1s, 2s, 3s: showed 2.0s instead of 3.0s.
+
+  **Solution**: Now uses `max(delays)` which correctly represents the time from original packet to last retransmission.
+
+### Added
+- **PCAP Generation Tool**: New `scripts/generate_retransmission_pcap.py` for creating test PCAPs with controlled retransmission timings.
+- **TDD Test Suite**: `tests/test_retransmission_timing_validation.py` for retransmission timing validation.
+
+### Changed
+- **Retransmission Analysis**: CLI and HTML reports now show consistent delay values from tshark backend.
 
 ## [5.4.0] - 2025-12-28
 
