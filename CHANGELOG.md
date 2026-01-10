@@ -7,6 +7,41 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.1] - 2026-01-10
+
+### Fixed - BUGFIXES 🐛
+
+- **tshark Backend Retransmission Delay Calculation**: Fixed `delay=None` for all retransmissions from tshark backend causing HTML reports to show "Avg Delay: 0.0ms".
+
+  **Problem**: The tshark backend only extracted retransmission packets without tracking original packet timestamps. Without knowing when the original segment was sent, delay calculation was impossible.
+
+  **Solution**: Implemented two-pass approach in `TsharkRetransmissionAnalyzer`:
+  1. First pass: Index ALL TCP packets by `(flow_key, seq_num)` → `(pkt_num, timestamp)`
+  2. Second pass: For each retransmission, lookup original packet and calculate delay
+
+  **Validation**:
+  - SYN retransmissions: delays 1.0s, 2.0s, 3.0s ✓
+  - PSH,ACK retransmissions: delays 0.2s, 0.4s, 0.8s ✓
+
+- **SYN Retransmission Total Delay Display**: Restored "Délai total" display for SYN retransmissions without SYN-ACK response.
+
+  **Problem**: The total_delay was only displayed when `synack_time` existed, but for `no_synack_received` cases the delay was calculated but never shown in CLI output.
+
+  **Solution**: Now displays "Délai total: X.XXXs" after the timeline for all cases where `total_delay` is available.
+
+- **HTML Report Duration Calculation**: Fixed Duration column showing incorrect values in retransmission table.
+
+  **Problem**: Duration was calculated as `max(timestamps) - min(timestamps)` which only measured the window between retransmissions, excluding the original packet. For SYN retrans at t=1s, 2s, 3s: showed 2.0s instead of 3.0s.
+
+  **Solution**: Now uses `max(delays)` which correctly represents the time from original packet to last retransmission.
+
+### Added
+- **PCAP Generation Tool**: New `scripts/generate_retransmission_pcap.py` for creating test PCAPs with controlled retransmission timings.
+- **TDD Test Suite**: `tests/test_retransmission_timing_validation.py` for retransmission timing validation.
+
+### Changed
+- **Retransmission Analysis**: CLI and HTML reports now show consistent delay values from tshark backend.
+
 ## [5.4.0] - 2025-12-28
 
 ### Added - MAJOR FEATURE 🎯
