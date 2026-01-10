@@ -200,8 +200,10 @@ class TsharkRetransmissionAnalyzer:
         """
         Analyze PCAP using tshark for retransmission detection.
 
-        This method spawns a single tshark subprocess to extract all TCP retransmissions
-        from the PCAP file. It uses Wireshark's display filter and JSON output for parsing.
+        This method spawns tshark subprocesses to:
+        1. Extract all TCP packets to build original segment tracking
+        2. Extract retransmissions with their flags
+        3. Calculate delay from original packet timestamp
 
         Args:
             pcap_path: Path to PCAP file
@@ -219,7 +221,22 @@ class TsharkRetransmissionAnalyzer:
 
         logger.info(f"Analyzing {pcap_path} with tshark backend...")
 
-        # Build tshark command
+        # Step 1: Get ALL TCP packets to build original segment index
+        # This enables delay calculation by tracking first occurrence of each (flow, seq)
+        original_packets = self._get_all_tcp_packets(pcap_path)
+        
+        # Build index: (flow_key, seq_num) -> (packet_num, timestamp)
+        segment_first_seen: Dict[tuple, tuple] = {}
+        for pkt in original_packets:
+            flow_key = (pkt["src_ip"], pkt["dst_ip"], pkt["src_port"], pkt["dst_port"])
+            seq_num = pkt["seq_num"]
+            key = (flow_key, seq_num)
+            
+            # Only store FIRST occurrence (original packet)
+            if key not in segment_first_seen:
+                segment_first_seen[key] = (pkt["packet_num"], pkt["timestamp"])
+
+        # Step 2: Build tshark command for retransmissions
         cmd = [
             self.tshark_path,
             "-r", pcap_path,  # Read PCAP
@@ -269,7 +286,7 @@ class TsharkRetransmissionAnalyzer:
         retransmissions = []
         for pkt in packets:
             try:
-                retrans = self._parse_tshark_packet(pkt)
+                retrans = self._parse_tshark_packet(pkt, segment_first_seen)
                 if retrans:
                     retransmissions.append(retrans)
             except Exception as e:
@@ -282,12 +299,82 @@ class TsharkRetransmissionAnalyzer:
         logger.info(f"Successfully parsed {len(retransmissions)} retransmissions from tshark")
         return retransmissions
 
-    def _parse_tshark_packet(self, pkt: Dict[str, Any]) -> Optional[TCPRetransmission]:
+    def _get_all_tcp_packets(self, pcap_path: str) -> List[Dict[str, Any]]:
+        """
+        Get all TCP packets from PCAP for delay calculation.
+
+        Uses tshark fields output (faster than JSON) to build segment index.
+
+        Args:
+            pcap_path: Path to PCAP file
+
+        Returns:
+            List of packet dicts with frame.number, timestamp, flow info, seq
+        """
+        cmd = [
+            self.tshark_path,
+            "-r", pcap_path,
+            "-Y", "tcp",  # All TCP packets
+            "-T", "fields",
+            "-E", "separator=|",
+            "-e", "frame.number",
+            "-e", "frame.time_epoch",
+            "-e", "ip.src",
+            "-e", "ip.dst",
+            "-e", "tcp.srcport",
+            "-e", "tcp.dstport",
+            "-e", "tcp.seq",
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=300,
+            )
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Failed to get TCP packets: {e.stderr}")
+            return []
+        except subprocess.TimeoutExpired:
+            logger.warning("Timeout getting TCP packets")
+            return []
+
+        packets = []
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split("|")
+            if len(parts) >= 7:
+                try:
+                    packets.append({
+                        "packet_num": int(parts[0]),
+                        "timestamp": float(parts[1]),
+                        "src_ip": parts[2],
+                        "dst_ip": parts[3],
+                        "src_port": int(parts[4]) if parts[4] else 0,
+                        "dst_port": int(parts[5]) if parts[5] else 0,
+                        "seq_num": int(parts[6]) if parts[6] else 0,
+                    })
+                except (ValueError, IndexError) as e:
+                    logger.debug(f"Skipping malformed line: {line} ({e})")
+                    continue
+
+        logger.debug(f"Indexed {len(packets)} TCP packets for delay calculation")
+        return packets
+
+    def _parse_tshark_packet(
+        self, 
+        pkt: Dict[str, Any], 
+        segment_first_seen: Dict[tuple, tuple] = None,
+    ) -> Optional[TCPRetransmission]:
         """
         Parse a single tshark JSON packet into TCPRetransmission.
 
         Args:
             pkt: JSON packet dict from tshark output
+            segment_first_seen: Index mapping (flow_key, seq) -> (original_pkt_num, timestamp)
 
         Returns:
             TCPRetransmission object or None if parsing failed
@@ -334,19 +421,46 @@ class TsharkRetransmissionAnalyzer:
                 # SYN retransmitted → Client sent SYN but server didn't respond
                 syn_retrans_direction = "server_unreachable"
 
+        # Extract packet info for delay calculation
+        packet_num = get_field("frame.number", 0, int)
+        timestamp = get_field("frame.time_epoch", 0.0, float)
+        src_ip = get_field("ip.src", "")
+        dst_ip = get_field("ip.dst", "")
+        src_port = get_field("tcp.srcport", 0, int)
+        dst_port = get_field("tcp.dstport", 0, int)
+        seq_num = get_field("tcp.seq", 0, int)
+
+        # Calculate delay from original packet (if segment index available)
+        original_packet_num = None
+        delay = None
+        
+        if segment_first_seen:
+            flow_key = (src_ip, dst_ip, src_port, dst_port)
+            key = (flow_key, seq_num)
+            
+            if key in segment_first_seen:
+                orig_pkt_num, orig_timestamp = segment_first_seen[key]
+                # Only calculate if this is NOT the original (retrans comes after original)
+                if orig_pkt_num < packet_num:
+                    original_packet_num = orig_pkt_num
+                    delay = timestamp - orig_timestamp
+                    logger.debug(
+                        f"Retrans #{packet_num}: delay={delay:.3f}s from original #{orig_pkt_num}"
+                    )
+
         # Create TCPRetransmission object
         retrans = TCPRetransmission(
-            packet_num=get_field("frame.number", 0, int),
-            timestamp=get_field("frame.time_epoch", 0.0, float),
-            src_ip=get_field("ip.src", ""),
-            dst_ip=get_field("ip.dst", ""),
-            src_port=get_field("tcp.srcport", 0, int),
-            dst_port=get_field("tcp.dstport", 0, int),
-            seq_num=get_field("tcp.seq", 0, int),
+            packet_num=packet_num,
+            timestamp=timestamp,
+            src_ip=src_ip,
+            dst_ip=dst_ip,
+            src_port=src_port,
+            dst_port=dst_port,
+            seq_num=seq_num,
             retrans_type=retrans_type,
-            # tshark doesn't provide original packet reference
-            original_packet_num=None,
-            delay=None,
+            # Now calculated from segment index
+            original_packet_num=original_packet_num,
+            delay=delay,
             # Context enrichment (best effort from tshark output)
             expected_ack=get_field("tcp.nxtseq", None, int),
             last_ack_seen=get_field("tcp.ack", None, int),
