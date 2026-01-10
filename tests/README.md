@@ -69,16 +69,36 @@ pytest tests/ -v -m "not slow"
 
 ## Objectif de coverage
 
-**Target**: >80% de couverture de code
+**Target**: >80% de couverture de code  
+**Actuel**: 26.77% de couverture
 
-Actuellement testé:
-- ✅ Service database (10 tests)
-- ✅ Service worker (6 tests)
-- ✅ Routes upload (6 tests)
-- ✅ Routes progress/status (4 tests)
-- ✅ Routes reports (4 tests)
-- ✅ Route health (1 test)
-- ✅ Validation sécurité upload (6 tests)
-- ✅ Tests intégration end-to-end (7 tests)
+### Statistiques (v5.4.5)
 
-**Total**: ~44 tests
+- **102 fichiers** de tests
+- **877 tests** collectés par pytest
+- **Répartition**:
+  - Unit: ~170 tests (19 fichiers)
+  - Integration: ~400 tests (26 fichiers)
+  - Security: ~150 tests (13 fichiers)
+  - Root/E2E: ~157 tests (38 fichiers)
+
+### Catégories principales
+
+- ✅ **Tests unitaires** (`tests/unit/`): Services, routes, analyzers
+- ✅ **Tests d'intégration** (`tests/integration/`): Workflows complets, base de données
+- ✅ **Tests de sécurité** (`tests/security/`): Validation upload, XSS, CSRF, injection
+- ✅ **Tests E2E** (`tests/e2e/`): Flux utilisateur complets
+- ✅ **Tests de régression**: Bugs corrigés (duration, flow_key, timing)
+
+### Tests nettoyés (v5.4.5)
+
+- ❌ `test_v415_security_poc.py` - POC obsolète v4.15.0 (supprimé)
+- ❌ `test_security_poc_exploits.py` - POC d'exploits non-pytest (supprimé)
+- ✅ Tests de régression consolidés dans `tests/regression/`
+- ✅ Bug corrigé dans `test_routes_health.py` (version hardcodée → dynamique)
+
+### Tests de régression (utiles pour éviter les régressions)
+
+- ✅ `test_duration_calculation_regression.py` - Bug corrigé v5.4.4
+- ✅ `test_timeline_flow_key_fix.py` - Bug corrigé v4.15.0
+- ✅ `test_backward_compatibility.py` - Compatibilité SQLite/PostgreSQL

@@ -79,9 +79,10 @@ data/
 .claude/debugging-methodology.md
 
 # Test scripts (contiennent potentiellement des mots de passe de test)
-test_*.py
-generate_*.py
-analyze_*.py
-poc_*.py
+# Only ignore at root level, not in tests/ directory
+/test_*.py
+/generate_*.py
+/analyze_*.py
+/poc_*.py
 reports/*.html
 local_data/reports/*.html
