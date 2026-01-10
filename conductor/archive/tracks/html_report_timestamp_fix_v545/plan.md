@@ -30,5 +30,5 @@ The HTML generator was relying solely on `RetransmissionAnalyzer` (generic), whi
 ## Release Info
 - Version: `5.4.5`
 - Date: 2026-01-10
-- Branch: `feature/internal-registry`
+- Branch: `main`
 - Tag: `v5.4.5`

@@ -1,32 +1,14 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: pcap-analyzer
-containerdConfigPatches:
-  - |-
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
-      endpoint = ["https://registry.example.com"]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."gcr.io"]
-      endpoint = ["https://registry.example.com"]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.k8s.io"]
-      endpoint = ["https://registry.example.com"]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."ghcr.io"]
-      endpoint = ["https://registry.example.com"]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."quay.io"]
-      endpoint = ["https://registry.example.com"]
 nodes:
 - role: control-plane
-  image: kindest/node:v1.32.0
   kubeadmConfigPatches:
   - |
     kind: InitConfiguration
     nodeRegistration:
       kubeletExtraArgs:
         node-labels: "ingress-ready=true"
-  extraMounts:
-    - containerPath: /usr/local/share/ca-certificates/internal-bundle.crt
-      hostPath: /Users/user/Documents/internal/containers/gitlab/kind-flux/public_data/internal-bundle.crt
-    - containerPath: /usr/local/share/ca-certificates/ca.internal.proxy.com.crt
-      hostPath: /Users/user/Documents/internal/containers/gitlab/kind-flux/public_data/ca.internal.proxy.com.crt
   extraPortMappings:
   - containerPort: 80
     hostPort: 80
