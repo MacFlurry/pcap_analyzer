@@ -4,6 +4,13 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
+## [x] Track: HTML Report Timestamp Discrepancy Fix (v5.4.5)
+*Context: Fix discrepancy between CLI (Premier SYN) and HTML report (First Retrans) by integrating stateful SYN analysis data into the HTML exporter.*
+*Link: [./conductor/tracks/html_report_timestamp_fix_v545/](./conductor/tracks/html_report_timestamp_fix_v545/)*
+*Version: v5.4.5 (PATCH)*
+*Priority: MEDIUM 🟡*
+*Status: ✅ COMPLETED*
+
 ## [x] Track: Frame Numbering Bug Fix (v5.2.4)
 *Context: Fix triple root cause bug - frame numbers didn't match Wireshark (parser counted only IP packets, CLI passed wrong counter, handshake analyzer recorded last SYN-ACK)*
 *Link: [./conductor/archive/tracks/frame_numbering_bug_v524/](./conductor/archive/tracks/frame_numbering_bug_v524/)*
