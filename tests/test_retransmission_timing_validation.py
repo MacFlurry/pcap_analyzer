@@ -15,8 +15,10 @@ Reference: conductor/tracks/retransmission_timing_validation/
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -161,6 +163,9 @@ class TestRetransmissionTimingValidation:
         tshark is our ground truth - if it doesn't detect retransmissions,
         our PCAP generation is incorrect.
         """
+        if shutil.which("tshark") is None:
+            pytest.skip("tshark is not installed on this environment")
+
         pcap_path, expected = pcap_with_syn_retrans
         
         # Run tshark to detect retransmissions
@@ -189,6 +194,9 @@ class TestRetransmissionTimingValidation:
         """
         RED PHASE: Validate tshark detects PSH,ACK retransmissions.
         """
+        if shutil.which("tshark") is None:
+            pytest.skip("tshark is not installed on this environment")
+
         pcap_path, expected = pcap_with_psh_ack_retrans
         
         result = subprocess.run(
@@ -223,27 +231,24 @@ class TestRetransmissionTimingValidation:
         Expected: delays of ~1.0s and ~2.0s (from original)
         """
         pcap_path, expected = pcap_with_syn_retrans
-        
-        # Run pcap_analyzer CLI
+
+        project_root = Path(__file__).parent.parent
+        output_base = f"syn_retrans_{uuid.uuid4().hex}"
+
+        # Run pcap_analyzer CLI (current CLI always generates JSON+HTML reports)
         result = subprocess.run(
-            [
-                "python", "-m", "src.cli", "analyze",
-                str(pcap_path),
-                "--format", "json",
-            ],
+            [sys.executable, "-m", "src.cli", "analyze", str(pcap_path), "--output", output_base],
             capture_output=True,
             text=True,
-            cwd=str(Path(__file__).parent.parent),
+            cwd=str(project_root),
         )
-        
+
         assert result.returncode == 0, f"CLI failed: {result.stderr}"
-        
-        # Parse JSON output
-        # The CLI outputs to a file, find it
-        output_files = list(pcap_path.parent.glob("*.json"))
-        assert len(output_files) >= 1, "No JSON output file generated"
-        
-        with open(output_files[0]) as f:
+
+        output_json = project_root / "reports" / f"{output_base}.json"
+        assert output_json.exists(), f"No JSON output file generated: {output_json}"
+
+        with open(output_json) as f:
             report = json.load(f)
         
         retrans = report.get("retransmission", {}).get("retransmissions", [])
@@ -265,24 +270,23 @@ class TestRetransmissionTimingValidation:
         Expected: delays of ~0.2s, ~0.4s, ~0.8s
         """
         pcap_path, expected = pcap_with_psh_ack_retrans
-        
+
+        project_root = Path(__file__).parent.parent
+        output_base = f"psh_ack_retrans_{uuid.uuid4().hex}"
+
         result = subprocess.run(
-            [
-                "python", "-m", "src.cli", "analyze",
-                str(pcap_path),
-                "--format", "json",
-            ],
+            [sys.executable, "-m", "src.cli", "analyze", str(pcap_path), "--output", output_base],
             capture_output=True,
             text=True,
-            cwd=str(Path(__file__).parent.parent),
+            cwd=str(project_root),
         )
-        
+
         assert result.returncode == 0, f"CLI failed: {result.stderr}"
-        
-        output_files = list(pcap_path.parent.glob("*.json"))
-        assert len(output_files) >= 1, "No JSON output file generated"
-        
-        with open(output_files[0]) as f:
+
+        output_json = project_root / "reports" / f"{output_base}.json"
+        assert output_json.exists(), f"No JSON output file generated: {output_json}"
+
+        with open(output_json) as f:
             report = json.load(f)
         
         retrans = report.get("retransmission", {}).get("retransmissions", [])
@@ -306,41 +310,29 @@ class TestRetransmissionTimingValidation:
         This is the key test - if HTML differs from CLI, there's a bug.
         """
         pcap_path, expected = pcap_combined
-        
-        # Generate JSON report
-        result_json = subprocess.run(
-            [
-                "python", "-m", "src.cli", "analyze",
-                str(pcap_path),
-                "--format", "json",
-                "--output", str(pcap_path.parent / "report.json"),
-            ],
+        project_root = Path(__file__).parent.parent
+        output_base = f"combined_retrans_{uuid.uuid4().hex}"
+
+        # Current CLI generates JSON and HTML in a single analyze run
+        result = subprocess.run(
+            [sys.executable, "-m", "src.cli", "analyze", str(pcap_path), "--output", output_base],
             capture_output=True,
             text=True,
-            cwd=str(Path(__file__).parent.parent),
+            cwd=str(project_root),
         )
-        assert result_json.returncode == 0, f"JSON generation failed: {result_json.stderr}"
-        
-        # Generate HTML report
-        result_html = subprocess.run(
-            [
-                "python", "-m", "src.cli", "analyze",
-                str(pcap_path),
-                "--format", "html",
-                "--output", str(pcap_path.parent / "report.html"),
-            ],
-            capture_output=True,
-            text=True,
-            cwd=str(Path(__file__).parent.parent),
-        )
-        assert result_html.returncode == 0, f"HTML generation failed: {result_html.stderr}"
-        
+        assert result.returncode == 0, f"CLI generation failed: {result.stderr}"
+
+        output_json = project_root / "reports" / f"{output_base}.json"
+        output_html = project_root / "reports" / f"{output_base}.html"
+        assert output_json.exists(), f"JSON output file not found: {output_json}"
+        assert output_html.exists(), f"HTML output file not found: {output_html}"
+
         # Load JSON report
-        with open(pcap_path.parent / "report.json") as f:
+        with open(output_json) as f:
             json_report = json.load(f)
-        
+
         # Load HTML report and extract delays
-        with open(pcap_path.parent / "report.html") as f:
+        with open(output_html) as f:
             html_content = f.read()
         
         # Extract delays from JSON

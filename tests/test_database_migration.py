@@ -28,7 +28,7 @@ class TestSQLiteBackwardCompatibility:
         """Create temporary SQLite database."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "test.db")
-            db_service = UserDatabaseService(db_path=db_path)
+            db_service = UserDatabaseService(database_url=f"sqlite:///{db_path}")
             await db_service.init_db()
             yield db_service
 
@@ -58,7 +58,7 @@ class TestSQLiteBackwardCompatibility:
         admin_data = UserCreate(
             username="admin",
             email="admin@example.com",
-            password="AdminPass123",
+            password="Admin-Strong-Password-2025!",
         )
 
         admin = await sqlite_db.create_user(admin_data, role=UserRole.ADMIN)
@@ -75,7 +75,7 @@ class TestSQLiteBackwardCompatibility:
         admin_data = UserCreate(
             username="admin",
             email="admin@example.com",
-            password="AdminPass123",
+            password="Admin-Strong-Password-2025!",
         )
         admin = await sqlite_db.create_user(admin_data, role=UserRole.ADMIN)
 
@@ -83,7 +83,7 @@ class TestSQLiteBackwardCompatibility:
         user_data = UserCreate(
             username="user1",
             email="user1@example.com",
-            password="UserPass123!",
+            password="User1-Strong-Password-2025!",
         )
         user = await sqlite_db.create_user(user_data)
         assert user.is_approved is False
@@ -126,11 +126,12 @@ class TestSQLiteBackwardCompatibility:
             user_data = UserCreate(
                 username=f"user{i}",
                 email=f"user{i}@example.com",
-                password="Password123!",
+                password=f"User{i}-Strong-Password-2025!",
             )
             await sqlite_db.create_user(user_data)
 
-        users = await sqlite_db.get_all_users()
+        users, total = await sqlite_db.get_all_users()
+        assert total == 3
         assert len(users) == 3
 
         for user in users:
@@ -377,8 +378,8 @@ class TestSQLiteToPostgreSQLMigration:
         await user_db.init_db()
 
         # Create test users
-        user1_data = UserCreate(username="user1", email="user1@test.com", password="Pass123!Pass123!")
-        user2_data = UserCreate(username="user2", email="user2@test.com", password="Pass456!Pass456!")
+        user1_data = UserCreate(username="user1", email="user1@test.com", password="StrongPassword123!User1")
+        user2_data = UserCreate(username="user2", email="user2@test.com", password="StrongPassword123!User2")
 
         user1 = await user_db.create_user(user1_data)
         user2 = await user_db.create_user(user2_data, role=UserRole.ADMIN, auto_approve=True)
@@ -412,7 +413,7 @@ class TestSQLiteToPostgreSQLMigration:
         user_db = UserDatabaseService(database_url=sqlite_url)
         await user_db.init_db()
 
-        user_data = UserCreate(username="owner", email="owner@test.com", password="Pass123!Pass123!")
+        user_data = UserCreate(username="owner", email="owner@test.com", password="StrongPassword123!Owner")
         user = await user_db.create_user(user_data, auto_approve=True)
 
         # Create tasks with owner_id

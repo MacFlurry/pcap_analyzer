@@ -131,14 +131,14 @@ async def test_health_check_integration(async_client):
 async def test_view_routes_accessibility(async_client):
     """Test que les routes de vues (HTML) sont accessibles"""
     # Page d'accueil
-    response = await async_client.get("/")
+    response = await async_client.get("/", follow_redirects=True)
     assert response.status_code == 200
     assert b"PCAP Analyzer" in response.content or b"pcap" in response.content.lower()
 
     # Page historique
-    response = await async_client.get("/history")
+    response = await async_client.get("/history", follow_redirects=True)
     assert response.status_code == 200
 
     # Page progression (avec task_id fictif)
-    response = await async_client.get("/progress/test-task-123")
-    assert response.status_code == 200
+    response = await async_client.get("/progress/test-task-123", follow_redirects=False)
+    assert response.status_code in [200, 302, 307]

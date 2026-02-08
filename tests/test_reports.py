@@ -67,7 +67,7 @@ async def client():
         user1 = UserCreate(
             username="user1",
             email="user1@example.com",
-            password="userpass1234"
+            password="User1-Strong-Password-2025!"
         )
         user = await user_db_service.create_user(user1, role=UserRole.USER, auto_approve=True)
 
@@ -184,7 +184,7 @@ class TestGetHTMLReport:
     async def test_get_html_report_access_denied(self, client):
         """Test that user cannot access other user's report."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        user_token = await get_auth_token(ac, "user1", "userpass1234")
+        user_token = await get_auth_token(ac, "user1", "User1-Strong-Password-2025!")
 
         # User1 trying to access admin's task
         response = await ac.get(
@@ -249,7 +249,7 @@ class TestGetJSONReport:
     async def test_get_json_report_access_denied(self, client):
         """Test that user cannot access other user's JSON report."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        user_token = await get_auth_token(ac, "user1", "userpass1234")
+        user_token = await get_auth_token(ac, "user1", "User1-Strong-Password-2025!")
 
         # User1 trying to access admin's task
         response = await ac.get(
@@ -310,7 +310,7 @@ class TestDeleteReport:
     async def test_delete_report_access_denied(self, client):
         """Test that user cannot delete other user's reports."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        user_token = await get_auth_token(ac, "user1", "userpass1234")
+        user_token = await get_auth_token(ac, "user1", "User1-Strong-Password-2025!")
 
         # Get CSRF token
         csrf_response = await ac.get(

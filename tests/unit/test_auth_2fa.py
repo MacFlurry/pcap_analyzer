@@ -14,6 +14,10 @@ def auth_client(test_data_dir, monkeypatch):
     """Client for auth testing (no auth mocks)"""
     # Setup DATA_DIR override
     monkeypatch.setenv("DATA_DIR", str(test_data_dir))
+    # Keep JWT signing deterministic across requests in this test
+    stable_secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    monkeypatch.setenv("SECRET_KEY", stable_secret)
+    monkeypatch.setenv("CSRF_SECRET_KEY", stable_secret)
     
     # Mock Worker to avoid FS access
     from app.services import worker
@@ -261,8 +265,6 @@ def test_2fa_flow(auth_client, test_data_dir):
     })
 
     assert final_res.status_code == 200
-
-
 
 
 

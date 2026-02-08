@@ -29,9 +29,8 @@ async def client():
 
         os.environ["DATA_DIR"] = str(tmpdir)
 
-        # Support DATABASE_URL override for PostgreSQL testing
-        # Only set to SQLite if not already configured
-        if not original_database_url:
+        # Keep explicit PostgreSQL override; otherwise isolate to a per-test SQLite DB.
+        if not original_database_url or not original_database_url.startswith("postgresql"):
             os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/pcap_analyzer.db"
 
         os.environ["SECRET_KEY"] = "test-secret-key-for-jwt-signing-in-tests-minimum-32-chars"
@@ -67,7 +66,7 @@ async def client():
         regular_user = UserCreate(
             username="user1",
             email="user1@example.com",
-            password="userpass1234"
+            password="User1-Strong-Password-2025!"
         )
         await user_db_service.create_user(regular_user, role=UserRole.USER, auto_approve=True)
 
@@ -75,7 +74,7 @@ async def client():
         unapproved_user = UserCreate(
             username="unapproved",
             email="unapproved@example.com",
-            password="unapprovedpass1234"
+            password="Unapproved-Strong-Password-2025!"
         )
         await user_db_service.create_user(unapproved_user, role=UserRole.USER, auto_approve=False)
 
@@ -150,7 +149,7 @@ class TestLogin:
         """Test successful login with regular user credentials."""
         response = await client.post(
             "/api/token",
-            data={"username": "user1", "password": "userpass1234"}
+            data={"username": "user1", "password": "User1-Strong-Password-2025!"}
         )
 
         assert response.status_code == 200
@@ -182,7 +181,7 @@ class TestLogin:
         """Test that unapproved accounts cannot login."""
         response = await client.post(
             "/api/token",
-            data={"username": "unapproved", "password": "unapprovedpass1234"}
+            data={"username": "unapproved", "password": "Unapproved-Strong-Password-2025!"}
         )
 
         assert response.status_code == 403
@@ -199,7 +198,7 @@ class TestRegistration:
             json={
                 "username": "newuser",
                 "email": "newuser@example.com",
-                "password": "newuserpass1234"
+                "password": "newUser1-Strong-Password-2025!"
             }
         )
 
@@ -218,7 +217,7 @@ class TestRegistration:
             json={
                 "username": "admin",
                 "email": "different@example.com",
-                "password": "somepassword123"
+                "password": "Different-Strong-Password-2025!"
             }
         )
 
@@ -232,7 +231,7 @@ class TestRegistration:
             json={
                 "username": "differentuser",
                 "email": "admin@example.com",
-                "password": "somepassword123"
+                "password": "Different-Strong-Password-2025!"
             }
         )
 
@@ -270,14 +269,14 @@ class TestUpdatePassword:
 
     async def test_update_password_success(self, client: AsyncClient):
         """Test successful password update."""
-        token = await get_auth_token(client, "user1", "userpass1234")
+        token = await get_auth_token(client, "user1", "User1-Strong-Password-2025!")
 
         response = await client.put(
             "/api/users/me",
             headers={"Authorization": f"Bearer {token}"},
             json={
-                "current_password": "userpass1234",
-                "new_password": "newpassword1234"
+                "current_password": "User1-Strong-Password-2025!",
+                "new_password": "New-Strong-Password-2025!"
             }
         )
 
@@ -288,20 +287,20 @@ class TestUpdatePassword:
         # Verify new password works
         login_response = await client.post(
             "/api/token",
-            data={"username": "user1", "password": "newpassword1234"}
+            data={"username": "user1", "password": "New-Strong-Password-2025!"}
         )
         assert login_response.status_code == 200
 
     async def test_update_password_wrong_current_password(self, client: AsyncClient):
         """Test password update with wrong current password."""
-        token = await get_auth_token(client, "user1", "userpass1234")
+        token = await get_auth_token(client, "user1", "User1-Strong-Password-2025!")
 
         response = await client.put(
             "/api/users/me",
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "current_password": "wrongpassword",
-                "new_password": "newpassword1234"
+                "new_password": "New-Strong-Password-2025!"
             }
         )
 
@@ -310,13 +309,13 @@ class TestUpdatePassword:
 
     async def test_update_password_too_short(self, client: AsyncClient):
         """Test password update with too short new password."""
-        token = await get_auth_token(client, "user1", "userpass1234")
+        token = await get_auth_token(client, "user1", "User1-Strong-Password-2025!")
 
         response = await client.put(
             "/api/users/me",
             headers={"Authorization": f"Bearer {token}"},
             json={
-                "current_password": "userpass1234",
+                "current_password": "User1-Strong-Password-2025!",
                 "new_password": "short"
             }
         )
@@ -363,7 +362,7 @@ class TestAdminListUsers:
 
     async def test_non_admin_cannot_list_users(self, client: AsyncClient):
         """Test that regular users cannot list all users."""
-        token = await get_auth_token(client, "user1", "userpass1234")
+        token = await get_auth_token(client, "user1", "User1-Strong-Password-2025!")
 
         response = await client.get(
             "/api/users",
@@ -441,7 +440,7 @@ class TestAdminBlockUser:
         # Verify user cannot login
         login_response = await client.post(
             "/api/token",
-            data={"username": "user1", "password": "userpass1234"}
+            data={"username": "user1", "password": "User1-Strong-Password-2025!"}
         )
         assert login_response.status_code == 403
 
@@ -564,7 +563,7 @@ class TestAdminUnblockUser:
 
     async def test_regular_user_cannot_unblock(self, client: AsyncClient):
         """Test that regular users cannot unblock."""
-        user_token = await get_auth_token(client, "user1", "userpass1234")
+        user_token = await get_auth_token(client, "user1", "User1-Strong-Password-2025!")
 
         # Try to unblock with regular user token
         response = await client.put(
@@ -691,7 +690,7 @@ class TestSessionInvalidation:
         # They shouldn't be able to get a token in the first place
         response = await client.post(
             "/api/token",
-            data={"username": "unapproved", "password": "unapprovedpass1234"}
+            data={"username": "unapproved", "password": "Unapproved-Strong-Password-2025!"}
         )
 
         assert response.status_code == 403
@@ -834,7 +833,11 @@ class TestBulkUserActions:
         # Create and login as regular user
         await client.post(
             "/api/register",
-            json={"username": "regular", "email": "regular@test.com", "password": "regularpass12"}
+            json={
+                "username": "regular",
+                "email": "regular@test.com",
+                "password": "Regular-Strong-Password-2025!",
+            }
         )
 
         # Admin approves regular user
@@ -862,7 +865,7 @@ class TestBulkUserActions:
         # Login as regular user
         regular_response = await client.post(
             "/api/token",
-            data={"username": "regular", "password": "regularpass12"}
+            data={"username": "regular", "password": "Regular-Strong-Password-2025!"}
         )
         regular_token = regular_response.json()["access_token"]
 

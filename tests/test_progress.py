@@ -72,7 +72,7 @@ async def client():
         user1 = UserCreate(
             username="user1",
             email="user1@example.com",
-            password="userpass1234"
+            password="User1-Strong-Password-2025!"
         )
         user = await user_db_service.create_user(user1, role=UserRole.USER, auto_approve=True)
 
@@ -173,7 +173,7 @@ class TestGetTaskStatus:
     async def test_get_task_status_access_denied(self, client):
         """Test that user cannot access other user's task status."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        user_token = await get_auth_token(ac, "user1", "userpass1234")
+        user_token = await get_auth_token(ac, "user1", "User1-Strong-Password-2025!")
 
         # User1 trying to access admin's task
         response = await ac.get(
@@ -215,7 +215,7 @@ class TestGetProgress:
     async def test_get_progress_access_denied(self, client):
         """Test that user cannot access other user's progress."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        user_token = await get_auth_token(ac, "user1", "userpass1234")
+        user_token = await get_auth_token(ac, "user1", "User1-Strong-Password-2025!")
 
         # User1 trying to access admin's task
         try:
@@ -269,7 +269,7 @@ class TestGetTaskHistory:
     async def test_get_history_user_sees_own_only(self, client):
         """Test that regular user sees only their own tasks."""
         ac, admin_id, user_id, task1_id, task2_id = client
-        user_token = await get_auth_token(ac, "user1", "userpass1234")
+        user_token = await get_auth_token(ac, "user1", "User1-Strong-Password-2025!")
 
         response = await ac.get(
             "/api/history",

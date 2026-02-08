@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from fastapi_csrf_protect import CsrfProtect
 from httpx import AsyncClient, ASGITransport
 from passlib.context import CryptContext
+from docker.errors import DockerException
 from testcontainers.postgres import PostgresContainer
 from alembic.config import Config
 from alembic import command
@@ -173,19 +174,20 @@ def postgres_container():
     Returns the connection URL.
     """
     # Use postgres:15-alpine to match production recommendation
-    with PostgresContainer("postgres:15-alpine") as postgres:
-        # testcontainers waits for the container to be ready
+    try:
+        with PostgresContainer("postgres:15-alpine") as postgres:
+            # testcontainers waits for the container to be ready
+            db_url = postgres.get_connection_url()
 
-        # Get connection URL
-        db_url = postgres.get_connection_url()
+            # Ensure compatibility with asyncpg (used by the app)
+            if db_url.startswith("postgresql+psycopg2://"):
+                async_db_url = db_url.replace("postgresql+psycopg2://", "postgresql://")
+            else:
+                async_db_url = db_url
 
-        # Ensure compatibility with asyncpg (used by the app)
-        if db_url.startswith("postgresql+psycopg2://"):
-            async_db_url = db_url.replace("postgresql+psycopg2://", "postgresql://")
-        else:
-            async_db_url = db_url
-
-        yield async_db_url
+            yield async_db_url
+    except DockerException as exc:
+        pytest.skip(f"Docker unavailable for PostgreSQL test container: {exc}")
 
 
 @pytest.fixture(scope="session")
@@ -238,9 +240,7 @@ def get_test_database_url(test_data_dir: Path, db_type: str = "auto") -> str:
 
 
 @pytest.fixture
-async def test_db(
-    test_data_dir: Path, request, postgres_db_url, apply_migrations, test_postgres_pool
-) -> AsyncGenerator[DatabaseService, None]:
+async def test_db(test_data_dir: Path, request) -> AsyncGenerator[DatabaseService, None]:
     """
     Create test database (auto-detects SQLite vs PostgreSQL from DATABASE_URL).
 
@@ -259,8 +259,10 @@ async def test_db(
     database_url = ""
     db = None
     if db_type == "postgresql" or (db_type == "auto" and os.getenv("DATABASE_URL", "").startswith("postgresql")):
-        # Use postgres fixtures
-        database_url = postgres_db_url
+        # Load postgres fixtures lazily so SQLite-only tests do not require Docker
+        database_url = request.getfixturevalue("postgres_db_url")
+        request.getfixturevalue("apply_migrations")
+        test_postgres_pool = request.getfixturevalue("test_postgres_pool")
 
         # Use shared pool
         db = DatabaseService(database_url=database_url)
@@ -270,6 +272,10 @@ async def test_db(
         db = DatabaseService(database_url=database_url)
 
     await db.init_db()
+    # Ensure users table exists for joins in task/history queries on SQLite tests.
+    udb = UserDatabaseService(database_url=database_url)
+    await udb.init_db()
+    await udb.migrate_tasks_table()
 
     # Create mock admin user to satisfy foreign key constraints
     from datetime import datetime, timezone
@@ -399,7 +405,7 @@ def client(test_data_dir: Path, monkeypatch, request) -> Generator[TestClient, N
 
 @pytest.fixture
 async def async_client(
-    test_data_dir, monkeypatch, request, postgres_db_url, apply_migrations, test_postgres_pool
+    test_data_dir, monkeypatch, request
 ) -> AsyncGenerator[AsyncClient, None]:
     """Async HTTP client for testing FastAPI endpoints."""
     from app.main import app
@@ -412,9 +418,12 @@ async def async_client(
     if "db_type" in request.fixturenames:
         db_type = request.getfixturevalue("db_type")
 
+    test_postgres_pool = None
     if db_type == "postgresql" or (db_type == "auto" and os.getenv("DATABASE_URL", "").startswith("postgresql")):
-        # Use postgres fixtures
-        database_url = postgres_db_url
+        # Load postgres fixtures lazily so SQLite-only tests do not require Docker
+        database_url = request.getfixturevalue("postgres_db_url")
+        request.getfixturevalue("apply_migrations")
+        test_postgres_pool = request.getfixturevalue("test_postgres_pool")
     else:
         database_url = get_test_database_url(test_data_dir, db_type=db_type)
 
@@ -549,7 +558,9 @@ def large_file(test_data_dir: Path) -> Path:
     # Create 501 MB file (over 500 MB limit)
     size = 501 * 1024 * 1024
     with open(large_file, "wb") as f:
-        f.write(b"\x00" * size)
+        # Use sparse allocation to avoid huge in-memory buffer on constrained filesystems
+        f.seek(size - 1)
+        f.write(b"\x00")
     return large_file
 
 
@@ -594,6 +605,23 @@ def sample_tcp_ack_packet():
 def tcp_handshake_packets(sample_tcp_syn_packet, sample_tcp_synack_packet, sample_tcp_ack_packet):
     """Create a complete TCP handshake (SYN, SYN-ACK, ACK)"""
     return [sample_tcp_syn_packet, sample_tcp_synack_packet, sample_tcp_ack_packet]
+
+
+@pytest.fixture
+def tcp_connection_packets(tcp_handshake_packets, sample_tcp_data_packet, sample_tcp_fin_packet):
+    """Create a basic TCP connection flow for integration tests."""
+    return [*tcp_handshake_packets, sample_tcp_data_packet, sample_tcp_fin_packet]
+
+
+@pytest.fixture
+def retransmission_packets(sample_tcp_syn_packet):
+    """Create packets with a retransmission (same 5-tuple and sequence)."""
+    from scapy.all import Ether, IP, TCP
+
+    original = sample_tcp_syn_packet.copy()
+    retrans = Ether() / IP(src="192.168.1.1", dst="192.168.1.2") / TCP(sport=12345, dport=80, flags="S", seq=1000)
+    retrans.time = 1.5
+    return [original, retrans]
 
 
 @pytest.fixture

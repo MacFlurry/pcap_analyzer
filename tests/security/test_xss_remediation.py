@@ -1,8 +1,9 @@
 import pytest
 from app.services.email_service import EmailService
-from app.models.user import User, UserRole
+from app.models.user import UserRole
 from datetime import datetime
-from unittest.mock import MagicMock, patch, AsyncMock
+from types import SimpleNamespace
+from unittest.mock import patch, AsyncMock
 
 @pytest.mark.asyncio
 async def test_xss_prevention_in_email_templates():
@@ -10,8 +11,9 @@ async def test_xss_prevention_in_email_templates():
     Vérifie que les données utilisateur sont échappées dans les emails.
     """
     service = EmailService()
+    service.mail_enabled = True
     # Payload XSS dans le username
-    user = User(
+    user = SimpleNamespace(
         id="user-123",
         username="<script>alert('xss')</script>",
         email="test@example.com",

@@ -46,8 +46,15 @@ def test_upload_invalid_magic_bytes(client: TestClient, invalid_pcap_file):
 
 @pytest.mark.unit
 @pytest.mark.slow
-def test_upload_file_too_large(client: TestClient, large_file):
+def test_upload_file_too_large(client: TestClient, test_data_dir, monkeypatch):
     """Test uploading a file that exceeds size limit"""
+    # Lower limit for test to avoid creating very large payloads on constrained FS.
+    import app.utils.file_validator as file_validator
+
+    monkeypatch.setattr(file_validator, "MAX_UPLOAD_SIZE_MB", 1)
+    large_file = test_data_dir / "large.pcap"
+    large_file.write_bytes(b"\xa1\xb2\xc3\xd4" + b"\x00" * (2 * 1024 * 1024))
+
     with open(large_file, "rb") as f:
         response = client.post("/api/upload", files={"file": ("large.pcap", f, "application/vnd.tcpdump.pcap")})
 

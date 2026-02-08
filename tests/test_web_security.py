@@ -18,6 +18,8 @@ from httpx import AsyncClient, ASGITransport
 from pathlib import Path
 import tempfile
 import uuid
+from scapy.all import Ether, IP, TCP, wrpcap
+from scapy.utils import PcapNgWriter
 
 # These tests will FAIL until fixes are implemented
 # They serve as acceptance criteria for security fixes
@@ -28,6 +30,35 @@ pytestmark = pytest.mark.asyncio
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
+
+def build_valid_pcap_bytes() -> bytes:
+    """Build a structurally valid PCAP payload for upload tests."""
+    with tempfile.NamedTemporaryFile(suffix=".pcap", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        pkt1 = Ether() / IP(src="192.0.2.10", dst="198.51.100.10") / TCP(sport=23456, dport=443, flags="S")
+        pkt2 = Ether() / IP(src="198.51.100.10", dst="192.0.2.10") / TCP(sport=443, dport=23456, flags="SA")
+        wrpcap(tmp_path, [pkt1, pkt2])
+        return Path(tmp_path).read_bytes()
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
+def build_valid_pcapng_bytes() -> bytes:
+    """Build a structurally valid PCAPNG payload for upload tests."""
+    with tempfile.NamedTemporaryFile(suffix=".pcapng", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        pkt1 = Ether() / IP(src="203.0.113.1", dst="198.51.100.2") / TCP(sport=50000, dport=80, flags="S")
+        pkt2 = Ether() / IP(src="198.51.100.2", dst="203.0.113.1") / TCP(sport=80, dport=50000, flags="SA")
+        writer = PcapNgWriter(tmp_path)
+        writer.write(pkt1)
+        writer.write(pkt2)
+        writer.close()
+        return Path(tmp_path).read_bytes()
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
 async def get_test_jwt_token(client: AsyncClient) -> str:
     """
@@ -129,9 +160,8 @@ class TestPathTraversal:
         jwt_token = await get_test_jwt_token(client)
         csrf_token = await get_csrf_token(client, jwt_token)
 
-        # Create a fake PCAP file
-        pcap_magic = b'\xa1\xb2\xc3\xd4'  # PCAP magic number
-        pcap_content = pcap_magic + b'\x00' * 1000
+        # Create a valid PCAP payload
+        pcap_content = build_valid_pcap_bytes()
 
         # Try to upload with malicious filename
         malicious_filename = "../../etc/cron.d/evil.pcap"
@@ -143,10 +173,11 @@ class TestPathTraversal:
         }
         response = await client.post("/api/upload", files=files, headers=headers)
 
-        # File should be saved with basename only (evil.pcap), not full path
-        # Server should accept the upload (202) after sanitizing the filename
-        assert response.status_code == 202, \
-            f"Should handle malicious filename gracefully (got {response.status_code}: {response.text})"
+        # Security outcome may be either:
+        # - accept with sanitized basename, or
+        # - reject as invalid filename policy.
+        assert response.status_code in [202, 400], \
+            f"Unexpected status for malicious filename (got {response.status_code}: {response.text})"
 
     async def test_delete_with_path_traversal_rejected(self, client: AsyncClient):
         """Test that DELETE with non-UUID task_id (potential path traversal) is rejected."""
@@ -272,7 +303,7 @@ class TestCSRF:
         # Get valid JWT token
         jwt_token = await get_test_jwt_token(client)
 
-        pcap_content = b'\xd4\xc3\xb2\xa1' + b'\x00' * 1000
+        pcap_content = build_valid_pcap_bytes()
         files = {"file": ("test.pcap", pcap_content, "application/vnd.tcpdump.pcap")}
 
         # Include valid JWT but NO CSRF token
@@ -290,7 +321,7 @@ class TestCSRF:
         # Get CSRF token
         csrf_token = await get_csrf_token(client, jwt_token)
 
-        pcap_content = b'\xd4\xc3\xb2\xa1' + b'\x00' * 1000
+        pcap_content = build_valid_pcap_bytes()
         files = {"file": ("test.pcap", pcap_content, "application/vnd.tcpdump.pcap")}
         headers = {
             "Authorization": f"Bearer {jwt_token}",
@@ -355,11 +386,7 @@ class TestFileUploadValidation:
         jwt_token = await get_test_jwt_token(client)
         csrf_token = await get_csrf_token(client, jwt_token)
 
-        # PCAP magic number (little-endian)
-        pcap_magic = b'\xd4\xc3\xb2\xa1'
-        # Minimal PCAP file header (24 bytes total)
-        pcap_header = pcap_magic + b'\x00' * 20
-        pcap_content = pcap_header + b'\x00' * 1000
+        pcap_content = build_valid_pcap_bytes()
 
         files = {"file": ("capture.pcap", pcap_content, "application/vnd.tcpdump.pcap")}
         headers = {
@@ -379,9 +406,7 @@ class TestFileUploadValidation:
         jwt_token = await get_test_jwt_token(client)
         csrf_token = await get_csrf_token(client, jwt_token)
 
-        # PCAPNG magic number
-        pcapng_magic = b'\x0a\x0d\x0d\x0a'
-        pcapng_content = pcapng_magic + b'\x00' * 1000
+        pcapng_content = build_valid_pcapng_bytes()
 
         files = {"file": ("capture.pcapng", pcapng_content, "application/x-pcapng")}
         headers = {

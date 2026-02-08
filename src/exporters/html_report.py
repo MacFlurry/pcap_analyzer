@@ -894,8 +894,24 @@ class HTMLReportGenerator:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html)
 
+    def _has_interactive_qos_graphs(self, results: dict[str, Any]) -> bool:
+        """Return True when QoS section includes Plotly timeseries graphs."""
+        jitter_data = results.get("jitter", {})
+        flows = jitter_data.get("high_jitter_flows", [])
+
+        for flow in flows:
+            if isinstance(flow, dict) and "timeseries" in flow:
+                timeseries = flow.get("timeseries", {})
+                if timeseries.get("timestamps") and timeseries.get("jitter_values"):
+                    return True
+        return False
+
     def _generate_header(self, results: dict[str, Any]) -> str:
         """Generate HTML header with embedded CSS."""
+        plotly_script = ""
+        if self._has_interactive_qos_graphs(results):
+            plotly_script = f"\n    {get_plotly_cdn()}"
+
         return """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2258,9 +2274,9 @@ class HTMLReportGenerator:
             initializeEventListeners();
         }
     </script>
-    <!-- Plotly.js CDN for interactive graphs (v4.18.0) -->
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-</head>"""
+    <!-- Plotly.js loaded only when interactive QoS graphs are present -->
+__PLOTLY_SCRIPT__
+</head>""".replace("__PLOTLY_SCRIPT__", plotly_script)
 
     def _generate_title(self, results: dict[str, Any]) -> str:
         """Generate report title."""

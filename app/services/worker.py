@@ -96,16 +96,26 @@ class AnalysisWorker:
 
         self.is_running = False
 
-        # Attendre que la queue se vide
-        await self.queue.join()
-
-        # Annuler le worker task
+        # Annuler le worker task d'abord pour éviter un deadlock sur queue.join()
+        # quand des tâches restent en file après mise à false de is_running.
         if self.worker_task:
             self.worker_task.cancel()
             try:
                 await self.worker_task
             except asyncio.CancelledError:
                 pass
+            self.worker_task = None
+
+        # Purger les éléments restants pour décrémenter les unfinished_tasks.
+        while True:
+            try:
+                self.queue.get_nowait()
+                self.queue.task_done()
+            except asyncio.QueueEmpty:
+                break
+
+        # S'assurer que le compteur interne de la queue est bien revenu à 0.
+        await self.queue.join()
 
         logger.info("Analysis worker stopped")
 

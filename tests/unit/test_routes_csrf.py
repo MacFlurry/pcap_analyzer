@@ -28,8 +28,8 @@ async def client():
 
         os.environ["DATA_DIR"] = str(tmpdir)
 
-        # Support DATABASE_URL override for PostgreSQL testing
-        if not original_database_url:
+        # Keep explicit PostgreSQL override; otherwise isolate to a per-test SQLite DB.
+        if not original_database_url or not original_database_url.startswith("postgresql"):
             os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/pcap_analyzer.db"
 
         os.environ["SECRET_KEY"] = "test-secret-key-for-jwt-signing-in-tests-minimum-32-chars"

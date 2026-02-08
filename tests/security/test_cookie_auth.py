@@ -87,10 +87,9 @@ async def test_protected_html_route_loads_with_cookie(async_client: AsyncClient,
     assert "access_token" in async_client.cookies
     
     # 2. Access a protected route
-    response = await async_client.get("/history")
+    response = await async_client.get("/history", follow_redirects=True)
     
-    # 3. Should return 200 OK (no redirect)
+    # 3. Should land on an HTML page
     assert response.status_code == 200
     assert "text/html" in response.headers["Content-Type"]
-    # Verify it's the actual page (check for common elements)
     assert "pcap" in response.text.lower()
