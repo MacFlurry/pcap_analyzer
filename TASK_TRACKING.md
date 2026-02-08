@@ -34,3 +34,4 @@ Last update: 2026-02-08
 - [x] Re-run targeted tests for metadata guards (`3 passed`).
 - [x] Standardize remaining legacy version markers in `docs/ARCHITECTURE.md`.
 - [x] Add guard test ensuring `CHANGELOG.md` contains the current package version section (`4 passed`).
+- [x] Add a test convention guard to forbid `@pytest.mark.asyncio` on sync tests (`5 passed` with metadata guards).
