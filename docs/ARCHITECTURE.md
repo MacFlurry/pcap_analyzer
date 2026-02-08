@@ -1,8 +1,37 @@
-# Architecture Design - PCAP Analyzer v4.22.0
+# Architecture Design - PCAP Analyzer v5.4.8
 
-**Last Updated**: 2025-12-21
-**Version**: 4.22.0
+**Last Updated**: 2026-02-08
+**Version**: 5.4.8
 **Security Score**: 91.5% (Production Ready)
+
+## Statut actuel (v5.4.8)
+
+Ce document contient encore des sections historiques détaillées (notamment des références `v4.22.0`).
+La cartographie opérationnelle actuelle est la suivante:
+
+- Entrées:
+  - CLI: `cli.py`
+  - API Web FastAPI: `main.py`
+- Flux Web:
+  - Upload/validation/queue: `app/api/routes/upload.py`
+  - Worker asynchrone + heartbeat + progression: `app/services/worker.py`
+  - Suivi SSE/statut/historique: `app/api/routes/progress.py`
+  - Rapports HTML/JSON + suppression: `app/api/routes/reports.py`
+- Moteur d'analyse:
+  - Orchestration analyzers: `src/analyzers/analyzer_factory.py`
+  - Analyseurs: `src/analyzers/`
+  - Exporters: `src/exporters/`
+- Données:
+  - Service tâches/statuts: `app/services/database.py`
+  - Pool DB/translation SQL SQLite/PostgreSQL: `app/services/postgres_database.py`
+  - Utilisateurs/roles/password/2FA: `app/services/user_database.py`
+  - Migrations: `alembic/`
+- Sécurité:
+  - Auth JWT + ownership: `app/auth.py`
+  - CSRF: `app/security/csrf.py`
+  - Validation fichiers/paths/rate limits: `app/utils/` et `src/utils/`
+
+Les évolutions postérieures à `v4.22.0` sont détaillées dans `CHANGELOG.md`.
 
 ## Vue d'ensemble
 
