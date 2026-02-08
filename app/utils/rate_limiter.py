@@ -11,9 +11,11 @@ For production at scale, consider Redis-based rate limiting.
 """
 
 import logging
+import os
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+from threading import Lock
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -134,3 +136,55 @@ def get_rate_limiter() -> RateLimiter:
     if _rate_limiter is None:
         _rate_limiter = RateLimiter()
     return _rate_limiter
+
+
+class UploadRateLimiter:
+    """
+    Fixed-window upload rate limiter.
+
+    Default policy: 5 requests per 60 seconds per client.
+    Tunable via env vars:
+    - UPLOAD_RATE_LIMIT_REQUESTS (default: 5)
+    - UPLOAD_RATE_LIMIT_WINDOW_SECONDS (default: 60)
+    """
+
+    def __init__(self):
+        self.max_requests = int(os.getenv("UPLOAD_RATE_LIMIT_REQUESTS", "5"))
+        self.window_seconds = int(os.getenv("UPLOAD_RATE_LIMIT_WINDOW_SECONDS", "60"))
+        self._state: Dict[str, tuple[int, float]] = {}
+        self._lock = Lock()
+
+    def check(self, client_id: str) -> tuple[bool, Optional[int]]:
+        """
+        Check and consume one upload request for a client.
+
+        Returns:
+            (allowed, retry_after_seconds)
+        """
+        now = time.time()
+
+        with self._lock:
+            count, window_start = self._state.get(client_id, (0, now))
+
+            # Window expired: reset counter
+            if now - window_start >= self.window_seconds:
+                count = 0
+                window_start = now
+
+            if count >= self.max_requests:
+                retry_after = max(1, int(self.window_seconds - (now - window_start)))
+                return False, retry_after
+
+            self._state[client_id] = (count + 1, window_start)
+            return True, None
+
+
+_upload_rate_limiter: Optional[UploadRateLimiter] = None
+
+
+def get_upload_rate_limiter() -> UploadRateLimiter:
+    """Get singleton upload rate limiter instance."""
+    global _upload_rate_limiter
+    if _upload_rate_limiter is None:
+        _upload_rate_limiter = UploadRateLimiter()
+    return _upload_rate_limiter

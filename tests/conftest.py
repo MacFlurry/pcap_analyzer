@@ -35,6 +35,7 @@ from app.services.analyzer import ProgressCallback
 from app.services.database import DatabaseService
 from app.services.user_database import UserDatabaseService
 from app.services.worker import AnalysisWorker
+from app.utils import rate_limiter
 
 
 # =============================================================================
@@ -74,6 +75,13 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiters():
+    """Reset in-memory rate limiters between tests to avoid cross-test leakage."""
+    rate_limiter._rate_limiter = None
+    rate_limiter._upload_rate_limiter = None
 
 
 @pytest.fixture

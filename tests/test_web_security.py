@@ -561,7 +561,6 @@ class TestSecurityHeaders:
 class TestRateLimiting:
     """Test rate limiting on endpoints."""
 
-    @pytest.mark.skip(reason="Rate limiting not yet implemented")
     async def test_upload_rate_limit(self, client: AsyncClient):
         """Test that upload endpoint enforces rate limit (5/minute)."""
         pcap_content = b'\xa1\xb2\xc3\xd4' + b'\x00' * 1000

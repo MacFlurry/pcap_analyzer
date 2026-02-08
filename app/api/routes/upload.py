@@ -6,7 +6,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from app.auth import get_current_user
@@ -20,6 +20,7 @@ from app.utils import file_validator as _file_validator
 from app.utils.config import get_uploads_dir
 from app.utils.path_validator import validate_filename, validate_path_in_directory
 from app.utils.file_validator import validate_pcap_upload_complete
+from app.utils.rate_limiter import get_upload_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,26 @@ router = APIRouter()
 # Backward-compat alias used by tests monkeypatching upload size limit.
 MAX_UPLOAD_SIZE_MB = _file_validator.MAX_UPLOAD_SIZE_MB
 
+
+async def enforce_upload_rate_limit(request: Request):
+    """
+    Enforce upload rate limiting before CSRF/auth checks.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    limiter = get_upload_rate_limiter()
+    allowed, retry_after = limiter.check(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Upload rate limit exceeded. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
 @router.post(
     "/upload",
     response_model=UploadResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[Depends(validate_csrf_token)],
+    dependencies=[Depends(enforce_upload_rate_limit), Depends(validate_csrf_token)],
 )
 async def upload_pcap(
     file: UploadFile = File(...),  # noqa: B008
