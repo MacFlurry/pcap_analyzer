@@ -26,7 +26,7 @@ import qrcode
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status, Form
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from zxcvbn import zxcvbn
 
 from app.auth import create_access_token, get_current_admin_user, get_current_user
@@ -59,7 +59,8 @@ class PasswordUpdate(BaseModel):
     current_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=12, max_length=128)
 
-    @validator("new_password")
+    @field_validator("new_password")
+    @classmethod
     def password_strength(cls, v):
         """
         Enhanced password policy (Issue #23: NIST SP 800-63B + zxcvbn strength meter).
@@ -206,7 +207,8 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str = Field(..., min_length=12, max_length=128)
 
-    @validator("new_password")
+    @field_validator("new_password")
+    @classmethod
     def password_strength(cls, v):
         """Validate password strength (zxcvbn)."""
         if len(v) < 12:

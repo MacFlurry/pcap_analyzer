@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class TaskStatus(str, Enum):
@@ -62,14 +62,14 @@ class TaskInfo(BaseModel):
     owner_id: Optional[str] = None  # User ID (multi-tenant)
     owner_username: Optional[str] = None  # Username du propriétaire (pour admins)
 
-    @validator("expires_at", always=True)
-    def calculate_expiry(cls, v, values):
+    @model_validator(mode="after")
+    def calculate_expiry(self):
         """Calcule la date d'expiration si non fournie"""
-        if v is None and "uploaded_at" in values:
+        if self.expires_at is None and self.uploaded_at is not None:
             from datetime import timedelta
 
-            return values["uploaded_at"] + timedelta(hours=24)
-        return v
+            self.expires_at = self.uploaded_at + timedelta(hours=24)
+        return self
 
 
 class HealthCheck(BaseModel):

@@ -12,7 +12,6 @@ import shutil
 from pathlib import Path
 import os
 
-pytestmark = pytest.mark.asyncio
 ADMIN_USERNAME = "mt_admin"
 USER_A_USERNAME = "mt_user_a"
 USER_B_USERNAME = "mt_user_b"

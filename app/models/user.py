@@ -17,7 +17,7 @@ from enum import Enum
 from typing import Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from zxcvbn import zxcvbn
 
 
@@ -59,15 +59,15 @@ class User(BaseModel):
     totp_secret: Optional[str] = None
     backup_codes: Optional[list[str]] = None  # Hashed backup codes
 
-    @validator("username")
+    @field_validator("username")
+    @classmethod
     def username_alphanumeric(cls, v):
         """Username must be alphanumeric (+ underscore, hyphen)."""
         if not v.replace("_", "").replace("-", "").isalnum():
             raise ValueError("Username must be alphanumeric (a-z, 0-9, _, -)")
         return v.lower()
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserCreate(BaseModel):
@@ -77,7 +77,8 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=12, max_length=128)
 
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def password_strength(cls, v):
         """
         Enhanced password policy (Issue #23: NIST SP 800-63B + zxcvbn strength meter).
@@ -155,9 +156,10 @@ class TokenData(BaseModel):
 class BulkUserActionRequest(BaseModel):
     """Schema for bulk user actions (approve, block, unblock)."""
 
-    user_ids: list[str] = Field(..., min_items=1, max_items=100, description="List of user IDs to process")
+    user_ids: list[str] = Field(..., min_length=1, max_length=100, description="List of user IDs to process")
 
-    @validator("user_ids")
+    @field_validator("user_ids")
+    @classmethod
     def validate_user_ids(cls, v):
         """Ensure user IDs are unique and not empty."""
         if not v:

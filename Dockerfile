@@ -39,7 +39,7 @@ FROM python:3.11-slim-bookworm
 
 LABEL maintainer="PCAP Analyzer Team"
 LABEL description="PCAP Network Analysis Tool - Web Interface"
-LABEL version="5.4.0"
+LABEL version="5.4.7"
 LABEL org.opencontainers.image.source="https://github.com/MacFlurry/pcap_analyzer"
 
 # Install runtime libs + tshark for 100% retransmission detection accuracy

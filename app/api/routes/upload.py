@@ -3,7 +3,6 @@ Route pour upload de fichiers PCAP et démarrage d'analyse.
 """
 
 import logging
-import os
 import uuid
 from pathlib import Path
 
@@ -16,7 +15,8 @@ from app.models.user import User
 from app.security.csrf import validate_csrf_token
 from app.services.database import get_db_service
 from app.services.worker import get_worker
-from app.services.pcap_validator import validate_pcap, PCAPValidationError
+from app.services.pcap_validator import validate_pcap
+from app.utils import file_validator as _file_validator
 from app.utils.config import get_uploads_dir
 from app.utils.path_validator import validate_filename, validate_path_in_directory
 from app.utils.file_validator import validate_pcap_upload_complete
@@ -24,69 +24,8 @@ from app.utils.file_validator import validate_pcap_upload_complete
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Configuration via variables d'environnement
-MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "500"))
-ALLOWED_EXTENSIONS = {".pcap", ".pcapng"}
-
-
-def validate_pcap_file(filename: str, file_size: int) -> None:
-    """
-    Valide un fichier PCAP uploadé.
-
-    Args:
-        filename: Nom du fichier
-        file_size: Taille du fichier en octets
-
-    Raises:
-        HTTPException: Si la validation échoue
-    """
-    # Validation 1: Extension
-    file_ext = Path(filename).suffix.lower()
-    if file_ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Extension non autorisée. Extensions valides: {', '.join(ALLOWED_EXTENSIONS)}",
-        )
-
-    # Validation 2: Taille
-    max_size_bytes = MAX_UPLOAD_SIZE_MB * 1024 * 1024
-    if file_size > max_size_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Fichier trop volumineux. Taille maximale: {MAX_UPLOAD_SIZE_MB} MB",
-        )
-
-    if file_size == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Fichier vide",
-        )
-
-
-def validate_pcap_magic_bytes(file_content: bytes) -> None:
-    """
-    Valide les magic bytes d'un fichier PCAP/PCAPNG.
-
-    Args:
-        file_content: Contenu du fichier (premiers octets)
-
-    Raises:
-        HTTPException: Si les magic bytes ne correspondent pas
-    """
-    # Magic bytes PCAP (little-endian et big-endian)
-    PCAP_MAGIC_LE = b"\xd4\xc3\xb2\xa1"  # Little-endian
-    PCAP_MAGIC_BE = b"\xa1\xb2\xc3\xd4"  # Big-endian
-
-    # Magic bytes PCAPNG
-    PCAPNG_MAGIC = b"\x0a\x0d\x0d\x0a"
-
-    if file_content[:4] not in [PCAP_MAGIC_LE, PCAP_MAGIC_BE, PCAPNG_MAGIC]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Format de fichier invalide. Le fichier n'est pas un PCAP/PCAPNG valide.",
-        )
-
+# Backward-compat alias used by tests monkeypatching upload size limit.
+MAX_UPLOAD_SIZE_MB = _file_validator.MAX_UPLOAD_SIZE_MB
 
 @router.post(
     "/upload",

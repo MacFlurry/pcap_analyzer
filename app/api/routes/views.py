@@ -26,7 +26,7 @@ async def index(request: Request, user=Depends(get_current_user_cookie_or_redire
     """
     Page d'accueil - Upload PCAP
     """
-    return templates.TemplateResponse("upload.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "upload.html", {"request": request, "version": __version__})
 
 
 @router.get("/progress/{task_id}", response_class=HTMLResponse)
@@ -34,7 +34,9 @@ async def progress(request: Request, task_id: str, user=Depends(get_current_user
     """
     Page de progression d'analyse
     """
-    return templates.TemplateResponse("progress.html", {"request": request, "task_id": task_id, "version": __version__})
+    return templates.TemplateResponse(
+        request, "progress.html", {"request": request, "task_id": task_id, "version": __version__}
+    )
 
 
 @router.get("/history", response_class=HTMLResponse)
@@ -42,7 +44,7 @@ async def history(request: Request, user=Depends(get_current_user_cookie_or_redi
     """
     Page d'historique des analyses
     """
-    return templates.TemplateResponse("history.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "history.html", {"request": request, "version": __version__})
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -50,7 +52,7 @@ async def login(request: Request):
     """
     Page de connexion
     """
-    return templates.TemplateResponse("login.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "login.html", {"request": request, "version": __version__})
 
 
 @router.get("/logout", response_class=HTMLResponse)
@@ -58,7 +60,7 @@ async def logout(request: Request):
     """
     Page de déconnexion (efface le localStorage)
     """
-    return templates.TemplateResponse("logout.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "logout.html", {"request": request, "version": __version__})
 
 
 @router.get("/admin", response_class=HTMLResponse)
@@ -67,7 +69,7 @@ async def admin(request: Request, user=Depends(get_current_user_cookie_or_redire
     Page d'administration (admin only)
     Gestion des utilisateurs et permissions
     """
-    return templates.TemplateResponse("admin.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "admin.html", {"request": request, "version": __version__})
 
 
 @router.get("/change-password", response_class=HTMLResponse)
@@ -76,7 +78,7 @@ async def change_password(request: Request, user=Depends(get_current_user_cookie
     Page de changement de mot de passe obligatoire
     Affichée quand password_must_change=True
     """
-    return templates.TemplateResponse("change-password.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "change-password.html", {"request": request, "version": __version__})
 
 
 @router.get("/register", response_class=HTMLResponse)
@@ -84,7 +86,7 @@ async def register(request: Request):
     """
     Page d'inscription (user registration)
     """
-    return templates.TemplateResponse("register.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "register.html", {"request": request, "version": __version__})
 
 
 @router.get("/forgot-password", response_class=HTMLResponse)
@@ -92,7 +94,7 @@ async def forgot_password(request: Request):
     """
     Page 'Mot de passe oublié'
     """
-    return templates.TemplateResponse("forgot-password.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "forgot-password.html", {"request": request, "version": __version__})
 
 
 @router.get("/reset-password", response_class=HTMLResponse)
@@ -100,7 +102,7 @@ async def reset_password(request: Request):
     """
     Page de réinitialisation de mot de passe (avec token)
     """
-    return templates.TemplateResponse("reset-password.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "reset-password.html", {"request": request, "version": __version__})
 
 
 @router.get("/profile", response_class=HTMLResponse)
@@ -108,4 +110,4 @@ async def profile(request: Request, user=Depends(get_current_user_cookie_or_redi
     """
     Page de profil utilisateur (2FA, etc.)
     """
-    return templates.TemplateResponse("profile.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse(request, "profile.html", {"request": request, "version": __version__})

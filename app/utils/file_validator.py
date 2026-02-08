@@ -70,7 +70,7 @@ async def validate_upload_size_streaming(
         if total_bytes > max_size_bytes:
             logger.warning(f"Upload rejected: size {total_bytes} bytes exceeds limit {max_size_bytes} bytes")
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"File too large (max: {max_size_mb} MB)",
             )
 
@@ -157,7 +157,7 @@ def detect_decompression_bomb(chunks: list, estimated_size: int) -> None:
             f"(processed: {total_bytes} bytes from {estimated_size} bytes source)"
         )
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"Suspected decompression bomb (expansion ratio: {expansion_ratio:.0f}:1)",
         )
 
