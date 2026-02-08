@@ -26,6 +26,11 @@ Last update: 2026-02-08
 - [ ] None.
 
 ## Done
+- [x] CI test pipeline optimized for speed/stability on PRs:
+  - keep Ubuntu Python `3.12` only (remove `3.11` matrix duplication),
+  - exclude `tests/integration` and `tests/e2e` from PR test run,
+  - run coverage upload only on push to `main`,
+  - make `lint` non-blocking temporarily while baseline debt is reduced.
 - [x] Release `v5.4.8` validated and published (git tag, GitHub release, Docker images).
 - [x] Global non-e2e test suite green: `1242 passed, 44 skipped`.
 - [x] Create guard tests for version metadata consistency (`__version__`, Docker label, README badge).
