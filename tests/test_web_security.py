@@ -519,7 +519,6 @@ class TestXSSProtection:
 class TestSecurityHeaders:
     """Test that security headers are present."""
 
-    @pytest.mark.skip(reason="Security headers not yet implemented - Future enhancement")
     async def test_csp_header_present(self, client: AsyncClient):
         """Test that Content-Security-Policy header is set."""
         response = await client.get("/")
@@ -528,7 +527,6 @@ class TestSecurityHeaders:
                "content-security-policy" in response.headers, \
                "CSP header should be present"
 
-    @pytest.mark.skip(reason="Security headers not yet implemented - Future enhancement")
     async def test_x_frame_options_header_present(self, client: AsyncClient):
         """Test that X-Frame-Options header is set to DENY."""
         response = await client.get("/")
@@ -536,7 +534,6 @@ class TestSecurityHeaders:
         x_frame = response.headers.get("X-Frame-Options", "")
         assert x_frame.upper() == "DENY", "X-Frame-Options should be DENY"
 
-    @pytest.mark.skip(reason="Security headers not yet implemented - Future enhancement")
     async def test_x_content_type_options_header_present(self, client: AsyncClient):
         """Test that X-Content-Type-Options header is set to nosniff."""
         response = await client.get("/")
