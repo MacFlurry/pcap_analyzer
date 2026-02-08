@@ -26,6 +26,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+
 
 def sanitize_file_path(text: str) -> str:
     """
@@ -137,6 +139,10 @@ def sanitize_error_message(text: str, context: Optional[str] = None) -> str:
 
     # Redact connection strings
     sanitized = re.sub(r"(?:postgresql|mysql|mongodb)://[^@]+@[^\s]+", "[CONNECTION_REDACTED]", sanitized)
+
+    # Redact email addresses in user-facing messages.
+    if context == "user_facing":
+        sanitized = EMAIL_PATTERN.sub("[EMAIL_REDACTED]", sanitized)
 
     return sanitized
 

@@ -545,20 +545,26 @@ class TestFileUploadValidation:
 class TestXSSProtection:
     """Test XSS protection in output encoding."""
 
-    @pytest.mark.skip(reason="Requires frontend testing setup")
     async def test_error_message_with_xss_payload_escaped(self, client: AsyncClient):
         """Test that error messages with HTML/JS are escaped."""
+        jwt_token = await get_test_jwt_token(client)
+        csrf_token = await get_csrf_token(client, jwt_token)
+
         # Upload a file with XSS in filename
         pcap_content = b'\xa1\xb2\xc3\xd4' + b'\x00' * 1000
         xss_filename = "<script>alert(document.cookie)</script>.pcap"
 
         files = {"file": (xss_filename, pcap_content, "application/vnd.tcpdump.pcap")}
-        response = await client.post("/api/upload", files=files)
+        headers = {
+            "Authorization": f"Bearer {jwt_token}",
+            "X-CSRF-Token": csrf_token,
+        }
+        response = await client.post("/api/upload", files=files, headers=headers)
 
         # Check that response doesn't contain unescaped script tags
         response_text = response.text
         assert "<script>" not in response_text, "HTML should be escaped in responses"
-        assert "&lt;script&gt;" in response_text or response.status_code == 400
+        assert response.status_code in [202, 400]
 
 
 # =============================================================================

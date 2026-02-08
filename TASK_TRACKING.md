@@ -29,6 +29,9 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] Remove two "future enhancement" style skips by implementing testable behavior:
+  - activated XSS upload-response escaping test in `tests/test_web_security.py` (API-based, no frontend harness),
+  - implemented user-facing email redaction in `src/utils/error_sanitizer.py` and converted corresponding test in `tests/security/test_error_sanitizer.py` from conditional skip to assertion.
 - [x] Clarify BPF/tcpdump test strategy:
   - `tests/test_bpf_validation.py` is now opt-in via `RUN_BPF_TESTS=1`,
   - explicit `requires_tcpdump` marker added,

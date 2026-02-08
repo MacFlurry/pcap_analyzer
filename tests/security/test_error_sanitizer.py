@@ -173,10 +173,8 @@ class TestSensitiveInformationRemoval:
 
         user_error = "Failed to send report to admin@company.com"
         sanitized_user = sanitize_error_message(user_error, context="user_facing")
-
-        # User-facing errors should redact emails
-        if "admin@company.com" in sanitized_user:
-            pytest.skip("Email redaction not implemented for user errors")
+        assert "admin@company.com" not in sanitized_user
+        assert "[EMAIL_REDACTED]" in sanitized_user
 
     def test_ip_addresses_in_errors_handled_by_pii_redactor(self):
         """IP addresses in errors are handled by PII redactor (separate module)."""
