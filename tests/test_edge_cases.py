@@ -28,7 +28,7 @@ async def test_empty_database_queries(test_db, db_type):
     assert stats["pending"] == 0
 
     # Get non-existent task
-    task = await test_db.get_task("does-not-exist")
+    task = await test_db.get_task("00000000-0000-0000-0000-000000000001")
     assert task is None
 
 
@@ -84,11 +84,9 @@ async def test_uuid_vs_string_id(test_db, db_type):
 async def test_large_result_set(test_db, db_type):
     """Verify pagination with 1000+ tasks."""
     # Create 100 tasks (scale down from 1000 for test speed)
-    task_ids = []
     for i in range(100):
-        task_id = f"bulk-{i:04d}"
+        task_id = f"00000000-0000-0000-0000-{i:012d}"
         await test_db.create_task(task_id, f"test{i}.pcap", 1024 * i)
-        task_ids.append(task_id)
 
     # Test pagination
     page1 = await test_db.get_recent_tasks(limit=10)
@@ -102,8 +100,8 @@ async def test_large_result_set(test_db, db_type):
     assert stats["total"] == 100
 
     # Verify descending order (most recent first)
-    assert page1[0].task_id == "bulk-0099"  # Last created
-    assert page1[9].task_id == "bulk-0090"
+    assert page1[0].task_id == "00000000-0000-0000-0000-000000000099"  # Last created
+    assert page1[9].task_id == "00000000-0000-0000-0000-000000000090"
 
 
 @pytest.mark.asyncio
@@ -121,7 +119,7 @@ async def test_special_characters_in_filenames(test_db, db_type):
     ]
 
     for i, filename in enumerate(special_filenames):
-        task_id = f"special-{i}"
+        task_id = f"10000000-0000-0000-0000-{i:012d}"
         task = await test_db.create_task(task_id, filename, 1024)
 
         assert task.filename == filename
@@ -135,7 +133,7 @@ async def test_special_characters_in_filenames(test_db, db_type):
 @pytest.mark.db_parametrize
 async def test_concurrent_status_updates(test_db, db_type):
     """Test concurrent status updates don't cause race conditions."""
-    task_id = "concurrent-status-test"
+    task_id = "20000000-0000-0000-0000-000000000001"
     await test_db.create_task(task_id, "concurrent.pcap", 2048)
 
     # Launch 5 concurrent status updates

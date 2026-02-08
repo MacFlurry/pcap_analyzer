@@ -16,16 +16,9 @@ from app.models.schemas import TaskStatus
 
 @pytest.fixture
 def valid_pcap_content() -> bytes:
-    """Minimal valid PCAP content."""
-    return bytes.fromhex(
-        "d4c3b2a1"  # Magic
-        "0200"      # Major version
-        "0400"      # Minor version
-        "00000000"  # Timezone
-        "00000000"  # Sigfigs
-        "ffff0000"  # Snaplen
-        "01000000"  # Network (Ethernet)
-    )
+    """Known-good PCAP fixture bytes used by other integration tests."""
+    fixture_path = Path("tests/test_data/test_bidirectional.pcap")
+    return fixture_path.read_bytes()
 
 @pytest.fixture
 def corrupted_pcap_content() -> bytes:

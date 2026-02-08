@@ -193,10 +193,8 @@ def postgres_container():
 @pytest.fixture(scope="session")
 def postgres_db_url(postgres_container):
     """
-    Sets the DATABASE_URL environment variable to the container's URL.
-    This ensures that any code reading os.environ["DATABASE_URL"] gets the test container.
+    Return PostgreSQL container URL for tests that explicitly need it.
     """
-    os.environ["DATABASE_URL"] = postgres_container
     return postgres_container
 
 
@@ -213,10 +211,18 @@ def apply_migrations(postgres_db_url):
     sync_url = postgres_db_url.replace("postgresql://", "postgresql+psycopg2://")
     alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
 
-    # Run migrations
-    command.upgrade(alembic_cfg, "head")
-
-    yield
+    # Alembic env.py prioritizes DATABASE_URL from environment.
+    # Force it to PostgreSQL for the migration run, then restore.
+    old_database_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = sync_url
+    try:
+        command.upgrade(alembic_cfg, "head")
+        yield
+    finally:
+        if old_database_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = old_database_url
 
 
 def get_test_database_url(test_data_dir: Path, db_type: str = "auto") -> str:
@@ -258,52 +264,55 @@ async def test_db(test_data_dir: Path, request) -> AsyncGenerator[DatabaseServic
 
     database_url = ""
     db = None
-    if db_type == "postgresql" or (db_type == "auto" and os.getenv("DATABASE_URL", "").startswith("postgresql")):
-        # Load postgres fixtures lazily so SQLite-only tests do not require Docker
-        database_url = request.getfixturevalue("postgres_db_url")
-        request.getfixturevalue("apply_migrations")
-        test_postgres_pool = request.getfixturevalue("test_postgres_pool")
-
-        # Use shared pool
-        db = DatabaseService(database_url=database_url)
-        db.pool = test_postgres_pool
-    else:
-        database_url = get_test_database_url(test_data_dir, db_type=db_type)
-        db = DatabaseService(database_url=database_url)
-
-    await db.init_db()
-    # Ensure users table exists for joins in task/history queries on SQLite tests.
-    udb = UserDatabaseService(database_url=database_url)
-    await udb.init_db()
-    await udb.migrate_tasks_table()
-
-    # Create mock admin user to satisfy foreign key constraints
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc)
+    udb = None
     try:
-        # Use direct SQL to satisfy foreign key constraints with a fixed ID
-        # that matches the one used in the client fixture
-        query, params = db.pool.translate_query(
-            """
-            INSERT INTO users (id, username, email, hashed_password, role, is_active, is_approved, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("00000000-0000-0000-0000-000000000000", "admin-test", "admin@test.com", "hash", "admin", True, True, now),
-        )
-        await db.pool.execute(query, *params)
-    except Exception:
-        # User might already exist (e.g. from init_db or previous run)
-        pass
+        if db_type == "postgresql" or (db_type == "auto" and os.getenv("DATABASE_URL", "").startswith("postgresql")):
+            # Load postgres fixtures lazily so SQLite-only tests do not require Docker
+            database_url = request.getfixturevalue("postgres_db_url")
+            request.getfixturevalue("apply_migrations")
+            db = DatabaseService(database_url=database_url)
+        else:
+            database_url = get_test_database_url(test_data_dir, db_type=db_type)
+            db = DatabaseService(database_url=database_url)
 
-    yield db
+        await db.init_db()
+        # Enforce deterministic isolation for PostgreSQL even if a previous test
+        # aborted before teardown cleanup.
+        if database_url.startswith("postgresql"):
+            await cleanup_database(db.pool)
+        # Ensure users table exists for joins in task/history queries on SQLite tests.
+        udb = UserDatabaseService(database_url=database_url)
+        await udb.init_db()
+        await udb.migrate_tasks_table()
 
-    # Cleanup for PostgreSQL (TRUNCATE tables for isolation)
-    if database_url.startswith("postgresql"):
-        await cleanup_database(db.pool)
-    else:
-        # Close SQLite pool
-        await db.pool.close()
+        # Create mock admin user to satisfy foreign key constraints
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        try:
+            # Use direct SQL to satisfy foreign key constraints with a fixed ID
+            # that matches the one used in the client fixture
+            query, params = db.pool.translate_query(
+                """
+                INSERT INTO users (id, username, email, hashed_password, role, is_active, is_approved, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("00000000-0000-0000-0000-000000000000", "admin-test", "admin@test.com", "hash", "admin", True, True, now),
+            )
+            await db.pool.execute(query, *params)
+        except Exception:
+            # User might already exist (e.g. from init_db or previous run)
+            pass
+
+        yield db
+    finally:
+        if db and db.pool:
+            # Cleanup for PostgreSQL (TRUNCATE tables for isolation)
+            if database_url.startswith("postgresql"):
+                await cleanup_database(db.pool)
+            await db.pool.close()
+        if udb and udb.pool:
+            await udb.pool.close()
 
 
 @pytest.fixture
@@ -328,17 +337,9 @@ def client(test_data_dir: Path, monkeypatch, request) -> Generator[TestClient, N
     # Set DATA_DIR to temporary directory for tests
     monkeypatch.setenv("DATA_DIR", str(test_data_dir))
 
-    # Determine database URL (same logic as test_db)
-    db_type = "auto"
-    if "db_type" in request.fixturenames:
-        db_type = request.getfixturevalue("db_type")
-
-    if db_type == "postgresql" or (db_type == "auto" and os.getenv("DATABASE_URL", "").startswith("postgresql")):
-        # Request postgres fixtures
-        database_url = request.getfixturevalue("postgres_db_url")
-        request.getfixturevalue("apply_migrations")
-    else:
-        database_url = get_test_database_url(test_data_dir, db_type=db_type)
+    # Keep sync TestClient fixture on SQLite to avoid event-loop coupling issues
+    # with async DB setup in mixed sync/async test modules.
+    database_url = get_test_database_url(test_data_dir, db_type="sqlite")
 
     monkeypatch.setenv("DATABASE_URL", database_url)
 
@@ -349,13 +350,14 @@ def client(test_data_dir: Path, monkeypatch, request) -> Generator[TestClient, N
     # The setenv above is sufficient.
 
     # Reset all singletons to pick up new DATA_DIR and ensure clean state
-    from app.services import database, worker, user_database, postgres_database, analyzer
+    from app.services import database, worker, user_database, postgres_database, analyzer, password_reset_service
 
     database._db_service = None
     worker._worker = None
     user_database._user_db_service = None
     postgres_database._db_pool = None
     analyzer._analyzer_service = None
+    password_reset_service._password_reset_service = None
 
     # Mock get_worker to return a MockWorker that doesn't actually process tasks
     # This prevents event loop issues and real PCAP analysis from running
@@ -409,7 +411,7 @@ async def async_client(
 ) -> AsyncGenerator[AsyncClient, None]:
     """Async HTTP client for testing FastAPI endpoints."""
     from app.main import app
-    from app.services import database, worker, user_database, postgres_database, analyzer
+    from app.services import database, worker, user_database, postgres_database, analyzer, password_reset_service
 
     monkeypatch.setenv("DATA_DIR", str(test_data_dir))
 
@@ -418,12 +420,10 @@ async def async_client(
     if "db_type" in request.fixturenames:
         db_type = request.getfixturevalue("db_type")
 
-    test_postgres_pool = None
     if db_type == "postgresql" or (db_type == "auto" and os.getenv("DATABASE_URL", "").startswith("postgresql")):
         # Load postgres fixtures lazily so SQLite-only tests do not require Docker
         database_url = request.getfixturevalue("postgres_db_url")
         request.getfixturevalue("apply_migrations")
-        test_postgres_pool = request.getfixturevalue("test_postgres_pool")
     else:
         database_url = get_test_database_url(test_data_dir, db_type=db_type)
 
@@ -435,6 +435,7 @@ async def async_client(
     user_database._user_db_service = None
     postgres_database._db_pool = None
     analyzer._analyzer_service = None
+    password_reset_service._password_reset_service = None
 
     # Patch DATA_DIR
     # from app.api.routes import health, reports, upload
@@ -477,44 +478,44 @@ async def async_client(
     mock_csrf.generate_csrf_tokens = MagicMock(return_value=("mock-token", "mock-signed-token"))
     app.dependency_overrides[CsrfProtect] = lambda: mock_csrf
 
-    # Initialize databases
-    db = DatabaseService(database_url=database_url)
-    if db_type == "postgresql" or (db_type == "auto" and os.getenv("DATABASE_URL", "").startswith("postgresql")):
-        db.pool = test_postgres_pool
-
-    await db.init_db()
-    database._db_service = db
-
-    udb = UserDatabaseService(database_url=database_url)
-    await udb.init_db()
-    user_database._user_db_service = udb
-
-    # Create mock admin user
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc)
+    db = None
+    udb = None
     try:
-        query, params = db.pool.translate_query(
-            """
-            INSERT INTO users (id, username, email, hashed_password, role, is_active, is_approved, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("00000000-0000-0000-0000-000000000000", "admin-test", "admin@test.com", "hash", "admin", True, True, now),
-        )
-        await db.pool.execute(query, *params)
-    except Exception:
-        pass
+        # Initialize databases
+        db = DatabaseService(database_url=database_url)
+        await db.init_db()
+        database._db_service = db
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        yield ac
+        udb = UserDatabaseService(database_url=database_url)
+        await udb.init_db()
+        user_database._user_db_service = udb
 
-    # Cleanup
-    app.dependency_overrides = {}
-    if db.pool and not (
-        db_type == "postgresql" or (db_type == "auto" and os.environ.get("DATABASE_URL", "").startswith("postgresql"))
-    ):
-        await db.pool.close()
-    worker._worker = None
+        # Create mock admin user
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        try:
+            query, params = db.pool.translate_query(
+                """
+                INSERT INTO users (id, username, email, hashed_password, role, is_active, is_approved, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("00000000-0000-0000-0000-000000000000", "admin-test", "admin@test.com", "hash", "admin", True, True, now),
+            )
+            await db.pool.execute(query, *params)
+        except Exception:
+            pass
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            yield ac
+    finally:
+        # Cleanup
+        app.dependency_overrides = {}
+        if db and db.pool:
+            await db.pool.close()
+        if udb and udb.pool:
+            await udb.pool.close()
+        worker._worker = None
 
 
 @pytest.fixture
@@ -685,9 +686,9 @@ def sample_tcp_data_packet():
 
 
 @pytest.fixture(scope="session")
-async def ensure_postgres_ready():
+async def ensure_postgres_ready(postgres_db_url):
     """Wait for PostgreSQL to be ready (max 30s)."""
-    url = os.getenv("DATABASE_URL", "postgresql://pcap:change_me_in_production@localhost:5432/pcap_analyzer_test")
+    url = postgres_db_url
 
     for attempt in range(30):
         try:
@@ -729,13 +730,11 @@ async def test_postgres_pool(postgres_db_url, ensure_postgres_ready):
 
 
 @pytest.fixture(scope="function")
-async def test_postgres_db(test_postgres_pool):
+async def test_postgres_db(test_postgres_pool, postgres_db_url):
     """PostgreSQL DatabaseService fixture with TRUNCATE-based isolation."""
     from app.services.database import DatabaseService
 
-    database_url = os.getenv(
-        "DATABASE_URL", "postgresql://pcap:change_me_in_production@localhost:5432/pcap_analyzer_test"
-    )
+    database_url = postgres_db_url
 
     db = DatabaseService(database_url=database_url)
 

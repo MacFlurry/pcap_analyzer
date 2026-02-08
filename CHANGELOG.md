@@ -7,6 +7,24 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.7] - 2026-02-08
+
+### Fixed - BUGFIXES 🐛
+
+- **Test suite stabilization (SQLite/PostgreSQL)**:
+  - Hardened database fixture isolation for PostgreSQL by cleaning state at setup and teardown.
+  - Removed cross-test contamination from global `DATABASE_URL` behavior in test fixtures.
+  - Stabilized auth/upload fixtures and singleton resets to avoid async lifecycle pool-close races.
+  - Updated edge-case tests to use valid UUID identifiers for PostgreSQL compatibility.
+
+- **Resource limit regression**:
+  - Fixed `RLIMIT_NOFILE` handling to lower only the soft limit while preserving the hard limit.
+  - Prevents unintended global descriptor-cap reductions that triggered `Too many open files` cascades in tests.
+
+- **Integration test compatibility updates**:
+  - Adjusted JWT persistence test for updated dependency signature requiring `Request`.
+  - Improved upload lifecycle test fixture to use a known-valid PCAP sample.
+
 ## [5.4.5] - 2026-01-10
 
 ### Fixed - BUGFIXES 🐛

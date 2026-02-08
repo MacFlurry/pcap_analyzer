@@ -312,9 +312,25 @@ def set_resource_limits(
         # Prevents fd exhaustion attacks (e.g., opening thousands of files)
         # When exceeded, open() will fail with errno EMFILE
         current_nofile_soft, current_nofile_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        if current_nofile_hard == resource.RLIM_INFINITY or max_open_files <= current_nofile_hard:
-            resource.setrlimit(resource.RLIMIT_NOFILE, (max_open_files, max_open_files))
-            logger.info("File descriptor limit (RLIMIT_NOFILE): %d (prevents fd exhaustion)", max_open_files)
+        if current_nofile_hard == resource.RLIM_INFINITY:
+            target_nofile_soft = max_open_files
+            target_nofile_hard = current_nofile_hard
+            resource.setrlimit(resource.RLIMIT_NOFILE, (target_nofile_soft, target_nofile_hard))
+            logger.info(
+                "File descriptor limit (RLIMIT_NOFILE): soft=%d hard=unlimited (prevents fd exhaustion)",
+                target_nofile_soft,
+            )
+        elif max_open_files <= current_nofile_hard:
+            # Keep hard limit unchanged to avoid irreversible test-process degradation
+            # when lowering limits in a non-root context.
+            target_nofile_soft = max_open_files
+            target_nofile_hard = current_nofile_hard
+            resource.setrlimit(resource.RLIMIT_NOFILE, (target_nofile_soft, target_nofile_hard))
+            logger.info(
+                "File descriptor limit (RLIMIT_NOFILE): soft=%d hard=%d (prevents fd exhaustion)",
+                target_nofile_soft,
+                target_nofile_hard,
+            )
         else:
             logger.warning(
                 "Cannot set file descriptor limit to %d (system hard limit is %d). Using system limit.",

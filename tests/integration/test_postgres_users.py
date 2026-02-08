@@ -146,6 +146,7 @@ async def test_jwt_persistence(user_db, monkeypatch):
     Verifies that a token issued continues to work as long as the user exists in DB.
     """
     from app.auth import create_access_token, get_current_user, get_secret_key
+    from starlette.requests import Request
     from datetime import timedelta
     
     # Ensure SECRET_KEY is set for consistency
@@ -161,12 +162,12 @@ async def test_jwt_persistence(user_db, monkeypatch):
     assert token is not None
     
     # 2. Validate Token (simulate dependency injection)
-    # We need to mock get_user_db_service to return our fixture user_db
-    # because get_current_user calls get_user_db_service() internally
-    import app.auth
-    monkeypatch.setattr(app.auth, "get_user_db_service", lambda: user_db)
+    # get_current_user imports get_user_db_service from the service module at runtime.
+    import app.services.user_database
+    monkeypatch.setattr(app.services.user_database, "get_user_db_service", lambda: user_db)
     
-    authenticated_user = await get_current_user(token=token)
+    request = Request({"type": "http", "headers": [], "query_string": b""})
+    authenticated_user = await get_current_user(request=request, token=token)
     assert authenticated_user is not None
     assert authenticated_user.id == user.id
     assert authenticated_user.username == username
@@ -176,7 +177,7 @@ async def test_jwt_persistence(user_db, monkeypatch):
     await user_db.update_last_login(user.id)
     
     # Token should still be valid and return updated user info (if any)
-    authenticated_user_2 = await get_current_user(token=token)
+    authenticated_user_2 = await get_current_user(request=request, token=token)
     assert authenticated_user_2.last_login is not None
     
     # 4. Test invalidation on user deletion
@@ -186,6 +187,6 @@ async def test_jwt_persistence(user_db, monkeypatch):
     
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token)
+        await get_current_user(request=request, token=token)
     assert exc.value.status_code == 403
     assert "inactive" in exc.value.detail
