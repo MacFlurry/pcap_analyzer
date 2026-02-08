@@ -7,6 +7,27 @@ on:
     branches: [ main ]
 
 jobs:
+  version-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .[test]
+        pip install pytest-asyncio
+
+    - name: Run metadata and test-convention guards
+      run: |
+        pytest tests/unit/test_version_metadata.py tests/unit/test_test_conventions.py -q
+
   test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30

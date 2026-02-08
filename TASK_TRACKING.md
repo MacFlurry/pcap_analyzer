@@ -37,3 +37,4 @@ Last update: 2026-02-08
 - [x] Add a test convention guard to forbid `@pytest.mark.asyncio` on sync tests (`5 passed` with metadata guards).
 - [x] Add guard and fix Helm chart appVersion drift against package version (`6 passed` on guard suite).
 - [x] Add metadata guards for Helm values + docker-compose image tag policy and fix detected drifts (`8 passed` on guard suite).
+- [x] Add CI job to enforce metadata/convention guards on push/PR.
