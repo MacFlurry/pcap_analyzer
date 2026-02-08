@@ -35,3 +35,4 @@ Last update: 2026-02-08
 - [x] Standardize remaining legacy version markers in `docs/ARCHITECTURE.md`.
 - [x] Add guard test ensuring `CHANGELOG.md` contains the current package version section (`4 passed`).
 - [x] Add a test convention guard to forbid `@pytest.mark.asyncio` on sync tests (`5 passed` with metadata guards).
+- [x] Add guard and fix Helm chart appVersion drift against package version (`6 passed` on guard suite).
