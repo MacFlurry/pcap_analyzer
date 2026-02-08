@@ -23,7 +23,10 @@ Last update: 2026-02-08
 - [ ] None.
 
 ## In Progress
-- [ ] None.
+- [ ] Progressive CI reactivation (phase 1):
+  - re-enable `version-guards` and `test` jobs with stable scope,
+  - keep `docker-build` and `helm-test` disabled for now,
+  - validate one green run on `main` before next phase.
 
 ## Done
 - [x] Lint CI aligned to flake8-only signal:

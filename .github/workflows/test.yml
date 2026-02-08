@@ -8,7 +8,6 @@ on:
 
 jobs:
   version-guards:
-    if: ${{ false }}  # Temporarily disabled to focus only on lint stabilization
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,8 +29,9 @@ jobs:
         pytest tests/unit/test_version_metadata.py tests/unit/test_test_conventions.py -q
 
   test:
-    if: ${{ false }}  # Temporarily disabled to focus only on lint stabilization
     runs-on: ${{ matrix.os }}
+    env:
+      DATABASE_URL: sqlite:///./pcap_analyzer_ci.db
     timeout-minutes: 20
     strategy:
       fail-fast: false
