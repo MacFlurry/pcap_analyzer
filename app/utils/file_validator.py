@@ -43,6 +43,7 @@ async def validate_upload_size_streaming(
 
     Args:
         file: FastAPI UploadFile object
+        max_upload_size_mb: Maximum upload size limit in MB
         max_size_mb: Maximum allowed file size in MB
 
     Yields:
@@ -162,7 +163,7 @@ def detect_decompression_bomb(chunks: list, estimated_size: int) -> None:
         )
 
 
-async def validate_pcap_upload_complete(file: UploadFile) -> Tuple[bytes, str]:
+async def validate_pcap_upload_complete(file: UploadFile, max_upload_size_mb: int = MAX_UPLOAD_SIZE_MB) -> Tuple[bytes, str]:
     """
     Complete file upload validation with defense-in-depth.
 
@@ -190,7 +191,7 @@ async def validate_pcap_upload_complete(file: UploadFile) -> Tuple[bytes, str]:
     estimated_size = file.size or 1024  # Fallback if Content-Length not provided
 
     # Step 1: Stream validation with size check
-    async for chunk in validate_upload_size_streaming(file, MAX_UPLOAD_SIZE_MB):
+    async for chunk in validate_upload_size_streaming(file, max_upload_size_mb):
         chunks.append(chunk)
 
         # Step 3: Decompression bomb check every 50MB

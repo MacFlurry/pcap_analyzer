@@ -78,7 +78,9 @@ async def upload_pcap(
     # Validation Step 2: Stream-based validation (size + magic + decompression bomb)
     # This replaces the old vulnerable pattern of reading entire file then validating
     try:
-        content, pcap_type = await validate_pcap_upload_complete(file)
+        # Keep compatibility with tests patching either route alias or file_validator constant.
+        effective_max_upload_mb = min(MAX_UPLOAD_SIZE_MB, _file_validator.MAX_UPLOAD_SIZE_MB)
+        content, pcap_type = await validate_pcap_upload_complete(file, max_upload_size_mb=effective_max_upload_mb)
         file_size = len(content)
         logger.info(f"Upload validated: {sanitized_filename}, size: {file_size} bytes, type: {pcap_type}")
     except HTTPException:

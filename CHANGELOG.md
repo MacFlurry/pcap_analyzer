@@ -7,6 +7,30 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.8] - 2026-02-08
+
+### Added
+
+- **Upload rate limiting (5/minute par IP)** sur `POST /api/upload` avec réponse `429` et en-tête `Retry-After`.
+- **Middleware de security headers** appliqué globalement:
+  - `Content-Security-Policy`
+  - `X-Frame-Options: DENY`
+  - `X-Content-Type-Options: nosniff`
+  - `Referrer-Policy`
+  - `Strict-Transport-Security` uniquement en HTTPS.
+
+### Changed
+
+- **Durcissement de la suite de sécurité Web**:
+  - Activation des tests rate limiting upload et security headers.
+  - Activation du test ownership multi-tenant (accès refusé inter-utilisateurs).
+  - Activation du test de rejet upload oversized.
+  - Activation du test de rejet decompression bomb (chemin 413 validé).
+- **Isolation des tests**: reset automatique des rate limiters mémoire entre tests pour éviter les effets de bord.
+- **Stabilité upload/tests**:
+  - Restauration correcte des constantes `file_validator` entre tests (plus de contamination inter-tests).
+  - Validation upload alignée pour supporter les overrides de limite côté route et côté validateur.
+
 ## [5.4.7] - 2026-02-08
 
 ### Fixed - BUGFIXES 🐛

@@ -448,7 +448,7 @@ class TestFileUploadValidation:
         monkeypatch.setenv("MAX_UPLOAD_SIZE_MB", "1")
         try:
             from app.utils import file_validator
-            file_validator.MAX_UPLOAD_SIZE_MB = 1
+            monkeypatch.setattr(file_validator, "MAX_UPLOAD_SIZE_MB", 1)
 
             jwt_token = await get_test_jwt_token(client)
             csrf_token = await get_csrf_token(client, jwt_token)
@@ -479,8 +479,8 @@ class TestFileUploadValidation:
 
             monkeypatch.setenv("CRITICAL_EXPANSION_RATIO", "0")
             monkeypatch.setenv("MAX_EXPANSION_RATIO", "0")
-            file_validator.CRITICAL_EXPANSION_RATIO = 0
-            file_validator.MAX_EXPANSION_RATIO = 0
+            monkeypatch.setattr(file_validator, "CRITICAL_EXPANSION_RATIO", 0)
+            monkeypatch.setattr(file_validator, "MAX_EXPANSION_RATIO", 0)
 
             jwt_token = await get_test_jwt_token(client)
             csrf_token = await get_csrf_token(client, jwt_token)
