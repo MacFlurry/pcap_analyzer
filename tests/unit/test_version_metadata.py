@@ -42,3 +42,18 @@ def test_helm_chart_app_version_matches_package_version():
     match = re.search(r'appVersion:\s*"([^"]+)"', chart)
     assert match, "Helm Chart.yaml appVersion not found"
     assert match.group(1) == __version__
+
+
+def test_helm_values_image_tag_matches_package_version():
+    root = Path(__file__).resolve().parents[2]
+    values = (root / "helm-chart" / "pcap-analyzer" / "values.yaml").read_text(encoding="utf-8")
+    match = re.search(r'^\s*tag:\s*"([^"]+)"', values, re.MULTILINE)
+    assert match, "Helm values image.tag not found"
+    assert match.group(1) == f"v{__version__}"
+
+
+def test_docker_compose_does_not_pin_stale_app_version_tag():
+    root = Path(__file__).resolve().parents[2]
+    compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+    # pcap-analyzer service should use latest/local build policy, not a stale hardcoded semver tag.
+    assert not re.search(r"image:\s*pcap-analyzer:v\d+\.\d+\.\d+", compose)
