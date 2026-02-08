@@ -9,6 +9,7 @@ On macOS, you may need to run: sudo chmod +s /usr/sbin/tcpdump
 """
 
 import subprocess
+import os
 
 import pytest
 
@@ -24,10 +25,22 @@ def check_tcpdump_available():
         return False
 
 
-# Skip all tests if tcpdump is not available with proper permissions
-pytestmark = pytest.mark.skipif(
-    not check_tcpdump_available(), reason="tcpdump not available or requires root permissions"
-)
+# BPF/tcpdump tests are opt-in by default because they depend on host tooling
+# and privileges (tcpdump capabilities/root on some systems).
+RUN_BPF_TESTS = os.getenv("RUN_BPF_TESTS", "0") == "1"
+TCPDUMP_READY = check_tcpdump_available()
+
+pytestmark = [
+    pytest.mark.requires_tcpdump,
+    pytest.mark.skipif(
+        not RUN_BPF_TESTS,
+        reason="BPF tests disabled by default (set RUN_BPF_TESTS=1 to enable)",
+    ),
+    pytest.mark.skipif(
+        RUN_BPF_TESTS and not TCPDUMP_READY,
+        reason="tcpdump not available or insufficient permissions for filter compilation",
+    ),
+]
 
 
 class TestBPFValidation:

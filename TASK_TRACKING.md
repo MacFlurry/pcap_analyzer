@@ -29,6 +29,10 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] Clarify BPF/tcpdump test strategy:
+  - `tests/test_bpf_validation.py` is now opt-in via `RUN_BPF_TESTS=1`,
+  - explicit `requires_tcpdump` marker added,
+  - clear skip reasons when tcpdump binary/capabilities are unavailable.
 - [x] Windows-specific resource-limit tests excluded by default:
   - `tests/security/test_resource_limits.py` now requires explicit opt-in (`RUN_WINDOWS_TESTS=1`) to run Windows-only checks,
   - default local/CI behavior keeps them skipped.

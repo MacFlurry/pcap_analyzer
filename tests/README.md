@@ -48,6 +48,11 @@ pytest tests/ -v --cov=app --cov=src --cov-report=html
 pytest tests/ -v -m "not slow"
 ```
 
+### Tests BPF/tcpdump (opt-in)
+```bash
+RUN_BPF_TESTS=1 pytest tests/test_bpf_validation.py -v
+```
+
 ## Markers
 
 - `@pytest.mark.unit` - Tests unitaires
@@ -55,6 +60,7 @@ pytest tests/ -v -m "not slow"
 - `@pytest.mark.security` - Tests de sécurité
 - `@pytest.mark.slow` - Tests lents (>5s)
 - `@pytest.mark.smoke` - Tests rapides essentiels
+- `@pytest.mark.requires_tcpdump` - Tests dépendants de `tcpdump` local
 
 ## Fixtures disponibles
 

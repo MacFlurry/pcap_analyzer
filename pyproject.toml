@@ -187,6 +187,7 @@ markers = [
     "integration: Integration tests",
     "slow: Slow running tests",
     "network: Tests requiring network access",
+    "requires_tcpdump: Tests requiring local tcpdump binary/capabilities",
 ]
 filterwarnings = [
     "error",
