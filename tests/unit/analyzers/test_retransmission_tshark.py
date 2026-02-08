@@ -254,7 +254,7 @@ class TestTsharkRetransmissionAnalyzer:
                     assert retransmissions[0].original_packet_num == 1
 
 
-@pytest.mark.skipif(not shutil.which("tshark"), reason="tshark not available")
+@pytest.mark.skipif(find_tshark() is None, reason="tshark not available")
 class TestTsharkRetransmissionAnalyzerIntegration:
     """Integration tests when tshark is actually available."""
 

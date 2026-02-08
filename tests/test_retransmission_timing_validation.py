@@ -35,6 +35,7 @@ from generate_retransmission_pcap import (
     generate_syn_retransmissions,
     generate_psh_ack_retransmissions,
 )
+from src.analyzers.retransmission_tshark import find_tshark
 
 
 @dataclass
@@ -163,7 +164,8 @@ class TestRetransmissionTimingValidation:
         tshark is our ground truth - if it doesn't detect retransmissions,
         our PCAP generation is incorrect.
         """
-        if shutil.which("tshark") is None:
+        tshark_path = find_tshark()
+        if tshark_path is None:
             pytest.skip("tshark is not installed on this environment")
 
         pcap_path, expected = pcap_with_syn_retrans
@@ -171,7 +173,7 @@ class TestRetransmissionTimingValidation:
         # Run tshark to detect retransmissions
         result = subprocess.run(
             [
-                "tshark", "-r", str(pcap_path),
+                tshark_path, "-r", str(pcap_path),
                 "-Y", "tcp.analysis.retransmission",
                 "-T", "fields",
                 "-e", "frame.number",
@@ -194,14 +196,15 @@ class TestRetransmissionTimingValidation:
         """
         RED PHASE: Validate tshark detects PSH,ACK retransmissions.
         """
-        if shutil.which("tshark") is None:
+        tshark_path = find_tshark()
+        if tshark_path is None:
             pytest.skip("tshark is not installed on this environment")
 
         pcap_path, expected = pcap_with_psh_ack_retrans
         
         result = subprocess.run(
             [
-                "tshark", "-r", str(pcap_path),
+                tshark_path, "-r", str(pcap_path),
                 "-Y", "tcp.analysis.retransmission",
                 "-T", "fields",
                 "-e", "frame.number",

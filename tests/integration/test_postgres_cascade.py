@@ -21,12 +21,9 @@ import pytest
 
 # Use function-scoped pool to avoid event loop issues
 @pytest.fixture
-async def db_pool():
+async def db_pool(postgres_db_url, apply_migrations):
     """Create a fresh connection pool for each test."""
-    database_url = os.getenv(
-        "DATABASE_URL",
-        "postgresql://pcap:b1b58d89a09b421e9968e2fbbd81fd641897036a1bd376e3c26bd1480355dd71@localhost:5432/pcap_analyzer_test"
-    )
+    database_url = postgres_db_url
     if not database_url.startswith("postgresql://") and not database_url.startswith("postgres://"):
         pytest.skip("PostgreSQL CASCADE tests require DATABASE_URL with postgresql://")
     pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
