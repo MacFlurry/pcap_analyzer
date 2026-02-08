@@ -264,29 +264,46 @@ class TestAuthentication:
         assert response.status_code == 401
         assert "detail" in response.json()
 
-    @pytest.mark.skip(reason="Auth not yet implemented - Issue #15")
     async def test_ownership_check(self, client: AsyncClient):
         """Test that users can only access their own resources."""
-        # Login as user1
-        credentials1 = {"username": "user1", "password": "password1"}
-        login1 = await client.post("/token", data=credentials1)
-        token1 = login1.json()["access_token"]
+        from app.models.user import UserCreate
+        from app.services.user_database import get_user_db_service
+        from app.auth import create_access_token
 
-        # Login as user2
-        credentials2 = {"username": "user2", "password": "password2"}
-        login2 = await client.post("/token", data=credentials2)
-        token2 = login2.json()["access_token"]
+        user_db = get_user_db_service()
 
-        # User1 uploads a file
-        pcap_content = b'\xa1\xb2\xc3\xd4' + b'\x00' * 1000
-        files = {"file": ("test.pcap", pcap_content, "application/vnd.tcpdump.pcap")}
-        headers1 = {"Authorization": f"Bearer {token1}"}
-        upload_response = await client.post("/api/upload", files=files, headers=headers1)
-        task_id = upload_response.json()["task_id"]
+        user1 = await user_db.create_user(
+            UserCreate(
+                username=f"user1_{uuid.uuid4().hex[:6]}",
+                email=f"user1_{uuid.uuid4().hex[:6]}@example.com",
+                password="Correct-Horse-Battery-Staple-2025!",
+            ),
+            auto_approve=True,
+        )
+        user2 = await user_db.create_user(
+            UserCreate(
+                username=f"user2_{uuid.uuid4().hex[:6]}",
+                email=f"user2_{uuid.uuid4().hex[:6]}@example.com",
+                password="Correct-Horse-Battery-Staple-2025!",
+            ),
+            auto_approve=True,
+        )
 
-        # User2 tries to access User1's report
+        token2 = create_access_token(user2)
+
+        # Create a task owned by user1; user2 must not be able to access it.
+        from app.services.database import get_db_service
+        db_service = get_db_service()
+        task_id = str(uuid.uuid4())
+        await db_service.create_task(
+            task_id=task_id,
+            filename="owned-by-user1.pcap",
+            file_size_bytes=1234,
+            owner_id=user1.id,
+        )
+
         headers2 = {"Authorization": f"Bearer {token2}"}
-        response = await client.get(f"/api/reports/{task_id}/html", headers=headers2)
+        response = await client.get(f"/api/status/{task_id}", headers=headers2)
 
         assert response.status_code == 403, "Should reject access to other user's resources"
 
@@ -426,15 +443,27 @@ class TestFileUploadValidation:
         VULNERABILITY: Size checked AFTER full read into memory
         FIX: Stream read with size check per chunk
         """
-        # Simulate a 600 MB file (don't actually create it, just test size check)
-        file_size_mb = 600
-        max_size_mb = 500
+        # Use a low runtime limit to avoid huge payloads, and verify 413 path.
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setenv("MAX_UPLOAD_SIZE_MB", "1")
+        try:
+            from app.utils import file_validator
+            file_validator.MAX_UPLOAD_SIZE_MB = 1
 
-        # This test would need to verify that the server checks size incrementally
-        # For now, we'll test that the error message is correct
-        # TODO: Implement streaming read test
+            jwt_token = await get_test_jwt_token(client)
+            csrf_token = await get_csrf_token(client, jwt_token)
 
-        pytest.skip("Requires streaming read implementation")
+            pcap_content = b"\xd4\xc3\xb2\xa1" + b"\x00" * (2 * 1024 * 1024)
+            files = {"file": ("too_large.pcap", pcap_content, "application/vnd.tcpdump.pcap")}
+            headers = {
+                "Authorization": f"Bearer {jwt_token}",
+                "X-CSRF-Token": csrf_token,
+            }
+
+            response = await client.post("/api/upload", files=files, headers=headers)
+            assert response.status_code == 413, f"Expected 413, got {response.status_code}: {response.text}"
+        finally:
+            monkeypatch.undo()
 
     async def test_upload_decompression_bomb_rejected(self, client: AsyncClient):
         """
