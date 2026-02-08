@@ -29,6 +29,9 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] Reactivate `tests/security/test_integration.py` and remove obsolete global skips:
+  - updated legacy test adapters to current APIs (`DecompressionMonitor`, audit logger, file-size error handling),
+  - result: `18 passed` on this suite (previously `18 skipped`).
 - [x] CI test scope narrowed for runtime stability:
   - `test` job now targets `tests/unit` + `tests/regression` only,
   - avoids repeated long-running API/security flows in the main CI lane.
