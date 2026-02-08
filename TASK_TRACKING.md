@@ -29,6 +29,9 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] Replace remaining non-environment security/test skips in targeted files:
+  - `tests/test_security.py`: activated XSS escaping and CSP header checks (no skip),
+  - `tests/test_tcp_state_machine.py`: replaced TIME-WAIT skip with explicit conditional `xfail` documenting current limitation.
 - [x] Remove two "future enhancement" style skips by implementing testable behavior:
   - activated XSS upload-response escaping test in `tests/test_web_security.py` (API-based, no frontend harness),
   - implemented user-facing email redaction in `src/utils/error_sanitizer.py` and converted corresponding test in `tests/security/test_error_sanitizer.py` from conditional skip to assertion.

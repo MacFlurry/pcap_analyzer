@@ -18,7 +18,10 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
+from app.main import app
+from src.exporters.html_report import escape_html
 from src.report_generator import ReportGenerator
 from src.utils.result_sanitizer import sanitize_results
 
@@ -96,16 +99,17 @@ class TestXSSProtection:
 
     def test_jinja2_autoescape_enabled(self):
         """
-        Test that Jinja2 autoescape is enabled
+        Test that HTML escaping is active for report output values.
 
         Prevents: <script>alert('XSS')</script> in packet data from executing
 
-        Note: ReportGenerator now only handles JSON export.
-        HTML generation moved to HTMLReportGenerator which uses inline generation.
-        XSS protection is verified through the other XSS tests.
+        Note: Template-based generation was removed. We validate the current
+        escape helper used by HTML report generation.
         """
-        # Skip: Template-based system removed, HTML now generated inline
-        pytest.skip("Template system removed - XSS protection verified by other tests")
+        payload = "<script>alert('XSS')</script>"
+        escaped = escape_html(payload)
+        assert "<script>" not in escaped
+        assert "&lt;script&gt;" in escaped
 
     def test_xss_payload_in_ip_address_escaped(self):
         """
@@ -251,11 +255,14 @@ class TestCSPHeader:
 
         Prevents: Inline scripts, external resource loading
 
-        Note: HTMLReportGenerator generates inline HTML with embedded CSS.
-        CSP would be set at the web server level for served reports.
+        CSP is currently injected by FastAPI security headers middleware.
         """
-        # Skip: Old template-based system removed, CSP handled at web server level
-        pytest.skip("CSP validation moved to web server configuration")
+        client = TestClient(app)
+        response = client.get("/", follow_redirects=False)
+        assert "Content-Security-Policy" in response.headers
+        csp = response.headers["Content-Security-Policy"]
+        assert "default-src 'self'" in csp
+        assert "object-src 'none'" in csp
 
 
 class TestSecretsProtection:
