@@ -28,3 +28,9 @@ def test_architecture_doc_version_matches_package_version():
     match = re.search(r"\*\*Version\*\*:\s*([0-9]+\.[0-9]+\.[0-9]+)", architecture)
     assert match, "docs/ARCHITECTURE.md version line not found"
     assert match.group(1) == __version__
+
+
+def test_changelog_contains_current_version_section():
+    root = Path(__file__).resolve().parents[2]
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert f"## [{__version__}] - " in changelog, "CHANGELOG.md must contain a section for the current version"

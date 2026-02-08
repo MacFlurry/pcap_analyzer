@@ -33,3 +33,4 @@ Last update: 2026-02-08
 - [x] Update architecture documentation header/status to current release (`5.4.8`) with explicit historical note.
 - [x] Re-run targeted tests for metadata guards (`3 passed`).
 - [x] Standardize remaining legacy version markers in `docs/ARCHITECTURE.md`.
+- [x] Add guard test ensuring `CHANGELOG.md` contains the current package version section (`4 passed`).
