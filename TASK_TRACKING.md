@@ -29,6 +29,9 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] CI test scope narrowed for runtime stability:
+  - `test` job now targets `tests/unit` + `tests/regression` only,
+  - avoids repeated long-running API/security flows in the main CI lane.
 - [x] CI runtime optimization for `test` job:
   - avoid double execution on `main` by running non-coverage pytest only on PRs,
   - keep coverage run on push to `main` as the single test execution path.
