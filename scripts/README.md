@@ -2,6 +2,26 @@
 
 Scripts de benchmarking et profiling pour valider les performances de l'analyseur PCAP.
 
+## Capture Raspberry Pi (SSH + tcpdump + tshark)
+
+Deux scripts ont été ajoutés pour capturer depuis un Raspberry Pi puis analyser localement:
+
+- `scripts/raspi_remote_tcpdump.sh`: helper à exécuter sur le Raspberry (capture tcpdump avec timeout).
+- `scripts/capture_from_raspberry.sh`: orchestration locale (upload helper via SSH, capture distante, récupération PCAP, stats `tshark`, puis `pcap_analyzer`).
+
+Usage local:
+
+```bash
+scripts/capture_from_raspberry.sh \
+  --host 192.168.25.15 \
+  --user omegabk \
+  --key ~/.ssh/id_ed25519_raspberry \
+  --duration 120 \
+  --iface any \
+  --filter "tcp or udp" \
+  --name raspi_lab
+```
+
 ## Scripts Disponibles
 
 ### 1. benchmark_cli_vs_web.py

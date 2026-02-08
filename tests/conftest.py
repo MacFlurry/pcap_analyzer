@@ -522,27 +522,15 @@ def normal_pcap_path():
 
 @pytest.fixture
 def sample_pcap_file(test_data_dir: Path) -> Path:
-    """Create a minimal valid PCAP file for testing"""
+    """Create a small valid PCAP file with 2 packets for validation tests."""
+    from scapy.all import Ether, IP, TCP, wrpcap
+
     pcap_file = test_data_dir / "sample.pcap"
-
-    # PCAP global header (little-endian)
-    # Magic number: 0xa1b2c3d4
-    # Version: 2.4
-    # Timezone: 0
-    # Sigfigs: 0
-    # Snaplen: 65535
-    # Network: 1 (Ethernet)
-    global_header = bytes.fromhex(
-        "d4c3b2a1"  # Magic
-        "0200"  # Major version
-        "0400"  # Minor version
-        "00000000"  # Timezone
-        "00000000"  # Sigfigs
-        "ffff0000"  # Snaplen
-        "01000000"  # Network (Ethernet)
-    )
-
-    pcap_file.write_bytes(global_header)
+    pkt1 = Ether() / IP(src="192.168.1.10", dst="192.168.1.20") / TCP(sport=12345, dport=80, flags="S")
+    pkt2 = Ether() / IP(src="192.168.1.20", dst="192.168.1.10") / TCP(sport=80, dport=12345, flags="SA")
+    pkt1.time = 1.0
+    pkt2.time = 2.0
+    wrpcap(str(pcap_file), [pkt1, pkt2])
     return pcap_file
 
 

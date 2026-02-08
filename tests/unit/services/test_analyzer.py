@@ -143,41 +143,27 @@ class TestAnalyzerService:
         assert reports_dir.exists()
 
     @pytest.mark.asyncio
-    @patch("app.services.analyzer.analyze_pcap_hybrid")
-    async def test_analyze_pcap_success(self, mock_analyze, service, tmp_path):
-        """Test successful PCAP analysis."""
-        # Create a temporary PCAP file
+    async def test_analyze_pcap_success(self, service, tmp_path):
+        """Test successful PCAP analysis orchestration."""
         pcap_file = tmp_path / "test.pcap"
         pcap_file.write_bytes(b"dummy pcap data")
 
-        # Mock analyze_pcap_hybrid to return results
-        mock_analyze.return_value = {
-            "retransmissions": [],
-            "rtt_stats": {},
-            "window_stats": {},
-        }
+        mock_results = {"retransmissions": [], "rtt_stats": {}, "window_stats": {}}
+        mock_reports = {"html": "/tmp/test.html", "json": "/tmp/test.json"}
 
-        # Create progress callback
         mock_callback = AsyncMock()
         progress_callback = ProgressCallback(task_id="test_task", callback_fn=mock_callback)
 
-        # Run analysis
-        with patch("app.services.analyzer.run_in_executor") as mock_executor:
-            # Mock executor to call analyze_pcap_hybrid directly
-            async def executor_wrapper(fn, *args):
-                return fn(*args)
+        with patch.object(service, "_run_analysis_sync", return_value=mock_results) as mock_run_sync:
+            with patch.object(service, "_generate_reports", return_value=mock_reports) as mock_generate:
+                result = await service.analyze_pcap("test_task", str(pcap_file), progress_callback=progress_callback)
 
-            mock_executor.side_effect = executor_wrapper
-            mock_executor.__call__ = executor_wrapper
-
-            with patch("asyncio.get_event_loop") as mock_loop:
-                mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = Mock(return_value=None)
-                mock_loop.return_value = mock_loop_instance
-
-                # This test is complex due to async/sync boundary
-                # For now, just verify service structure
-                assert service.data_dir.exists()
+        assert result["results"] == mock_results
+        assert result["reports"] == mock_reports
+        assert mock_run_sync.called
+        assert mock_generate.called
+        # At least one completion update should be emitted.
+        assert mock_callback.await_count >= 1
 
     def test_generate_reports_directory_exists(self, service):
         """Test that report generation creates necessary directories."""
