@@ -26,6 +26,9 @@ Last update: 2026-02-08
 - [ ] None.
 
 ## Done
+- [x] CI narrowed to lint-only temporarily:
+  - disabled `version-guards`, `test`, `docker-build`, and `helm-test` jobs,
+  - made `lint` blocking again to focus cleanup effort.
 - [x] CI test pipeline optimized for speed/stability on PRs:
   - keep Ubuntu Python `3.12` only (remove `3.11` matrix duplication),
   - exclude `tests/integration` and `tests/e2e` from PR test run,
