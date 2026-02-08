@@ -29,6 +29,9 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] Windows-specific resource-limit tests excluded by default:
+  - `tests/security/test_resource_limits.py` now requires explicit opt-in (`RUN_WINDOWS_TESTS=1`) to run Windows-only checks,
+  - default local/CI behavior keeps them skipped.
 - [x] Reactivate `tests/security/test_integration.py` and remove obsolete global skips:
   - updated legacy test adapters to current APIs (`DecompressionMonitor`, audit logger, file-size error handling),
   - result: `18 passed` on this suite (previously `18 skipped`).

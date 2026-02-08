@@ -24,6 +24,15 @@ from src.utils.resource_limits import (
 )
 
 
+# Windows-only tests are opt-in by default.
+# Enable explicitly with: RUN_WINDOWS_TESTS=1 pytest ...
+RUN_WINDOWS_TESTS = os.getenv("RUN_WINDOWS_TESTS", "0") == "1"
+WINDOWS_ONLY_SKIP = pytest.mark.skipif(
+    sys.platform != "win32" or not RUN_WINDOWS_TESTS,
+    reason="Windows-specific tests excluded by default (set RUN_WINDOWS_TESTS=1 on Windows)",
+)
+
+
 # Save system limits once at module level (before any test modifies them)
 _SYSTEM_DEFAULT_LIMITS = {}
 if sys.platform != "win32":
@@ -365,7 +374,7 @@ class TestDoSProtection:
 class TestWindowsPlatformHandling:
     """Test graceful degradation on Windows (limited resource module)."""
 
-    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific test")
+    @WINDOWS_ONLY_SKIP
     def test_windows_resource_limits_log_warning(self):
         """On Windows, resource limits log warning about limited support."""
         config = ResourceLimitConfig()
@@ -377,7 +386,7 @@ class TestWindowsPlatformHandling:
             # Expected on Windows
             pass
 
-    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific test")
+    @WINDOWS_ONLY_SKIP
     def test_windows_file_size_validation_still_works(self):
         """On Windows, file size pre-validation still works (no resource module needed)."""
         from src.utils.file_validator import validate_file_size
