@@ -89,7 +89,7 @@ async def test_upload_oversized_rejected(api_client, auth_with_csrf):
             headers=auth_with_csrf,
             files=files
         )
-        assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+        assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
         assert "too large" in response.json()["detail"].lower()
 
 @pytest.mark.integration
