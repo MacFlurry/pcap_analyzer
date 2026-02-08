@@ -472,11 +472,31 @@ class TestFileUploadValidation:
         VULNERABILITY: No decompression bomb protection in Web UI
         FIX: Reuse src/utils/decompression_monitor.py from CLI
         """
-        # Simulate a zip bomb (small compressed, huge uncompressed)
-        # Real test would use 42.zip or similar
-        # For now, just verify the check exists
+        # Force strict expansion threshold to exercise decompression bomb rejection path.
+        monkeypatch = pytest.MonkeyPatch()
+        try:
+            from app.utils import file_validator
 
-        pytest.skip("Requires decompression_monitor.py integration")
+            monkeypatch.setenv("CRITICAL_EXPANSION_RATIO", "0")
+            monkeypatch.setenv("MAX_EXPANSION_RATIO", "0")
+            file_validator.CRITICAL_EXPANSION_RATIO = 0
+            file_validator.MAX_EXPANSION_RATIO = 0
+
+            jwt_token = await get_test_jwt_token(client)
+            csrf_token = await get_csrf_token(client, jwt_token)
+
+            pcap_content = build_valid_pcap_bytes()
+            files = {"file": ("bomb_like.pcap", pcap_content, "application/vnd.tcpdump.pcap")}
+            headers = {
+                "Authorization": f"Bearer {jwt_token}",
+                "X-CSRF-Token": csrf_token,
+            }
+
+            response = await client.post("/api/upload", files=files, headers=headers)
+            assert response.status_code == 413, f"Expected 413, got {response.status_code}: {response.text}"
+            assert "decompression bomb" in response.json()["detail"].lower()
+        finally:
+            monkeypatch.undo()
 
     async def test_filename_special_characters_sanitized(self, client: AsyncClient):
         """Test that filename with special characters is sanitized."""
