@@ -41,7 +41,7 @@ PCAP Analyzer est une application d'analyse de fichiers PCAP conçue avec une ar
 
 ```
 ┌─────────────────────────────────────────────────┐
-│              PCAP Analyzer v4.22.0              │
+│              PCAP Analyzer v5.4.8               │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │  Mode 1: CLI (Recommandé)                      │
@@ -84,7 +84,7 @@ PCAP Analyzer est une application d'analyse de fichiers PCAP conçue avec une ar
 └─────────────────────────────────────────────────┘
                        │
 ┌─────────────────────────────────────────────────┐
-│            Couche Sécurité (v4.22.0)            │
+│            Couche Sécurité (v5.4.8)             │
 │  ┌──────────────────────────────────────────┐  │
 │  │  • File Validator (PCAP magic numbers)   │  │
 │  │  • Decompression Bomb Monitor            │  │
@@ -151,7 +151,7 @@ for analyzer in deep_analyzers:
 
 **Résultat :** 1.7x speedup global (93.3s → 55.2s sur 131k paquets)
 
-### 3. Architecture de sécurité v4.22.0 (Production Ready)
+### 3. Architecture de sécurité (Legacy snapshot v4.22.0, toujours applicable)
 
 **Score de sécurité** : 51% → 91.5% (+40.5 points)
 
@@ -225,7 +225,7 @@ for analyzer in deep_analyzers:
 
 **Détails dans** : `/SECURITY.md` (24.5 KB, 20 sections)
 
-### 4. Architecture d'authentification et gestion utilisateurs (v4.22.0)
+### 4. Architecture d'authentification et gestion utilisateurs (Legacy snapshot v4.22.0)
 
 **Système multi-tenant** avec authentification JWT et gestion des rôles.
 
@@ -630,7 +630,7 @@ def create_analyzers() -> list[BaseAnalyzer]:
 
 Voir [../src/analyzers/](../src/analyzers/) pour le code complet.
 
-## Features majeures (v4.16.0 - v4.22.0)
+## Features majeures (legacy v4.16.0 - v4.22.0)
 
 ### 1. TCP State Machine (v4.16.0) - RFC 793
 
@@ -703,7 +703,7 @@ def generate_jitter_timeseries_graph(
 
 **Module** : `src/analyzers/retransmission.py` (enhanced)
 
-### 4. Authentication & User Management System (v4.22.0)
+### 4. Authentication & User Management System (legacy v4.22.0)
 
 **Problème** : Application web sans authentification ni contrôle d'accès.
 
@@ -1304,7 +1304,7 @@ tests/
 
 ---
 
-**Version**: 4.22.0
-**Last Updated**: 2025-12-21
+**Version**: 5.4.8
+**Last Updated**: 2026-02-08
 **Security Score**: 91.5% (Production Ready)
 **Compliance**: 100% OWASP ASVS, NIST, CWE Top 25, GDPR
