@@ -14,6 +14,15 @@ import os
 pytestmark = pytest.mark.asyncio
 
 
+def _is_async_postgres_url(url: str | None) -> bool:
+    """Return True only for asyncpg-compatible PostgreSQL URLs."""
+    if not url:
+        return False
+    if url.startswith("postgresql+"):
+        return False
+    return url.startswith("postgresql://") or url.startswith("postgres://")
+
+
 @pytest.fixture
 async def async_client():
     """Create async HTTP client for testing."""
@@ -28,7 +37,7 @@ async def async_client():
         os.environ["DATA_DIR"] = str(tmpdir)
 
         # Keep explicit PostgreSQL override; otherwise isolate to a per-test SQLite DB.
-        if not original_database_url or not original_database_url.startswith("postgresql"):
+        if not _is_async_postgres_url(original_database_url):
             os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/pcap_analyzer.db"
 
         os.environ["SECRET_KEY"] = "test-secret-key-for-jwt-signing-in-tests-minimum-32-chars"

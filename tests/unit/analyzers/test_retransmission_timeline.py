@@ -9,6 +9,15 @@ import re
 from scapy.all import rdpcap
 from src.analyzers.retransmission import RetransmissionAnalyzer
 
+PCAP_PATH = "tests/data/syn_retrans_bug.pcap"
+
+
+pytestmark = pytest.mark.skipif(
+    not os.path.exists(PCAP_PATH),
+    reason="Requires local regression PCAP fixture tests/data/syn_retrans_bug.pcap",
+)
+
+
 def test_syn_retrans_correct_packet_timeline():
     """
     Test that SYN retransmission timeline shows correct frames from correct TCP stream.
@@ -18,9 +27,7 @@ def test_syn_retrans_correct_packet_timeline():
     Flow: 10.20.0.165:1831 → 2.19.147.191:80 (tcp.stream 131)
     """
     # Load test PCAP
-    pcap_path = "tests/data/syn_retrans_bug.pcap"
-    assert os.path.exists(pcap_path), f"Test PCAP not found: {pcap_path}"
-    packets = rdpcap(pcap_path)
+    packets = rdpcap(PCAP_PATH)
 
     # Analyze
     analyzer = RetransmissionAnalyzer()
@@ -85,8 +92,7 @@ def test_syn_retrans_diagnostic_client_unreachable():
     Regression test for bug where tool showed "server unreachable" when actually
     server WAS reachable (sending SYN,ACK) but client didn't complete handshake.
     """
-    pcap_path = "tests/data/syn_retrans_bug.pcap"
-    packets = rdpcap(pcap_path)
+    packets = rdpcap(PCAP_PATH)
 
     analyzer = RetransmissionAnalyzer()
     analyzer.analyze(packets)

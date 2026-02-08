@@ -29,6 +29,9 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] Stabilized CI unit test bootstrap and local-PCAP dependency:
+  - unit async route fixtures now reject sync-only PostgreSQL URLs (`postgresql+psycopg2`) and fall back to isolated SQLite test DBs,
+  - `tests/unit/analyzers/test_retransmission_timeline.py` now skips explicitly when local fixture `tests/data/syn_retrans_bug.pcap` is unavailable in CI.
 - [x] Reduced remaining static skips:
   - `tests/test_service_classifier.py`: removed static skip and asserted expected port-priority behavior (`HTTPS` on 443 flow),
   - `tests/integration/test_postgres_advanced.py`: replaced static `skip` with documented `xfail` for known Alembic/testcontainer downgrade issue,
