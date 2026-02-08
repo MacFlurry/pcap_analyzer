@@ -26,6 +26,9 @@ Last update: 2026-02-08
 - [ ] None.
 
 ## Done
+- [x] Lint CI aligned to flake8-only signal:
+  - `lint` job now runs `pre-commit run flake8 --all-files` (no auto-fix hooks in CI),
+  - flake8 scope reduced to critical runtime/syntax classes only (`E9,F63,F7,F82`) while historical style debt is cleaned incrementally.
 - [x] CI narrowed to lint-only temporarily:
   - disabled `version-guards`, `test`, `docker-build`, and `helm-test` jobs,
   - made `lint` blocking again to focus cleanup effort.

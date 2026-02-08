@@ -200,8 +200,6 @@ async def get_current_user(request: Request, token: Optional[str] = Depends(oaut
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    from app.services.user_database import get_user_db_service
-
     user_db = get_user_db_service()
     return await get_current_user_from_token(effective_token, user_db)
 
@@ -216,8 +214,6 @@ async def get_current_user_optional(request: Request, token: Optional[str] = Dep
         return None
 
     try:
-        from app.services.user_database import get_user_db_service
-
         user_db = get_user_db_service()
         return await get_current_user_from_token(effective_token, user_db)
     except HTTPException:
@@ -276,8 +272,6 @@ async def get_current_user_sse(
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    from app.services.user_database import get_user_db_service
 
     user_db = get_user_db_service()
     return await get_current_user_from_token(effective_token, user_db)

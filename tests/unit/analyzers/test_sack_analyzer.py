@@ -408,7 +408,6 @@ class TestSackAnalyzer:
 
     def test_non_ip_packet_ignored(self, analyzer):
         """Test that non-IP packets are ignored."""
-        from scapy.all import Raw
         raw_packet = Raw(load=b"data")
         raw_packet.time = 1234567890.0
         analyzer.process_packet(raw_packet, 1)

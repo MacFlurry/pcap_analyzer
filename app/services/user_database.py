@@ -212,8 +212,6 @@ class UserDatabaseService:
         This ensures that rebuilding the container with a new secrets file will
         automatically update the admin password.
         """
-        from pathlib import Path
-
         # Check if secrets file exists
         secrets_file = Path("/var/run/secrets/admin_password")
         secrets_password = None

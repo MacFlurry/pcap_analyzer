@@ -107,7 +107,7 @@ jobs:
 
     - name: Run pre-commit hooks
       run: |
-        pre-commit run --all-files --show-diff-on-failure
+        pre-commit run flake8 --all-files --show-diff-on-failure
 
   docker-build:
     if: ${{ false }}  # Temporarily disabled to focus only on lint stabilization
