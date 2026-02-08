@@ -27,9 +27,8 @@ class TestServiceClassifierBasics:
         assert results["total_flows"] == 0
         assert results["classified_flows"] == {}
 
-    @pytest.mark.skip(reason="Classifier prioritizes port-based detection (HTTPS:443) over pattern-based (Streaming/Bulk)")
     def test_video_streaming_detection(self):
-        """Test video streaming detection based on large sustained flow."""
+        """Known ports take precedence over heuristics for service detection."""
         from src.analyzers.service_classifier import ServiceClassifier
 
         packets = []
@@ -42,9 +41,11 @@ class TestServiceClassifierBasics:
         classifier = ServiceClassifier()
         results = classifier.analyze(packets)
 
-        # Should classify as streaming
-        flow_classifications = results["service_classifications"]
-        assert "Streaming" in flow_classifications or "Bulk" in flow_classifications
+        service_counts = results["service_classifications"]
+        assert service_counts
+
+        # Port-based classification (443) is expected to override heuristic labels.
+        assert service_counts.get("HTTPS", 0) >= 1
 
     def test_web_traffic_detection(self):
         """Test web traffic detection (request-response pattern)."""

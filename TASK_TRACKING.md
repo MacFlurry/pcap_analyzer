@@ -29,6 +29,10 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] Reduced remaining static skips:
+  - `tests/test_service_classifier.py`: removed static skip and asserted expected port-priority behavior (`HTTPS` on 443 flow),
+  - `tests/integration/test_postgres_advanced.py`: replaced static `skip` with documented `xfail` for known Alembic/testcontainer downgrade issue,
+  - verification: `@pytest.mark.skip` count in `tests/` is now `0`.
 - [x] Replace remaining non-environment security/test skips in targeted files:
   - `tests/test_security.py`: activated XSS escaping and CSP header checks (no skip),
   - `tests/test_tcp_state_machine.py`: replaced TIME-WAIT skip with explicit conditional `xfail` documenting current limitation.

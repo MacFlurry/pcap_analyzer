@@ -16,7 +16,10 @@ def alembic_config(postgres_db_url):
     return alembic_cfg
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="Alembic downgrade fails in testcontainer environment due to revision history tracking issues")
+@pytest.mark.xfail(
+    reason="Known issue: Alembic downgrade in testcontainer may fail due to revision history tracking",
+    strict=False,
+)
 def test_migration_data_preservation(postgres_db_url, alembic_config):
     """
     Test that data is preserved when upgrading from initial schema to head.
