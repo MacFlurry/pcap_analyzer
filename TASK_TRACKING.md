@@ -29,6 +29,9 @@ Last update: 2026-02-08
   - validate one green run on `main` before next phase.
 
 ## Done
+- [x] CI runtime optimization for `test` job:
+  - avoid double execution on `main` by running non-coverage pytest only on PRs,
+  - keep coverage run on push to `main` as the single test execution path.
 - [x] Lint CI aligned to flake8-only signal:
   - `lint` job now runs `pre-commit run flake8 --all-files` (no auto-fix hooks in CI),
   - flake8 scope reduced to critical runtime/syntax classes only (`E9,F63,F7,F82`) while historical style debt is cleaned incrementally.
