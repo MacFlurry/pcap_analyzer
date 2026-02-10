@@ -4295,10 +4295,12 @@ __PLOTLY_SCRIPT__
     def _generate_tcp_section(self, results: dict[str, Any]) -> str:
         """Generate TCP analysis section."""
         html = "<h2>🔌 TCP Analysis</h2>"
+        section_has_content = False
 
         # TCP Retransmissions
         retrans_data = results.get("retransmission", {})
-        if retrans_data and retrans_data.get("total_retransmissions", 0) > 0:
+        if retrans_data:
+            section_has_content = True
             html += "<h3>📦 TCP Retransmissions</h3>"
 
             total_retrans = retrans_data.get("total_retransmissions", 0)
@@ -4361,7 +4363,7 @@ __PLOTLY_SCRIPT__
 
             # Top flows with retransmissions - Grouped by type
             retrans_list = retrans_data.get("retransmissions", [])
-            if retrans_list:
+            if total_retrans > 0 and retrans_list:
                 # Group by flow first
                 flows = {}
                 for r in retrans_list[:200]:  # Increased limit for better coverage
@@ -4374,10 +4376,17 @@ __PLOTLY_SCRIPT__
 
                 # Classify each flow by dominant retransmission type (with behavioral correlation)
                 html += self._generate_grouped_retransmission_analysis(flows, total_packets, results)
+            else:
+                html += """
+                <div class="info-box">
+                    <p>✅ No TCP retransmissions detected in this capture.</p>
+                </div>
+                """
 
         # TCP Handshakes
         handshake_data = results.get("tcp_handshake", {})
         if handshake_data:
+            section_has_content = True
             html += "<h3>🤝 TCP Handshakes</h3>"
 
             total_handshakes = handshake_data.get("total_handshakes", 0)
@@ -4400,6 +4409,7 @@ __PLOTLY_SCRIPT__
         # RTT Analysis
         rtt_data = results.get("rtt", {})
         if rtt_data and rtt_data.get("flows_with_high_rtt", 0) > 0:
+            section_has_content = True
             html += "<h3>⏲️ RTT (Round Trip Time) Analysis</h3>"
 
             global_stats = rtt_data.get("global_statistics", {})
@@ -4487,6 +4497,7 @@ __PLOTLY_SCRIPT__
         # TCP Window Analysis
         window_data = results.get("tcp_window", {})
         if window_data and window_data.get("flows_with_issues", 0) > 0:
+            section_has_content = True
             html += "<h3>🪟 TCP Window Analysis</h3>"
 
             # Calculate total zero windows and duration
@@ -4560,6 +4571,13 @@ __PLOTLY_SCRIPT__
 
             # Generate grouped window analysis by bottleneck type
             html += self._generate_grouped_window_analysis(window_data, total_packets, capture_duration)
+
+        if not section_has_content:
+            html += """
+            <div class="info-box">
+                <p>✅ No significant TCP issues detected in this capture.</p>
+            </div>
+            """
 
         return html
 

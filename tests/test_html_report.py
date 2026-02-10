@@ -253,6 +253,41 @@ class TestJitterVisualization:
         assert "15" in html or "0.015" in html  # 15ms
 
 
+class TestTCPAnalysisNoIssues:
+    """Ensure TCP section remains informative even without detected anomalies."""
+
+    def test_tcp_section_shows_no_issue_summary_when_metrics_are_zero(self):
+        from src.exporters.html_report import HTMLReportGenerator
+
+        results = {
+            "metadata": {
+                "pcap_file": "clean_capture.pcap",
+                "total_packets": 1200,
+                "capture_duration": 42.0,
+            },
+            "retransmission": {
+                "total_retransmissions": 0,
+                "rto_count": 0,
+                "fast_retrans_count": 0,
+                "retransmissions": [],
+            },
+            "rtt": {
+                "flows_with_high_rtt": 0,
+                "global_statistics": {"mean_rtt": 0.002, "max_rtt": 0.004},
+                "flow_statistics": [],
+            },
+            "tcp_window": {"flows_with_issues": 0, "flow_statistics": []},
+            "tcp_handshake": {"total_handshakes": 0, "slow_handshakes": 0},
+        }
+
+        generator = HTMLReportGenerator()
+        html = generator.generate(results)
+
+        assert "TCP Analysis" in html
+        assert "TCP Retransmissions" in html
+        assert "No TCP retransmissions detected" in html
+
+
 class TestReportStyling:
     """Test report styling and presentation."""
 

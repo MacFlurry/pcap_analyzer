@@ -29,6 +29,11 @@ Last update: 2026-02-08
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] TCP report parity with CLI in clean captures (no anomalies):
+  - `src/exporters/html_report.py` now keeps TCP tab informative even with zero retransmissions,
+  - explicit healthy message is rendered: `No TCP retransmissions detected in this capture.`,
+  - fallback summary when no TCP issue subsection is triggered: `No significant TCP issues detected in this capture.`,
+  - tests added in `tests/test_html_report.py` (TDD), full `tests/test_html_report.py` suite green.
 - [x] Stabilized CI unit test bootstrap and local-PCAP dependency:
   - unit async route fixtures now reject sync-only PostgreSQL URLs (`postgresql+psycopg2`) and fall back to isolated SQLite test DBs,
   - `tests/unit/analyzers/test_retransmission_timeline.py` now skips explicitly when local fixture `tests/data/syn_retrans_bug.pcap` is unavailable in CI.
