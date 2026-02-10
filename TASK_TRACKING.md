@@ -32,6 +32,7 @@ Last update: 2026-02-08
 - [x] TCP report parity with CLI in clean captures (no anomalies):
   - `src/exporters/html_report.py` now keeps TCP tab informative even with zero retransmissions,
   - explicit healthy message is rendered: `No TCP retransmissions detected in this capture.`,
+  - confidence label for zero-event case is now neutral (`Analysis Confidence: N/A`) instead of misleading `Low`,
   - fallback summary when no TCP issue subsection is triggered: `No significant TCP issues detected in this capture.`,
   - tests added in `tests/test_html_report.py` (TDD), full `tests/test_html_report.py` suite green.
 - [x] Stabilized CI unit test bootstrap and local-PCAP dependency:

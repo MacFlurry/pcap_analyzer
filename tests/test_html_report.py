@@ -286,6 +286,7 @@ class TestTCPAnalysisNoIssues:
         assert "TCP Analysis" in html
         assert "TCP Retransmissions" in html
         assert "No TCP retransmissions detected" in html
+        assert "Analysis Confidence:</strong> ⚪ N/A (0 events)" in html
 
 
 class TestReportStyling:

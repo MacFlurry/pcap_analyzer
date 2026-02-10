@@ -2716,6 +2716,14 @@ __PLOTLY_SCRIPT__
         total_retrans = retrans_data.get("total_retransmissions", 0)
         retrans_list = retrans_data.get("retransmissions", [])
 
+        if total_retrans == 0 or not retrans_list:
+            html = """
+            <div style="background: #f5f5f5; padding: 10px; margin: 15px 0; border-radius: 4px;">
+                <p style="margin: 0;"><strong>Analysis Confidence:</strong> ⚪ N/A (0 events)</p>
+            </div>
+            """
+            return html
+
         # Determine overall confidence
         high_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "high")
         medium_confidence_count = sum(1 for r in retrans_list if r.get("confidence") == "medium")
