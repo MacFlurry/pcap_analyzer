@@ -7,6 +7,19 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.9] - 2026-02-10
+
+### Fixed - BUGFIXES 🐛
+
+- **TCP Analysis report visibility on clean captures**:
+  - The HTML TCP tab now remains informative even when no retransmission issues are detected.
+  - Added explicit healthy-state message: `No TCP retransmissions detected in this capture.`
+  - Added fallback TCP summary when no issue-specific subsection is rendered.
+
+- **Misleading confidence label when no events exist**:
+  - Reworked confidence rendering for zero-event retransmission analysis.
+  - `Analysis Confidence` now shows `N/A (0 events)` instead of `Low`, avoiding false negative interpretation.
+
 ## [5.4.8] - 2026-02-08
 
 ### Added

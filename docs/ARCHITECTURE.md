@@ -1,10 +1,10 @@
-# Architecture Design - PCAP Analyzer v5.4.8
+# Architecture Design - PCAP Analyzer v5.4.9
 
 **Last Updated**: 2026-02-08
-**Version**: 5.4.8
+**Version**: 5.4.9
 **Security Score**: 91.5% (Production Ready)
 
-## Statut actuel (v5.4.8)
+## Statut actuel (v5.4.9)
 
 Ce document contient encore des sections historiques détaillées (notamment des références `v4.22.0`).
 La cartographie opérationnelle actuelle est la suivante:
@@ -41,7 +41,7 @@ PCAP Analyzer est une application d'analyse de fichiers PCAP conçue avec une ar
 
 ```
 ┌─────────────────────────────────────────────────┐
-│              PCAP Analyzer v5.4.8               │
+│              PCAP Analyzer v5.4.9               │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │  Mode 1: CLI (Recommandé)                      │
@@ -84,7 +84,7 @@ PCAP Analyzer est une application d'analyse de fichiers PCAP conçue avec une ar
 └─────────────────────────────────────────────────┘
                        │
 ┌─────────────────────────────────────────────────┐
-│            Couche Sécurité (v5.4.8)             │
+│            Couche Sécurité (v5.4.9)             │
 │  ┌──────────────────────────────────────────┐  │
 │  │  • File Validator (PCAP magic numbers)   │  │
 │  │  • Decompression Bomb Monitor            │  │
@@ -1304,7 +1304,7 @@ tests/
 
 ---
 
-**Version**: 5.4.8
+**Version**: 5.4.9
 **Last Updated**: 2026-02-08
 **Security Score**: 91.5% (Production Ready)
 **Compliance**: 100% OWASP ASVS, NIST, CWE Top 25, GDPR
