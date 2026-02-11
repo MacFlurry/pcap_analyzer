@@ -9,9 +9,9 @@ Last update: 2026-02-10
 - Prefer smallest safe change set, then verify with tests.
 
 ## SemVer / Versioning Notes
-- Current released version: `5.4.9`.
-- Keep `5.4.9` for documentation-only and test-only cleanup commits.
-- Bump to `5.4.10` only when a runtime behavior or public contract changes.
+- Current released version: `5.4.10`.
+- Keep `5.4.10` for documentation-only and test-only cleanup commits.
+- Bump to `5.4.11` only when a runtime behavior or public contract changes.
 - If version is bumped, update in lockstep:
   - `src/__version__.py`
   - `Dockerfile` (`LABEL version`)
@@ -29,6 +29,14 @@ Last update: 2026-02-10
   - keep `helm-test` disabled until docker phase is stable.
 
 ## Done
+- [x] Fix misleading TCP window root-cause for RFC1918 receiver IPs:
+  - `src/exporters/html_report.py`: `_analyze_window_root_cause` now uses reserved IP ranges as root cause only when `diagnostic=True`,
+  - RFC1918 ranges stay contextual and no longer appear as causal diagnosis,
+  - regression tests added in `tests/test_html_report.py`:
+    - `test_window_root_cause_does_not_blame_rfc1918_private_receiver_ip`
+    - `test_window_root_cause_keeps_diagnostic_ranges_as_explicit_cause`
+  - verification: `pytest tests/test_html_report.py -q` -> `26 passed`.
+- [x] Release `v5.4.10` validated and published (git tag, GitHub release, Docker images).
 - [x] TCP report parity with CLI in clean captures (no anomalies):
   - `src/exporters/html_report.py` now keeps TCP tab informative even with zero retransmissions,
   - explicit healthy message is rendered: `No TCP retransmissions detected in this capture.`,

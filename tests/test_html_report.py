@@ -289,6 +289,52 @@ class TestTCPAnalysisNoIssues:
         assert "Analysis Confidence:</strong> ⚪ N/A (0 events)" in html
 
 
+class TestTCPWindowRootCause:
+    """Regression tests for TCP window root-cause messaging."""
+
+    def test_window_root_cause_does_not_blame_rfc1918_private_receiver_ip(self):
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flows = [
+            {
+                "dst_ip": "10.28.104.211",
+                "dst_port": 443,
+                "zero_window_count": 1,
+                "zero_window_total_duration": 150.0,
+                "suspected_bottleneck": "application",
+            }
+        ]
+
+        analysis = generator._analyze_window_root_cause(flows, "application")
+
+        assert analysis["root_cause"] is not None
+        assert "Private Network (RFC 1918)" not in analysis["root_cause"]
+        assert "application cannot process data fast enough" in analysis["root_cause"]
+        assert analysis["action"] is not None
+        assert "application performance" in analysis["action"]
+
+    def test_window_root_cause_keeps_diagnostic_ranges_as_explicit_cause(self):
+        from src.exporters.html_report import HTMLReportGenerator
+
+        generator = HTMLReportGenerator()
+        flows = [
+            {
+                "dst_ip": "192.0.2.10",
+                "dst_port": 443,
+                "zero_window_count": 1,
+                "zero_window_total_duration": 2.0,
+                "suspected_bottleneck": "application",
+            }
+        ]
+
+        analysis = generator._analyze_window_root_cause(flows, "application")
+
+        assert analysis["root_cause"] is not None
+        assert "TEST-NET-1" in analysis["root_cause"]
+        assert "RFC 5737" in analysis["root_cause"]
+
+
 class TestReportStyling:
     """Test report styling and presentation."""
 

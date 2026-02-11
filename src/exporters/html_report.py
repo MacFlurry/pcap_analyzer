@@ -3688,12 +3688,12 @@ __PLOTLY_SCRIPT__
                 receiver_ip = most_common_ip[0]
                 ip_info = self._identify_ip_range(receiver_ip)
 
-                if ip_info:
-                    # Reserved IP range detected
+                if ip_info and ip_info.get("diagnostic", False):
+                    # Diagnostic IP range detected (e.g. TEST-NET, loopback, link-local)
                     result["root_cause"] = f"Receiver {receiver_ip} is {ip_info['name']} ({ip_info['rfc']})"
                     result["action"] = ip_info["action"]
                 else:
-                    # Real IP - application bottleneck
+                    # Real or contextual-only range (e.g. RFC 1918) -> keep operational bottleneck cause
                     result["root_cause"] = f"Receiver {receiver_ip} application cannot process data fast enough"
                     result["action"] = f"Investigate application performance on {receiver_ip}"
 

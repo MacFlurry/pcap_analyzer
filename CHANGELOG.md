@@ -7,6 +7,16 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [5.4.10] - 2026-02-11
+
+### Fixed - BUGFIXES 🐛
+
+- **TCP Window root-cause accuracy (RFC1918)**:
+  - Removed misleading causal diagnosis where private receiver IP ranges (`RFC 1918`) were reported as root cause.
+  - Private ranges are now treated as contextual only in TCP window analysis.
+  - Root-cause messaging now prioritizes operational bottleneck diagnosis (receiver/application throughput limitation) for real/private endpoints.
+  - Added regression coverage to prevent reintroduction.
+
 ## [5.4.9] - 2026-02-10
 
 ### Fixed - BUGFIXES 🐛

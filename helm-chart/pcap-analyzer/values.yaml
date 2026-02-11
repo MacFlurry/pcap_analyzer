@@ -4,7 +4,7 @@ replicaCount: 1
 image:
   repository: omegabk/pcap-analyzer
   pullPolicy: Always  # Pull from Docker Hub
-  tag: "v5.4.9"
+  tag: "v5.4.10"
 
 service:
   type: ClusterIP  # Changed from NodePort when using Ingress
